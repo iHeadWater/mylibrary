@@ -90,7 +90,7 @@ dkms.conf
 .ipynb_checkpoints
 
 # vscode
-.vscode/*
+.vscode
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
@@ -101,4 +101,5 @@ dkms.conf
 .history/
 
 # else
-1-basic-env/helloworld
+1-c-basic/helloworld
+1-c-basic/main

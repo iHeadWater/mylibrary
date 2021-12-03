@@ -1,7 +1,0 @@
-name: hydrocpp
-channels:
-  - conda-forge
-  - defaults
-dependencies:
-  - jupyterlab
-  - xeus-cling
