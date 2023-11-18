@@ -1,4 +1,6 @@
-# hydroc
+# LearnCoding
+
+## C语言
 
 水文水资源（Hydrology and Water Resources）方面利用 C 做模型model、算法algorithm等科学计算工作所需的基础技能树学习。
 
@@ -28,3 +30,13 @@ C 是计算非常高效的编程语言，不过代价就是学起来比较难。
 本repo下的代码如无特别说明，都是在win10下的Ubuntu18.04中执行的。
 
 关于win10下安装ubuntu可以参考：[OuyangWenyu/elks](https://github.com/OuyangWenyu/elks)，
+
+## Fortran
+
+了解fortran，看懂代码
+
+Fortran学习资源可以关注：
+
+- https://github.com/fortran-lang
+- https://fortran-lang.org/zh_CN/learn/
+- https://github.com/LKedward/quickstart-fortran
