@@ -7,7 +7,7 @@
  * @FilePath: /HydroGPU/README.md
  * Copyright (c) 2023-2024 Wenyu Ouyang. All rights reserved.
 -->
-# HydroGPU
+# LearnCoding
 
 ## C/C++ 基础学习
 
