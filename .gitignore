@@ -103,3 +103,15 @@ dkms.conf
 # else
 1-c-basic/helloworld
 1-c-basic/main
+
+build/*
+# any build subdirectory in the tree
+**/build/
+gpu.cpp/examples/hello_gpu/build/*
+gpu.cpp/examples/raymarch/build/*
+gpu.cpp/docs/html
+gpu.cpp/source
+gpu.cpp/.DS_Store
+gpu.cpp/third_party/lib/libdawn.*
+gpu.cpp/third_party/lib/*.so
+gpu.cpp/third_party/lib/*.dylib

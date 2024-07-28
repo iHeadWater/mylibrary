@@ -1,11 +1,20 @@
-# LearnCoding
+<!--
+ * @Author: Wenyu Ouyang
+ * @Date: 2024-07-28 13:52:47
+ * @LastEditTime: 2024-07-28 15:10:53
+ * @LastEditors: Wenyu Ouyang
+ * @Description: 
+ * @FilePath: /HydroGPU/README.md
+ * Copyright (c) 2023-2024 Wenyu Ouyang. All rights reserved.
+-->
+# HydroGPU
 
-## C语言
+## C/C++ 基础学习
 
 水文水资源（Hydrology and Water Resources）方面利用 C 做模型model、算法algorithm等科学计算工作所需的基础技能树学习。
 
 C 是计算非常高效的编程语言，不过代价就是学起来比较难。
-但是因为历史原因，经典的水文模型等很多都是C这类比较基础的难学的语言写成的，所以还是很有必要了解下，至少能够把这些模型运行调试起来，能够读懂里面的代码。
+但是因为历史原因，经典的水文模型等很多都是C这类比较基础的难学的语言写成的，一些GPU编程，包括人工智能模型基础也是C/C++的，所以还是很有必要了解下，至少能够把这些模型运行调试起来，能够读懂里面的代码。
 这也是本创建hydroc的最主要原因，另外，借助C的学习也能帮助我们更好地理解计算机编程，了解计算思维，也了解一下计算机科学的常识，帮助我们更好地解决在水文等科学实践中面临的实际问题。
 
 下面是一些学习资料，因为整体上目的还是为了科学计算，所以学习C还是偏快速整体性的技能学习，因此重点参考：
@@ -31,11 +40,17 @@ C 是计算非常高效的编程语言，不过代价就是学起来比较难。
 
 关于win10下安装ubuntu可以参考：[OuyangWenyu/elks](https://github.com/OuyangWenyu/elks)，
 
-## Fortran
+## C/C++ GPU编程学习
 
-了解fortran，看懂代码
+主要是把 这个资源粘贴过来了：
 
-Fortran学习资源可以关注：
+- https://github.com/AnswerDotAI/gpu.cpp
+
+GPU程序在各种终端运行，这样一些边缘计算可能能更好地实现
+
+## Fortran了解
+
+如果需要了解fortran，看懂代码，可以参考Fortran学习资源：
 
 - https://github.com/fortran-lang
 - https://fortran-lang.org/zh_CN/learn/
