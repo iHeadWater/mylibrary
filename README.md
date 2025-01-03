@@ -1,57 +1,52 @@
 <!--
  * @Author: Wenyu Ouyang
  * @Date: 2024-07-28 13:52:47
- * @LastEditTime: 2024-07-28 15:10:53
+ * @LastEditTime: 2025-01-03 13:34:20
  * @LastEditors: Wenyu Ouyang
- * @Description: 
- * @FilePath: /HydroGPU/README.md
+ * @Description: Readme file for the AI-Hydro-Research repository
+ * @FilePath: \hydro_ai_papers\README.md
  * Copyright (c) 2023-2024 Wenyu Ouyang. All rights reserved.
 -->
-# LearnCoding
+# Hydro-AI-Papers
 
-## C/C++ 基础学习
+Welcome to the Hydro-AI-Papers repository, a comprehensive collection of resources for AI-driven hydrological and water resources research. This repository aims to provide a platform for researchers, students, and enthusiasts to access and reproduce recent studies in the field. It includes a curated list of papers and the necessary code to read and process relevant data.
 
-水文水资源（Hydrology and Water Resources）方面利用 C 做模型model、算法algorithm等科学计算工作所需的基础技能树学习。
+## Table of Contents
 
-C 是计算非常高效的编程语言，不过代价就是学起来比较难。
-但是因为历史原因，经典的水文模型等很多都是C这类比较基础的难学的语言写成的，一些GPU编程，包括人工智能模型基础也是C/C++的，所以还是很有必要了解下，至少能够把这些模型运行调试起来，能够读懂里面的代码。
-这也是本创建hydroc的最主要原因，另外，借助C的学习也能帮助我们更好地理解计算机编程，了解计算思维，也了解一下计算机科学的常识，帮助我们更好地解决在水文等科学实践中面临的实际问题。
+- [Hydro-AI-Papers](#hydro-ai-papers)
+  - [Table of Contents](#table-of-contents)
+  - [Papers](#papers)
+  - [Contribution Guidelines](#contribution-guidelines)
+  - [License](#license)
+  - [Contact](#contact)
 
-下面是一些学习资料，因为整体上目的还是为了科学计算，所以学习C还是偏快速整体性的技能学习，因此重点参考：
+## Papers
 
-- [Linux C编程一站式学习](https://akaedu.github.io/book/)
+Here is a small selection of papers that we have included in our repository. We will be continuously updating this list with more papers and their corresponding code.
 
-其他也不错的资料：
+1. [Global prediction of extreme floods in ungauged watersheds | Nature](https://www.nature.com/articles/s41586-024-07145-1) : [Artificial intelligence can provide accurate forecasts of extreme floods at global scale](https://www.nature.com/articles/d41586-024-00835-w)
+2. [Title of Paper 2](Link to Paper 2)
+3. [Title of Paper 3](Link to Paper 3)
 
-- [Standford CS106B summer school 2020](https://web.stanford.edu/class/archive/cs/cs106b/cs106b.1208/schedule)
-- [Complete C++ Scientific Programming Bundle - 21 Hours!](https://www.udemy.com/course/cpp-for-scientific-programming/)
-- [C++ 那些事](https://github.com/Light-City/CPlusPlusThings)
-- [学习完 C++ Primer 能做什么项目练手或者看什么好的开源项目源码？](https://www.zhihu.com/question/29112393/answer/1692382930)
+Please note that the links provided are for reference only. The actual code for reproducing the results may be added in the future.
 
-根据 [Linux C编程一站式学习](https://akaedu.github.io/book/) 的内容安排，这里暂拟定了hydroc主要内容如下：
+## Contribution Guidelines
 
-1. 基本的C语法学习
-2. 更进一步了解C语言
-3. 创建C语言的项目
+We welcome contributions from the community! If you have a paper or code that you think would be valuable to include in this repository, please follow these steps:
 
-仍在慢慢更新，根据实际碰到的实例来记录相关的基本知识。
+1. Fork the repository and create a new branch.
+2. Add your paper or code to the appropriate section.
+3. Ensure that you have the rights to share the code and that it complies with our [license](#license).
+4. Submit a pull request with a clear description of your changes.
 
-本repo下的代码如无特别说明，都是在win10下的Ubuntu18.04中执行的。
+## License
 
-关于win10下安装ubuntu可以参考：[OuyangWenyu/elks](https://github.com/OuyangWenyu/elks)，
+All code in this repository is licensed under the [MIT License](LICENSE.md). Please ensure that any contributions you make are compatible with this license.
 
-## C/C++ GPU编程学习
+## Contact
 
-主要是把 这个资源粘贴过来了：
+For any questions or suggestions, please feel free to open an issue or contact the maintainers directly.
 
-- https://github.com/AnswerDotAI/gpu.cpp
+---
 
-GPU程序在各种终端运行，这样一些边缘计算可能能更好地实现
-
-## Fortran了解
-
-如果需要了解fortran，看懂代码，可以参考Fortran学习资源：
-
-- https://github.com/fortran-lang
-- https://fortran-lang.org/zh_CN/learn/
-- https://github.com/LKedward/quickstart-fortran
+Thank you for your interest in AI-Hydro-Research. We look forward to growing this repository together with the community!
