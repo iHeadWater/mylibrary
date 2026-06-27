@@ -173,3 +173,17 @@ cython_debug/
 .vscode/*
 definitions_private.py
 results/*
+
+# ── HydrolitAgent additions ──
+.DS_Store
+.uv-cache/
+.pytest-tmp/
+~$*
+outputs/
+.graph_state.toml
+cache/
+graphify-out/
+hydrolitagent.egg-info/
+papers/
+.claude/settings.local.json
+tasks/

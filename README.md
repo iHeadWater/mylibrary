@@ -1,52 +1,87 @@
-<!--
- * @Author: Wenyu Ouyang
- * @Date: 2024-07-28 13:52:47
- * @LastEditTime: 2025-01-03 13:34:20
- * @LastEditors: Wenyu Ouyang
- * @Description: Readme file for the AI-Hydro-Research repository
- * @FilePath: \hydro_ai_papers\README.md
- * Copyright (c) 2023-2024 Wenyu Ouyang. All rights reserved.
--->
-# Hydro-AI-Papers
+# Hydro AI Papers
 
-Welcome to the Hydro-AI-Papers repository, a comprehensive collection of resources for AI-driven hydrological and water resources research. This repository aims to provide a platform for researchers, students, and enthusiasts to access and reproduce recent studies in the field. It includes a curated list of papers and the necessary code to read and process relevant data.
+AI-driven hydrology and water resources research — **paper collection, code reproduction, and knowledge graph construction**.
 
-## Table of Contents
+This repository serves a dual purpose:
 
-- [Hydro-AI-Papers](#hydro-ai-papers)
-  - [Table of Contents](#table-of-contents)
-  - [Papers](#papers)
-  - [Contribution Guidelines](#contribution-guidelines)
-  - [License](#license)
-  - [Contact](#contact)
+1. **Knowledge Graph** — Build a structured, queryable knowledge base from hydrology literature using [graphify](https://github.com/graphify), with entity extraction, community detection, and Obsidian-compatible export.
+2. **Paper Archive** — Curate and reproduce key papers in AI-driven hydrology, with accompanying code and data.
+
+## Quick Start
+
+```bash
+# Clone and install
+git clone git@github.com:OuyangWenyu/hydro_ai_papers.git
+cd hydro_ai_papers
+uv pip install -e .
+
+# Configure
+cp .env.example .env   # Add your DEEPSEEK_API_KEY, set HYDROLITAGENT_OUTPUT
+```
+
+### Build a Knowledge Graph
+
+```bash
+# Full pipeline on a directory of markdown papers
+uv run hydrolitagent prepare papers/your-topic/          # Step 1: detect + split
+uv run hydrolitagent extract papers/your-topic/           # Step 2: LLM extraction
+uv run hydrolitagent graph papers/your-topic/             # Step 3: build + cluster + export
+
+# Or merge multiple topic graphs into a unified graph
+uv run hydrolitagent merge --graphs-dir outputs/graph/ --output outputs/graph/unified/
+
+# Query the graph
+uv run hydrolitagent query outputs/graph/graph.json --search "LSTM"
+uv run hydrolitagent query outputs/graph/graph.json --neighbors <node_id> --depth 2
+uv run hydrolitagent query outputs/graph/graph.json --path <node_a> <node_b>
+```
+
+### Outputs
+
+Each build produces (written to `HYDROLITAGENT_OUTPUT` or `--output`):
+
+| File | Description |
+|------|-------------|
+| `graph.json` | Full graph: nodes, edges, communities, hyperedges |
+| `graph.html` | Interactive D3.js force-directed visualization |
+| `graph_hierarchical.html` | Hierarchical topic/community drill-down view |
+| `GRAPH_REPORT.md` | Narrative report: god nodes, surprising connections, stats |
+| `obsidian/` | Obsidian vault with per-node `.md` pages and `[[wikilinks]]` |
+
+## Project Structure
+
+```
+hydrolitagent/           # Knowledge graph toolkit
+├── cli.py               # CLI: prepare, extract, graph, merge, query
+├── graph/
+│   ├── build.py         # Single-topic graph build pipeline
+│   └── merge.py         # Multi-topic merge + D3.js HTML viz
+└── query/search.py      # Deterministic graph queries (no LLM)
+
+configs/                 # LLM prompt templates for entity extraction
+
+equation_from_data/      # Paper: equation discovery from data
+google_floodhub/         # Paper: Google flood forecasting
+definitions.py           # Shared constants
+```
 
 ## Papers
 
-Here is a small selection of papers that we have included in our repository. We will be continuously updating this list with more papers and their corresponding code.
+Curated hydrology AI papers with reproduction code:
 
-1. [Global prediction of extreme floods in ungauged watersheds | Nature](https://www.nature.com/articles/s41586-024-07145-1) : [Artificial intelligence can provide accurate forecasts of extreme floods at global scale](https://www.nature.com/articles/d41586-024-00835-w)
-2. [Title of Paper 2](Link to Paper 2)
-3. [Title of Paper 3](Link to Paper 3)
+1. [Global prediction of extreme floods in ungauged watersheds | Nature](https://www.nature.com/articles/s41586-024-07145-1) ([code](./google_floodhub/))
 
-Please note that the links provided are for reference only. The actual code for reproducing the results may be added in the future.
+More papers and code will be added continuously.
 
-## Contribution Guidelines
+## Contributing
 
-We welcome contributions from the community! If you have a paper or code that you think would be valuable to include in this repository, please follow these steps:
+We welcome contributions:
 
-1. Fork the repository and create a new branch.
-2. Add your paper or code to the appropriate section.
-3. Ensure that you have the rights to share the code and that it complies with our [license](#license).
-4. Submit a pull request with a clear description of your changes.
+1. Fork and create a new branch
+2. Add papers or code to the appropriate section
+3. Ensure rights to share and compatibility with the [MIT License](LICENSE)
+4. Submit a PR with a clear description
 
 ## License
 
-All code in this repository is licensed under the [MIT License](LICENSE.md). Please ensure that any contributions you make are compatible with this license.
-
-## Contact
-
-For any questions or suggestions, please feel free to open an issue or contact the maintainers directly.
-
----
-
-Thank you for your interest in AI-Hydro-Research. We look forward to growing this repository together with the community!
+MIT License. See [LICENSE](LICENSE).

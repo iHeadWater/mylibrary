@@ -1,52 +1,85 @@
-<!--
- * @Author: Wenyu Ouyang
- * @Date: 2024-07-28 13:52:47
- * @LastEditTime: 2025-01-03 13:37:50
- * @LastEditors: Wenyu Ouyang
- * @Description: Readme file for the AI-Hydro-Research repository
- * @FilePath: \hydro_ai_papers\README-zh.md
- * Copyright (c) 2023-2024 Wenyu Ouyang. All rights reserved.
--->
-# Hydro-AI-Papers
+# Hydro AI Papers
 
-欢迎来到Hydro-AI-Papers代码库，这是一个全面的资源集合，用于AI驱动的水文和水资源研究。该代码库旨在为研究人员、学生和爱好者提供一个平台，以便访问和复现该领域的最新研究。它包括精选的论文列表和读取及处理相关数据所需的代码。
+AI 驱动的水文水资源研究 —— **论文收集、代码复现、知识图谱构建**。
 
-## 目录
+本仓库承担两个角色：
 
-- [Hydro-AI-Papers](#hydro-ai-papers)
-  - [目录](#目录)
-  - [论文](#论文)
-  - [贡献指南](#贡献指南)
-  - [许可证](#许可证)
-  - [联系方式](#联系方式)
+1. **知识图谱** — 使用 [graphify](https://github.com/graphify) 从水文文献中构建结构化、可查询的知识库，包含实体提取、社区发现和 Obsidian 兼容导出。
+2. **论文归档** — 精选并复现 AI 驱动的水文学关键论文，附带代码和数据。
+
+## 快速开始
+
+```bash
+git clone git@github.com:OuyangWenyu/hydro_ai_papers.git
+cd hydro_ai_papers
+uv pip install -e .
+
+cp .env.example .env   # 填入 DEEPSEEK_API_KEY，设置 HYDROLITAGENT_OUTPUT
+```
+
+### 构建知识图谱
+
+```bash
+# 对一个目录下的 Markdown 论文执行完整 pipeline
+uv run hydrolitagent prepare papers/your-topic/          # 第一步：检测 + 分批
+uv run hydrolitagent extract papers/your-topic/           # 第二步：LLM 提取
+uv run hydrolitagent graph papers/your-topic/             # 第三步：建图 + 聚类 + 导出
+
+# 合并多个 topic 图谱为统一图谱
+uv run hydrolitagent merge --graphs-dir outputs/graph/ --output outputs/graph/unified/
+
+# 查询图谱
+uv run hydrolitagent query outputs/graph/graph.json --search "LSTM"
+uv run hydrolitagent query outputs/graph/graph.json --neighbors <node_id> --depth 2
+uv run hydrolitagent query outputs/graph/graph.json --path <node_a> <node_b>
+```
+
+### 输出产物
+
+每次构建会产出以下文件（写入 `HYDROLITAGENT_OUTPUT` 或 `--output`）：
+
+| 文件 | 说明 |
+|------|------|
+| `graph.json` | 完整图数据：节点、边、社区、超边 |
+| `graph.html` | 交互式 D3.js 力导向可视化 |
+| `graph_hierarchical.html` | 层级 Topic/Community 下钻视图 |
+| `GRAPH_REPORT.md` | 文字报告：核心节点、意外连接、统计信息 |
+| `obsidian/` | Obsidian 知识库：每个节点一个 `.md` 页面，带 `[[wikilinks]]` |
+
+## 项目结构
+
+```
+hydrolitagent/           # 知识图谱工具集
+├── cli.py               # CLI：prepare, extract, graph, merge, query
+├── graph/
+│   ├── build.py         # 单 topic 图谱构建管道
+│   └── merge.py         # 多 topic 合并 + D3.js 可视化
+└── query/search.py      # 确定性图查询（不走 LLM）
+
+configs/                 # 实体提取的 LLM prompt 模板
+
+equation_from_data/      # 论文复现：从数据发现方程
+google_floodhub/         # 论文复现：Google 洪水预测
+definitions.py           # 共享常量
+```
 
 ## 论文
 
-以下是我们代码库中包含的一部分论文。我们将不断更新这个列表，增加更多的论文及其对应的代码。
+精选水文 AI 论文及复现代码：
 
-1. [全球无测站流域极端洪水的预测 | 自然](https://www.nature.com/articles/s41586-024-07145-1)  : [人工智能可以在全球范围内提供极端洪水的准确预测](https://www.nature.com/articles/d41586-024-00835-w)
-2. [论文2的标题](链接到论文2)
-3. [论文3的标题](链接到论文3)
+1. [Global prediction of extreme floods in ungauged watersheds | Nature](https://www.nature.com/articles/s41586-024-07145-1) ([代码](./google_floodhub/))
 
-请注意，提供的链接仅供参考。实际复现结果的代码可能将在将来添加。
+更多论文和代码将持续更新。
 
-## 贡献指南
+## 贡献
 
-我们欢迎社区的贡献！如果您有认为有价值的论文或代码，想要包含在本代码库中，请按照以下步骤操作：
+欢迎贡献：
 
-1. 复制代码库并创建一个新的分支。
-2. 将您的论文或代码添加到适当的部分。
-3. 确保您有权分享代码，并且它符合我们的[许可证](#许可证)。
-4. 提交一个清晰的描述您更改的拉取请求。
+1. Fork 并创建新分支
+2. 将论文或代码添加到相应位置
+3. 确保有分享权限且兼容 [MIT License](LICENSE)
+4. 提交 PR 并附上清晰说明
 
 ## 许可证
 
-本代码库中的所有代码均在[MIT许可证](LICENSE.md)下授权。请确保您所做的任何贡献都与此许可证兼容。
-
-## 联系方式
-
-如有任何问题或建议，请随时提出问题或直接联系维护者。
-
----
-
-感谢您对AI-Hydro-Research的兴趣。我们期待与社区一起成长这个代码库！
+MIT License。详见 [LICENSE](LICENSE)。
