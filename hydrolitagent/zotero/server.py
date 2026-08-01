@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Zotero MCP Server for mylibrary — literature query service.
 
-Exposes 6 tools via FastMCP SSE transport on port 8002:
+Exposes 12 tools via FastMCP SSE transport on port 8002:
   Web API (api.zotero.org via pyzotero):
     - zotero_search              -> Search library by keyword
+    - zotero_fulltext_search     -> Full-text search across all fields
+    - zotero_search_by_tag       -> Search items by tag(s)
     - zotero_get_item            -> Get full metadata for an item
+    - zotero_get_attachments     -> Get attachment list for an item
+    - zotero_get_annotations     -> Get PDF annotations for an item
     - zotero_get_recent          -> Get recently added items
+    - zotero_get_collections     -> List all collections
     - zotero_get_collection_items -> Get items in a collection
+    - zotero_get_tags            -> List tags (optionally by collection)
   Local API (host.docker.internal:23119 via httpx):
     - zotero_get_fulltext        -> Get indexed full-text content
     - zotero_get_file_info       -> Get attachment file metadata
@@ -211,6 +217,227 @@ async def zotero_get_collection_items(
             "zotero_get_collection_items(%s) failed: %s", collection_key, e
         )
         return _make_error("zotero_get_collection_items", str(e))
+
+
+# ── Tool: zotero_get_collections ────────────────────────────────────
+
+
+@mcp.tool()
+async def zotero_get_collections(limit: int = 50) -> str:
+    """List all collections in the Zotero library.
+
+    Returns collection key, name, version, and parentCollection for each.
+    """
+    if not _zot:
+        return _make_error("zotero_get_collections", "Web API client not initialized")
+    try:
+        collections = await asyncio.to_thread(_zot.collections, limit=limit)
+        return json.dumps(
+            {
+                "total": len(collections or []),
+                "collections": collections or [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    except Exception as e:
+        logger.error("zotero_get_collections failed: %s", e)
+        return _make_error("zotero_get_collections", str(e))
+
+
+# ── Tool: zotero_get_tags ───────────────────────────────────────────
+
+
+@mcp.tool()
+async def zotero_get_tags(collection_key: str | None = None) -> str:
+    """List all tags in the Zotero library, or tags for a specific collection.
+
+    Pass collection_key to get tags scoped to one collection.
+    """
+    if not _zot:
+        return _make_error("zotero_get_tags", "Web API client not initialized")
+    try:
+        if collection_key:
+            tags = await asyncio.to_thread(
+                _zot.collection_tags, collection_key
+            )
+            return json.dumps(
+                {
+                    "total": len(tags or []),
+                    "collectionKey": collection_key,
+                    "tags": tags or [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        else:
+            tags = await asyncio.to_thread(_zot.tags)
+            return json.dumps(
+                {
+                    "total": len(tags or []),
+                    "tags": tags or [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+    except Exception as e:
+        logger.error("zotero_get_tags failed: %s", e)
+        return _make_error("zotero_get_tags", str(e))
+
+
+# ── Tool: zotero_search_by_tag ──────────────────────────────────────
+
+
+@mcp.tool()
+async def zotero_search_by_tag(tag: str, limit: int = 20) -> str:
+    """Search Zotero items by tag. Returns items matching the given tag.
+
+    Zotero API semantics: comma-separated tags = AND, && = OR.
+    """
+    if not tag:
+        return _make_error("zotero_search_by_tag", "tag is required")
+    if not _zot:
+        return _make_error("zotero_search_by_tag", "Web API client not initialized")
+    try:
+        items = await asyncio.to_thread(
+            _zot.items, tag=tag, limit=limit
+        )
+        return json.dumps(
+            {
+                "total": len(items or []),
+                "tag": tag,
+                "items": [_format_item(i) for i in (items or [])],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    except Exception as e:
+        logger.error("zotero_search_by_tag failed: %s", e)
+        return _make_error("zotero_search_by_tag", str(e))
+
+
+# ── Tool: zotero_fulltext_search ───────────────────────────────────
+
+
+@mcp.tool()
+async def zotero_fulltext_search(query: str, limit: int = 20) -> str:
+    """Search Zotero library across all fields including full-text content.
+
+    Uses qmode=everything to search titles, creators, abstracts, and
+    indexed PDF full-text content in one call.
+    """
+    if not query:
+        return _make_error("zotero_fulltext_search", "query is required")
+    if not _zot:
+        return _make_error(
+            "zotero_fulltext_search", "Web API client not initialized"
+        )
+    try:
+        items = await asyncio.to_thread(
+            _zot.items, q=query, qmode="everything", limit=limit
+        )
+        return json.dumps(
+            {
+                "total": len(items or []),
+                "query": query,
+                "items": [_format_item(i) for i in (items or [])],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    except Exception as e:
+        logger.error("zotero_fulltext_search failed: %s", e)
+        return _make_error("zotero_fulltext_search", str(e))
+
+
+# ── Tool: zotero_get_attachments ────────────────────────────────────
+
+
+@mcp.tool()
+async def zotero_get_attachments(item_key: str) -> str:
+    """Get child items (attachments and notes) for a Zotero item.
+
+    Returns key, title, filename, contentType, linkMode, and file size/md5
+    for each attachment. Notes are included with their note text.
+    """
+    if not item_key:
+        return _make_error("zotero_get_attachments", "item_key is required")
+    if not _zot:
+        return _make_error(
+            "zotero_get_attachments", "Web API client not initialized"
+        )
+    try:
+        children = await asyncio.to_thread(_zot.children, item_key)
+        return json.dumps(
+            {
+                "total": len(children or []),
+                "itemKey": item_key,
+                "attachments": children or [],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    except Exception as e:
+        logger.error("zotero_get_attachments(%s) failed: %s", item_key, e)
+        return _make_error("zotero_get_attachments", str(e))
+
+
+# ── Tool: zotero_get_annotations ────────────────────────────────────
+
+
+@mcp.tool()
+async def zotero_get_annotations(item_key: str) -> str:
+    """Get PDF annotations for a Zotero item.
+
+    Traverses paper → attachment → annotations to find highlights and notes
+    made in the Zotero PDF reader. Returns annotation type, text, color,
+    page number, and comment for each annotation.
+    """
+    if not item_key:
+        return _make_error("zotero_get_annotations", "item_key is required")
+    if not _zot:
+        return _make_error(
+            "zotero_get_annotations", "Web API client not initialized"
+        )
+    try:
+        # Step 1: get paper's children, find PDF attachments
+        children = await asyncio.to_thread(_zot.children, item_key)
+        attachment_keys = []
+        for child in (children or []):
+            data = child.get("data", child)
+            if data.get("itemType") == "attachment":
+                attachment_keys.append(data.get("key"))
+
+        # Step 2: get annotations from each attachment
+        all_annotations = []
+        for att_key in attachment_keys:
+            att_children = await asyncio.to_thread(_zot.children, att_key)
+            for child in (att_children or []):
+                data = child.get("data", child)
+                if data.get("itemType") == "annotation":
+                    all_annotations.append(
+                        {
+                            "key": data.get("key", ""),
+                            "type": data.get("annotationType", ""),
+                            "text": data.get("annotationText", ""),
+                            "comment": data.get("annotationComment", ""),
+                            "color": data.get("annotationColor", ""),
+                            "page": data.get("annotationPageLabel", ""),
+                        }
+                    )
+
+        return json.dumps(
+            {
+                "total": len(all_annotations),
+                "itemKey": item_key,
+                "annotations": all_annotations,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    except Exception as e:
+        logger.error("zotero_get_annotations(%s) failed: %s", item_key, e)
+        return _make_error("zotero_get_annotations", str(e))
 
 
 # ── Tool: zotero_get_fulltext (Local API) ─────────────────────────

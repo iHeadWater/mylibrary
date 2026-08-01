@@ -1,6 +1,6 @@
 """Tests for zotero-mcp server.py -- FastMCP Zotero tools.
 
-Tests for 6 MCP tools + helpers. All external calls are mocked.
+Tests for 12 MCP tools + helpers. All external calls are mocked.
 
 Coverage:
   - _format_item helper (12 tests)
@@ -10,6 +10,12 @@ Coverage:
   - zotero_get_collection_items (4 tests)
   - zotero_get_fulltext (4 tests)
   - zotero_get_file_info (4 tests)
+  - zotero_get_collections (3 tests)  [NEW]
+  - zotero_get_tags (3 tests)         [NEW]
+  - zotero_search_by_tag (3 tests)    [NEW]
+  - zotero_fulltext_search (3 tests)  [NEW]
+  - zotero_get_attachments (3 tests)  [NEW]
+  - zotero_get_annotations (4 tests)  [NEW]
   - Integration / initialization (4 tests)
 """
 
@@ -165,6 +171,10 @@ def mock_zot_client():
     client.item = MagicMock()
     client.top = MagicMock()
     client.collection_items = MagicMock()
+    client.collections = MagicMock()
+    client.collection_tags = MagicMock()
+    client.tags = MagicMock()
+    client.children = MagicMock()
     return client
 
 
@@ -789,6 +799,482 @@ class TestZoteroGetFileInfo:
 
         result = json.loads(result_json)
         assert result["error"] is True
+
+
+# =========================================================================
+# Fixtures for new tools
+# =========================================================================
+
+
+@pytest.fixture
+def sample_collections_list():
+    """A realistic Zotero collections response."""
+    return [
+        {
+            "key": "COLA1B2C",
+            "version": 42,
+            "name": "Hydrology",
+            "parentCollection": False,
+        },
+        {
+            "key": "COLD3E4F",
+            "version": 17,
+            "name": "Deep Learning",
+            "parentCollection": "COLA1B2C",
+        },
+    ]
+
+
+@pytest.fixture
+def sample_annotations():
+    """Realistic Zotero PDF annotation items."""
+    return [
+        {
+            "key": "ANN0001",
+            "version": 5,
+            "data": {
+                "key": "ANN0001",
+                "itemType": "annotation",
+                "annotationType": "highlight",
+                "annotationText": "LSTM outperforms traditional models",
+                "annotationComment": "Key finding",
+                "annotationColor": "#ffd400",
+                "annotationPageLabel": "3",
+                "parentItem": "ATTACH99",
+            },
+        },
+        {
+            "key": "ANN0002",
+            "version": 8,
+            "data": {
+                "key": "ANN0002",
+                "itemType": "annotation",
+                "annotationType": "note",
+                "annotationText": "",
+                "annotationComment": "Check the cited reference for methodology details",
+                "annotationColor": "#5fb236",
+                "annotationPageLabel": "5",
+                "parentItem": "ATTACH99",
+            },
+        },
+    ]
+
+
+# =========================================================================
+# Tests: zotero_get_collections (NEW)
+# =========================================================================
+
+
+class TestZoteroGetCollections:
+    """Tests for the zotero_get_collections tool (Web API via pyzotero)."""
+
+    def test_returns_collections_list(
+        self, mock_zot_client, sample_collections_list
+    ):
+        """get_collections returns collection key, name, version."""
+        mock_zot_client.collections.return_value = sample_collections_list
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_collections(limit=50)
+            )
+
+        result = json.loads(result_json)
+        assert result["total"] == 2
+        assert len(result["collections"]) == 2
+        assert result["collections"][0]["key"] == "COLA1B2C"
+        assert result["collections"][0]["name"] == "Hydrology"
+        assert result["collections"][1]["parentCollection"] == "COLA1B2C"
+        assert "error" not in result
+
+    def test_handles_empty_library(self, mock_zot_client):
+        """Empty library returns zero total, not an error."""
+        mock_zot_client.collections.return_value = []
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_collections()
+            )
+
+        result = json.loads(result_json)
+        assert result["total"] == 0
+        assert result["collections"] == []
+        assert "error" not in result
+
+    def test_handles_api_error(self, mock_zot_client):
+        """Returns error JSON when API fails."""
+        mock_zot_client.collections.side_effect = Exception("API unavailable")
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_collections()
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+        assert "context" in result
+        assert "message" in result
+
+
+# =========================================================================
+# Tests: zotero_get_tags (NEW)
+# =========================================================================
+
+
+class TestZoteroGetTags:
+    """Tests for the zotero_get_tags tool (Web API via pyzotero)."""
+
+    def test_returns_all_tags(self, mock_zot_client):
+        """get_tags returns a list of tag strings."""
+        mock_zot_client.tags.return_value = ["deep learning", "hydrology", "LSTM"]
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_tags()
+            )
+
+        result = json.loads(result_json)
+        assert result["total"] == 3
+        assert result["tags"] == ["deep learning", "hydrology", "LSTM"]
+        assert "error" not in result
+
+    def test_returns_tags_for_collection(self, mock_zot_client):
+        """get_tags filters by collection_key when provided."""
+        mock_zot_client.collection_tags.return_value = ["hydrology"]
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_tags(collection_key="COLA1B2C")
+            )
+
+        result = json.loads(result_json)
+        assert result["total"] == 1
+        assert result["tags"] == ["hydrology"]
+        assert result["collectionKey"] == "COLA1B2C"
+        mock_zot_client.collection_tags.assert_called_once_with("COLA1B2C")
+        # tags() should NOT be called when collection_key is provided
+        mock_zot_client.tags.assert_not_called()
+
+    def test_handles_api_error(self, mock_zot_client):
+        """Returns error JSON when API fails."""
+        mock_zot_client.tags.side_effect = Exception("API unavailable")
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_tags()
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+
+
+# =========================================================================
+# Tests: zotero_search_by_tag (NEW)
+# =========================================================================
+
+
+class TestZoteroSearchByTag:
+    """Tests for the zotero_search_by_tag tool (Web API via pyzotero)."""
+
+    def test_returns_items_with_tag(
+        self, mock_zot_client, sample_zotero_item_list
+    ):
+        """search_by_tag returns formatted items matching a tag."""
+        mock_zot_client.items.return_value = sample_zotero_item_list
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_search_by_tag(tag="hydrology", limit=20)
+            )
+
+        result = json.loads(result_json)
+        assert result["total"] == 1
+        assert result["tag"] == "hydrology"
+        assert len(result["items"]) == 1
+        assert result["items"][0]["key"] == "ABC12345"
+        assert "error" not in result
+
+    def test_missing_tag_returns_error(self, mock_zot_client):
+        """search_by_tag returns error when tag is empty."""
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_search_by_tag(tag="")
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+        assert "tag" in result["message"].lower()
+        mock_zot_client.items.assert_not_called()
+
+    def test_passes_tag_to_api(self, mock_zot_client):
+        """search_by_tag passes the tag parameter to items()."""
+        mock_zot_client.items.return_value = []
+
+        with patch.object(server, "_zot", mock_zot_client):
+            asyncio.run(server.zotero_search_by_tag(tag="hydrology"))
+
+        call_kwargs = mock_zot_client.items.call_args[1]
+        assert call_kwargs.get("tag") == "hydrology"
+        assert call_kwargs.get("limit") == 20
+
+
+# =========================================================================
+# Tests: zotero_fulltext_search (NEW)
+# =========================================================================
+
+
+class TestZoteroFulltextSearch:
+    """Tests for the zotero_fulltext_search tool (Web API via pyzotero)."""
+
+    def test_returns_items_with_fulltext_match(
+        self, mock_zot_client, sample_zotero_item_list
+    ):
+        """fulltext_search returns items matching across all fields."""
+        mock_zot_client.items.return_value = sample_zotero_item_list
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_fulltext_search(query="streamflow prediction", limit=20)
+            )
+
+        result = json.loads(result_json)
+        assert result["total"] == 1
+        assert result["query"] == "streamflow prediction"
+        assert len(result["items"]) == 1
+        assert "error" not in result
+
+    def test_passes_qmode_everything_to_api(self, mock_zot_client):
+        """fulltext_search uses qmode='everything' for full-text search."""
+        mock_zot_client.items.return_value = []
+
+        with patch.object(server, "_zot", mock_zot_client):
+            asyncio.run(server.zotero_fulltext_search(query="neural network"))
+
+        call_kwargs = mock_zot_client.items.call_args[1]
+        assert call_kwargs.get("q") == "neural network"
+        assert call_kwargs.get("qmode") == "everything"
+
+    def test_missing_query_returns_error(self, mock_zot_client):
+        """fulltext_search returns error when query is empty."""
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_fulltext_search(query="")
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+        assert "query" in result["message"].lower()
+        mock_zot_client.items.assert_not_called()
+
+
+# =========================================================================
+# Tests: zotero_get_attachments (NEW)
+# =========================================================================
+
+
+class TestZoteroGetAttachments:
+    """Tests for the zotero_get_attachments tool (Web API via pyzotero)."""
+
+    def test_returns_attachments_list(self, mock_zot_client):
+        """get_attachments returns child items of type attachment."""
+        attachments = [
+            {
+                "key": "ATTACH99",
+                "version": 12,
+                "data": {
+                    "key": "ATTACH99",
+                    "itemType": "attachment",
+                    "title": "paper.pdf",
+                    "filename": "paper.pdf",
+                    "contentType": "application/pdf",
+                    "linkMode": "imported_file",
+                    "md5": "abc123",
+                    "size": 2048000,
+                },
+            },
+            {
+                "key": "NOTE01",
+                "version": 3,
+                "data": {
+                    "key": "NOTE01",
+                    "itemType": "note",
+                    "note": "Important paper",
+                },
+            },
+        ]
+        mock_zot_client.children.return_value = attachments
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_attachments(item_key="ABC12345")
+            )
+
+        result = json.loads(result_json)
+        # Should include both attachment and note children
+        assert result["total"] == 2
+        assert len(result["attachments"]) == 2
+        assert result["itemKey"] == "ABC12345"
+        assert "error" not in result
+
+    def test_missing_key_returns_error(self, mock_zot_client):
+        """get_attachments returns error when item_key is empty."""
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_attachments(item_key="")
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+        assert "item_key" in result["message"].lower()
+        mock_zot_client.children.assert_not_called()
+
+    def test_handles_item_with_no_attachments(self, mock_zot_client):
+        """Item with no children returns empty list."""
+        mock_zot_client.children.return_value = []
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_attachments(item_key="NO_ATTACH")
+            )
+
+        result = json.loads(result_json)
+        assert result["total"] == 0
+        assert result["attachments"] == []
+        assert "error" not in result
+
+
+# =========================================================================
+# Tests: zotero_get_annotations (NEW)
+# =========================================================================
+
+
+class TestZoteroGetAnnotations:
+    """Tests for the zotero_get_annotations tool (Web API, two-step)."""
+
+    def test_returns_annotations_from_pdf_attachment(
+        self, mock_zot_client, sample_annotations
+    ):
+        """get_annotations traverses paper→attachment→annotations."""
+        # Step 1: paper has a PDF attachment child
+        paper_children = [
+            {
+                "key": "ATTACH99",
+                "version": 12,
+                "data": {
+                    "key": "ATTACH99",
+                    "itemType": "attachment",
+                    "title": "paper.pdf",
+                    "contentType": "application/pdf",
+                    "linkMode": "imported_file",
+                },
+            },
+            {
+                "key": "NOTE01",
+                "version": 3,
+                "data": {
+                    "key": "NOTE01",
+                    "itemType": "note",
+                    "note": "Important paper",
+                },
+            },
+        ]
+        # Step 2: the attachment has annotation children
+        attachment_children = sample_annotations
+
+        # First children() call returns paper's direct children
+        # Second call returns the attachment's children
+        mock_zot_client.children.side_effect = [
+            paper_children,
+            attachment_children,
+        ]
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_annotations(item_key="ABC12345")
+            )
+
+        result = json.loads(result_json)
+        assert result["total"] == 2
+        assert result["itemKey"] == "ABC12345"
+        assert len(result["annotations"]) == 2
+        assert result["annotations"][0]["key"] == "ANN0001"
+        assert result["annotations"][0]["type"] == "highlight"
+        assert result["annotations"][0]["text"] == "LSTM outperforms traditional models"
+        assert result["annotations"][0]["color"] == "#ffd400"
+        assert result["annotations"][0]["page"] == "3"
+        assert result["annotations"][1]["type"] == "note"
+        assert result["annotations"][1]["comment"] == (
+            "Check the cited reference for methodology details"
+        )
+        assert "error" not in result
+
+    def test_missing_key_returns_error(self, mock_zot_client):
+        """get_annotations returns error when item_key is empty."""
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_annotations(item_key="")
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+        assert "item_key" in result["message"].lower()
+        mock_zot_client.children.assert_not_called()
+
+    def test_handles_item_with_no_attachment(self, mock_zot_client):
+        """Paper with no attachment children returns empty annotations."""
+        # Paper has children but no attachment type
+        mock_zot_client.children.return_value = [
+            {
+                "key": "NOTE01",
+                "version": 3,
+                "data": {
+                    "key": "NOTE01",
+                    "itemType": "note",
+                    "note": "Important paper",
+                },
+            },
+        ]
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_annotations(item_key="NO_PDF")
+            )
+
+        result = json.loads(result_json)
+        assert result["total"] == 0
+        assert result["annotations"] == []
+        assert result["itemKey"] == "NO_PDF"
+        assert "error" not in result
+
+    def test_handles_attachment_with_no_annotations(self, mock_zot_client):
+        """PDF attachment exists but has no annotation children."""
+        paper_children = [
+            {
+                "key": "ATTACH99",
+                "version": 12,
+                "data": {
+                    "key": "ATTACH99",
+                    "itemType": "attachment",
+                    "title": "paper.pdf",
+                    "contentType": "application/pdf",
+                },
+            },
+        ]
+
+        mock_zot_client.children.side_effect = [
+            paper_children,
+            [],  # attachment has no annotations
+        ]
+
+        with patch.object(server, "_zot", mock_zot_client):
+            result_json = asyncio.run(
+                server.zotero_get_annotations(item_key="NO_ANNOT")
+            )
+
+        result = json.loads(result_json)
+        assert result["total"] == 0
+        assert result["annotations"] == []
+        assert "error" not in result
 
 
 # =========================================================================
