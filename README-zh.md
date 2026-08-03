@@ -1,11 +1,12 @@
 # Hydro AI Papers
 
-AI 驱动的水文水资源研究 —— **论文收集、代码复现、知识图谱构建**。
+AI 驱动的水文水资源研究 —— **Zotero 文献工具、知识图谱构建、论文复现**。
 
-本仓库承担两个角色：
+本仓库承担三个角色：
 
-1. **知识图谱** — 使用 [graphify](https://github.com/graphify) 从水文文献中构建结构化、可查询的知识库，包含实体提取、社区发现和 Obsidian 兼容导出。
-2. **论文归档** — 精选并复现 AI 驱动的水文学关键论文，附带代码和数据。
+1. **Zotero 工具** — 12 个工具的 MCP Server 用于查询 Zotero 文献库，以及论文入库流水线（DOI → PDF → Zotero 条目）。[📖 文档](http://localhost:8000)
+2. **知识图谱** — 使用 [graphify](https://github.com/graphify) 从水文文献中构建结构化、可查询的知识库，包含实体提取、社区发现和 Obsidian 兼容导出。
+3. **论文归档** — 精选并复现 AI 驱动的水文学关键论文，附带代码和数据。
 
 ## 快速开始
 
@@ -16,6 +17,24 @@ uv pip install -e .
 
 cp .env.example .env   # 填入 DEEPSEEK_API_KEY，设置 HYDROLITAGENT_OUTPUT
 ```
+
+### Zotero 工具
+
+```bash
+# 启动 Zotero MCP Server（12 个工具，端口 8002）
+uv run python -m hydrolitagent.zotero.server
+
+# 通过 DOI 添加论文到 Zotero
+uv run python -m hydrolitagent.zotero.paper_to_zotero --metadata-only "10.1038/s41586-024-07145-1"
+
+# 完整流水线：下载 PDF + Zotero 入库
+bash scripts/run_paper_pipeline.sh "10.1038/s41586-024-07145-1"
+
+# 启动文档站点
+uv run mkdocs serve
+```
+
+详见 [文档站点](http://localhost:8000) 获取 MCP 工具完整参考和论文入库指南。
 
 ### 构建知识图谱
 
@@ -54,9 +73,16 @@ hydrolitagent/           # 知识图谱工具集
 ├── graph/
 │   ├── build.py         # 单 topic 图谱构建管道
 │   └── merge.py         # 多 topic 合并 + D3.js 可视化
-└── query/search.py      # 确定性图查询（不走 LLM）
+├── query/search.py      # 确定性图查询（不走 LLM）
+└── zotero/              # Zotero 集成
+    ├── server.py         # 12 工具 MCP Server（FastMCP，端口 8002）
+    ├── paper_to_zotero.py # DOI → Zotero 条目（Crossref/arXiv 元数据）
+    └── zot_link_gdrive.py # Google Drive → linked_file 附件
 
 configs/                 # 实体提取的 LLM prompt 模板
+scripts/                 # run_paper_pipeline.sh — 论文一键入库
+skills/                  # Agent 技能（zotero-query, paper-to-zotero）
+docs/                    # 文档站点（mkdocs-material）
 
 equation_from_data/      # 论文复现：从数据发现方程
 google_floodhub/         # 论文复现：Google 洪水预测

@@ -1,11 +1,12 @@
 # Hydro AI Papers
 
-AI-driven hydrology and water resources research — **paper collection, code reproduction, and knowledge graph construction**.
+AI-driven hydrology and water resources research — **Zotero literature tools, knowledge graph construction, and paper reproduction**.
 
-This repository serves a dual purpose:
+This repository serves three purposes:
 
-1. **Knowledge Graph** — Build a structured, queryable knowledge base from hydrology literature using [graphify](https://github.com/graphify), with entity extraction, community detection, and Obsidian-compatible export.
-2. **Paper Archive** — Curate and reproduce key papers in AI-driven hydrology, with accompanying code and data.
+1. **Zotero Tools** — MCP Server with 12 tools for querying your Zotero library, plus a paper ingestion pipeline (DOI → PDF → Zotero entry). [📖 Docs](http://localhost:8000)
+2. **Knowledge Graph** — Build a structured, queryable knowledge base from hydrology literature using [graphify](https://github.com/graphify), with entity extraction, community detection, and Obsidian-compatible export.
+3. **Paper Archive** — Curate and reproduce key papers in AI-driven hydrology, with accompanying code and data.
 
 ## Quick Start
 
@@ -18,6 +19,24 @@ uv pip install -e .
 # Configure
 cp .env.example .env   # Add your DEEPSEEK_API_KEY, set HYDROLITAGENT_OUTPUT
 ```
+
+### Zotero Tools
+
+```bash
+# Start the Zotero MCP Server (12 tools on port 8002)
+uv run python -m hydrolitagent.zotero.server
+
+# Add a paper to Zotero by DOI
+uv run python -m hydrolitagent.zotero.paper_to_zotero --metadata-only "10.1038/s41586-024-07145-1"
+
+# Full pipeline: download PDF + add to Zotero
+bash scripts/run_paper_pipeline.sh "10.1038/s41586-024-07145-1"
+
+# Start docs
+uv run mkdocs serve
+```
+
+See the [documentation site](http://localhost:8000) for the full MCP tools reference and paper pipeline guide.
 
 ### Build a Knowledge Graph
 
@@ -56,9 +75,16 @@ hydrolitagent/           # Knowledge graph toolkit
 ├── graph/
 │   ├── build.py         # Single-topic graph build pipeline
 │   └── merge.py         # Multi-topic merge + D3.js HTML viz
-└── query/search.py      # Deterministic graph queries (no LLM)
+├── query/search.py      # Deterministic graph queries (no LLM)
+└── zotero/              # Zotero integration
+    ├── server.py         # 12-tool MCP Server (FastMCP, port 8002)
+    ├── paper_to_zotero.py # DOI → Zotero entry with Crossref/arXiv metadata
+    └── zot_link_gdrive.py # Google Drive → linked_file attachment
 
 configs/                 # LLM prompt templates for entity extraction
+scripts/                 # run_paper_pipeline.sh — one-shot paper ingestion
+skills/                  # Agent skills (zotero-query, paper-to-zotero)
+docs/                    # Documentation site (mkdocs-material)
 
 equation_from_data/      # Paper: equation discovery from data
 google_floodhub/         # Paper: Google flood forecasting

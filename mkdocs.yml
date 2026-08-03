@@ -1,0 +1,58 @@
+site_name: Hydro AI Papers
+site_description: Zotero literature tools for AI-driven hydrology research
+repo_url: https://github.com/OuyangWenyu/hydro_ai_papers
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.sections
+    - navigation.expand
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换至暗色模式
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换至亮色模式
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            show_source: true
+            show_root_heading: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - admonition
+  - footnotes
+  - toc:
+      permalink: true
+
+nav:
+  - 首页: index.md
+  - 快速开始:
+      - 安装配置: getting-started/installation.md
+      - 5 分钟上手: getting-started/quickstart.md
+  - 用户指南:
+      - MCP Server 工具: user-guide/mcp-tools.md
+      - 论文入库流水线: user-guide/paper-pipeline.md
+      - Zotero 配置参考: user-guide/config.md
+  - 开发:
+      - 模块架构: development/architecture.md
+      - 贡献指南: development/contributing.md
