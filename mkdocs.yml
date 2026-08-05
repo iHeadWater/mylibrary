@@ -1,6 +1,6 @@
 site_name: Hydro AI Papers
 site_description: Zotero literature tools for AI-driven hydrology research
-repo_url: https://github.com/OuyangWenyu/hydro_ai_papers
+repo_url: https://github.com/OuyangWenyu/mylibrary
 theme:
   name: material
   language: zh

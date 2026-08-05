@@ -4,11 +4,9 @@ Literature knowledge base for AI-driven hydrology and water resources research.
 
 ## 定位 (Role)
 
-mylibrary 是 **文献库处理 + 知识库 + 主题深度探讨** 的仓库,以 **Zotero 库为分界线**:
-- **上游(dailyinfo)**:采集/下载/入库 → 文献进入 Zotero 之前的动作
-- **本仓库(mylibrary)**:读 Zotero → 精读分析卡 → 主题分类 → 公众号文章/播客 → 知识库积累
+mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入库 → 精读分析卡 → 主题分类 → 公众号文章/播客 → 知识库积累。**Zotero 库是文献库的起点**,深度处理典型地以 Zotero 库为文献来源(通过 Zotero MCP 读库);**Zotero 论文入库也是本仓库能力**(`run_paper_pipeline.sh`/`paper_to_zotero.py`)。上游 dailyinfo 负责进入 Zotero 之前的情报采集(资讯流、原始下载)。
 
-**Zotero 是唯一共享事实层。** 本仓库的一切输入来自 Zotero MCP(读库),不维护自己的 Zotero 镜像,不读 dailyinfo 的输出文件。
+**Zotero 是文献库的事实层。** 深度处理的输入来自 Zotero MCP(读库);本仓库不维护自己的 Zotero 镜像,不读 dailyinfo 的输出文件。
 
 ## Zotero 接入方式 (IMPORTANT)
 

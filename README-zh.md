@@ -1,108 +1,164 @@
-# Hydro AI Papers
+# Hydro AI Papers (mylibrary)
 
-AI 驱动的水文水资源研究 —— **Zotero 文献工具、知识图谱构建、论文复现**。
+[English](README.md)
 
-本仓库承担三个角色：
+AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:精读、主题分类、公众号文章、播客、知识图谱,以 **Zotero 文献库**为根基。
 
-1. **Zotero 工具** — 12 个工具的 MCP Server 用于查询 Zotero 文献库，以及论文入库流水线（DOI → PDF → Zotero 条目）。[📖 文档](http://localhost:8000)
-2. **知识图谱** — 使用 [graphify](https://github.com/graphify) 从水文文献中构建结构化、可查询的知识库，包含实体提取、社区发现和 Obsidian 兼容导出。
-3. **论文归档** — 精选并复现 AI 驱动的水文学关键论文，附带代码和数据。
+## 定位
+
+mylibrary 承担**情报汇集之后的深度处理**:
+
+- **Zotero 库是文献库的起点** —— 深度处理典型地以 Zotero 库为文献来源(通过 MCP server 读库)。
+- **Zotero 论文入库也是本仓库能力** —— DOI / arXiv / 标题 → PDF → Zotero 条目的流水线(`run_paper_pipeline.sh`)就在本仓库。
+- 上游的兄弟仓库(dailyinfo)负责**进入 Zotero 之前的情报采集**(资讯流、原始下载);本仓库不读它的输出文件。
+
+产物沉淀为**文献知识库**:`papers/` 按主题组织(10 个主题,6000+ 篇),以及 `outputs/` 下的精读分析卡、公众号文章、播客。
+
+## 能力
+
+| 能力 | 命令 | 文档 |
+|---|---|---|
+| **Zotero 文献查询** — 12 个工具的 MCP Server(FastMCP SSE,端口 8002):搜索、浏览、读取全文/附件/批注 | `uv run python -m hydrolitagent.zotero.server` | [MCP 工具](docs/user-guide/mcp-tools.md) |
+| **论文入库** — DOI / arXiv ID / 标题 → PDF → Zotero 条目 + `linked_file` 附件 | `bash scripts/run_paper_pipeline.sh "<DOI|arXiv|title>"` | [入库流水线](docs/user-guide/paper-pipeline.md) |
+| **论文 PDF 下载** — 机构访问(大连理工 SSO)通过 Claude Code + Playwright 下载 | `uv run python -m hydrolitagent.literature.download_pdf doi <doi>` | [PDF 下载](docs/user-guide/download-pdf.md) |
+| **Zotero 入库 linked_file** — 已下载 PDF 同步进 Zotero 作为 `linked_file`(零云端配额) | `uv run python -m hydrolitagent.literature.zotero_sync <pdf> <doi>` | [Zotero 入库](docs/user-guide/zotero-sync.md) |
+| **Zotero → NotebookLM** — 新增论文整理成中文简报 / 音频 / 视频概览 | `uv run python -m hydrolitagent.literature.zotero_notebooklm --collection <name> --artifact audio` | [NotebookLM](docs/user-guide/zotero-notebooklm.md) |
+| **文献深度处理** — Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [文献深度处理](docs/user-guide/literature.md) |
+| **知识图谱** — 用 [graphify](https://github.com/graphify) 构建结构化、可查询的知识库(实体提取、社区发现、Obsidian 导出) | `uv run hydrolitagent graph papers/your-topic/` | [模块架构](docs/development/architecture.md) |
+| **论文复现** — 复现 AI 驱动水文学关键论文 | — | `equation_from_data/`、`google_floodhub/` |
 
 ## 快速开始
 
 ```bash
-git clone git@github.com:OuyangWenyu/hydro_ai_papers.git
-cd hydro_ai_papers
+# 克隆并安装
+git clone git@github.com:OuyangWenyu/mylibrary.git
+cd mylibrary
 uv pip install -e .
 
-cp .env.example .env   # 填入 DEEPSEEK_API_KEY，设置 HYDROLITAGENT_OUTPUT
+# 配置
+cp .env.example .env   # 填入 DEEPSEEK_API_KEY;设置 HYDROLITAGENT_OUTPUT、ZOTERO_API_KEY、ZOTERO_LIBRARY_ID
 ```
+
+完整参考(Zotero Desktop / Linked Attachment Base Directory 配置、环境变量、TOML 配置)见[安装配置](docs/getting-started/installation.md)。
+
+## 常用命令
 
 ### Zotero 工具
 
 ```bash
-# 启动 Zotero MCP Server（12 个工具，端口 8002）
+# 启动 12 个工具的 MCP Server(端口 8002)
 uv run python -m hydrolitagent.zotero.server
 
-# 通过 DOI 添加论文到 Zotero
+# 通过 DOI 添加论文到 Zotero(仅元数据)
 uv run python -m hydrolitagent.zotero.paper_to_zotero --metadata-only "10.1038/s41586-024-07145-1"
 
-# 完整流水线：下载 PDF + Zotero 入库
+# 一键流水线:下载 PDF + 建 Zotero 条目 + linked_file 附件
 bash scripts/run_paper_pipeline.sh "10.1038/s41586-024-07145-1"
 
-# 启动文档站点
-uv run mkdocs serve
+# 把已有的 GDrive PDF 链接为 Zotero linked_file
+uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>
 ```
 
-详见 [文档站点](http://localhost:8000) 获取 MCP 工具完整参考和论文入库指南。
-
-### 构建知识图谱
+### Literature CLI(入库后深度处理)
 
 ```bash
-# 对一个目录下的 Markdown 论文执行完整 pipeline
-uv run hydrolitagent prepare papers/your-topic/          # 第一步：检测 + 分批
-uv run hydrolitagent extract papers/your-topic/           # 第二步：LLM 提取
-uv run hydrolitagent graph papers/your-topic/             # 第三步：建图 + 聚类 + 导出
+# 机构访问下载 PDF
+uv run python -m hydrolitagent.literature.download_pdf doi <doi>
+
+# 把已下载 PDF 同步进 Zotero 作为 linked_file
+uv run python -m hydrolitagent.literature.zotero_sync <pdf_path> <doi> --json
+
+# Zotero → NotebookLM 简报 / 音频 / 视频(需 [notebooklm] extra)
+uv run --extra notebooklm python -m hydrolitagent.literature.zotero_notebooklm --collection <name> --artifact audio
+
+# 公众号工作流
+uv run python -m hydrolitagent.literature.wechat.polish <draft.md>
+uv run python -m hydrolitagent.literature.wechat.figure <article.md>
+uv run python -m hydrolitagent.literature.wechat.push <polished.md> [--thumb <media_id>]
+
+# 上传播客音频到 B 站
+uv run python -m hydrolitagent.literature.bilibili_upload <audio.mp3> --title "标题" --tags "AI,水文,科研" [--dry-run]
+```
+
+### 知识图谱
+
+```bash
+# 对目录下的 Markdown 论文执行三步 pipeline
+uv run hydrolitagent prepare papers/your-topic/    # 第一步:检测 + 分批
+uv run hydrolitagent extract papers/your-topic/     # 第二步:LLM 提取
+uv run hydrolitagent graph papers/your-topic/       # 第三步:建图 + 聚类 + 导出
 
 # 合并多个 topic 图谱为统一图谱
 uv run hydrolitagent merge --graphs-dir outputs/graph/ --output outputs/graph/unified/
 
-# 查询图谱
+# 查询图谱(确定性查询,不走 LLM)
 uv run hydrolitagent query outputs/graph/graph.json --search "LSTM"
-uv run hydrolitagent query outputs/graph/graph.json --neighbors <node_id> --depth 2
-uv run hydrolitagent query outputs/graph/graph.json --path <node_a> <node_b>
 ```
 
-### 输出产物
+每次建图会把 `graph.json`、`graph.html`(D3.js)、`GRAPH_REPORT.md`、`obsidian/`(带 `[[wikilinks]]` 的 Obsidian 知识库)写入 `HYDROLITAGENT_OUTPUT` 或 `--output`。
 
-每次构建会产出以下文件（写入 `HYDROLITAGENT_OUTPUT` 或 `--output`）：
+## Agent Skills
 
-| 文件 | 说明 |
-|------|------|
-| `graph.json` | 完整图数据：节点、边、社区、超边 |
-| `graph.html` | 交互式 D3.js 力导向可视化 |
-| `graph_hierarchical.html` | 层级 Topic/Community 下钻视图 |
-| `GRAPH_REPORT.md` | 文字报告：核心节点、意外连接、统计信息 |
-| `obsidian/` | Obsidian 知识库：每个节点一个 `.md` 页面，带 `[[wikilinks]]` |
+| Skill | 功能 |
+|---|---|
+| `zotero-query` | 通过 MCP 工具查询 Zotero 文献库 |
+| `paper-to-zotero` | 下载论文并入库 Zotero(DOI / arXiv / 标题) |
+| `run-paper-to-zotero` | 一键 paper-fetch → GDrive → Zotero linked_file 流水线 |
+| `download-pdf` | Playwright 机构访问下载 PDF |
+| `zotero-notebooklm` | Zotero 论文 → NotebookLM 中文简报 / 音频 / 视频 |
+| `weekly-review` | 每周文献综述:精读 → 分析卡 → 公众号文章 → NotebookLM 播客 |
+| `weekly-report-skill` | NotebookLM 输出 → 公众号周报 MD |
+| `figure-skill-v2` | 每篇论文配图 + 整期封面(优先 PDF 提取,否则智谱 CogView 生成) |
+| `bilibili-upload` | 播客音频 → MP4 → B 站上传 |
 
 ## 项目结构
 
 ```
-hydrolitagent/           # 知识图谱工具集
-├── cli.py               # CLI：prepare, extract, graph, merge, query
-├── graph/
-│   ├── build.py         # 单 topic 图谱构建管道
-│   └── merge.py         # 多 topic 合并 + D3.js 可视化
-├── query/search.py      # 确定性图查询（不走 LLM）
-└── zotero/              # Zotero 集成
-    ├── server.py         # 12 工具 MCP Server（FastMCP，端口 8002）
-    ├── paper_to_zotero.py # DOI → Zotero 条目（Crossref/arXiv 元数据）
-    └── zot_link_gdrive.py # Google Drive → linked_file 附件
+hydrolitagent/
+├── cli.py               # CLI 入口:prepare, extract, graph, merge, query
+├── zotero/              # Zotero 集成
+│   ├── server.py         # 12 工具 MCP Server(FastMCP,端口 8002)
+│   ├── paper_to_zotero.py # DOI/arXiv/标题 → Zotero 条目(Crossref/arXiv 元数据)
+│   └── zot_link_gdrive.py # Google Drive → linked_file 附件
+├── literature/          # Literature CLI(入库后深度处理)
+│   ├── download_pdf.py      # 机构访问下载 PDF
+│   ├── zotero_sync.py       # PDF → Zotero linked_file
+│   ├── zotero_notebooklm.py # Zotero → NotebookLM 简报/音频/视频
+│   ├── bilibili_upload.py   # 播客 → MP4 → B 站
+│   └── wechat/              # figure.py, polish.py, push.py
+├── graph/               # 知识图谱构建 + 合并(graphify)
+│   ├── build.py          # prepare / extract / graph
+│   └── merge.py          # 多 topic 合并 + D3.js HTML 可视化
+└── query/               # 确定性图查询(不走 LLM)
+    └── search.py
 
-configs/                 # 实体提取的 LLM prompt 模板
-scripts/                 # run_paper_pipeline.sh — 论文一键入库
-skills/                  # Agent 技能（zotero-query, paper-to-zotero）
-docs/                    # 文档站点（mkdocs-material）
+configs/                 # Prompt / 提取配置
+scripts/                 # run_paper_pipeline.sh, chunk_fulltext.py
+skills/                  # 9 个 Agent skill
+docs/                    # 文档站点(mkdocs-material)
+outputs/                 # 精读产物:outputs/weekly-review/{date}/{cards,article,podcast}
+papers/                  # 按主题组织的文献库(10 个主题)
 
-equation_from_data/      # 论文复现：从数据发现方程
-google_floodhub/         # 论文复现：Google 洪水预测
+equation_from_data/      # 论文复现:从数据发现方程
+google_floodhub/         # 论文复现:Google 洪水预测
 definitions.py           # 共享常量
 ```
 
-## 论文
+## 文档
 
-精选水文 AI 论文及复现代码：
+文档站点基于 [mkdocs-material](https://squidfunk.github.io/mkdocs-material/),源码在 [`docs/`](docs/):
 
-1. [Global prediction of extreme floods in ungauged watersheds | Nature](https://www.nature.com/articles/s41586-024-07145-1) ([代码](./google_floodhub/))
-
-更多论文和代码将持续更新。
+```bash
+uv run mkdocs serve    # http://127.0.0.1:8000
+uv run mkdocs build --strict
+```
 
 ## 贡献
 
-欢迎贡献：
+欢迎贡献:
 
 1. Fork 并创建新分支
-2. 将论文或代码添加到相应位置
+2. 将论文、代码或文档添加到相应位置
 3. 确保有分享权限且兼容 [MIT License](LICENSE)
 4. 提交 PR 并附上清晰说明
 

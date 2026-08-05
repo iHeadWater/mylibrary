@@ -9,8 +9,8 @@
 ## 安装项目
 
 ```bash
-git clone git@github.com:OuyangWenyu/hydro_ai_papers.git
-cd hydro_ai_papers
+git clone git@github.com:OuyangWenyu/mylibrary.git
+cd mylibrary
 uv pip install -e .
 ```
 
