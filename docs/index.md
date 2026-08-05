@@ -48,6 +48,11 @@ skills/                    # Agent 可用的 Skill
 - [5 分钟上手](getting-started/quickstart.md) — 查询文献、添加论文、启动服务
 - [MCP Server 工具](user-guide/mcp-tools.md) — 12 个 MCP 工具完整参考
 - [论文入库流水线](user-guide/paper-pipeline.md) — DOI 到 Zotero 的完整流程
+- [论文 PDF 下载（机构访问）](user-guide/download-pdf.md) — Playwright 浏览器下载
+- [Zotero 入库（linked_file）](user-guide/zotero-sync.md) — PDF → Zotero 条目
+- [Zotero → NotebookLM 简报](user-guide/zotero-notebooklm.md) — 新机器配置与完整工作流
+- [文献深度处理](user-guide/literature.md) — 精读/主题/公众号/播客 CLI
 - [Zotero 配置参考](user-guide/config.md) — 配置文件与环境变量
 - [模块架构](development/architecture.md) — 代码结构与数据流
 - [贡献指南](development/contributing.md) — 如何运行测试与添加新工具
+- [决策记录](adr/0001-zotero-linked-file-sync.md) — 为什么用 linked_file

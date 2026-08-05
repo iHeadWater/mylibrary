@@ -178,6 +178,7 @@ results/*
 .DS_Store
 .uv-cache/
 .pytest-tmp/
+.playwright-mcp/
 ~$*
 outputs/
 .graph_state.toml
@@ -187,3 +188,6 @@ hydrolitagent.egg-info/
 papers/
 .claude/settings.local.json
 tasks/
+.claude/
+.specify/
+.codegraph/

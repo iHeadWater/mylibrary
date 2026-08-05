@@ -75,8 +75,24 @@ bash scripts/run_paper_pipeline.sh --dry-run "10.1038/s41586-024-07145-1"
 uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>
 ```
 
+## 场景 5：文献深度处理
+
+对已入库的 Zotero 文献做精读、主题分析、公众号/播客产出(该能力从 dailyinfo 迁入)。
+
+```bash
+# 每周文献综述:精读 → 8 段分析卡 → 主题聚类 → 文章 → 播客
+# (由 skills/weekly-review/ 驱动,产物在 outputs/weekly-review/{date}/)
+
+# B 站发布 podcast
+uv run python -m hydrolitagent.literature.bilibili_upload audio.mp3 --title "标题" --dry-run
+
+# Zotero → NotebookLM 音频
+uv run python -m hydrolitagent.literature.zotero_notebooklm --collection water --artifact audio
+```
+
 ## 下一步
 
 - [MCP Server 工具详解](../user-guide/mcp-tools.md) — 每个工具的用途、参数和返回格式
 - [论文入库流水线详解](../user-guide/paper-pipeline.md) — 完整流程和故障排查
+- [文献深度处理详解](../user-guide/literature.md) — literature CLI 和知识库
 - [Zotero 配置参考](../user-guide/config.md) — 环境变量和配置文件

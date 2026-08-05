@@ -52,7 +52,12 @@ nav:
   - 用户指南:
       - MCP Server 工具: user-guide/mcp-tools.md
       - 论文入库流水线: user-guide/paper-pipeline.md
+      - 论文 PDF 下载: user-guide/download-pdf.md
+      - Zotero 入库（linked_file）: user-guide/zotero-sync.md
+      - Zotero → NotebookLM 简报: user-guide/zotero-notebooklm.md
+      - 文献深度处理: user-guide/literature.md
       - Zotero 配置参考: user-guide/config.md
   - 开发:
       - 模块架构: development/architecture.md
       - 贡献指南: development/contributing.md
+      - 决策记录: adr/0001-zotero-linked-file-sync.md

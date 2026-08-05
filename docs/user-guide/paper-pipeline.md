@@ -158,3 +158,9 @@ uv run python -m hydrolitagent.zotero.zot_link_gdrive --dry-run <ZOTERO_KEY> <fi
 ```
 
 使用 `attachments:` scheme，路径由 Zotero 桌面版的 **Linked Attachment Base Directory** 解析。
+
+## 相关文档
+
+- [论文 PDF 下载（机构访问）](download-pdf.md) — 需 DUT SSO 的出版商手动下载
+- [Zotero 入库（linked_file）](zotero-sync.md) — 已下载 PDF 的 linked_file 入库
+- [ADR-0001：linked_file 设计](../adr/0001-zotero-linked-file-sync.md) — 为什么用 linked_file

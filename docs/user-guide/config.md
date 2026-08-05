@@ -21,6 +21,24 @@ ZOTERO_LOCAL_API_URL=http://host.docker.internal:23119
 | `ZOTERO_LIBRARY_TYPE` | MCP Server | `user`（默认）或 `group`（群组库） |
 | `ZOTERO_LOCAL_API_URL` | MCP Server (Local API 工具) | 本地全文检索 API 地址 |
 
+### 文献深度处理（literature CLI）环境变量
+
+| 变量 | 使用方 | 说明 |
+|------|--------|------|
+| `ZOTERO_API_KEY` | zotero_sync.py | Zotero Web API 密钥 |
+| `ZOTERO_LIBRARY_ID` | zotero_sync.py | Zotero 数字型用户 ID |
+| `GDRIVE_PAPERS_PATH` | zotero_sync.py | GDrive 论文文件夹（= Linked Attachment Base Directory） |
+| `ZHIPUAI_API_KEY` | wechat/figure.py | 智谱 AI(CogView)配图/封面 |
+| `WECHAT_APPID` | wechat/push.py | 公众号 AppID |
+| `WECHAT_APPSECRET` | wechat/push.py | 公众号 AppSecret |
+| `WECHAT_THUMB_MEDIA_ID` | wechat/push.py | 公众号默认封面 media_id |
+| `NOTEBOOKLM_HOME` | zotero_notebooklm.py | NotebookLM CLI 配置目录(默认 `.tmp/notebooklm`) |
+| `ZOTERO_LOCAL_BASE_URL` | zotero_notebooklm.py | Zotero 本地 API(默认 `http://127.0.0.1:23119`) |
+
+> ⚠️ 凭据一律从环境变量读取,不要硬编码进源码。参见 [文献深度处理](literature.md)。
+
+> **两种 Zotero 配置模型并存**：`paper_to_zotero.py` / `zot_link_gdrive.py`（入库流水线）用 TOML 配置文件（见下节）；`zotero_sync.py`（文献深度处理）用上面的环境变量。两者都用 Web API 凭据，但读取方式不同。
+
 ## Zotero 配置文件
 
 论文入库流水线（`paper_to_zotero.py`、`zot_link_gdrive.py`）使用 TOML 配置文件：

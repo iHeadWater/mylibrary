@@ -3,23 +3,39 @@
 ## 整体结构
 
 ```text
-hydrolitagent/zotero/
-├── __init__.py              # 包入口
-├── server.py                # MCP Server（12 个工具）
-├── paper_to_zotero.py       # DOI → Zotero 条目
-└── zot_link_gdrive.py       # Google Drive → linked_file 附件
+hydrolitagent/
+├── zotero/                  # Zotero 集成（MCP Server + 入库）
+│   ├── __init__.py
+│   ├── server.py            # MCP Server（12 个工具,端口 8002）
+│   ├── paper_to_zotero.py   # DOI → Zotero 条目
+│   └── zot_link_gdrive.py   # Google Drive → linked_file 附件
+├── literature/              # 文献深度处理（从 dailyinfo 迁入）
+│   ├── _paths.py            # 路径助手
+│   ├── bilibili_upload.py   # B 站发布
+│   ├── zotero_notebooklm.py # Zotero → NotebookLM
+│   └── wechat/              # 公众号（figure/polish/push）
+├── graph/                   # graphify 知识图谱
+└── query/                   # 图查询
 
 scripts/
-└── run_paper_pipeline.sh    # 论文一键入库 Shell 脚本
+├── run_paper_pipeline.sh    # 论文一键入库 Shell 脚本
+└── chunk_fulltext.py        # 大文档切块（weekly-review 辅助）
 
 skills/
 ├── zotero-query/            # 文献查询 Skill
 ├── paper-to-zotero/         # 论文入库 Skill（详细版）
-└── run-paper-to-zotero/     # 论文入库 Skill（简化版）
+├── run-paper-to-zotero/     # 论文入库 Skill（简化版）
+├── weekly-review/           # 每周文献综述（从 dailyinfo 迁入）
+├── zotero-notebooklm/       # Zotero → NotebookLM（迁入）
+├── weekly-report-skill/     # 公众号周报（迁入）
+├── figure-skill-v2/         # 配图/封面（迁入）
+└── bilibili-upload/         # B 站发布（迁入）
 
-tests/
-├── test_zotero_server.py    # MCP Server 测试（56 个）
-└── test_paper_to_zotero.py  # paper_to_zotero 测试
+outputs/
+└── weekly-review/{date}/    # 精读产物（cards/article/podcast）
+
+papers/                      # 按主题组织的文献库（知识库核心资产）
+tests/                       # pytest（含迁入的 test_literature_*）
 ```
 
 ## 数据流
