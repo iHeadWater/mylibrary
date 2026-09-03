@@ -1,0 +1,131 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="drawio" version="31.1.8">
+  <diagram name="实体架构" id="architecture">
+    <mxGraphModel dx="2240" dy="1260" grid="1" gridSize="10" page="1" pageScale="1" pageWidth="2240" pageHeight="1260" background="#ffffff">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="科研知识平台｜白板到实体" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;fontFamily=Microsoft YaHei;fontSize=38;fontColor=#183B50;fontStyle=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="30" width="1600" height="60" />
+        </mxCell>
+        <mxCell id="sub" value="目标设计图  ·  V0.1 / 2026.09.03  ·  让学生理解领域，让师生共同论证值得做的事" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;fontFamily=Microsoft YaHei;fontSize=22;fontColor=#526477;fontStyle=0;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="90" width="2000" height="40" />
+        </mxCell>
+        <mxCell id="layer1" value="人在哪里使用" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;fontFamily=Microsoft YaHei;fontSize=26;fontColor=#183B50;fontStyle=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="150" width="350" height="50" />
+        </mxCell>
+        <mxCell id="layer1sub" value="看、问、选择、判断" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;fontFamily=Microsoft YaHei;fontSize=20;fontColor=#526477;fontStyle=0;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="210" width="330" height="40" />
+        </mxCell>
+        <mxCell id="human" value="&lt;b style=&quot;font-size:24px&quot;&gt;导师与学生&lt;/b&gt;&lt;br&gt;&lt;br&gt;学生：学习、整理、核查&lt;br&gt;导师：目标、取舍、科研判断&lt;br&gt;也可直接向Codex发起任务" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="500" y="160" width="320" height="150" />
+        </mxCell>
+        <mxCell id="obsidian" value="&lt;b style=&quot;font-size:24px&quot;&gt;Obsidian 阅读界面&lt;/b&gt;&lt;br&gt;&lt;br&gt;读同一份 Markdown&lt;br&gt;打开主题、文献和来源" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="940" y="160" width="320" height="150" />
+        </mxCell>
+        <mxCell id="external" value="&lt;b style=&quot;font-size:24px&quot;&gt;人的认知＋外部资料&lt;/b&gt;&lt;br&gt;&lt;br&gt;研究目标、经验、指南等&lt;br&gt;记录来源与能支持的边界" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1380" y="160" width="320" height="150" />
+        </mxCell>
+        <mxCell id="resource" value="&lt;b style=&quot;font-size:24px&quot;&gt;项目与数据清单&lt;/b&gt;&lt;br&gt;&lt;br&gt;后续扩展：指向真实资源&lt;br&gt;第一版先写已知条件与缺口" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1820" y="160" width="320" height="150" />
+        </mxCell>
+        <mxCell id="use" value="阅读／选择" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#426D7E;dashed=0;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="human" target="obsidian">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="context" value="问题与约束" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#426D7E;dashed=0;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="external" target="theme">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="resources" value="可行性条件" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#798899;dashed=1;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="resource" target="idea">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="view" value="显示同一文件" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#426D7E;dashed=0;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="obsidian" target="card">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="layer2" value="信息怎样成为知识，再成为研究构思" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;fontFamily=Microsoft YaHei;fontSize=26;fontColor=#183B50;fontStyle=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="350" width="1700" height="50" />
+        </mxCell>
+        <mxCell id="intake" value="&lt;b style=&quot;font-size:24px&quot;&gt;01  信息入口&lt;/b&gt;&lt;br&gt;&lt;br&gt;dailyinfo / Inoreader / RSS&lt;br&gt;按期刊汇总新论文简介&lt;br&gt;人决定收录、暂存或跳过&lt;br&gt;产物：选中文献清单" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="460" width="320" height="210" />
+        </mxCell>
+        <mxCell id="zotero" value="&lt;b style=&quot;font-size:24px&quot;&gt;02  Zotero 文献库&lt;/b&gt;&lt;br&gt;&lt;br&gt;题录＋DOI＋PDF＋批注&lt;br&gt;区分所属库与全文状态&lt;br&gt;OA获取／机构或人工获取&lt;br&gt;原始资料留在来源存储" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="500" y="460" width="320" height="210" />
+        </mxCell>
+        <mxCell id="card" value="&lt;b style=&quot;font-size:24px&quot;&gt;03  唯一文献卡&lt;/b&gt;&lt;br&gt;&lt;br&gt;一篇文献 → 一个 .md&lt;br&gt;快速判断＋完整证据&lt;br&gt;关键认知、结果、条件、定位&lt;br&gt;承载：40_文献初读/" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="940" y="460" width="320" height="210" />
+        </mxCell>
+        <mxCell id="theme" value="&lt;b style=&quot;font-size:24px&quot;&gt;04  主题研究页&lt;/b&gt;&lt;br&gt;&lt;br&gt;一个问题 → 一篇连续论述&lt;br&gt;脉络、现状、边界、关键来源&lt;br&gt;学习对话 → 形成新的追问&lt;br&gt;承载：30_主题研究/" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1380" y="460" width="320" height="210" />
+        </mxCell>
+        <mxCell id="idea" value="&lt;b style=&quot;font-size:24px&quot;&gt;05  待评议 Idea 包&lt;/b&gt;&lt;br&gt;&lt;br&gt;做什么、为什么、凭什么&lt;br&gt;核心文献＋条件＋缺口&lt;br&gt;基本思路＋最小下一步&lt;br&gt;落点：任务候选目录内 .md&lt;br&gt;导师决定继续、修改或停止" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1820" y="460" width="320" height="210" />
+        </mxCell>
+        <mxCell id="e1" value="人工选择&lt;br&gt;获取／查重" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#426D7E;dashed=0;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="intake" target="zotero">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="e2" value="阅读＋核查&lt;br&gt;形成理解" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#426D7E;dashed=0;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="zotero" target="card">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="e3" value="按研究问题&lt;br&gt;综合证据" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#426D7E;dashed=0;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="card" target="theme">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="e4" value="带目标对话&lt;br&gt;补证据／评议" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#426D7E;dashed=0;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="theme" target="idea">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="reread" value="有决定性缺口 → 定向补读 → 增量补回原卡" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#426D7E;dashed=0;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=0.25;exitY=1;entryX=0.75;entryY=1;" edge="1" parent="1" source="theme" target="card">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="1460" y="760" />
+              <mxPoint x="1180" y="760" />
+            </Array>
+            <mxPoint as="offset" x="0" y="-8" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="readnote" value="共用卡片更新后，定位受影响的主题并提出差异；核心判断经确认后才改变。" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;fontFamily=Microsoft YaHei;fontSize=19;fontColor=#526477;fontStyle=0;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="760" width="1000" height="70" />
+        </mxCell>
+        <mxCell id="layer3" value="谁来执行，怎样保存" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;fontFamily=Microsoft YaHei;fontSize=26;fontColor=#183B50;fontStyle=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="880" width="400" height="45" />
+        </mxCell>
+        <mxCell id="template" value="&lt;b style=&quot;font-size:24px&quot;&gt;模板＋规则＋Skill&lt;/b&gt;&lt;br&gt;&lt;br&gt;模板：输出结构&lt;br&gt;规则：证据与权限边界&lt;br&gt;Skill：阅读、综合与核查方法" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="960" width="320" height="160" />
+        </mxCell>
+        <mxCell id="codex" value="&lt;b style=&quot;font-size:24px&quot;&gt;Codex 执行与对话&lt;/b&gt;&lt;br&gt;&lt;br&gt;读取来源、调用工具、形成候选修改，按权限处理写回&lt;br&gt;Zotero接口／导出；Markdown文件访问；MCP按需接入&lt;br&gt;确定动作交给脚本；研究取舍留给人" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="500" y="960" width="760" height="160" />
+        </mxCell>
+        <mxCell id="git" value="&lt;b style=&quot;font-size:24px&quot;&gt;Git / GitHub 协作与历史&lt;/b&gt;&lt;br&gt;&lt;br&gt;加工内容、模板、规则和必要工具保留版本&lt;br&gt;候选分支 → 检查与交接 → 正式版本；原始PDF和凭据不入库&lt;br&gt;共享文件夹与Git不等于排他编辑锁，技术权限须另行验证" style="rounded=1;arcSize=8;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;fontColor=#223344;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacingLeft=22;spacingRight=18;spacingTop=15;spacingBottom=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1380" y="960" width="760" height="160" />
+        </mxCell>
+        <mxCell id="skills" value="工作方法" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#798899;dashed=1;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="template" target="codex">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="zread" value="读取条目／附件" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#798899;dashed=1;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=0.2;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="1" source="codex" target="zotero">
+          <mxGeometry as="geometry" relative="1">
+            <mxPoint as="offset" x="-90" y="0" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="cwrite" value="形成候选卡" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#798899;dashed=1;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=0.75;exitY=0;entryX=0.25;entryY=1;" edge="1" parent="1" source="codex" target="card">
+          <mxGeometry as="geometry" relative="1">
+            <mxPoint as="offset" x="-20" y="0" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="twrite" value="候选修改／授权写回" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#798899;dashed=1;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=0.93;exitY=0;entryX=0.8;entryY=1;" edge="1" parent="1" source="codex" target="theme">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="1210" y="850" />
+              <mxPoint x="1636" y="850" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="history" value="保存差异&lt;br&gt;检查与交接" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeWidth=2;strokeColor=#798899;dashed=1;fontFamily=Microsoft YaHei;fontSize=18;fontColor=#324E61;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="codex" target="git">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="foot" value="落地原则：正式内容一份；精读回原卡；页面是入口；Idea必须带依据。学生候选内容在指定任务分支，正式接入另行确认。" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;fontFamily=Microsoft YaHei;fontSize=21;fontColor=#183B50;fontStyle=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="1150" width="2100" height="45" />
+        </mxCell>
+        <mxCell id="legend" value="蓝：软件与操作   绿：知识内容   黄：人的选择与判断   灰：外部／后续     实线：业务关系     虚线：工具／版本支撑或扩展" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=middle;fontFamily=Microsoft YaHei;fontSize=19;fontColor=#526477;fontStyle=0;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="1210" width="2100" height="40" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
