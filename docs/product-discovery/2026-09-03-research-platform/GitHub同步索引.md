@@ -5,6 +5,7 @@
 - 项目：[水利智能平台](https://github.com/orgs/iHeadWater/projects/7)。
 - 文件仓库：[iHeadWater/mylibrary](https://github.com/iHeadWater/mylibrary)。
 - 文档分支：[codex/research-platform-plan-20260903](https://github.com/iHeadWater/mylibrary/tree/codex/research-platform-plan-20260903/docs/product-discovery/2026-09-03-research-platform)。
+- 文档审查：[PR #19](https://github.com/iHeadWater/mylibrary/pull/19)；尚未合并。
 
 ## 里程碑
 
@@ -30,4 +31,4 @@
 
 已建立设计与任务定义；没有宣称文献加工、学习效果、Idea 价值或换机运行已经验收。负责人待认领，实际日期待 T01 确认。
 
-项目卡片关联另行核对；仅存在 Issue 不代表已经加入看板。
+9 个任务均已在 Project 7 的可见任务列表中核对。
