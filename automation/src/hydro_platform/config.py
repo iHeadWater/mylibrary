@@ -38,6 +38,13 @@ class PdfGateConfig:
 
 
 @dataclass(frozen=True)
+class TaskConfig:
+    lease_seconds: int
+    lock_stale_seconds: int
+    max_history_entries: int
+
+
+@dataclass(frozen=True)
 class PathConfig:
     project_root: Path
     runtime_dir: Path
@@ -62,6 +69,7 @@ class AppConfig:
     zotero: ZoteroConfig
     scan: ScanConfig
     pdf_gate: PdfGateConfig
+    tasks: TaskConfig
     paths: PathConfig
 
 
@@ -288,10 +296,30 @@ def load_config(
         ),
     )
 
+    raw_tasks = data.get("tasks", {})
+    if not isinstance(raw_tasks, dict):
+        raise ConfigError("tasks 必须是 JSON 对象")
+    task_fields = ("lease_seconds", "lock_stale_seconds", "max_history_entries")
+    for name in task_fields:
+        if name not in raw_tasks:
+            raise ConfigError(f"缺少 tasks.{name}")
+    task_config = TaskConfig(
+        lease_seconds=_validate_positive_int(
+            "tasks.lease_seconds", raw_tasks["lease_seconds"]
+        ),
+        lock_stale_seconds=_validate_positive_int(
+            "tasks.lock_stale_seconds", raw_tasks["lock_stale_seconds"]
+        ),
+        max_history_entries=_validate_positive_int(
+            "tasks.max_history_entries", raw_tasks["max_history_entries"]
+        ),
+    )
+
     return AppConfig(
         source_file=config_file,
         zotero=zotero_config,
         scan=scan_config,
         pdf_gate=pdf_gate_config,
+        tasks=task_config,
         paths=path_config,
     )

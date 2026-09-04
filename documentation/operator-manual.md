@@ -10,9 +10,10 @@
 2. 建立 Zotero 条目与 PDF 附件基线；
 3. 检测新增父条目、新增 PDF、移除条目和替换 PDF；
 4. 重复扫描时不把同一变化再次报告为新增；
-5. 对指定父条目执行 PDF 全文门禁，检查唯一附件、本地文件、基础 PDF 结构、哈希和可提取文字。
+5. 对指定父条目执行 PDF 全文门禁，检查唯一附件、本地文件、基础 PDF 结构、哈希和可提取文字；
+6. 将全部父条目同步为本地任务清单，记录等待、阻塞或等待全文提取状态。
 
-当前尚未实现供制卡使用的完整全文导出、任务状态机、证据包写入、AI 制卡、Git 自动同步和每日调度。
+当前尚未实现供制卡使用的完整全文导出、证据包写入、AI 制卡、Git 自动同步和每日调度。任务领取、租约和完成保护的底层接口已经实现，但在后续处理器接入前不会自行产生真实 `COMPLETED` 状态。
 
 ## 2. 运行前提
 
@@ -161,7 +162,53 @@ python automation/run.py pdf-gate --item-key CEXH4PQA --json
 
 当前使用 Zotero 的全文索引判断文字是否可提取。它能够阻止空文本和疑似扫描件进入后续环节，但正式制卡前仍需在 US-06 中实现可追溯的完整全文导出。
 
-## 7. 查看本地快照
+## 7. 同步任务清单
+
+让系统扫描目标共享库、执行每篇论文的 PDF 门禁，并生成或更新任务清单：
+
+```powershell
+python automation/run.py tasks-sync --json
+```
+
+第一次对当前样本执行时，预期重点结果为：
+
+```json
+{
+  "ok": true,
+  "task_count": 1,
+  "changed_count": 1,
+  "state_counts": {
+    "READY_FOR_EXTRACTION": 1
+  }
+}
+```
+
+在 `tasks` 数组中，应能找到父条目 `CEXH4PQA`，并看到：
+
+- `state` 为 `READY_FOR_EXTRACTION`；
+- `reason_code` 为 `PDF_READY`；
+- `input.attachment_key` 为 `JNCB9BGP`；
+- `input.pdf_sha256` 与 PDF 门禁结果一致；
+- `task_id` 以 `TASK-` 开头；
+- `history` 只有第一次状态变化记录。
+
+立即再次运行相同命令：
+
+```powershell
+python automation/run.py tasks-sync --json
+```
+
+预期 `changed_count` 为 `0`，任务数和历史记录不会增加。这是任务清单的幂等验证。
+
+只查看已有任务、不访问 Zotero：
+
+```powershell
+python automation/run.py tasks-list --json
+```
+
+任务文件默认位于 `.runtime/tasks.json`，进程锁默认位于 `.runtime/worker.lock`。两者都属于本机可重建状态，不进入 Git。
+
+## 8. 查看本地快照
 
 快照默认保存在：
 
@@ -183,7 +230,7 @@ notepad '.runtime\zotero-snapshot.json'
 
 不要把文件路径直接输入 PowerShell。直接输入路径会被当作命令执行，也不要手工修改快照内容。
 
-## 8. 常见问题
+## 9. 常见问题
 
 ### `python` 命令不存在
 
@@ -228,7 +275,15 @@ py automation/run.py preflight --json
 
 先在 Zotero 中确认 PDF 是否能搜索和复制正文。如果是扫描件，第一版不会自动 OCR；如果是正常文本 PDF，可能需要重新建立 Zotero 全文索引后再试。
 
-## 9. 安全操作规则
+### `TASK_STORE_BUSY`
+
+另一个任务同步或处理进程正在更新任务清单。等待其结束后重试。如果原进程已经崩溃，超过总配置中的锁过期时间后系统才会清理死锁。
+
+### `TASK_STORE_INVALID`
+
+本地任务文件损坏。系统会拒绝静默覆盖。先保留损坏文件并查明原因；正式恢复命令将在 US-12 实现，不要手工伪造任务状态。
+
+## 10. 安全操作规则
 
 - 不要为了重新看到 `ITEM_ADDED` 而随意删除快照；
 - 不要手工编辑 `.runtime` 中的状态文件；
@@ -237,7 +292,7 @@ py automation/run.py preflight --json
 - 切换 Zotero 群组时不能只改 `group_id` 后删除旧快照，必须执行后续定义的群组迁移或重新建基线流程；
 - 所有可调整路径和固定运行参数统一在 [config.json](../config/config.json) 修改。
 
-## 10. 已完成的真实验收
+## 11. 已完成的真实验收
 
 共享库：`qinjiajun`（群组 ID `6618088`）
 
@@ -259,7 +314,9 @@ py automation/run.py preflight --json
 
 结论：US-02 的“真实新增父条目、真实新增 PDF、父子关联和重复扫描幂等”已用一篇真实文献通过验收；US-03 的正常文本 PDF 正向门禁已通过真实验证。替换 PDF、后补 PDF、移除条目以及门禁负面场景目前只有自动化测试覆盖，尚未进行真实 Zotero 操作验收。
 
-## 11. 手册维护规则
+US-04 当前已通过自动化测试，尚未由用户执行第一次真实 `tasks-sync`，因此本节暂不声称真实任务清单验收通过。
+
+## 12. 手册维护规则
 
 以下变化发生时，必须在同一次修改中更新本手册：
 

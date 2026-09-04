@@ -71,3 +71,4 @@ GitHub 私有仓库
 - [`automation.md`](automation.md)：自动化边界、身份和安全约束。
 - [variables.md](variables.md)：总配置、运行变量、证据事实、协议常量与密钥的边界。
 - [operator-manual.md](operator-manual.md)：当前可执行命令、结果解释、故障处理和真实验收记录。
+- [task-state-machine.md](task-state-machine.md)：任务身份、状态转换、幂等、锁和崩溃恢复规则。

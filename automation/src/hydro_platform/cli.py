@@ -10,6 +10,7 @@ from typing import Any, Sequence
 from hydro_platform.config import ConfigError, load_config
 from hydro_platform.pdf_gate import PdfGateError, evaluate_pdf_gate
 from hydro_platform.snapshot import SnapshotError, scan_group
+from hydro_platform.tasks import TaskStoreError, list_tasks, sync_tasks
 from hydro_platform.zotero import ZoteroApiError, discover_groups, preflight
 
 
@@ -39,6 +40,8 @@ def _parser() -> argparse.ArgumentParser:
         ("preflight", "检查目标 Zotero 群组库能否被后台读取"),
         ("scan", "建立基线或检测目标群组中的文献变化"),
         ("pdf-gate", "检查一个父条目的 PDF 全文是否可进入后续处理"),
+        ("tasks-sync", "根据 Zotero 和 PDF 门禁同步本地任务清单"),
+        ("tasks-list", "查看本地任务清单，不访问 Zotero"),
     ):
         command = subparsers.add_parser(name, help=help_text)
         command.add_argument(
@@ -49,7 +52,7 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--base-url", help="覆盖本机 Zotero API 地址")
         command.add_argument("--timeout", type=float, help="请求超时秒数")
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
-        if name in {"preflight", "scan", "pdf-gate"}:
+        if name in {"preflight", "scan", "pdf-gate", "tasks-sync", "tasks-list"}:
             command.add_argument("--group-id", help="覆盖目标 Zotero 群组 ID")
         if name == "scan":
             command.add_argument(
@@ -68,6 +71,17 @@ def _parser() -> argparse.ArgumentParser:
 
 def _render_human(result: dict[str, Any]) -> str:
     if result.get("ok"):
+        if "task_count" in result:
+            states = ", ".join(
+                f"{name}={count}" for name, count in result.get("state_counts", {}).items()
+            ) or "无任务"
+            return (
+                "通过：任务清单已读取"
+                f"\n- 任务数：{result['task_count']}"
+                f"\n- 状态变化：{result.get('changed_count', 0)}"
+                f"\n- 状态分布：{states}"
+                f"\n- 文件：{result['state_path']}"
+            )
         if "gate_status" in result:
             pdf = result.get("pdf") or {}
             return (
@@ -117,7 +131,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             base_url=args.base_url,
             group_id=getattr(args, "group_id", None),
             timeout_seconds=args.timeout,
-            require_group=args.command in {"preflight", "scan", "pdf-gate"},
+            require_group=args.command
+            in {"preflight", "scan", "pdf-gate", "tasks-sync", "tasks-list"},
         )
     except ConfigError as exc:
         result = {
@@ -154,7 +169,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "ok": False,
                     "error": {"code": exc.code, "message": str(exc)},
                 }
-    else:
+    elif args.command == "pdf-gate":
         readiness = preflight(app_config.zotero)
         if not readiness["ok"]:
             result = readiness
@@ -171,6 +186,38 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "ok": False,
                     "error": {"code": exc.code, "message": str(exc)},
                 }
+    elif args.command == "tasks-sync":
+        readiness = preflight(app_config.zotero)
+        if not readiness["ok"]:
+            result = readiness
+        else:
+            try:
+                result = sync_tasks(
+                    app_config.zotero,
+                    app_config.pdf_gate,
+                    app_config.tasks,
+                    app_config.paths.tasks_file,
+                    app_config.paths.lock_file,
+                    page_size=app_config.scan.page_size,
+                )
+            except (TaskStoreError, SnapshotError, PdfGateError, ZoteroApiError) as exc:
+                result = {
+                    "schema_version": 1,
+                    "ok": False,
+                    "error": {"code": exc.code, "message": str(exc)},
+                }
+    else:
+        try:
+            result = list_tasks(
+                app_config.zotero.group_id,
+                app_config.paths.tasks_file,
+            )
+        except TaskStoreError as exc:
+            result = {
+                "schema_version": 1,
+                "ok": False,
+                "error": {"code": exc.code, "message": str(exc)},
+            }
     _emit(result, args.json)
     return 0 if result["ok"] else 3
 

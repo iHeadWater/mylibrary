@@ -67,6 +67,15 @@ US-01 不修改 Zotero，不读取 PDF，也不写入 GitHub。自动启动 Zote
 
 门禁检查 PDF 是否唯一、是否已同步为本地文件、文件大小、基础 PDF 结构、SHA-256，以及 Zotero 全文索引中的可提取文字数量。结果分为 `READY`、`WAITING` 和 `BLOCKED`。当前不会复制 PDF、导出整篇全文或生成证据包；这些属于后续用户故事。
 
+## 当前实现：US-04
+
+同步并查看本地任务清单：
+
+    python automation/run.py tasks-sync --json
+    python automation/run.py tasks-list --json
+
+任务清单使用群组 ID、父条目 Key、PDF 附件 Key 和 SHA-256 形成输入指纹，支持幂等同步、输入版本变化、原子写入、进程锁、处理租约、过期重试和完成保护。当前命令只把门禁通过的任务推进到 `READY_FOR_EXTRACTION`，不会假装已经提取全文或完成制卡。
+
 ## 配置原则
 
 程序不依赖调用命令时的工作目录。所有可调整的项目路径和固定运行参数由 `config/config.json` 集中管理；运行时产生的 Key、哈希、时间和任务状态不属于配置；API Key、Token 等密钥不得写入配置或 Git。
