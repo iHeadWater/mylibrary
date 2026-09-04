@@ -1,0 +1,25 @@
+# 制卡机本地运行状态
+.runtime/
+
+# 本地密钥与凭据
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# 原始日志与临时文件
+*.log
+*.tmp
+*.temp
+
+# Zotero PDF 不进入 Git 仓库
+evidence-packs/**/*.pdf
+
+# 本机配置
+config/config.local.json
+
+# Python 缓存和虚拟环境
+__pycache__/
+*.py[cod]
+.venv/

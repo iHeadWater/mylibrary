@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "paths": {
+    "project_root": "..",
+    "runtime_dir": ".runtime",
+    "snapshot_file": ".runtime/zotero-snapshot.json",
+    "tasks_file": ".runtime/tasks.json",
+    "lock_file": ".runtime/worker.lock",
+    "logs_dir": ".runtime/logs",
+    "pdf_work_dir": ".runtime/pdf-work",
+    "evidence_packs_dir": "evidence-packs",
+    "templates_dir": "templates",
+    "themes_dir": "themes",
+    "members_dir": "members",
+    "activity_dir": "activity",
+    "reports_dir": "reports",
+    "prompts_dir": "automation/prompts",
+    "schemas_dir": "automation/schemas"
+  },
+  "zotero": {
+    "base_url": "http://127.0.0.1:23119",
+    "group_id": "REPLACE_WITH_ZOTERO_GROUP_ID",
+    "timeout_seconds": 5,
+    "process_timeout_seconds": 5
+  },
+  "scan": {
+    "page_size": 100
+  }
+}
