@@ -59,6 +59,14 @@ US-01 不修改 Zotero，不读取 PDF，也不写入 GitHub。自动启动 Zote
 
 本地快照默认保存在 `.runtime/zotero-snapshot.json`，实际路径来自 `config/config.json`，已被 Git 忽略。快照损坏或属于另一群组时，程序会拒绝覆盖。
 
+## 当前实现：US-03
+
+对单个 Zotero 父条目执行只读 PDF 全文门禁：
+
+    python automation/run.py pdf-gate --item-key CEXH4PQA --json
+
+门禁检查 PDF 是否唯一、是否已同步为本地文件、文件大小、基础 PDF 结构、SHA-256，以及 Zotero 全文索引中的可提取文字数量。结果分为 `READY`、`WAITING` 和 `BLOCKED`。当前不会复制 PDF、导出整篇全文或生成证据包；这些属于后续用户故事。
+
 ## 配置原则
 
 程序不依赖调用命令时的工作目录。所有可调整的项目路径和固定运行参数由 `config/config.json` 集中管理；运行时产生的 Key、哈希、时间和任务状态不属于配置；API Key、Token 等密钥不得写入配置或 Git。

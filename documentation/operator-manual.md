@@ -9,9 +9,10 @@
 1. 检查 Zotero Desktop 和目标共享群组库；
 2. 建立 Zotero 条目与 PDF 附件基线；
 3. 检测新增父条目、新增 PDF、移除条目和替换 PDF；
-4. 重复扫描时不把同一变化再次报告为新增。
+4. 重复扫描时不把同一变化再次报告为新增；
+5. 对指定父条目执行 PDF 全文门禁，检查唯一附件、本地文件、基础 PDF 结构、哈希和可提取文字。
 
-当前尚未实现 PDF 全文读取、任务状态机、证据包写入、AI 制卡、Git 自动同步和每日调度。
+当前尚未实现供制卡使用的完整全文导出、任务状态机、证据包写入、AI 制卡、Git 自动同步和每日调度。
 
 ## 2. 运行前提
 
@@ -121,7 +122,46 @@ python automation/run.py scan --json
 
 这表示同一条目没有被重复报告为新增。
 
-## 6. 查看本地快照
+## 6. 执行 PDF 全文门禁
+
+门禁按父条目 Key 检查单篇论文：
+
+```powershell
+python automation/run.py pdf-gate --item-key CEXH4PQA --json
+```
+
+将 `CEXH4PQA` 替换为扫描结果中的 `ITEM_ADDED.item_key`。该命令只读 Zotero 和本地 PDF，不修改 Zotero、不生成证据包，也不更新扫描快照。
+
+### 6.1 门禁状态
+
+| `gate_status` | 含义 | 是否可以进入后续制卡 |
+|---|---|---|
+| `READY` | 本地 PDF 和足量可提取文字均可用 | 可以 |
+| `WAITING` | 缺 PDF、附件文件尚未同步或 Zotero 尚未提供全文索引 | 暂时不可以，后续重试 |
+| `BLOCKED` | 多个 PDF、文件损坏、文件过小或文字不可提取 | 不可以，需要人工处理 |
+
+关键 `reason_code`：
+
+| 原因码 | 含义 |
+|---|---|
+| `PDF_READY` | 门禁通过 |
+| `PDF_MISSING` | 父条目没有 PDF |
+| `PDF_FILE_NOT_SYNCED` | Zotero 有附件记录，但本机没有对应文件 |
+| `FULLTEXT_NOT_INDEXED` | 本地文件存在，但 Zotero 尚未提供全文索引 |
+| `MULTIPLE_PDFS` | 同一父条目有多个 PDF，系统拒绝猜测主文 |
+| `PDF_FILE_TOO_SMALL` | 文件小于总配置规定的最小体积 |
+| `PDF_STRUCTURE_INVALID` | 缺少 PDF 文件头或结束标记 |
+| `TEXT_NOT_EXTRACTABLE` | 可提取文字不足，可能是扫描件或索引异常；第一版不 OCR |
+
+门禁通过时还会输出：
+
+- PDF 附件 Key 和父条目 Key；
+- 文件名、文件大小和 SHA-256；
+- 去除空白后可提取的文字数量。
+
+当前使用 Zotero 的全文索引判断文字是否可提取。它能够阻止空文本和疑似扫描件进入后续环节，但正式制卡前仍需在 US-06 中实现可追溯的完整全文导出。
+
+## 7. 查看本地快照
 
 快照默认保存在：
 
@@ -143,7 +183,7 @@ notepad '.runtime\zotero-snapshot.json'
 
 不要把文件路径直接输入 PowerShell。直接输入路径会被当作命令执行，也不要手工修改快照内容。
 
-## 7. 常见问题
+## 8. 常见问题
 
 ### `python` 命令不存在
 
@@ -180,7 +220,15 @@ py automation/run.py preflight --json
 3. Zotero 是否完成同步；
 4. `counts` 是否已经包含该论文和 PDF。
 
-## 8. 安全操作规则
+### PDF 门禁返回 `FULLTEXT_NOT_INDEXED`
+
+等待 Zotero 完成附件同步和全文索引后，再运行同一条 `pdf-gate` 命令。不要因此删除扫描快照。
+
+### PDF 门禁返回 `TEXT_NOT_EXTRACTABLE`
+
+先在 Zotero 中确认 PDF 是否能搜索和复制正文。如果是扫描件，第一版不会自动 OCR；如果是正常文本 PDF，可能需要重新建立 Zotero 全文索引后再试。
+
+## 9. 安全操作规则
 
 - 不要为了重新看到 `ITEM_ADDED` 而随意删除快照；
 - 不要手工编辑 `.runtime` 中的状态文件；
@@ -189,7 +237,7 @@ py automation/run.py preflight --json
 - 切换 Zotero 群组时不能只改 `group_id` 后删除旧快照，必须执行后续定义的群组迁移或重新建基线流程；
 - 所有可调整路径和固定运行参数统一在 [config.json](../config/config.json) 修改。
 
-## 9. 已完成的真实验收
+## 10. 已完成的真实验收
 
 共享库：`qinjiajun`（群组 ID `6618088`）
 
@@ -204,10 +252,14 @@ py automation/run.py preflight --json
 | 第一次增量扫描 | 产生 1 条 `ITEM_ADDED` 和 1 条 `PDF_ADDED` |
 | 父子关联 | `JNCB9BGP.parent_key = CEXH4PQA` |
 | 第二次扫描 | `change_count = 0`，没有重复事件 |
+| PDF 门禁 | `READY / PDF_READY` |
+| 本地 PDF 大小 | 3,132,690 字节 |
+| PDF SHA-256 | `115fe50efabc0130ed20d1b8465aaa861b29497ae56949677bb59863c8dbd6e6` |
+| 可提取非空白字符 | 91,497 |
 
-结论：US-02 的“真实新增父条目、真实新增 PDF、父子关联和重复扫描幂等”已用一篇真实文献通过验收。替换 PDF、后补 PDF 和移除条目目前只有自动化测试覆盖，尚未进行真实 Zotero 操作验收。
+结论：US-02 的“真实新增父条目、真实新增 PDF、父子关联和重复扫描幂等”已用一篇真实文献通过验收；US-03 的正常文本 PDF 正向门禁已通过真实验证。替换 PDF、后补 PDF、移除条目以及门禁负面场景目前只有自动化测试覆盖，尚未进行真实 Zotero 操作验收。
 
-## 10. 手册维护规则
+## 11. 手册维护规则
 
 以下变化发生时，必须在同一次修改中更新本手册：
 

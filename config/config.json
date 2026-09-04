@@ -25,5 +25,10 @@
   },
   "scan": {
     "page_size": 100
+  },
+  "pdf_gate": {
+    "min_file_size_bytes": 1024,
+    "min_text_characters": 1000,
+    "hash_chunk_size_bytes": 1048576
   }
 }

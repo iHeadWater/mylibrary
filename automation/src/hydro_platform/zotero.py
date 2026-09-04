@@ -30,10 +30,34 @@ class ZoteroClient:
         self.config = config
 
     def get_json(self, path: str) -> ApiResponse:
+        raw, headers, status = self._get(path, accept="application/json")
+        try:
+            data = json.loads(raw.decode("utf-8")) if raw else None
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ZoteroApiError(
+                "INVALID_API_RESPONSE",
+                f"Zotero 返回了无法解析的 JSON：{path}",
+                status,
+            ) from exc
+        return ApiResponse(data=data, headers=headers)
+
+    def get_text(self, path: str) -> ApiResponse:
+        raw, headers, status = self._get(path, accept="text/plain")
+        try:
+            data = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ZoteroApiError(
+                "INVALID_API_RESPONSE",
+                f"Zotero 返回了无法解析的文本：{path}",
+                status,
+            ) from exc
+        return ApiResponse(data=data, headers=headers)
+
+    def _get(self, path: str, *, accept: str) -> tuple[bytes, dict[str, str], int]:
         request = Request(
             f"{self.config.base_url}{path}",
             headers={
-                "Accept": "application/json",
+                "Accept": accept,
                 "Zotero-API-Version": "3",
             },
             method="GET",
@@ -41,15 +65,7 @@ class ZoteroClient:
         try:
             with urlopen(request, timeout=self.config.timeout_seconds) as response:
                 raw = response.read()
-                try:
-                    data = json.loads(raw.decode("utf-8")) if raw else None
-                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-                    raise ZoteroApiError(
-                        "INVALID_API_RESPONSE",
-                        f"Zotero 返回了无法解析的 JSON：{path}",
-                        response.status,
-                    ) from exc
-                return ApiResponse(data=data, headers=dict(response.headers.items()))
+                return raw, dict(response.headers.items()), response.status
         except HTTPError as exc:
             if exc.code == 403:
                 code = "GROUP_PERMISSION_DENIED"

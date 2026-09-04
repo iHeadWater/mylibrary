@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from hydro_platform.config import ConfigError, load_config
+from hydro_platform.pdf_gate import PdfGateError, evaluate_pdf_gate
 from hydro_platform.snapshot import SnapshotError, scan_group
 from hydro_platform.zotero import ZoteroApiError, discover_groups, preflight
 
@@ -37,6 +38,7 @@ def _parser() -> argparse.ArgumentParser:
         ("discover-groups", "列出本机 Zotero 当前可见的群组库"),
         ("preflight", "检查目标 Zotero 群组库能否被后台读取"),
         ("scan", "建立基线或检测目标群组中的文献变化"),
+        ("pdf-gate", "检查一个父条目的 PDF 全文是否可进入后续处理"),
     ):
         command = subparsers.add_parser(name, help=help_text)
         command.add_argument(
@@ -47,12 +49,18 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--base-url", help="覆盖本机 Zotero API 地址")
         command.add_argument("--timeout", type=float, help="请求超时秒数")
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
-        if name in {"preflight", "scan"}:
+        if name in {"preflight", "scan", "pdf-gate"}:
             command.add_argument("--group-id", help="覆盖目标 Zotero 群组 ID")
         if name == "scan":
             command.add_argument(
                 "--state",
                 help="覆盖总配置中的本地快照路径",
+            )
+        if name == "pdf-gate":
+            command.add_argument(
+                "--item-key",
+                required=True,
+                help="需要检查的 Zotero 父条目 Key",
             )
 
     return parser
@@ -60,6 +68,15 @@ def _parser() -> argparse.ArgumentParser:
 
 def _render_human(result: dict[str, Any]) -> str:
     if result.get("ok"):
+        if "gate_status" in result:
+            pdf = result.get("pdf") or {}
+            return (
+                f"PDF 门禁：{result['gate_status']} [{result['reason_code']}]"
+                f"\n- 父条目：{result['parent_key']}"
+                f"\n- PDF 数量：{result['pdf_attachment_count']}"
+                f"\n- 附件：{pdf.get('attachment_key') or '无'}"
+                f"\n- 说明：{result['message']}"
+            )
         if "mode" in result:
             return (
                 f"通过：Zotero 扫描完成（{result['mode']}）"
@@ -100,7 +117,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             base_url=args.base_url,
             group_id=getattr(args, "group_id", None),
             timeout_seconds=args.timeout,
-            require_group=args.command in {"preflight", "scan"},
+            require_group=args.command in {"preflight", "scan", "pdf-gate"},
         )
     except ConfigError as exc:
         result = {
@@ -115,7 +132,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = discover_groups(app_config.zotero)
     elif args.command == "preflight":
         result = preflight(app_config.zotero)
-    else:
+    elif args.command == "scan":
         readiness = preflight(app_config.zotero)
         if not readiness["ok"]:
             result = readiness
@@ -132,6 +149,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                     page_size=app_config.scan.page_size,
                 )
             except (SnapshotError, ZoteroApiError) as exc:
+                result = {
+                    "schema_version": 1,
+                    "ok": False,
+                    "error": {"code": exc.code, "message": str(exc)},
+                }
+    else:
+        readiness = preflight(app_config.zotero)
+        if not readiness["ok"]:
+            result = readiness
+        else:
+            try:
+                result = evaluate_pdf_gate(
+                    app_config.zotero,
+                    app_config.pdf_gate,
+                    args.item_key,
+                )
+            except (PdfGateError, ZoteroApiError) as exc:
                 result = {
                     "schema_version": 1,
                     "ok": False,

@@ -11,7 +11,6 @@ from urllib.parse import urlparse
 DEFAULT_BASE_URL = "http://127.0.0.1:23119"
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_PROCESS_TIMEOUT_SECONDS = 5.0
-DEFAULT_PAGE_SIZE = 100
 
 
 class ConfigError(ValueError):
@@ -29,6 +28,13 @@ class ZoteroConfig:
 @dataclass(frozen=True)
 class ScanConfig:
     page_size: int
+
+
+@dataclass(frozen=True)
+class PdfGateConfig:
+    min_file_size_bytes: int
+    min_text_characters: int
+    hash_chunk_size_bytes: int
 
 
 @dataclass(frozen=True)
@@ -55,6 +61,7 @@ class AppConfig:
     source_file: Path | None
     zotero: ZoteroConfig
     scan: ScanConfig
+    pdf_gate: PdfGateConfig
     paths: PathConfig
 
 
@@ -129,6 +136,18 @@ def _validate_page_size(value: Any) -> int:
     if not 1 <= page_size <= 100:
         raise ConfigError("scan.page_size 必须是 1 到 100 之间的整数")
     return page_size
+
+
+def _validate_positive_int(name: str, value: Any) -> int:
+    if isinstance(value, bool):
+        raise ConfigError(f"{name} 必须是正整数")
+    try:
+        number = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"{name} 必须是正整数") from exc
+    if number <= 0:
+        raise ConfigError(f"{name} 必须是正整数")
+    return number
 
 
 def _path_value(value: Any, *, name: str) -> Path:
@@ -246,9 +265,33 @@ def load_config(
         raise ConfigError("缺少 scan.page_size")
     scan_config = ScanConfig(page_size=_validate_page_size(raw_scan["page_size"]))
 
+    raw_pdf_gate = data.get("pdf_gate", {})
+    if not isinstance(raw_pdf_gate, dict):
+        raise ConfigError("pdf_gate 必须是 JSON 对象")
+    pdf_gate_fields = (
+        "min_file_size_bytes",
+        "min_text_characters",
+        "hash_chunk_size_bytes",
+    )
+    for name in pdf_gate_fields:
+        if name not in raw_pdf_gate:
+            raise ConfigError(f"缺少 pdf_gate.{name}")
+    pdf_gate_config = PdfGateConfig(
+        min_file_size_bytes=_validate_positive_int(
+            "pdf_gate.min_file_size_bytes", raw_pdf_gate["min_file_size_bytes"]
+        ),
+        min_text_characters=_validate_positive_int(
+            "pdf_gate.min_text_characters", raw_pdf_gate["min_text_characters"]
+        ),
+        hash_chunk_size_bytes=_validate_positive_int(
+            "pdf_gate.hash_chunk_size_bytes", raw_pdf_gate["hash_chunk_size_bytes"]
+        ),
+    )
+
     return AppConfig(
         source_file=config_file,
         zotero=zotero_config,
         scan=scan_config,
+        pdf_gate=pdf_gate_config,
         paths=path_config,
     )

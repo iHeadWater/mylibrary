@@ -43,6 +43,11 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
             "process_timeout_seconds": 5,
         },
         "scan": {"page_size": 100},
+        "pdf_gate": {
+            "min_file_size_bytes": 1024,
+            "min_text_characters": 1000,
+            "hash_chunk_size_bytes": 1048576,
+        },
     }
     if overrides:
         for section, value in overrides.items():
