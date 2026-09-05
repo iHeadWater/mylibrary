@@ -1,0 +1,13 @@
+{
+  "attachment_key": "JNCB9BGP",
+  "card_status": "PLACEHOLDER",
+  "created_at": "2026-09-05T05:12:05.859391Z",
+  "evidence_id": "EV-CEXH4PQA",
+  "group_id": 6618088,
+  "parent_key": "CEXH4PQA",
+  "pdf_sha256": "115fe50efabc0130ed20d1b8465aaa861b29497ae56949677bb59863c8dbd6e6",
+  "schema_version": 1,
+  "source_task_id": "TASK-319b93c67deebdf073242fb902806053e90af7322f7ad98293383eaf9025be6c",
+  "title": "Anthropogenic intensification of short-duration rainfall extremes",
+  "updated_at": "2026-09-05T05:12:05.859391Z"
+}

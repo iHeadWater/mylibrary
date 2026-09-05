@@ -9,7 +9,7 @@
 5. 创建或更新共享证据包；
 6. 记录关键事件，并将可共享结果同步到 GitHub。
 
-当前只实现了 US-01 和 US-02；PDF 门禁、制卡、Git 同步和调度尚未实现。详细证据卡模板不是开始开发检测链路的前置条件。
+当前已完成 US-01 至 US-07A：Zotero 预检、变化扫描、PDF 全文门禁、本地任务状态机、共享证据包骨架、原始 PDF 的重新校验和只读交付，以及 Codex CLI/ChatGPT 账号登录预检。US-07A 已通过自动化测试和真实制卡机验收。正式制卡、Git 自动同步和调度尚未实现。详细证据卡模板不是运行预检的前置条件。
 
 ## 可复现材料
 
@@ -65,7 +65,7 @@ US-01 不修改 Zotero，不读取 PDF，也不写入 GitHub。自动启动 Zote
 
     python automation/run.py pdf-gate --item-key CEXH4PQA --json
 
-门禁检查 PDF 是否唯一、是否已同步为本地文件、文件大小、基础 PDF 结构、SHA-256，以及 Zotero 全文索引中的可提取文字数量。结果分为 `READY`、`WAITING` 和 `BLOCKED`。当前不会复制 PDF、导出整篇全文或生成证据包；这些属于后续用户故事。
+门禁检查 PDF 是否唯一、是否已同步为本地文件、文件大小、基础 PDF 结构、SHA-256，以及 Zotero 全文索引中的可提取文字数量。结果分为 `READY`、`WAITING` 和 `BLOCKED`。`pdf-gate` 命令自身不会复制 PDF 或生成证据包；证据包骨架由 US-05 的 `packages-sync` 创建。
 
 ## 当前实现：US-04
 
@@ -76,6 +76,34 @@ US-01 不修改 Zotero，不读取 PDF，也不写入 GitHub。自动启动 Zote
 
 任务清单使用群组 ID、父条目 Key、PDF 附件 Key 和 SHA-256 形成输入指纹，支持幂等同步、输入版本变化、原子写入、进程锁、处理租约、过期重试和完成保护。当前命令只把门禁通过的任务推进到 `READY_FOR_EXTRACTION`，不会假装已经提取全文或完成制卡。
 
+## 当前实现：US-05
+
+根据本地任务清单，为所有 `READY_FOR_EXTRACTION` 任务创建共享证据包骨架：
+
+    python automation/run.py packages-sync --json
+
+每个证据包包含 `manifest.json` 和最小占位 `card.md`。目录用 Zotero 父条目 Key 定位；相同输入重复运行不会创建第二个目录，也不会覆盖已经填写的卡片。manifest 损坏、目录不完整或 PDF 输入与已有证据包不一致时，命令拒绝静默覆盖。
+
+创建骨架不会改变任务状态，也不代表全文已经提取或证据卡已经完成。
+
+## 当前实现：US-06
+
+对一个已就绪任务重新定位 Zotero 原始 PDF，复核附件 Key、任务 ID、manifest 和 PDF SHA-256，并返回可供后续制卡器消费的本地文件路径：
+
+    python automation/run.py pdf-delivery --item-key CEXH4PQA --json
+
+该命令不复制 PDF、不导出全文文本、不调用 AI，也不修改任务或证据包。PDF 缺失、附件变化、哈希变化、任务未就绪或证据包不完整时直接失败，不交付旧路径。
+
+## 当前实现：US-07A
+
+检查总配置指定的 Codex CLI 是否存在、能否返回版本，以及当前是否明确使用 ChatGPT 账号登录：
+
+    python automation/run.py generator-preflight --json
+
+该命令只运行 `codex --version` 和 `codex login status`，不会运行 `codex exec`，也不会读取 Zotero、PDF、模板、任务或证据包。只有明确检测到 ChatGPT 登录时才返回成功；API Key 登录、未登录或无法确认认证方式都会失败。登录凭据和登录命令的原始输出不会写入结果。
+
+这只是运行环境预检，不代表已调用模型或已经具备正式制卡能力，也不能证明订阅档位或剩余额度。模型、推理强度、模板路由、输出结构和用量保护将在 US-07B 真正使用它们时再进入配置。
+
 ## 配置原则
 
-程序不依赖调用命令时的工作目录。所有可调整的项目路径和固定运行参数由 `config/config.json` 集中管理；运行时产生的 Key、哈希、时间和任务状态不属于配置；API Key、Token 等密钥不得写入配置或 Git。
+程序不依赖调用命令时的工作目录。所有可调整的项目路径和固定运行参数由 `config/config.json` 集中管理；运行时产生的 Key、哈希、时间和任务状态不属于配置；Codex CLI 登录凭据、API Key、Token 等秘密不得写入配置或 Git。当前制卡适配层位于 `automation/src/hydro_platform/card_generators/`，只注册了 `codex_cli`。

@@ -15,6 +15,7 @@
 
 # Zotero PDF 不进入 Git 仓库
 evidence-packs/**/*.pdf
+evidence-packs/.tmp-package-*
 
 # 本机配置
 config/config.local.json

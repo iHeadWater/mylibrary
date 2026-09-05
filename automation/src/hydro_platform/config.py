@@ -45,6 +45,14 @@ class TaskConfig:
 
 
 @dataclass(frozen=True)
+class CardGeneratorConfig:
+    adapter: str
+    executable: str
+    auth_mode: str
+    preflight_timeout_seconds: float
+
+
+@dataclass(frozen=True)
 class PathConfig:
     project_root: Path
     runtime_dir: Path
@@ -52,7 +60,6 @@ class PathConfig:
     tasks_file: Path
     lock_file: Path
     logs_dir: Path
-    pdf_work_dir: Path
     evidence_packs_dir: Path
     templates_dir: Path
     themes_dir: Path
@@ -70,6 +77,7 @@ class AppConfig:
     scan: ScanConfig
     pdf_gate: PdfGateConfig
     tasks: TaskConfig
+    card_generator: CardGeneratorConfig
     paths: PathConfig
 
 
@@ -79,7 +87,6 @@ PATH_FIELDS = (
     "tasks_file",
     "lock_file",
     "logs_dir",
-    "pdf_work_dir",
     "evidence_packs_dir",
     "templates_dir",
     "themes_dir",
@@ -158,6 +165,25 @@ def _validate_positive_int(name: str, value: Any) -> int:
     return number
 
 
+def _validate_non_empty_string(name: str, value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError(f"{name} 必须是非空字符串")
+    return value.strip()
+
+
+def _validate_card_generator_choice(
+    name: str,
+    value: Any,
+    *,
+    supported: set[str],
+) -> str:
+    normalized = _validate_non_empty_string(name, value)
+    if normalized not in supported:
+        choices = "、".join(sorted(supported))
+        raise ConfigError(f"{name} 当前仅支持：{choices}")
+    return normalized
+
+
 def _path_value(value: Any, *, name: str) -> Path:
     if not isinstance(value, str) or not value.strip():
         raise ConfigError(f"paths.{name} 必须是非空路径字符串")
@@ -229,7 +255,7 @@ def load_config(
             for name in PATH_FIELDS
         },
     )
-    for name in ("snapshot_file", "tasks_file", "lock_file", "logs_dir", "pdf_work_dir"):
+    for name in ("snapshot_file", "tasks_file", "lock_file", "logs_dir"):
         _require_inside(
             getattr(path_config, name),
             path_config.runtime_dir,
@@ -315,11 +341,45 @@ def load_config(
         ),
     )
 
+    raw_card_generator = data.get("card_generator", {})
+    if not isinstance(raw_card_generator, dict):
+        raise ConfigError("card_generator 必须是 JSON 对象")
+    card_generator_fields = (
+        "adapter",
+        "executable",
+        "auth_mode",
+        "preflight_timeout_seconds",
+    )
+    for name in card_generator_fields:
+        if name not in raw_card_generator:
+            raise ConfigError(f"缺少 card_generator.{name}")
+    card_generator_config = CardGeneratorConfig(
+        adapter=_validate_card_generator_choice(
+            "card_generator.adapter",
+            raw_card_generator["adapter"],
+            supported={"codex_cli"},
+        ),
+        executable=_validate_non_empty_string(
+            "card_generator.executable",
+            raw_card_generator["executable"],
+        ),
+        auth_mode=_validate_card_generator_choice(
+            "card_generator.auth_mode",
+            raw_card_generator["auth_mode"],
+            supported={"chatgpt_account"},
+        ),
+        preflight_timeout_seconds=_validate_seconds(
+            "card_generator.preflight_timeout_seconds",
+            raw_card_generator["preflight_timeout_seconds"],
+        ),
+    )
+
     return AppConfig(
         source_file=config_file,
         zotero=zotero_config,
         scan=scan_config,
         pdf_gate=pdf_gate_config,
         tasks=task_config,
+        card_generator=card_generator_config,
         paths=path_config,
     )

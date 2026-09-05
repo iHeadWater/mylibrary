@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hydro-platform.local/schemas/evidence-manifest.schema.json",
+  "title": "Hydro Platform Evidence Package Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "group_id",
+    "parent_key",
+    "attachment_key",
+    "pdf_sha256",
+    "source_task_id",
+    "title",
+    "card_status",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "evidence_id": { "type": "string", "pattern": "^EV-[A-Za-z0-9]+$" },
+    "group_id": { "type": "integer", "minimum": 1 },
+    "parent_key": { "type": "string", "pattern": "^[A-Za-z0-9]+$" },
+    "attachment_key": { "type": "string", "pattern": "^[A-Za-z0-9]+$" },
+    "pdf_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "source_task_id": { "type": "string", "pattern": "^TASK-[0-9a-f]{64}$" },
+    "title": { "type": "string", "minLength": 1 },
+    "card_status": { "const": "PLACEHOLDER" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" }
+  }
+}

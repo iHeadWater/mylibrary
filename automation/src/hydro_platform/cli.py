@@ -7,7 +7,10 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
+from hydro_platform.card_generators import build_card_generator_adapter
 from hydro_platform.config import ConfigError, load_config
+from hydro_platform.evidence_packages import EvidencePackageError, sync_evidence_packages
+from hydro_platform.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
 from hydro_platform.pdf_gate import PdfGateError, evaluate_pdf_gate
 from hydro_platform.snapshot import SnapshotError, scan_group
 from hydro_platform.tasks import TaskStoreError, list_tasks, sync_tasks
@@ -40,8 +43,11 @@ def _parser() -> argparse.ArgumentParser:
         ("preflight", "检查目标 Zotero 群组库能否被后台读取"),
         ("scan", "建立基线或检测目标群组中的文献变化"),
         ("pdf-gate", "检查一个父条目的 PDF 全文是否可进入后续处理"),
+        ("pdf-delivery", "复核并交付一个任务对应的 Zotero 原始 PDF"),
         ("tasks-sync", "根据 Zotero 和 PDF 门禁同步本地任务清单"),
         ("tasks-list", "查看本地任务清单，不访问 Zotero"),
+        ("packages-sync", "为已通过 PDF 门禁的任务创建证据包骨架"),
+        ("generator-preflight", "检查 Codex CLI 和 ChatGPT 账号登录状态"),
     ):
         command = subparsers.add_parser(name, help=help_text)
         command.add_argument(
@@ -49,17 +55,26 @@ def _parser() -> argparse.ArgumentParser:
             default=_default_config_path(),
             help="总配置文件路径；默认读取项目 config/config.json",
         )
-        command.add_argument("--base-url", help="覆盖本机 Zotero API 地址")
-        command.add_argument("--timeout", type=float, help="请求超时秒数")
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
-        if name in {"preflight", "scan", "pdf-gate", "tasks-sync", "tasks-list"}:
+        if name != "generator-preflight":
+            command.add_argument("--base-url", help="覆盖本机 Zotero API 地址")
+            command.add_argument("--timeout", type=float, help="请求超时秒数")
+        if name in {
+            "preflight",
+            "scan",
+            "pdf-gate",
+            "pdf-delivery",
+            "tasks-sync",
+            "tasks-list",
+            "packages-sync",
+        }:
             command.add_argument("--group-id", help="覆盖目标 Zotero 群组 ID")
         if name == "scan":
             command.add_argument(
                 "--state",
                 help="覆盖总配置中的本地快照路径",
             )
-        if name == "pdf-gate":
+        if name in {"pdf-gate", "pdf-delivery"}:
             command.add_argument(
                 "--item-key",
                 required=True,
@@ -71,6 +86,31 @@ def _parser() -> argparse.ArgumentParser:
 
 def _render_human(result: dict[str, Any]) -> str:
     if result.get("ok"):
+        if result.get("component") == "card_generator":
+            return (
+                "通过：Codex CLI 制卡运行环境可用"
+                f"\n- 适配器：{result['adapter']}"
+                f"\n- CLI 版本：{result['cli_version']}"
+                f"\n- 登录方式：{result['detected_auth_mode']}"
+                f"\n- 可执行程序：{result['resolved_executable']}"
+            )
+        if "delivery_status" in result:
+            return (
+                "通过：Zotero 原始 PDF 已复核，可以交给制卡器"
+                f"\n- 父条目：{result['parent_key']}"
+                f"\n- 附件：{result['attachment_key']}"
+                f"\n- PDF：{result['pdf_path']}"
+                f"\n- SHA-256：{result['pdf_sha256']}"
+                f"\n- 证据包：{result['evidence_package_path']}"
+            )
+        if "package_count" in result:
+            return (
+                "通过：证据包骨架已同步"
+                f"\n- 可处理任务：{result['eligible_task_count']}"
+                f"\n- 新建：{result['created_count']}"
+                f"\n- 保持不变：{result['unchanged_count']}"
+                f"\n- 目录：{result['evidence_packs_path']}"
+            )
         if "task_count" in result:
             states = ", ".join(
                 f"{name}={count}" for name, count in result.get("state_counts", {}).items()
@@ -128,11 +168,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         app_config = load_config(
             args.config,
-            base_url=args.base_url,
+            base_url=getattr(args, "base_url", None),
             group_id=getattr(args, "group_id", None),
-            timeout_seconds=args.timeout,
+            timeout_seconds=getattr(args, "timeout", None),
             require_group=args.command
-            in {"preflight", "scan", "pdf-gate", "tasks-sync", "tasks-list"},
+            in {
+                "preflight",
+                "scan",
+                "pdf-gate",
+                "pdf-delivery",
+                "tasks-sync",
+                "tasks-list",
+                "packages-sync",
+            },
         )
     except ConfigError as exc:
         result = {
@@ -186,6 +234,33 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "ok": False,
                     "error": {"code": exc.code, "message": str(exc)},
                 }
+    elif args.command == "pdf-delivery":
+        readiness = preflight(app_config.zotero)
+        if not readiness["ok"]:
+            result = readiness
+        else:
+            try:
+                result = prepare_pdf_delivery(
+                    app_config.zotero,
+                    app_config.pdf_gate,
+                    app_config.tasks,
+                    app_config.paths.tasks_file,
+                    app_config.paths.lock_file,
+                    app_config.paths.evidence_packs_dir,
+                    args.item_key,
+                ).as_result()
+            except (
+                PdfDeliveryError,
+                EvidencePackageError,
+                TaskStoreError,
+                PdfGateError,
+                ZoteroApiError,
+            ) as exc:
+                result = {
+                    "schema_version": 1,
+                    "ok": False,
+                    "error": {"code": exc.code, "message": str(exc)},
+                }
     elif args.command == "tasks-sync":
         readiness = preflight(app_config.zotero)
         if not readiness["ok"]:
@@ -206,7 +281,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "ok": False,
                     "error": {"code": exc.code, "message": str(exc)},
                 }
-    else:
+    elif args.command == "tasks-list":
         try:
             result = list_tasks(
                 app_config.zotero.group_id,
@@ -218,6 +293,37 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "ok": False,
                 "error": {"code": exc.code, "message": str(exc)},
             }
+    elif args.command == "packages-sync":
+        try:
+            result = sync_evidence_packages(
+                app_config.zotero.group_id,
+                app_config.tasks,
+                app_config.paths.tasks_file,
+                app_config.paths.lock_file,
+                app_config.paths.evidence_packs_dir,
+            )
+        except (EvidencePackageError, TaskStoreError) as exc:
+            result = {
+                "schema_version": 1,
+                "ok": False,
+                "error": {"code": exc.code, "message": str(exc)},
+            }
+    elif args.command == "generator-preflight":
+        try:
+            result = build_card_generator_adapter(
+                app_config.card_generator
+            ).preflight()
+        except ValueError as exc:
+            result = {
+                "schema_version": 1,
+                "ok": False,
+                "error": {
+                    "code": "CARD_GENERATOR_ADAPTER_NOT_REGISTERED",
+                    "message": str(exc),
+                },
+            }
+    else:
+        raise AssertionError(f"未处理的命令：{args.command}")
     _emit(result, args.json)
     return 0 if result["ok"] else 3
 

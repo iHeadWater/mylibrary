@@ -4,11 +4,11 @@
 
 | 类型 | 示例 | 保存位置 | 是否进入 Git |
 |---|---|---|---|
-| 团队级可调整配置 | 项目目录、运行区、证据包目录、Zotero 群组 ID、超时、分页大小、PDF 门禁阈值、任务租约和锁时长 | `config/config.json` | 是 |
+| 团队级可调整配置 | 项目目录、运行区、证据包目录、Zotero 群组 ID、超时、分页大小、PDF 门禁阈值、任务租约和锁时长、制卡适配器及预检参数 | `config/config.json` | 是 |
 | 本机覆盖配置 | 本机临时路径或不同端口 | `config/config.local.json` | 否 |
-| 运行时状态 | 扫描快照、任务状态、锁、原始日志、PDF 临时文本 | `paths.runtime_dir` 指向的目录 | 否 |
+| 运行时状态 | 扫描快照、任务状态、锁、原始日志和可删除的临时处理文件 | `paths.runtime_dir` 指向的目录 | 否 |
 | 证据事实 | 父条目 Key、附件 Key、PDF 哈希、生成版本、创建与更新时间 | 证据包 `manifest.json` | 是 |
-| 密钥 | 大模型 API Key、GitHub Token | 环境变量或操作系统密钥存储 | 否 |
+| 本机凭据与密钥 | Codex CLI 登录凭据、GitHub Token；未来可能使用的大模型 API Key | Codex 或操作系统凭据存储、环境变量 | 否 |
 | 程序协议常量 | Zotero API 路由、事件名称、Schema 版本 | 代码及受版本控制的 Schema | 是 |
 
 ## 路径解析规则
@@ -16,10 +16,21 @@
 1. `paths.project_root` 相对于总配置文件所在目录解析，也可以填写绝对路径；
 2. 其余项目路径相对于 `project_root` 解析，也可以填写位于项目根目录内的绝对路径；
 3. 所有项目路径不得逃出 `project_root`；
-4. `snapshot_file`、`tasks_file`、`lock_file`、`logs_dir` 和 `pdf_work_dir` 必须位于 `runtime_dir`；
+4. `snapshot_file`、`tasks_file`、`lock_file` 和 `logs_dir` 必须位于 `runtime_dir`；
 5. 配置中的环境变量会在启动时展开，但密钥不得通过路径配置间接写入仓库。
 6. 所有路径字段必须显式存在；程序不会用散落在源码里的路径默认值补齐漏项。
 
 ## 当前限制
 
-总配置已经驱动 Zotero 预检、变化扫描、PDF 门禁和任务状态机。后续证据包写入、事件记录和报告功能在实现时必须复用同一配置对象，不得重新引入散落路径。
+总配置已经驱动 Zotero 预检、变化扫描、PDF 门禁、任务状态机、证据包骨架写入、原始 PDF 交付，以及 US-07A 的 Codex CLI/ChatGPT 登录预检。US-06 已删除未被使用的 `paths.pdf_work_dir`，因为当前流程直接交付 Zotero 原始文件，不制造全文副本或持久解析缓存。后续事件记录和报告功能在实现时必须复用同一配置对象，不得重新引入散落路径。
+
+US-07A 已加入 `card_generator.adapter`、`executable`、`auth_mode` 和 `preflight_timeout_seconds`，并由真实预检代码读取和校验；当前分别只支持 `codex_cli` 与 `chatgpt_account`。后者只能证明 CLI 报告为 ChatGPT 账号登录，不能证明订阅档位或剩余额度。模型、推理强度、正式调用超时和订阅用量保护规则尚未进入配置，因为 US-07B 还没有实际消费这些字段的代码。Codex CLI 的账号登录凭据属于本机秘密，不得写入 config.json、日志、manifest.json 或 Git。未来增加独立 API 适配器时，API Key 同样只存在本机密钥环境。
+
+## 新功能的配置验收规则
+
+1. 凡是团队会主动调整且不敏感的参数，必须从 `config/config.json` 读取，不得写死在源码或计划任务命令中；
+2. 新配置字段必须同时具有解析、类型或范围校验、使用该字段的实际代码、自动化测试和中文说明；
+3. 配置只能选择已经实现并注册的适配器；填写未知适配器时必须启动失败，不能静默回退；
+4. 路径、模型和工具切换后，不修改源码即可运行对应的已实现能力；
+5. 密钥、账号凭据、运行状态和单篇文献事实不得因“可能变化”而被错误放入总配置；
+6. 生效配置及其版本需要被运行日志和证据包 manifest 追溯，但不得把秘密写入其中。

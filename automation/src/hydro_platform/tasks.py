@@ -181,7 +181,7 @@ def save_task_registry(path: str | Path, registry: dict[str, Any]) -> None:
     os.replace(temporary, task_path)
 
 
-def _task_id(group_id: int, parent_key: str, attachment_key: str, pdf_sha256: str) -> str:
+def build_task_id(group_id: int, parent_key: str, attachment_key: str, pdf_sha256: str) -> str:
     canonical = f"{group_id}\0{parent_key}\0{attachment_key}\0{pdf_sha256}".encode("utf-8")
     return "TASK-" + hashlib.sha256(canonical).hexdigest()
 
@@ -211,7 +211,7 @@ def _gate_input(group_id: int, parent_key: str, gate_result: dict[str, Any]) -> 
         "pdf_sha256": pdf_sha256 if isinstance(pdf_sha256, str) else None,
     }
     if input_data["attachment_key"] and input_data["pdf_sha256"]:
-        return input_data, _task_id(
+        return input_data, build_task_id(
             group_id,
             parent_key,
             input_data["attachment_key"],

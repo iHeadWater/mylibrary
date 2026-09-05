@@ -184,7 +184,13 @@ def evaluate_pdf_gate(
         )
 
     size, sha256, file_problem = _inspect_file(file_path, gate)
-    pdf.update({"file_size_bytes": size, "sha256": sha256 or None})
+    pdf.update(
+        {
+            "file_size_bytes": size,
+            "sha256": sha256 or None,
+            "local_path": str(file_path.resolve()),
+        }
+    )
     if file_problem is not None:
         status = "WAITING" if file_problem == "PDF_FILE_NOT_SYNCED" else "BLOCKED"
         messages = {

@@ -2,9 +2,11 @@
 
 ## 目的
 
-任务状态机位于 Zotero/PDF 门禁与后续全文提取、证据包生成之间。它只负责记录每篇论文当前处于什么状态、防止重复处理，并为崩溃后的安全重试提供依据。
+任务状态机位于 Zotero/PDF 门禁与后续原始 PDF 交付、证据卡生成之间。它只负责记录每篇论文当前处于什么状态、防止重复处理，并为崩溃后的安全重试提供依据。
 
-当前不会因为任务状态为 `READY_FOR_EXTRACTION` 就自动提取全文或生成证据包。
+当前不会因为任务状态为 `READY_FOR_EXTRACTION` 就自动调用制卡 Agent。该状态名是已发布的程序协议，当前含义是“Zotero 原始 PDF 已通过门禁，可以交给后续处理器”，不代表必须生成全文缓存。
+
+US-05 的 `packages-sync` 可以为该状态创建证据包骨架，US-06 的 `pdf-delivery` 可以只读复核并形成原始 PDF 交付对象；两者都不会领取任务或改变任务状态。只有后续正式制卡处理器才能把任务推进到 `PROCESSING` 和 `COMPLETED`。
 
 ## 身份与唯一性
 
@@ -22,7 +24,7 @@
 | `WAITING_FOR_FULLTEXT` | PDF 存在，Zotero 尚未提供全文索引 | `tasks-sync` |
 | `WAITING` | 其他可重试等待情况 | `tasks-sync` |
 | `BLOCKED` | 多 PDF、损坏文件或文字不可提取 | `tasks-sync` |
-| `READY_FOR_EXTRACTION` | PDF 门禁通过，可以交给全文提取器 | `tasks-sync` |
+| `READY_FOR_EXTRACTION` | PDF 门禁通过，可以把原始 PDF 交给后续处理器 | `tasks-sync` |
 | `PROCESSING` | 后续处理器已领取任务 | 任务领取接口 |
 | `RETRY_PENDING` | 处理失败或租约过期，可以重试 | 任务完成接口或租约恢复 |
 | `COMPLETED` | 后续处理器确认处理完成 | 任务完成接口；当前尚无真实处理器调用 |
@@ -53,6 +55,7 @@ RETRY_PENDING ─重新领取───→ PROCESSING
 - 相同 Zotero 输入和相同门禁结果重复同步，不新建第二条任务，不重复写相同历史；
 - 已经 `COMPLETED` 且输入指纹未变化的任务保持完成；
 - PDF 附件 Key 或 SHA-256 变化时产生新的 `task_id`，处理次数清零；
+- 新任务可以重新进入待处理，但已有非占位 card.md 是独立的写入保护边界；后续处理器必须停止自动覆盖并报告输入变化；
 - 任务清单损坏或群组不一致时拒绝覆盖；
 - 更新通过临时文件和原子替换完成，避免留下半个 JSON 文件。
 
@@ -71,8 +74,6 @@ RETRY_PENDING ─重新领取───→ PROCESSING
 
 ## 当前未接入
 
-- US-05 证据包骨架；
-- US-06 完整全文提取；
 - 后续 AI 制卡处理器；
 - 后台定时调度；
 - 面向教师的共享状态摘要。

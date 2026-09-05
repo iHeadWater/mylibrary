@@ -7,7 +7,6 @@
     "tasks_file": ".runtime/tasks.json",
     "lock_file": ".runtime/worker.lock",
     "logs_dir": ".runtime/logs",
-    "pdf_work_dir": ".runtime/pdf-work",
     "evidence_packs_dir": "evidence-packs",
     "templates_dir": "templates",
     "themes_dir": "themes",
@@ -35,5 +34,11 @@
     "lease_seconds": 1800,
     "lock_stale_seconds": 300,
     "max_history_entries": 100
+  },
+  "card_generator": {
+    "adapter": "codex_cli",
+    "executable": "codex",
+    "auth_mode": "chatgpt_account",
+    "preflight_timeout_seconds": 10
   }
 }
