@@ -15,11 +15,11 @@
 - `scan.page_size`：每页读取条目数；
 - `pdf_gate`：最小 PDF 体积、最小可提取文字数和计算哈希时的分块大小；
 - `tasks`：处理租约时长、死锁恢复时间和每篇论文保留的最大状态历史条数。
-- `card_generator`：当前已注册的制卡适配器、Codex CLI 可执行程序、认证方式和预检超时。
+- `card_generator`：当前已注册的制卡适配器、Codex CLI 可执行程序、认证方式、预检超时，以及最小模型调用使用的模型、推理强度和超时。
 
 后续功能实现时计划补充但当前尚未生效的配置类别：
 
-- `card_generator` 的制卡字段：模型、推理强度、真实调用超时、重试策略、提示词和输出结构路径；这些字段要等 US-07B 有实际消费代码时再增加；
+- `card_generator` 的正式制卡字段：正式调用超时、重试策略、提示词和输出结构路径；这些字段要等 US-07B2 有实际消费代码时再增加；
 - `git`：远端、分支和自动同步策略；
 - `scheduler`：每日运行时间、错过后的补跑规则和并发限制；
 - `reports`：摘要生成范围和保留规则。
@@ -34,10 +34,29 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 | `executable` | 要查找和运行的 Codex CLI 命令名或路径 | 默认为 `codex`；非空字符串 |
 | `auth_mode` | 本阶段能够确认的认证方式 | 当前只能是 `chatgpt_account` |
 | `preflight_timeout_seconds` | 版本和登录状态两项检查各自的最长等待秒数 | 大于 0 |
+| `model` | US-07B1 最小调用指定的模型 | `null` 表示使用 Codex 内置默认；也可填写非空模型名称 |
+| `reasoning_effort` | US-07B1 最小调用指定的推理强度 | `null` 表示使用模型默认；可选 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`，实际支持范围取决于模型 |
+| `smoke_test_timeout_seconds` | US-07B1 单次最小模型调用的最长等待秒数 | 大于 0；当前为 120 |
+
+例如，使用 GPT-5.6 Sol 和高推理强度：
+
+```json
+"model": "gpt-5.6-sol",
+"reasoning_effort": "high"
+```
+
+使用 GPT-5.5 和模型默认推理强度：
+
+```json
+"model": "gpt-5.5",
+"reasoning_effort": null
+```
+
+程序会把显式推理强度转换为 Codex CLI 的 `--config model_reasoning_effort="..."` 参数。配置校验只能防止未知档位和拼写错误；账号是否能使用指定模型、该模型是否支持指定档位，必须由 `generator-smoke-test` 真实验收。
 
 修改后可运行 `python automation/run.py generator-preflight --json` 验证。填写未实现的适配器或认证方式会返回配置错误，不会静默回退。
 
-注意：`chatgpt_account` 只表示 CLI 明确报告为 ChatGPT 登录。它不证明订阅档位、剩余额度或某次模型调用必然成功；这些只能在 US-07B 的受控真实调用中验证。
+注意：`chatgpt_account` 只表示 CLI 明确报告为 ChatGPT 登录。US-07B1 的 `generator-smoke-test` 可以验证一次真实模型调用是否成功，但仍不能证明订阅档位或未来一直有剩余额度。
 
 父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `.runtime/` 或证据包 `manifest.json`。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](../documentation/variables.md)。
 

@@ -57,6 +57,9 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
             "executable": "codex",
             "auth_mode": "chatgpt_account",
             "preflight_timeout_seconds": 10,
+            "model": None,
+            "reasoning_effort": None,
+            "smoke_test_timeout_seconds": 120,
         },
     }
     if overrides:
@@ -152,6 +155,33 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.card_generator.executable, "C:/Tools/codex.exe")
             self.assertEqual(config.card_generator.auth_mode, "chatgpt_account")
             self.assertEqual(config.card_generator.preflight_timeout_seconds, 12.5)
+            self.assertIsNone(config.card_generator.model)
+            self.assertIsNone(config.card_generator.reasoning_effort)
+            self.assertEqual(config.card_generator.smoke_test_timeout_seconds, 120)
+
+    def test_loads_explicit_smoke_test_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root,
+                {"card_generator": {"model": "gpt-test-model"}},
+            )
+
+            config = load_config(config_path)
+
+            self.assertEqual(config.card_generator.model, "gpt-test-model")
+
+    def test_loads_explicit_reasoning_effort(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root,
+                {"card_generator": {"reasoning_effort": "HIGH"}},
+            )
+
+            config = load_config(config_path)
+
+            self.assertEqual(config.card_generator.reasoning_effort, "high")
 
     def test_rejects_unknown_card_generator_adapter(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -197,6 +227,42 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 ConfigError,
                 "card_generator.preflight_timeout_seconds",
+            ):
+                load_config(config_path)
+
+    def test_rejects_empty_generator_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root,
+                {"card_generator": {"model": "  "}},
+            )
+
+            with self.assertRaisesRegex(ConfigError, "card_generator.model"):
+                load_config(config_path)
+
+    def test_rejects_unknown_reasoning_effort(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root,
+                {"card_generator": {"reasoning_effort": "extreme"}},
+            )
+
+            with self.assertRaisesRegex(ConfigError, "reasoning_effort"):
+                load_config(config_path)
+
+    def test_rejects_nonpositive_smoke_test_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root,
+                {"card_generator": {"smoke_test_timeout_seconds": 0}},
+            )
+
+            with self.assertRaisesRegex(
+                ConfigError,
+                "card_generator.smoke_test_timeout_seconds",
             ):
                 load_config(config_path)
 

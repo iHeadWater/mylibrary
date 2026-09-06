@@ -48,6 +48,7 @@ def _parser() -> argparse.ArgumentParser:
         ("tasks-list", "查看本地任务清单，不访问 Zotero"),
         ("packages-sync", "为已通过 PDF 门禁的任务创建证据包骨架"),
         ("generator-preflight", "检查 Codex CLI 和 ChatGPT 账号登录状态"),
+        ("generator-smoke-test", "执行一次无论文、只读的 Codex 最小模型调用"),
     ):
         command = subparsers.add_parser(name, help=help_text)
         command.add_argument(
@@ -56,7 +57,7 @@ def _parser() -> argparse.ArgumentParser:
             help="总配置文件路径；默认读取项目 config/config.json",
         )
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
-        if name != "generator-preflight":
+        if name not in {"generator-preflight", "generator-smoke-test"}:
             command.add_argument("--base-url", help="覆盖本机 Zotero API 地址")
             command.add_argument("--timeout", type=float, help="请求超时秒数")
         if name in {
@@ -87,6 +88,18 @@ def _parser() -> argparse.ArgumentParser:
 def _render_human(result: dict[str, Any]) -> str:
     if result.get("ok"):
         if result.get("component") == "card_generator":
+            if result.get("operation") == "smoke_test":
+                usage = result.get("usage") or {}
+                return (
+                    "通过：Codex 最小模型调用成功"
+                    f"\n- 适配器：{result['adapter']}"
+                    f"\n- CLI 版本：{result['cli_version']}"
+                    f"\n- 模型来源：{result['model_source']}"
+                    "\n- 推理强度："
+                    f"{result.get('configured_reasoning_effort') or '模型默认'}"
+                    f"\n- 输出 token：{usage.get('output_tokens', '未知')}"
+                    f"\n- 安全模式：{result['sandbox']} / ephemeral"
+                )
             return (
                 "通过：Codex CLI 制卡运行环境可用"
                 f"\n- 适配器：{result['adapter']}"
@@ -313,6 +326,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = build_card_generator_adapter(
                 app_config.card_generator
             ).preflight()
+        except ValueError as exc:
+            result = {
+                "schema_version": 1,
+                "ok": False,
+                "error": {
+                    "code": "CARD_GENERATOR_ADAPTER_NOT_REGISTERED",
+                    "message": str(exc),
+                },
+            }
+    elif args.command == "generator-smoke-test":
+        try:
+            result = build_card_generator_adapter(
+                app_config.card_generator
+            ).smoke_test()
         except ValueError as exc:
             result = {
                 "schema_version": 1,

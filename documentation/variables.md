@@ -22,9 +22,9 @@
 
 ## 当前限制
 
-总配置已经驱动 Zotero 预检、变化扫描、PDF 门禁、任务状态机、证据包骨架写入、原始 PDF 交付，以及 US-07A 的 Codex CLI/ChatGPT 登录预检。US-06 已删除未被使用的 `paths.pdf_work_dir`，因为当前流程直接交付 Zotero 原始文件，不制造全文副本或持久解析缓存。后续事件记录和报告功能在实现时必须复用同一配置对象，不得重新引入散落路径。
+总配置已经驱动 Zotero 预检、变化扫描、PDF 门禁、任务状态机、证据包骨架写入、原始 PDF 交付、US-07A 的 Codex CLI/ChatGPT 登录预检，以及 US-07B1 的模型、推理强度和调用超时。US-06 已删除未被使用的 `paths.pdf_work_dir`，因为当前流程直接交付 Zotero 原始文件，不制造全文副本或持久解析缓存。后续事件记录和报告功能在实现时必须复用同一配置对象，不得重新引入散落路径。
 
-US-07A 已加入 `card_generator.adapter`、`executable`、`auth_mode` 和 `preflight_timeout_seconds`，并由真实预检代码读取和校验；当前分别只支持 `codex_cli` 与 `chatgpt_account`。后者只能证明 CLI 报告为 ChatGPT 账号登录，不能证明订阅档位或剩余额度。模型、推理强度、正式调用超时和订阅用量保护规则尚未进入配置，因为 US-07B 还没有实际消费这些字段的代码。Codex CLI 的账号登录凭据属于本机秘密，不得写入 config.json、日志、manifest.json 或 Git。未来增加独立 API 适配器时，API Key 同样只存在本机密钥环境。
+US-07A 已加入 `card_generator.adapter`、`executable`、`auth_mode` 和 `preflight_timeout_seconds`；US-07B1 又加入 `model`、`reasoning_effort` 和 `smoke_test_timeout_seconds`，七项都由实际代码读取和校验。`model = null` 表示最小调用使用 Codex 内置默认，显式模型名则传给 `--model`；`reasoning_effort = null` 表示使用模型默认，显式档位则通过 `--config model_reasoning_effort="..."` 传给 Codex CLI。不同模型支持的档位可能不同，真实兼容性由最小调用探针验收。正式制卡超时和订阅用量保护规则尚未进入配置，因为 US-07B2 还没有实际消费这些字段的代码。Codex CLI 的账号登录凭据属于本机秘密，不得写入 config.json、日志、manifest.json 或 Git。未来增加独立 API 适配器时，API Key 同样只存在本机密钥环境。
 
 ## 新功能的配置验收规则
 

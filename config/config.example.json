@@ -39,6 +39,9 @@
     "adapter": "codex_cli",
     "executable": "codex",
     "auth_mode": "chatgpt_account",
-    "preflight_timeout_seconds": 10
+    "preflight_timeout_seconds": 10,
+    "model": null,
+    "reasoning_effort": null,
+    "smoke_test_timeout_seconds": 120
   }
 }

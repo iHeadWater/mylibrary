@@ -31,7 +31,7 @@
 
 当前可执行命令、结果解释、常见问题和真实验收记录见 [自动化操作手册](documentation/operator-manual.md)。后续自动化能力变化时，该手册必须同步更新。
 
-当前自动化已到达“复核任务、manifest 与 Zotero 原始 PDF，形成只读交付对象，并预检 Codex CLI 与 ChatGPT 登录方式”。预检不会调用模型；当前仍未生成正式证据卡或自动同步 GitHub。
+当前自动化已到达“复核任务、manifest 与 Zotero 原始 PDF，形成只读交付对象，预检 Codex CLI，并可执行一次无论文、无写入的最小模型调用”。当前仍未生成正式证据卡或自动同步 GitHub。
 
 ## 可复现要求
 

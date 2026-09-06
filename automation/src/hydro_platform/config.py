@@ -11,6 +11,9 @@ from urllib.parse import urlparse
 DEFAULT_BASE_URL = "http://127.0.0.1:23119"
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_PROCESS_TIMEOUT_SECONDS = 5.0
+SUPPORTED_REASONING_EFFORTS = frozenset(
+    {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
+)
 
 
 class ConfigError(ValueError):
@@ -50,6 +53,9 @@ class CardGeneratorConfig:
     executable: str
     auth_mode: str
     preflight_timeout_seconds: float
+    model: str | None
+    reasoning_effort: str | None
+    smoke_test_timeout_seconds: float
 
 
 @dataclass(frozen=True)
@@ -171,6 +177,12 @@ def _validate_non_empty_string(name: str, value: Any) -> str:
     return value.strip()
 
 
+def _validate_optional_non_empty_string(name: str, value: Any) -> str | None:
+    if value is None:
+        return None
+    return _validate_non_empty_string(name, value)
+
+
 def _validate_card_generator_choice(
     name: str,
     value: Any,
@@ -181,6 +193,21 @@ def _validate_card_generator_choice(
     if normalized not in supported:
         choices = "、".join(sorted(supported))
         raise ConfigError(f"{name} 当前仅支持：{choices}")
+    return normalized
+
+
+def _validate_optional_card_generator_choice(
+    name: str,
+    value: Any,
+    *,
+    supported: set[str] | frozenset[str],
+) -> str | None:
+    if value is None:
+        return None
+    normalized = _validate_non_empty_string(name, value).casefold()
+    if normalized not in supported:
+        choices = "、".join(sorted(supported))
+        raise ConfigError(f"{name} 当前仅支持：{choices}，或 null")
     return normalized
 
 
@@ -349,6 +376,9 @@ def load_config(
         "executable",
         "auth_mode",
         "preflight_timeout_seconds",
+        "model",
+        "reasoning_effort",
+        "smoke_test_timeout_seconds",
     )
     for name in card_generator_fields:
         if name not in raw_card_generator:
@@ -371,6 +401,19 @@ def load_config(
         preflight_timeout_seconds=_validate_seconds(
             "card_generator.preflight_timeout_seconds",
             raw_card_generator["preflight_timeout_seconds"],
+        ),
+        model=_validate_optional_non_empty_string(
+            "card_generator.model",
+            raw_card_generator["model"],
+        ),
+        reasoning_effort=_validate_optional_card_generator_choice(
+            "card_generator.reasoning_effort",
+            raw_card_generator["reasoning_effort"],
+            supported=SUPPORTED_REASONING_EFFORTS,
+        ),
+        smoke_test_timeout_seconds=_validate_seconds(
+            "card_generator.smoke_test_timeout_seconds",
+            raw_card_generator["smoke_test_timeout_seconds"],
         ),
     )
 

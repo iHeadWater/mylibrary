@@ -10,3 +10,8 @@ class CardGeneratorAdapter(Protocol):
         """Check whether the configured generator can be used safely."""
 
         ...
+
+    def smoke_test(self) -> dict[str, Any]:
+        """Run one bounded model call without domain data or repository writes."""
+
+        ...

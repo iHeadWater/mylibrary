@@ -14,9 +14,10 @@
 6. 将全部父条目同步为本地任务清单，记录等待、阻塞或 PDF 已可交给后续处理器的状态；
 7. 为 `READY_FOR_EXTRACTION` 任务创建共享证据包骨架和最小占位卡；
 8. 重新核对任务、manifest 与 Zotero 当前原始 PDF，形成只读本地文件交付对象；
-9. 预检 Codex CLI 是否可运行并明确使用 ChatGPT 账号登录。
+9. 预检 Codex CLI 是否可运行并明确使用 ChatGPT 账号登录；
+10. 执行一次不带论文和模板、不会写文件的最小模型调用。
 
-当前尚未实现真实 Codex 模型调用、正式证据卡写入、Git 自动同步和每日调度。US-07A 只检查 CLI 与认证环境，不能证明订阅档位、剩余额度或制卡质量。任务领取、租约和完成保护的底层接口已经实现，但在后续制卡处理器接入前不会自行产生真实 `COMPLETED` 状态。
+US-07B1 的最小模型调用已通过真实订阅账号验收。当前尚未实现读取论文的正式 Codex 制卡、正式证据卡写入、Git 自动同步和每日调度。任务领取、租约和完成保护的底层接口已经实现，但在后续制卡处理器接入前不会自行产生真实 `COMPLETED` 状态。
 
 ## 2. 运行前提
 
@@ -320,7 +321,7 @@ codex login status
 
 它不会运行 `codex exec`，不会调用模型，不会读取 Zotero、PDF、任务、模板或证据包，也不会写入任何文件。输出只给出归一化结论，不回显 `codex login status` 的原始输出。
 
-这个预检只能确认 CLI 明确报告为 ChatGPT 账号登录。它不能确认账号具体订阅档位、剩余额度或下一次模型调用一定成功；这些属于 US-07B 的受控真实调用验收。
+这个预检只能确认 CLI 明确报告为 ChatGPT 账号登录。它不能确认账号具体订阅档位、剩余额度或下一次模型调用一定成功；这些属于 US-07B1 的受控真实调用验收。
 
 命令返回码：
 
@@ -330,7 +331,81 @@ codex login status
 
 US-07A 的真实验收由用户运行本节命令并保存输出；不要用一次真实模型调用替代本预检。
 
-## 11. 查看本地快照
+## 11. 执行无论文的最小模型调用
+
+该命令会真实调用一次 Codex 模型并消耗少量账号用量，但不会提供论文、模板或任务数据：
+
+```powershell
+python automation/run.py generator-smoke-test --json
+```
+
+成功结果应至少满足：
+
+```json
+{
+  "ok": true,
+  "component": "card_generator",
+  "operation": "smoke_test",
+  "configured_model": null,
+  "model_source": "codex_default",
+  "configured_reasoning_effort": null,
+  "reasoning_effort_source": "model_default",
+  "probe_version": "codex-cli-smoke-v1",
+  "isolated_workspace": true,
+  "sandbox": "read-only",
+  "ephemeral": true,
+  "model_invoked": true,
+  "unexpected_item_types": [],
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0
+  }
+}
+```
+
+上例中的 token 数只是字段示意，以实际结果为准。成功时，`checks` 还应满足：
+
+- 可执行程序、版本和认证检查均为 `pass`；
+- `model_invocation` 为 `pass`；
+- `expected_response` 为 `pass`。
+
+程序实际调用固定版本探针，要求模型只返回 `HYDRO_GENERATOR_OK`。命令强制启用：
+
+- `--json`：以 JSONL 事件读取结果；
+- `--ephemeral`：不保存会话 rollout 文件；
+- `--sandbox read-only`：模型生成的命令没有写权限；
+- `--ignore-user-config`：不加载用户配置或 MCP；
+- `--ignore-rules`：不加载用户和项目执行策略规则；
+- `--skip-git-repo-check`：允许探针在隔离的空临时目录中运行；
+- `--color never`：避免终端颜色码污染机器解析。
+
+程序会在系统临时位置创建一个空目录作为探针工作区，并在调用结束后删除；项目仓库不是模型工作目录。同时，程序会拒绝包含命令执行、文件修改、MCP 调用或联网搜索事件的结果。它不会把模型最终文本、stderr 原文或线程 ID 写入仓库、任务或证据包。
+
+`config.json` 中：
+
+- `card_generator.model = null` 表示使用 Codex 内置默认模型；
+- 填写非空模型名时，程序通过 `--model` 显式使用该模型；
+- `card_generator.reasoning_effort = null` 表示使用模型默认推理强度；
+- 可显式填写 `none`、`minimal`、`low`、`medium`、`high`、`xhigh` 或 `max`，程序通过 `--config model_reasoning_effort="..."` 传给 Codex CLI；具体模型可能只支持其中一部分；
+- `smoke_test_timeout_seconds` 控制这次调用的最长等待时间，当前为 120 秒。
+
+例如要测试 GPT-5.6 Sol 的高推理强度，把两项改为：
+
+```json
+"model": "gpt-5.6-sol",
+"reasoning_effort": "high"
+```
+
+要测试 GPT-5.5 的模型默认推理强度，则使用：
+
+```json
+"model": "gpt-5.5",
+"reasoning_effort": null
+```
+
+返回码仍为 `0` 成功、`2` 配置错误、`3` 调用或协议失败。不要连续重复运行探针；真实验收仅返回固定标记仍消耗了 16,324 个输入 token，一次成功已经足以验证当前调用链。本命令不得加入每日调度，只在安装、重新登录、CLI 升级、模型或推理强度改变后受控执行。
+
+## 12. 查看本地快照
 
 快照默认保存在：
 
@@ -352,7 +427,7 @@ notepad '.runtime\zotero-snapshot.json'
 
 不要把文件路径直接输入 PowerShell。直接输入路径会被当作命令执行，也不要手工修改快照内容。
 
-## 12. 常见问题
+## 13. 常见问题
 
 ### `python` 命令不存在
 
@@ -441,7 +516,31 @@ CLI 当前报告为 API Key 登录，而本阶段只允许 ChatGPT 账号认证�
 
 CLI 命令成功，但输出没有让程序明确识别出 ChatGPT 登录方式。先人工运行 `codex login status` 查看本机结果，并检查是否使用了不兼容的 CLI 版本；不能把“命令返回 0”直接解释为订阅登录成功。
 
-## 13. 安全操作规则
+### `CODEX_SMOKE_TIMEOUT`
+
+最小模型调用超过 `card_generator.smoke_test_timeout_seconds`。先检查网络和 Codex 服务状态；可以合理增大总配置中的超时，但不要立即循环重试。
+
+### `CODEX_RATE_LIMITED` 或 `CODEX_USAGE_LIMIT`
+
+当前调用受到速率限制或账号没有可用调用额度。保留错误码并稍后人工重试；US-07B1 不会自动重试，也不会因此修改任务或证据包。
+
+### `CODEX_MODEL_UNAVAILABLE`
+
+`card_generator.model` 指定的模型当前不可用。将其改为账号可用的明确模型，或设为 `null` 使用 Codex 内置默认，然后只重试一次。
+
+### `CODEX_REASONING_EFFORT_UNAVAILABLE`
+
+`card_generator.reasoning_effort` 的拼写虽然有效，但当前所选模型不支持这个推理强度。先查询该模型支持的档位，修改模型或推理强度后只重试一次；不要静默降级，因为这会让实际运行参数与配置记录不一致。
+
+### `CODEX_EXEC_PROTOCOL_ERROR` 或 `CODEX_SMOKE_OUTPUT_INVALID`
+
+CLI 没有返回有效 JSONL 完成事件，或者模型没有严格返回固定标记。不要把这种结果算作成功；先核对 Codex CLI 版本和配置，再检查适配器兼容性。
+
+### `CODEX_SMOKE_UNEXPECTED_ACTIVITY`
+
+探针过程中出现了命令、文件、MCP 或联网搜索活动。系统会拒绝结果，即使模型最终返回固定标记也不通过。保留现场，不要通过放宽沙箱来绕过。
+
+## 14. 安全操作规则
 
 - 不要为了重新看到 `ITEM_ADDED` 而随意删除快照；
 - 不要手工编辑 `.runtime` 中的状态文件；
@@ -449,11 +548,13 @@ CLI 命令成功，但输出没有让程序明确识别出 ChatGPT 登录方式�
 - 当前扫描成功只代表发现了 PDF 附件元数据，不代表已经读取 PDF 全文；
 - `pdf-delivery` 成功只代表完整原始 PDF 已通过交付校验，不代表 Codex 已阅读或证据卡已生成；
 - `generator-preflight` 成功只代表 Codex CLI 可运行且报告为 ChatGPT 账号登录，不代表已经调用模型、拥有剩余额度或完成制卡；
+- `generator-smoke-test` 成功只代表当前时刻最小模型调用链可用，不代表模型读过论文、正式制卡可用或科研质量合格；
+- 不要为了让探针通过而改成 `workspace-write` 或 `danger-full-access`，也不要连续运行消耗额度；
 - 不要手工修改 manifest.json；card.md 可以在后续流程填写，但 `packages-sync` 不会覆盖非占位内容；
 - 切换 Zotero 群组时不能只改 `group_id` 后删除旧快照，必须执行后续定义的群组迁移或重新建基线流程；
 - 所有可调整路径和固定运行参数统一在 [config.json](../config/config.json) 修改。
 
-## 14. 真实验收记录
+## 15. 真实验收记录
 
 共享库：`qinjiajun`（群组 ID `6618088`）
 
@@ -556,9 +657,30 @@ CLI 命令成功，但输出没有让程序明确识别出 ChatGPT 登录方式�
 | 认证检查 | `pass` |
 | 验收时间 | `2026-09-05T06:39:38.648951Z` |
 
-结论：US-07A 的真实运行环境正向验收已经通过。该结果证明当前制卡机能找到并运行 Codex CLI，且 CLI 明确报告为 ChatGPT 账号登录；它不证明订阅档位、剩余额度、模型调用成功或证据卡质量，后四项仍属于 US-07B。
+结论：US-07A 的真实运行环境正向验收已经通过。该结果证明当前制卡机能找到并运行 Codex CLI，且 CLI 明确报告为 ChatGPT 账号登录；它不证明模型调用成功或证据卡质量，分别由 US-07B1 和 US-07B2 验收。
 
-## 15. 手册维护规则
+### US-07B1 最小模型调用（已通过）
+
+| 项目 | 真实结果 |
+|---|---|
+| 适配器 | `codex_cli` |
+| CLI 版本 | `codex-cli 0.149.1` |
+| 认证方式 | 配置和检测均为 `chatgpt_account` |
+| 配置模型 | `gpt-5.6-sol`，来源为 `configured` |
+| 配置推理强度 | `low`，来源为 `configured` |
+| 探针版本 | `codex-cli-smoke-v1` |
+| 隔离与权限 | 空临时工作区、`read-only`、`ephemeral` |
+| 模型调用 | 已执行并通过 |
+| 非预期工具活动 | 无 |
+| 输入 token | 16,324，其中缓存输入 10,880 |
+| 输出 token | 10 |
+| 推理输出 token | 0 |
+| 五项检查 | 全部 `pass` |
+| 验收时间 | `2026-09-06T08:07:37.982713Z` |
+
+结论：US-07B1 真实正向验收完成，证明当前制卡机能够通过 Python 使用 ChatGPT 账号非交互调用指定的 `gpt-5.6-sol / low`，并按固定协议返回结果。它不证明模型能正确读取论文或生成合格证据卡，这两项仍属于 US-07B2。
+
+## 16. 手册维护规则
 
 以下变化发生时，必须在同一次修改中更新本手册：
 
