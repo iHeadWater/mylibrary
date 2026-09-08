@@ -58,7 +58,19 @@ GDRIVE_PAPERS_PATH=<path>     # 本地 GDrive 路径(ZotMoov 目标)
 
 ## 用法
 
-在 mylibrary 仓库的 Claude Code 中：
+**方式一：自主脚本模式（首选，无需交互）**
+
+```bash
+uv run python scripts/download_paper.py --doi 10.1029/2026GL125188 --sync
+uv run python scripts/download_paper.py --arxiv 2608.18495 --sync
+uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元数据
+```
+
+脚本按 DOI 前缀自动路由到对应出版商流程，内置 **stealth Chrome 启动器**
+（真实 Chrome 内核 + 剥离自动化标记），Cloudflare / AMS 人机验证**自动通过**，
+全程无需手动干预。首次使用需 `uv run playwright install chromium`。
+
+**方式二：agent + Playwright MCP 浏览器**（脚本无法覆盖的出版商或需人工登录时）
 
 ```
 /download-pdf 10.1038/s41586-026-10704-3
@@ -76,8 +88,10 @@ agent 打开 Chromium 窗口。你只需在以下情况交互：
 | **Nature** | 机构 | WAYF → DUT SSO → 点击 "Download PDF" |
 | **Wiley** | 任意 | `pdfdirect?download=true` URL 触发原生下载 |
 | **AGU** | 任意 | 同 Wiley（`agupubs.onlinelibrary.wiley.com`） |
+| **AMS** | 机构/IP | stealth 指纹过验证 → `context.request` 取 PDF 字节 |
 | **Elsevier (ScienceDirect)** | SSO 自动识别 | 导航 → "View PDF" → 新标签页(可能经安全校验)→ 同源 `<a download>` 锚点 → 原生下载 |
 | **Copernicus (ESSD 等)** | 开放获取 | 直链 `curl -L` 下载(静态 PDF 锚点无效) |
+| **science.org** | 开放获取 | `curl -L "doi/pdf/<DOI>?download=true"` 直连 |
 
 ## 工作原理
 
@@ -118,6 +132,24 @@ curl -sL -A "Mozilla/5.0" -o paper.pdf "https://essd.copernicus.org/preprints/<m
 
 Copernicus 偶有慢速/超时——curl 中断用 `wget -c` 续传，或 Python urllib 配 120s 超时。
 
+### Stealth Chrome 脚本模式（scripts/download_paper.py）
+
+裸 Playwright Chromium 带 `navigator.webdriver=true` 和 `--enable-automation` 开关，Cloudflare 靠指纹识别后**每次导航都重新弹验证**（即使人工通过也没用——这不是 IP 封禁）。脚本模式改用：
+
+- `channel="chrome"`（本机真实 Chrome）+ `ignore_default_args=["--enable-automation"]`
+- `--disable-blink-features=AutomationControlled` + init-script 掩蔽 `webdriver`
+- persistent profile（临时目录下），验证 cookie 跨次运行复用
+
+效果：AMS "Human Verification" 与 ScienceDirect Cloudflare 全部自动通过。
+
+### AMS
+
+stealth 指纹过掉验证页后，用 `page.context.request.get(downloadpdf_url)`（带文章页 Referer，cookie 自动共享）直接取 PDF 字节。**不要**用 `expect_download` + `save_as`——下载触发后页面立即关闭，save 会竞速失败（TargetClosedError）。
+
+### science.org
+
+开放获取，`curl -L "https://www.science.org/doi/pdf/<DOI>?download=true"` 直连即可，无需浏览器。
+
 ### 反模式（DO NOT USE）
 
 | 模式 | 为什么坏 |
@@ -126,10 +158,18 @@ Copernicus 偶有慢速/超时——curl 中断用 `wget -c` 续传，或 Python
 | `browser_run_code` + `require('fs')` | MCP 运行时未定义 `require` |
 | `mcp__plugin_ecc_playwright__*` | 需要 Chrome 扩展桥，非独立 |
 | `python scripts/zotero_sync.py` | 用 `uv run python`——conda Python 缺依赖 |
+| 裸 Playwright Chromium 反复被 Cloudflare 拦 | `navigator.webdriver` 指纹暴露；用 stealth 启动器（`channel="chrome"` + 去 automation 标记） |
+| `context.request` 拉 ScienceDirect 签名 PDF | assets CDN 对非浏览器 TLS 指纹返回 403（AMS 可用，SD 不可用） |
+| main.pdf URL 一出现就注入锚点 | 二次重定向会摧毁执行上下文——先等 URL 稳定 |
 
 ## 命令参考
 
 ```bash
+# 一条命令：解析 → 按出版商路由 → 下载 → 验证（--sync 加入库）
+uv run python scripts/download_paper.py --doi <doi> [--sync] [--out DIR]
+uv run python scripts/download_paper.py --arxiv <id> [--sync]
+uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元数据
+
 # 解析和分类输入
 uv run python -m hydrolitagent.literature.download_pdf doi <doi>
 uv run python -m hydrolitagent.literature.download_pdf classify <input>

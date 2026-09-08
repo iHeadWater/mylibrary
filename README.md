@@ -62,6 +62,10 @@ uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>
 ### Literature CLI (post-ingestion deep processing)
 
 ```bash
+# One-command download + Zotero sync (stealth Chrome; auto publisher routing)
+uv run python scripts/download_paper.py --doi <doi> --sync
+uv run python scripts/download_paper.py --arxiv <id> --sync
+
 # Institutional-access PDF download
 uv run python -m hydrolitagent.literature.download_pdf doi <doi>
 
@@ -104,7 +108,7 @@ Each graph build writes `graph.json`, `graph.html` (D3.js), `GRAPH_REPORT.md`, a
 | `zotero-query` | Query the Zotero library via MCP tools |
 | `paper-to-zotero` | Download a paper and add it to Zotero (DOI / arXiv / title) |
 | `run-paper-to-zotero` | One-command paper-fetch → GDrive → Zotero linked_file pipeline |
-| `download-pdf` | Institutional-access PDF download via Playwright |
+| `download-pdf` | Institutional-access PDF download via Playwright (+ `scripts/download_paper.py` stealth one-command mode) |
 | `zotero-notebooklm` | Zotero papers → NotebookLM Chinese briefing / audio / video |
 | `weekly-review` | Weekly literature review: deep-read → analysis cards → WeChat article → NotebookLM podcast |
 | `weekly-report-skill` | NotebookLM output → WeChat weekly-report MD |
@@ -133,7 +137,7 @@ hydrolitagent/
     └── search.py
 
 configs/                 # Prompt / extraction configuration
-scripts/                 # run_paper_pipeline.sh, chunk_fulltext.py
+scripts/                 # run_paper_pipeline.sh, download_paper.py (stealth one-command PDF downloader), chunk_fulltext.py
 skills/                  # 9 agent skills
 docs/                    # Documentation site (mkdocs-material)
 outputs/                 # Deep-reading artifacts: outputs/weekly-review/{date}/{cards,article,podcast}

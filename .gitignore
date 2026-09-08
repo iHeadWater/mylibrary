@@ -180,6 +180,8 @@ results/*
 .pytest-tmp/
 .playwright-mcp/
 ~$*
+*.doc
+*.docx
 outputs/
 .graph_state.toml
 cache/
@@ -191,3 +193,12 @@ tasks/
 .claude/
 .specify/
 .codegraph/
+
+# Trellis（可用 `trellis init --claude --dsh -u owen` 重新生成，会话数据保持本地）
+.trellis/
+.agents/
+.dsh/
+AGENTS.md
+.gitattributes
+_docx_extract.md
+.tmp/

@@ -54,7 +54,7 @@ hydrolitagent/
     └── search.py
 
 configs/                 # Prompt / 提取配置
-scripts/                 # run_paper_pipeline.sh, chunk_fulltext.py
+scripts/                 # run_paper_pipeline.sh, download_paper.py (stealth one-command PDF downloader), chunk_fulltext.py
 skills/                  # Agent 可用 Skill(9 个)
 docs/                    # 文档站点(mkdocs-material)
 outputs/                 # 精读产物:outputs/weekly-review/{date}/{cards,article,podcast}
