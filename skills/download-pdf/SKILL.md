@@ -39,9 +39,10 @@ switch on URL pattern → follow publisher-specific steps → save PDF.
 
 ## Fast Path: Autonomous Script Mode (preferred)
 
-`scripts/download_paper.py` packages every publisher flow below into one command, with
-the stealth-browser launcher that makes Cloudflare / AMS "Human Verification" **auto-pass**
-(no manual CAPTCHA). Try this first; fall back to the MCP-browser phases when it can't run.
+`scripts/download_paper.py` packages every publisher flow below into one command.
+It prefers the **MCP browser profile** (stable, rich cookies) and falls back to the
+stealth temp profile when MCP is unavailable. Try this first; fall back to the
+MCP-browser phases only when it can't run.
 
 ```bash
 # Metadata check only (Crossref title/PII, no download)
@@ -54,8 +55,9 @@ uv run python scripts/download_paper.py --doi <doi> [--sync] [--out DIR]
 uv run python scripts/download_paper.py --arxiv <id> --sync
 ```
 
-Routing: `10.5194` Copernicus → curl · `10.1126` science.org → curl · `10.1016` → SD flow ·
-`10.1029`/`10.1002` → Wiley pdfdirect · `10.1175` → AMS · `10.1038` → Nature · else → manual phases.
+Routing: `10.5194` Copernicus → curl · `10.1126` science.org → curl two-step ·
+`10.1016` → SD flow · `10.1029`/`10.1002` → Wiley pdfdirect · `10.1175` → AMS ·
+`10.1038` → Nature · `10.2139` → SSRN · else → manual phases.
 First run needs: `uv run playwright install chromium` (real Chrome via `channel="chrome"` if installed).
 
 **Why stealth matters:** a plain Playwright Chromium carries `navigator.webdriver=true` and the
@@ -94,10 +96,13 @@ Per-publisher script flows (all validated end-to-end):
   save_as`. Details below in Phase 1 / Failure table.
 - **Wiley/AGU**: wrap `goto pdfdirect?download=true` in `expect_download`; the goto itself
   throws ERR_ABORTED (navigation became the download) — catch and ignore it.
-- **AMS**: stealth fingerprint passes the verification page; then
-  `page.context.request.get(downloadpdf_url, headers={'Referer': article_url})` returns the
-  PDF bytes directly (cookies are shared). Do NOT use `expect_download` + `save_as` here —
-  the page closes mid-save (TargetClosedError).
+- **AMS**: stealth fingerprint passes the verification page; visit the aop URL which
+  redirects to the published article (e.g., `aies/5/4/AIES-D-25-0069.1.xml`). Extract
+  vol/issue from the final URL, construct the downloadpdf path, then use
+  `page.context.request.get(downloadpdf_url, headers={'Referer': article_url})` to fetch
+  PDF bytes directly. Do NOT use `expect_download` + `save_as` — the page closes mid-save.
+- **SSRN**: Cloudflare auto-passes with MCP profile; visit abstract page, wait for challenge
+  to clear, click the download button, save_as.
 - **Nature**: check `[data-test="entitlement-box-main"]` text first; if it contains
   "is not available" the institution doesn't subscribe (e.g. Nature Reviews journals under
   "SpringerLink Liaoning & Heilongjiang") — check Unpaywall
@@ -306,6 +311,24 @@ d. Verify: `head -c 8 <file>` → should print `%PDF-`.
 
 **Slow/stalling note:** Copernicus can be slow (see `skills/paper-to-zotero`). If curl stalls, resume with `wget -c`, or use Python urllib with a long 120s timeout.
 
+### Phase 4b: science.org (curl two-step)
+
+Detect: DOI prefix `10.1126`. science.org papers are open access but have bot detection
+that blocks browser automation (even stealth Chrome). A two-step curl with a shared
+cookie jar bypasses it entirely.
+
+**Flow:**
+```bash
+# Step 1: visit article page (sets cookies)
+curl -sL -A "<UA>" -c cookies.txt -b cookies.txt "https://www.science.org/doi/<DOI>"
+# Step 2: fetch PDF with the same cookies
+curl -sL -A "<UA>" -c cookies.txt -b cookies.txt -o paper.pdf "https://www.science.org/doi/pdf/<DOI>?download=true"
+rm cookies.txt
+```
+
+The script's `curl_with_cookies()` function automates this. Do NOT use browser
+automation for science.org — it triggers infinite redirect loops or bot challenges.
+
 ### Phase 5: Sync to Zotero (linked_file)
 
 After a PDF is downloaded and verified, optionally sync it to Zotero with a linked_file attachment. The PDF is copied to the user's Google Drive papers folder (managed by ZotMoov), and Zotero stores only a pointer — **zero Zotero cloud storage used**.
@@ -400,6 +423,9 @@ The script uses Zotero's portable `attachments:<filename>` scheme. Zotero resolv
 | **脚本启动报 Playwright 浏览器缺失** | `uv run playwright install chromium`。之后仍优先 `channel="chrome"`（本机真 Chrome），失败再回退 bundled Chromium。 |
 | **机构访问在脚本浏览器中失效（显示 preview）** | 机构会话存在 MCP profile（`%LOCALAPPDATA%/ms-playwright-mcp/mcp-chrome-*`）或走 IP。先看 entitlement 文案；"is not available" = 机构不订阅该刊（如 Nature Reviews 系列），查 Unpaywall 后放弃或换 OA 副本，勿反复重试触发风控。 |
 | **arXiv 多作者条目作者被拆错** | `zotero_sync` Crossref 回退按 `;` 拆分会把逗号分隔的多作者列表拆坏。用 `paper_to_zotero.fetch_arxiv`（注意其 `authors` 是 `"First Last"` 字符串列表，非 dict）拼 creators 后走 `_create_zotero_item`。 |
+| **stealth profile 长时间运行后浏览器上下文崩溃** | 约 8 次以上导航后 stealth temp profile 不稳定（TargetClosedError 级联）。改用 MCP profile（`%LOCALAPPDATA%/ms-playwright-mcp/mcp-chrome-*`）；脚本已自动优先选 MCP。 |
+| **AMS aop URL 返回 403** | 文章已发表，aop 不再可用。重定向到 published URL（如 `aies/5/4/...`），从中提取 vol/issue 构造 downloadpdf 路径。脚本 `ams_flow()` 已处理。 |
+| **science.org 浏览器无限重定向** | science.org 对自动化浏览器返回 ERR_TOO_MANY_REDIRECTS。改用 curl 两步法（先文章页设 cookie，再带 cookie 拉 PDF）。脚本已自动处理。 |
 
 ## Deterministic Patterns (for agents)
 
@@ -454,6 +480,19 @@ These are the ONLY patterns to use. Do not deviate.
 2. 10.5194/10.1126 → curl; 10.1016 → SD anchor flow; 10.1029/10.1002 → pdfdirect;
    10.1175 → AMS context.request; 10.1038 → Nature download-pdf click
 3. verify %PDF- header (script does it); --sync runs zotero_sync in the same step
+```
+
+### Download: science.org (curl two-step, no browser)
+```
+1. curl -sL -A "<UA>" -c cookies.txt -b cookies.txt "https://www.science.org/doi/<DOI>"   # set cookies
+2. curl -sL -A "<UA>" -c cookies.txt -b cookies.txt -o paper.pdf "https://www.science.org/doi/pdf/<DOI>?download=true"
+3. rm cookies.txt; verify %PDF- header
+```
+
+### Download: SSRN preprint
+```
+1. uv run python scripts/download_paper.py --doi 10.2139/ssrn.<id> --sync
+   (auto-routes to ssrn_flow: visit abstract page → wait Cloudflare → click download)
 ```
 
 ### Batch papers (titles list)

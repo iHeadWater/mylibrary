@@ -88,10 +88,11 @@ agent 打开 Chromium 窗口。你只需在以下情况交互：
 | **Nature** | 机构 | WAYF → DUT SSO → 点击 "Download PDF" |
 | **Wiley** | 任意 | `pdfdirect?download=true` URL 触发原生下载 |
 | **AGU** | 任意 | 同 Wiley（`agupubs.onlinelibrary.wiley.com`） |
-| **AMS** | 机构/IP | stealth 指纹过验证 → `context.request` 取 PDF 字节 |
+| **AMS** | 机构/IP | aop→published redirect → `context.request` 取 PDF 字节 |
 | **Elsevier (ScienceDirect)** | SSO 自动识别 | 导航 → "View PDF" → 新标签页(可能经安全校验)→ 同源 `<a download>` 锚点 → 原生下载 |
 | **Copernicus (ESSD 等)** | 开放获取 | 直链 `curl -L` 下载(静态 PDF 锚点无效) |
-| **science.org** | 开放获取 | `curl -L "doi/pdf/<DOI>?download=true"` 直连 |
+| **science.org** | 开放获取 | curl 两步法：先文章页设 cookie，再带 cookie 拉 PDF |
+| **SSRN** | 免费下载 | 浏览器访问摘要页 → Cloudflare 自动通过 → 点击下载 |
 
 ## 工作原理
 
@@ -148,7 +149,21 @@ stealth 指纹过掉验证页后，用 `page.context.request.get(downloadpdf_url
 
 ### science.org
 
-开放获取，`curl -L "https://www.science.org/doi/pdf/<DOI>?download=true"` 直连即可，无需浏览器。
+开放获取，但对自动化浏览器有 bot 检测（无限重定向）。用 **curl 两步法**绕过：
+
+```bash
+# 第一步：访文章页设 cookie
+curl -sL -A "Mozilla/5.0" -c cookies.txt -b cookies.txt "https://www.science.org/doi/<DOI>"
+# 第二步：带 cookie 拉 PDF
+curl -sL -A "Mozilla/5.0" -c cookies.txt -b cookies.txt -o paper.pdf "https://www.science.org/doi/pdf/<DOI>?download=true"
+rm cookies.txt
+```
+
+### SSRN
+
+SSRN 预印本免费下载。Cloudflare 挑战在 MCP 浏览器 profile 下自动通过。访问摘要页
+`https://papers.ssrn.com/sol3/papers.cfm?abstract_id=<id>`，等待验证通过后点击
+下载按钮即可。
 
 ### 反模式（DO NOT USE）
 
@@ -161,6 +176,8 @@ stealth 指纹过掉验证页后，用 `page.context.request.get(downloadpdf_url
 | 裸 Playwright Chromium 反复被 Cloudflare 拦 | `navigator.webdriver` 指纹暴露；用 stealth 启动器（`channel="chrome"` + 去 automation 标记） |
 | `context.request` 拉 ScienceDirect 签名 PDF | assets CDN 对非浏览器 TLS 指纹返回 403（AMS 可用，SD 不可用） |
 | main.pdf URL 一出现就注入锚点 | 二次重定向会摧毁执行上下文——先等 URL 稳定 |
+| 浏览器上下文长时间运行后崩溃 | 约 8 次导航后 stealth temp profile 不稳定；用 MCP profile（脚本已自动优先） |
+| science.org 浏览器无限重定向 | bot 检测；改用 curl 两步法（先文章页设 cookie） |
 
 ## 命令参考
 
