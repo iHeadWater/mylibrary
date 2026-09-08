@@ -96,6 +96,7 @@ def prepare_pdf_delivery(
     *,
     client: ZoteroClient | None = None,
     now: datetime | None = None,
+    allow_trial_states: bool = False,
 ) -> PdfDelivery:
     if zotero.group_id is None:
         raise PdfDeliveryError("CONFIG_ERROR", "PDF 交付需要目标 Zotero 群组 ID")
@@ -112,7 +113,12 @@ def prepare_pdf_delivery(
                 "PDF_DELIVERY_TASK_NOT_FOUND",
                 f"任务清单中找不到父条目：{normalized_key}",
             )
-        if raw_task.get("state") not in DELIVERABLE_TASK_STATES:
+        deliverable_states = (
+            DELIVERABLE_TASK_STATES | {"COMPLETED", "QUALITY_FAILED"}
+            if allow_trial_states
+            else DELIVERABLE_TASK_STATES
+        )
+        if raw_task.get("state") not in deliverable_states:
             raise PdfDeliveryError(
                 "PDF_DELIVERY_TASK_NOT_READY",
                 f"任务 {normalized_key} 当前状态不可交付：{raw_task.get('state')}",

@@ -185,6 +185,39 @@ class PdfDeliveryTests(unittest.TestCase):
         self.assertEqual(task_after, task_before)
         self.assertEqual(copied_pdfs, [])
 
+    def test_explicit_trial_can_read_terminal_task_without_mutating_it(self) -> None:
+        for terminal_state in ("COMPLETED", "QUALITY_FAILED"):
+            with self.subTest(state=terminal_state), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                pdf_path = self._write_pdf(root)
+                pdf_hash = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
+                task_path, lock_path, evidence_root = self._write_task(
+                    root,
+                    pdf_hash=pdf_hash,
+                )
+                self._create_package(root)
+                self._write_task(root, pdf_hash=pdf_hash, state=terminal_state)
+                task_before = task_path.read_bytes()
+
+                delivery = prepare_pdf_delivery(
+                    self.zotero,
+                    self.gate,
+                    self.tasks,
+                    task_path,
+                    lock_path,
+                    evidence_root,
+                    PARENT_KEY,
+                    client=FakeClient(
+                        attachment_key=ATTACHMENT_KEY,
+                        file_url=pdf_path.as_uri(),
+                    ),
+                    now=self.now,
+                    allow_trial_states=True,
+                )
+
+                self.assertEqual(delivery.pdf_path, pdf_path.resolve())
+                self.assertEqual(task_path.read_bytes(), task_before)
+
     def test_rejects_pdf_whose_hash_changed_after_task_creation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

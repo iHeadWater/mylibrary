@@ -8,10 +8,23 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from hydro_platform.card_generators import build_card_generator_adapter
+from hydro_platform.card_generation import (
+    CardGenerationError,
+    generate_evidence_card,
+    generate_evidence_card_trial,
+)
 from hydro_platform.config import ConfigError, load_config
+from hydro_platform.draft_export import export_evidence_draft
 from hydro_platform.evidence_packages import EvidencePackageError, sync_evidence_packages
+from hydro_platform.evidence_templates import (
+    EvidenceTemplateError,
+    validate_evidence_templates,
+)
 from hydro_platform.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
+from hydro_platform.pdf_direct_trial import PdfDirectTrialError, run_pdf_direct_trial
 from hydro_platform.pdf_gate import PdfGateError, evaluate_pdf_gate
+from hydro_platform.failure_records import save_failure_record
+from hydro_platform.progress import ConsoleProgress
 from hydro_platform.snapshot import SnapshotError, scan_group
 from hydro_platform.tasks import TaskStoreError, list_tasks, sync_tasks
 from hydro_platform.zotero import ZoteroApiError, discover_groups, preflight
@@ -47,8 +60,16 @@ def _parser() -> argparse.ArgumentParser:
         ("tasks-sync", "根据 Zotero 和 PDF 门禁同步本地任务清单"),
         ("tasks-list", "查看本地任务清单，不访问 Zotero"),
         ("packages-sync", "为已通过 PDF 门禁的任务创建证据包骨架"),
+        ("evidence-templates-validate", "校验证据卡模板目录、来源和版本完整性"),
         ("generator-preflight", "检查 Codex CLI 和 ChatGPT 账号登录状态"),
         ("generator-smoke-test", "执行一次无论文、只读的 Codex 最小模型调用"),
+        ("evidence-generate", "读取一篇 Zotero PDF 并生成首张粗证据卡"),
+        ("evidence-draft-export", "离线导出已完成的制卡草稿为 Markdown 预览，不调用模型或修改正式卡"),
+        ("pdf-direct-read-trial", "仅验证 Codex 自主读取本地 PDF 路径，不生成卡片、不使用 PDF MCP"),
+        (
+            "evidence-generate-trial",
+            "按配置执行制卡试运行（当前单 Agent），不修改正式卡片和任务",
+        ),
     ):
         command = subparsers.add_parser(name, help=help_text)
         command.add_argument(
@@ -57,7 +78,7 @@ def _parser() -> argparse.ArgumentParser:
             help="总配置文件路径；默认读取项目 config/config.json",
         )
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
-        if name not in {"generator-preflight", "generator-smoke-test"}:
+        if name not in {"generator-preflight", "generator-smoke-test", "evidence-draft-export"}:
             command.add_argument("--base-url", help="覆盖本机 Zotero API 地址")
             command.add_argument("--timeout", type=float, help="请求超时秒数")
         if name in {
@@ -68,6 +89,9 @@ def _parser() -> argparse.ArgumentParser:
             "tasks-sync",
             "tasks-list",
             "packages-sync",
+            "pdf-direct-read-trial",
+            "evidence-generate",
+            "evidence-generate-trial",
         }:
             command.add_argument("--group-id", help="覆盖目标 Zotero 群组 ID")
         if name == "scan":
@@ -75,11 +99,33 @@ def _parser() -> argparse.ArgumentParser:
                 "--state",
                 help="覆盖总配置中的本地快照路径",
             )
-        if name in {"pdf-gate", "pdf-delivery"}:
+        if name == "evidence-draft-export":
+            command.add_argument("--draft", required=True, help="失败结果中的 diagnostic.draft_path；相对路径基于当前目录")
+        if name in {
+            "pdf-gate",
+            "pdf-delivery",
+            "pdf-direct-read-trial",
+            "evidence-generate",
+            "evidence-generate-trial",
+        }:
             command.add_argument(
                 "--item-key",
                 required=True,
                 help="需要检查的 Zotero 父条目 Key",
+            )
+        if name == "evidence-generate":
+            command.add_argument(
+                "--retry-quality-failed",
+                action="store_true",
+                help="显式重试一个 QUALITY_FAILED 任务；默认不会自动重试",
+            )
+        if name == "pdf-direct-read-trial":
+            command.add_argument("--preflight-only", action="store_true",
+                                 help="仅检查 Windows 沙箱读 PDF 和渲染能力，不调用模型")
+        if name in {"evidence-generate", "evidence-generate-trial", "pdf-direct-read-trial"}:
+            command.add_argument(
+                "--no-progress", action="store_true",
+                help="关闭 stderr 实时进度，仅保留最终结果",
             )
 
     return parser
@@ -87,6 +133,52 @@ def _parser() -> argparse.ArgumentParser:
 
 def _render_human(result: dict[str, Any]) -> str:
     if result.get("ok"):
+        if result.get("operation") == "evidence_draft_export":
+            return ("已从草稿导出 Markdown 预览；未调用模型、未修改正式卡或任务"
+                    f"\n- 卡片：{result['card_path']}"
+                    f"\n- 结构检查：{result['structure_validation']['status']}"
+                    "\n- 仅预览，不是重新完成的生产验收")
+        if result.get("operation") == "pdf_direct_read_trial":
+            if result.get("preflight_only"):
+                return "本机沙箱预检通过：PDF 可读、文字可提取、页面可渲染；未调用模型"
+            return (
+                "路径直读实验：报告结构通过，模型声明阅读完成；不是独立质量验收"
+                f"\n- 报告：{result['model_report_path']}"
+                "\n- 未生成或修改正式证据卡，不能作为生产质量验收"
+            )
+        if result.get("operation") == "evidence_generate_trial":
+            return (
+                "通过：粗证据卡试运行已保存，正式证据包和任务未修改"
+                f"\n- 父条目：{result['parent_key']}"
+                f"\n- 质量状态：{result['quality_status']}"
+                f"\n- 模板：{result['template_id']}"
+                f"\n- 试运行目录：{result['trial_path']}"
+            )
+        if result.get("operation") == "evidence_generate":
+            if result.get("action") == "SKIPPED_EXISTING_CARD":
+                return (
+                    "跳过：证据包已经存在非占位卡，未调用模型、未覆盖文件"
+                    f"\n- 父条目：{result['parent_key']}"
+                    f"\n- 当前状态：{result.get('card_status') or '未知'}"
+                    f"\n- 卡片：{result['card_path']}"
+                )
+            return (
+                "通过：粗证据卡已生成并写入"
+                f"\n- 父条目：{result['parent_key']}"
+                f"\n- 模板：{result['template_id']} {result['template_version']}"
+                f"\n- 分类置信度：{result['classification_confidence']}"
+                f"\n- 任务状态：{result['task_state']}"
+                f"\n- 卡片：{result['card_path']}"
+            )
+        if result.get("component") == "evidence_templates":
+            return (
+                "通过：证据卡模板目录完整"
+                f"\n- 模板总数：{result['template_count']}"
+                f"\n- 已启用：{result['enabled_count']}"
+                f"\n- 目录版本：{result['catalog_version']}"
+                f"\n- 来源提交：{result['source_commit']}"
+                f"\n- 目录：{result['templates_dir']}"
+            )
         if result.get("component") == "card_generator":
             if result.get("operation") == "smoke_test":
                 usage = result.get("usage") or {}
@@ -193,6 +285,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "tasks-sync",
                 "tasks-list",
                 "packages-sync",
+                "pdf-direct-read-trial",
+                "evidence-generate",
+                "evidence-generate-trial",
+                "evidence-draft-export",
             },
         )
     except ConfigError as exc:
@@ -321,6 +417,29 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "ok": False,
                 "error": {"code": exc.code, "message": str(exc)},
             }
+    elif args.command == "evidence-templates-validate":
+        try:
+            result = validate_evidence_templates(
+                app_config.paths.evidence_card_templates_dir,
+                app_config.paths.evidence_card_template_catalog_file,
+            )
+        except EvidenceTemplateError as exc:
+            result = {
+                "schema_version": 1,
+                "ok": False,
+                "error": {"code": exc.code, "message": str(exc)},
+            }
+    elif args.command == "evidence-draft-export":
+        try:
+            result = export_evidence_draft(app_config, Path(args.draft))
+        except (CardGenerationError, EvidencePackageError) as exc:
+            error = {"code": exc.code, "message": str(exc)}
+            if getattr(exc, "diagnostic", None):
+                error["diagnostic"] = exc.diagnostic
+            result = {"schema_version": 1, "ok": False, "error": error}
+        except OSError:
+            result = {"schema_version": 1, "ok": False, "error": {
+                "code": "CARD_DRAFT_EXPORT_IO_ERROR", "message": "无法读取草稿或写入预览目录；原草稿和正式卡未修改"}}
     elif args.command == "generator-preflight":
         try:
             result = build_card_generator_adapter(
@@ -349,6 +468,112 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "message": str(exc),
                 },
             }
+    elif args.command in {"evidence-generate", "evidence-generate-trial", "pdf-direct-read-trial"}:
+        progress_config = app_config.card_generator.progress
+        with ConsoleProgress(
+            enabled=progress_config.enabled and not args.no_progress,
+            heartbeat_interval_seconds=progress_config.heartbeat_interval_seconds,
+        ) as progress:
+            try:
+                readiness = preflight(app_config.zotero)
+                if not readiness["ok"]:
+                    result = readiness
+                elif args.command == "pdf-direct-read-trial":
+                    delivery = prepare_pdf_delivery(
+                        app_config.zotero, app_config.pdf_gate, app_config.tasks,
+                        app_config.paths.tasks_file, app_config.paths.lock_file,
+                        app_config.paths.evidence_packs_dir, args.item_key,
+                        allow_trial_states=True,
+                    )
+                    result = run_pdf_direct_trial(app_config, delivery, progress=progress,
+                                                  preflight_only=args.preflight_only)
+                else:
+                    adapter = build_card_generator_adapter(
+                        app_config.card_generator, progress=progress,
+                    )
+                    if args.command == "evidence-generate-trial":
+                        result = generate_evidence_card_trial(
+                            app_config.zotero,
+                            app_config.pdf_gate,
+                            app_config.tasks,
+                            app_config.paths.tasks_file,
+                            app_config.paths.lock_file,
+                            app_config.paths.evidence_packs_dir,
+                            app_config.paths.card_trials_dir,
+                            app_config.paths.evidence_card_templates_dir,
+                            app_config.paths.evidence_card_template_catalog_file,
+                            app_config.paths.evidence_card_generation_prompt_file,
+                            app_config.paths.card_generation_output_schema_file,
+                            args.item_key,
+                            adapter,
+                        )
+                    else:
+                        result = generate_evidence_card(
+                            app_config.zotero,
+                            app_config.pdf_gate,
+                            app_config.tasks,
+                            app_config.paths.tasks_file,
+                            app_config.paths.lock_file,
+                            app_config.paths.evidence_packs_dir,
+                            app_config.paths.evidence_card_templates_dir,
+                            app_config.paths.evidence_card_template_catalog_file,
+                            app_config.paths.evidence_card_generation_prompt_file,
+                            app_config.paths.card_generation_output_schema_file,
+                            args.item_key,
+                            adapter,
+                            retry_quality_failed=args.retry_quality_failed,
+                        )
+            except (
+                CardGenerationError,
+                PdfDirectTrialError,
+                PdfDeliveryError,
+                EvidencePackageError,
+                EvidenceTemplateError,
+                TaskStoreError,
+                PdfGateError,
+                ZoteroApiError,
+            ) as exc:
+                error = {"code": exc.code, "message": str(exc)}
+                diagnostic = getattr(exc, "diagnostic", None)
+                if isinstance(diagnostic, dict):
+                    error["diagnostic"] = diagnostic
+                result = {
+                    "schema_version": 1,
+                    "ok": False,
+                    "error": error,
+                }
+            except OSError:
+                result = {
+                    "schema_version": 1, "ok": False,
+                    "error": {"code": "LOCAL_IO_ERROR", "message": "本地文件或程序访问失败，请检查配置路径和读写权限"},
+                }
+            except ValueError as exc:
+                result = {
+                    "schema_version": 1,
+                    "ok": False,
+                    "error": {
+                        "code": "CARD_GENERATOR_ADAPTER_NOT_REGISTERED",
+                        "message": str(exc),
+                    },
+                }
+            except KeyboardInterrupt:
+                result = {
+                    "schema_version": 1, "ok": False,
+                    "error": {"code": "CANCELLED", "message": "用户中止了本次生成"},
+                }
+                progress.finish(result)
+                _emit(result, args.json)
+                return 130
+            if not result.get("ok"):
+                try:
+                    diagnostic_path = save_failure_record(
+                        app_config.paths.logs_dir, args.command, args.item_key, result,
+                    )
+                    result["diagnostic_log_path"] = str(diagnostic_path)
+                    progress({"event": "phase", "message": f"脱敏失败记录已保存：{diagnostic_path}"})
+                except OSError:
+                    result["diagnostic_log_warning"] = "无法保存本地诊断记录，原始失败结果仍保留在本次 JSON 中"
+            progress.finish(result)
     else:
         raise AssertionError(f"未处理的命令：{args.command}")
     _emit(result, args.json)

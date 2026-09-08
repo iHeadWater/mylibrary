@@ -1,0 +1,84 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_read_status",
+    "source_page_count",
+    "visual_content_status",
+    "source_read_evidence",
+    "challenge_checks",
+    "coverage_checks",
+    "issues",
+    "verdict",
+    "verdict_reason"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "enum": [1] },
+    "source_read_status": { "enum": ["FULL_PDF_REVIEWED", "UNREADABLE"] },
+    "source_page_count": { "type": "integer" },
+    "visual_content_status": { "enum": ["REVIEWED", "NOT_PRESENT", "UNREADABLE"] },
+    "source_read_evidence": { "type": "string" },
+    "challenge_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["challenge_id", "challenge_type", "target", "status", "severity", "reason", "evidence"],
+        "properties": {
+          "challenge_id": { "type": "string" },
+          "challenge_type": { "enum": ["factual_support", "numerical_accuracy", "causal_language", "author_agent_boundary", "visual_interpretation"] },
+          "target": { "type": "string" },
+          "status": { "enum": ["SUPPORTED", "PARTIALLY_SUPPORTED", "UNSUPPORTED", "CONTRADICTED"] },
+          "severity": { "enum": ["LOW", "MEDIUM", "HIGH"] },
+          "reason": { "type": "string" },
+          "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+        }
+      }
+    },
+    "coverage_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["area", "status", "reason"],
+        "properties": {
+          "area": { "enum": ["research_question", "data", "method", "results", "visuals", "limitations", "negative_results"] },
+          "status": { "enum": ["COVERED", "NOT_APPLICABLE", "MISSING"] },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["issue_id", "issue_type", "severity", "description", "requires_correction", "evidence"],
+        "properties": {
+          "issue_id": { "type": "string" },
+          "issue_type": { "enum": ["unsupported_claim", "omission", "causal_overreach", "author_agent_boundary", "visual_misread", "generic_analysis", "internal_inconsistency", "other"] },
+          "severity": { "enum": ["LOW", "MEDIUM", "HIGH"] },
+          "description": { "type": "string" },
+          "requires_correction": { "type": "boolean" },
+          "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+        }
+      }
+    },
+    "verdict": { "enum": ["PASS", "FAIL"] },
+    "verdict_reason": { "type": "string" }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "locator", "evidence_text", "visual"],
+      "properties": {
+        "page": { "type": "integer" },
+        "locator": { "type": "string" },
+        "evidence_text": { "type": "string" },
+        "visual": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -1,17 +1,28 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from hydro_platform.config import CardGeneratorConfig
+from hydro_platform.card_generators.streaming import ExecutionStopped, run_streaming_prompt
+from hydro_platform.card_generators.connection_guard import is_reconnect_event
+from hydro_platform.progress import ProgressCallback
 
 
 CommandRunner = Callable[[Sequence[str], float], subprocess.CompletedProcess[str]]
+PromptRunner = Callable[
+    [Sequence[str], str, float, Mapping[str, str] | None],
+    subprocess.CompletedProcess[str],
+]
 ExecutableFinder = Callable[[str], str | None]
 
 SMOKE_TEST_VERSION = "codex-cli-smoke-v1"
@@ -24,6 +35,10 @@ SMOKE_TEST_PROMPT = (
 DISALLOWED_SMOKE_ITEM_TYPES = frozenset(
     {"command_execution", "file_change", "mcp_tool_call", "web_search"}
 )
+DISALLOWED_GENERATION_ITEM_TYPES = frozenset(
+    {"command_execution", "file_change", "web_search"}
+)
+GENERATION_PROTOCOL_VERSION = "evidence-card-generation-v3"
 USAGE_FIELDS = (
     "input_tokens",
     "cached_input_tokens",
@@ -31,6 +46,25 @@ USAGE_FIELDS = (
     "reasoning_output_tokens",
     "total_tokens",
 )
+DIAGNOSTIC_EVENT_TYPES = frozenset({"error", "turn.failed"})
+DIAGNOSTIC_KEYS = frozenset(
+    {"type", "code", "message", "status", "param", "reason", "error"}
+)
+DIAGNOSTIC_LINE_PATTERN = re.compile(
+    r"error|fail|denied|invalid|unsupported|unavailable|refus|limit|quota|"
+    r"timeout|sandbox|permission|context|disconnect|closed|cancel",
+    re.IGNORECASE,
+)
+USER_PROFILE_PATTERN = re.compile(r"(?i)\b[A-Z]:\\Users\\[^\\\s\"']+")
+SECRET_PATTERNS = (
+    re.compile(r"(?i)\bsk-[A-Za-z0-9_-]{8,}\b"),
+    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/=]{8,}"),
+    re.compile(
+        r"(?i)\b(authorization|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|"
+        r"secret|password)\b\s*[:=]\s*[^\s,;]+"
+    ),
+)
+MAX_DIAGNOSTIC_SUMMARY_LENGTH = 1600
 
 
 def _now() -> str:
@@ -57,12 +91,158 @@ def _run_command(
     )
 
 
+def _run_prompt_command(
+    command: Sequence[str],
+    prompt: str,
+    timeout_seconds: float,
+    environment: Mapping[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    process_environment = os.environ.copy()
+    if environment is not None:
+        process_environment.update(environment)
+    return subprocess.run(
+        list(command),
+        input=prompt,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout_seconds,
+        env=process_environment,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+
+
 def _combined_output(result: subprocess.CompletedProcess[str]) -> str:
     return "\n".join(
         part.strip()
         for part in (result.stdout or "", result.stderr or "")
         if part and part.strip()
     )
+
+
+def _sanitize_diagnostic_text(value: str) -> str:
+    sanitized = value.replace("\x00", " ")
+    sanitized = USER_PROFILE_PATTERN.sub("%USERPROFILE%", sanitized)
+    for pattern in SECRET_PATTERNS:
+        sanitized = pattern.sub("<redacted>", sanitized)
+    sanitized = " ".join(sanitized.split())
+    if len(sanitized) > MAX_DIAGNOSTIC_SUMMARY_LENGTH:
+        sanitized = sanitized[: MAX_DIAGNOSTIC_SUMMARY_LENGTH - 1].rstrip() + "…"
+    return sanitized
+
+
+def _event_diagnostic_parts(value: Any, *, key: str | None = None) -> list[str]:
+    if isinstance(value, dict):
+        parts: list[str] = []
+        for child_key, child_value in value.items():
+            parts.extend(_event_diagnostic_parts(child_value, key=str(child_key)))
+        return parts
+    if isinstance(value, list):
+        parts = []
+        for child in value:
+            parts.extend(_event_diagnostic_parts(child, key=key))
+        return parts
+    if key not in DIAGNOSTIC_KEYS or not isinstance(value, (str, int, float, bool)):
+        return []
+    rendered = _sanitize_diagnostic_text(f"{key}={value}")
+    return [rendered] if rendered else []
+
+
+def _safe_exec_diagnostic(
+    result: subprocess.CompletedProcess[str],
+    category: str,
+    *,
+    stage: str = "codex_exec",
+) -> dict[str, Any]:
+    event_summaries: list[str] = []
+    error_events: list[str] = []
+    first_tool_error: dict[str, str] | None = None
+    for line in (result.stdout or "").splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        item = event.get("item")
+        if (
+            first_tool_error is None and event.get("type") == "item.completed"
+            and isinstance(item, dict) and item.get("type") == "mcp_tool_call"
+            and item.get("status") == "failed"
+        ):
+            first_tool_error = {
+                "server": _sanitize_diagnostic_text(str(item.get("server", "unknown"))),
+                "tool": _sanitize_diagnostic_text(str(item.get("tool", "unknown"))),
+                "summary": _sanitize_diagnostic_text(" | ".join(
+                    _event_diagnostic_parts(item.get("error"), key="error")
+                )) or "工具失败，CLI 未提供错误细节",
+            }
+        if event.get("type") in DIAGNOSTIC_EVENT_TYPES:
+            parts = _event_diagnostic_parts(event)
+            event_summaries.extend(parts)
+            error_events.append(_sanitize_diagnostic_text(" | ".join(parts)))
+
+    stderr_lines = [
+        line.strip()
+        for line in (result.stderr or "").splitlines()
+        if line.strip() and DIAGNOSTIC_LINE_PATTERN.search(line)
+    ]
+    if not stderr_lines and not event_summaries:
+        stderr_lines = [
+            line.strip()
+            for line in (result.stderr or "").splitlines()
+            if line.strip()
+        ][-3:]
+    stderr_summaries = [
+        _sanitize_diagnostic_text(line) for line in stderr_lines[-6:]
+    ]
+
+    if event_summaries and stderr_summaries:
+        source = "codex_error_event+stderr"
+    elif event_summaries:
+        source = "codex_error_event"
+    elif stderr_summaries:
+        source = "codex_stderr"
+    else:
+        source = "none"
+    summaries = event_summaries + stderr_summaries
+
+    unique_summaries = list(dict.fromkeys(part for part in summaries if part))
+    summary = _sanitize_diagnostic_text(" | ".join(unique_summaries))
+    if not summary:
+        summary = "Codex CLI 未提供可安全提取的错误摘要"
+    diagnostic = {
+        "stage": stage,
+        "exit_code": result.returncode,
+        "category": category,
+        "source": source,
+        "summary": summary,
+    }
+    if error_events:
+        diagnostic["first_error"] = error_events[0]
+        diagnostic["last_error"] = error_events[-1]
+        diagnostic["error_event_count"] = len(error_events)
+    if first_tool_error is not None:
+        diagnostic["first_tool_error"] = first_tool_error
+    return diagnostic
+
+
+def _timeout_text(value: str | bytes | None) -> str:
+    return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value or ""
+
+
+def _terminal_failure_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    last_completion = max(
+        (index for index, event in enumerate(events) if event.get("type") == "turn.completed"),
+        default=-1,
+    )
+    return [
+        event for index, event in enumerate(events)
+        if event.get("type") in {"turn.failed", "error"}
+        and not (is_reconnect_event(event) and index < last_completion)
+    ]
 
 
 def _parse_jsonl(raw: str) -> list[dict[str, Any]]:
@@ -84,6 +264,68 @@ def _parse_jsonl(raw: str) -> list[dict[str, Any]]:
 
 def _classify_exec_failure(raw: str) -> tuple[str, str]:
     normalized = raw.casefold()
+    if any(
+        marker in normalized
+        for marker in (
+            "required mcp servers failed to initialize",
+            "hydro_pdf_reader: handshaking with mcp server failed",
+            "pdf mcp startup failed",
+        )
+    ):
+        return (
+            "PDF_READER_INITIALIZATION_FAILED",
+            "专用 PDF 读取器未能完成初始化",
+        )
+    if any(
+        marker in normalized
+        for marker in (
+            "invalid_json_schema",
+            "invalid schema",
+            "response_format",
+            "output schema",
+            "output-schema",
+        )
+    ):
+        return (
+            "CODEX_OUTPUT_SCHEMA_INVALID",
+            "Codex 拒绝了制卡输出结构；请检查 schema 是否属于当前模型支持的 JSON Schema 子集",
+        )
+    if any(
+        marker in normalized
+        for marker in (
+            "context_length_exceeded",
+            "maximum context length",
+            "context window",
+            "too many tokens",
+            "input too long",
+        )
+    ):
+        return "CODEX_CONTEXT_LIMIT", "制卡输入超过了当前 Codex 模型的上下文限制"
+    if any(
+        marker in normalized
+        for marker in (
+            "stream disconnected",
+            "stream_closed",
+            "connection closed",
+            "connection reset",
+            "transport error",
+            "server_error",
+            "service unavailable",
+            "503",
+        )
+    ):
+        return "CODEX_SERVICE_UNAVAILABLE", "Codex 服务或连接在制卡过程中中断"
+    if any(
+        marker in normalized
+        for marker in (
+            "approval required",
+            "permission denied",
+            "operation not permitted",
+            "sandbox denied",
+            "access is denied",
+        )
+    ):
+        return "CODEX_EXEC_PERMISSION_DENIED", "Codex 读取论文时受到权限或沙箱限制"
     if any(marker in normalized for marker in ("rate limit", "too many requests", "429")):
         return "CODEX_RATE_LIMITED", "Codex 模型调用受到速率限制"
     if any(
@@ -133,16 +375,71 @@ def _classify_exec_failure(raw: str) -> tuple[str, str]:
     return "CODEX_EXEC_FAILED", "Codex 模型调用失败"
 
 
-def _unexpected_item_types(events: list[dict[str, Any]]) -> list[str]:
+def _unexpected_item_types(
+    events: list[dict[str, Any]],
+    *,
+    disallowed: frozenset[str] = DISALLOWED_SMOKE_ITEM_TYPES,
+) -> list[str]:
     unexpected: set[str] = set()
     for event in events:
         item = event.get("item")
         if not isinstance(item, dict):
             continue
         item_type = item.get("type")
-        if isinstance(item_type, str) and item_type in DISALLOWED_SMOKE_ITEM_TYPES:
+        if isinstance(item_type, str) and item_type in disallowed:
             unexpected.add(item_type)
     return sorted(unexpected)
+
+
+def _pdf_access_diagnostic(
+    events: list[dict[str, Any]],
+    *,
+    server_name: str,
+    output: Any,
+) -> dict[str, Any]:
+    mcp_events: list[dict[str, str]] = []
+    for event in events:
+        item = event.get("item")
+        if not isinstance(item, dict) or item.get("type") != "mcp_tool_call":
+            continue
+        observed_server = item.get("server") or item.get("server_name")
+        if isinstance(observed_server, str) and observed_server != server_name:
+            continue
+        observed: dict[str, str] = {}
+        if isinstance(observed_server, str):
+            observed["server"] = observed_server
+        observed_tool = item.get("tool") or item.get("tool_name") or item.get("name")
+        if isinstance(observed_tool, str):
+            observed["tool"] = observed_tool
+        observed_status = item.get("status")
+        if isinstance(observed_status, str):
+            observed["status"] = observed_status
+        error_parts = _event_diagnostic_parts(item.get("error"), key="error")
+        if error_parts:
+            observed["error_summary"] = _sanitize_diagnostic_text(
+                " | ".join(error_parts)
+            )
+        event_type = event.get("type")
+        if isinstance(event_type, str):
+            observed["event"] = event_type
+        mcp_events.append(observed)
+
+    model_claim: dict[str, Any] = {}
+    if isinstance(output, dict):
+        for field in (
+            "source_read_status",
+            "source_page_count",
+            "visual_content_status",
+        ):
+            value = output.get(field)
+            if isinstance(value, (str, int)) and not isinstance(value, bool):
+                model_claim[field] = value
+    return {
+        "stage": "pdf_access_verification",
+        "mcp_event_count": len(mcp_events),
+        "mcp_events": mcp_events[:20],
+        "model_claim": model_claim,
+    }
 
 
 def _last_agent_message(events: list[dict[str, Any]]) -> str | None:
@@ -176,6 +473,107 @@ def _usage(events: list[dict[str, Any]]) -> dict[str, int] | None:
     return None
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while chunk := source.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _toml_string(value: str) -> str:
+    """JSON strings are valid TOML basic strings for these scalar values."""
+
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _toml_string_map(values: Mapping[str, str]) -> str:
+    """Encode a string map as a TOML inline table for Codex CLI overrides."""
+
+    entries = (
+        f"{key}={_toml_string(value)}" for key, value in sorted(values.items())
+    )
+    return "{" + ",".join(entries) + "}"
+
+
+def _source_pdf_access_from_receipt(
+    receipt: Any,
+    *,
+    expected_sha256: str,
+    server_name: str,
+) -> tuple[dict[str, Any] | None, str | None, str | None]:
+    if not isinstance(receipt, dict) or receipt.get("schema_version") != 1:
+        return (
+            None,
+            "CODEX_PDF_NOT_ACCESSED",
+            "Codex 已完成调用，但专用 PDF 读取器没有留下有效回执",
+        )
+    if receipt.get("source_sha256") != expected_sha256:
+        return (
+            None,
+            "CODEX_PDF_BINDING_MISMATCH",
+            "PDF 读取回执与本次任务绑定的文件指纹不一致",
+        )
+    if receipt.get("inspected") is not True:
+        return (
+            None,
+            "CODEX_PDF_NOT_ACCESSED",
+            "Codex 没有通过专用 PDF 读取器检查本次原始 PDF",
+        )
+    page_count = receipt.get("page_count")
+    if (
+        isinstance(page_count, bool)
+        or not isinstance(page_count, int)
+        or page_count < 1
+    ):
+        return (
+            None,
+            "CODEX_PDF_RECEIPT_INVALID",
+            "专用 PDF 读取器没有返回有效页数",
+        )
+    raw_pages = receipt.get("pages")
+    if not isinstance(raw_pages, dict):
+        raw_pages = {}
+    served_pages: set[int] = set()
+    visual_pages: set[int] = set()
+    for raw_page, details in raw_pages.items():
+        try:
+            page = int(raw_page)
+        except (TypeError, ValueError):
+            continue
+        if not 1 <= page <= page_count or not isinstance(details, dict):
+            continue
+        served_pages.add(page)
+        if details.get("image_delivered") is True:
+            visual_pages.add(page)
+    expected_pages = set(range(1, page_count + 1))
+    if served_pages != expected_pages:
+        return (
+            None,
+            "CODEX_PDF_NOT_FULLY_ACCESSED",
+            f"Codex 只读取了原始 PDF 的 {len(served_pages)}/{page_count} 页",
+        )
+    if visual_pages != expected_pages:
+        return (
+            None,
+            "CODEX_PDF_VISUALS_NOT_ACCESSED",
+            f"Codex 只取得了原始 PDF 的 {len(visual_pages)}/{page_count} 个页面图像",
+        )
+    return (
+        {
+            "verified": True,
+            "method": "bound_local_pdf_mcp",
+            "server_name": server_name,
+            "receipt_schema_version": 1,
+            "page_count": page_count,
+            "pages_served": len(served_pages),
+            "visual_pages_served": len(visual_pages),
+        },
+        None,
+        None,
+    )
+
+
 class CodexCliAdapter:
     """Codex CLI runtime checks and a bounded, non-domain smoke probe."""
 
@@ -185,10 +583,19 @@ class CodexCliAdapter:
         *,
         executable_finder: ExecutableFinder = shutil.which,
         runner: CommandRunner = _run_command,
+        prompt_runner: PromptRunner = _run_prompt_command,
+        progress: ProgressCallback | None = None,
     ):
         self.config = config
         self._executable_finder = executable_finder
         self._runner = runner
+        self._prompt_runner = prompt_runner
+        if prompt_runner is _run_prompt_command:
+            self._prompt_runner = lambda command, prompt, timeout, environment: run_streaming_prompt(
+                command, prompt, timeout, environment,
+                progress=progress, server=config.pdf_reader.server_name,
+                connection_guard=config.connection_guard,
+            )
 
     def _failure(
         self,
@@ -215,7 +622,7 @@ class CodexCliAdapter:
             "error": {"code": code, "message": message},
         }
 
-    def preflight(self) -> dict[str, Any]:
+    def preflight(self, *, check_pdf_reader: bool = True) -> dict[str, Any]:
         checks: list[dict[str, str]] = []
         executable = self._executable_finder(self.config.executable)
         if executable is None:
@@ -349,6 +756,62 @@ class CodexCliAdapter:
                 "已确认 Codex CLI 使用 ChatGPT 账号登录",
             )
         )
+        if not check_pdf_reader:
+            return {
+                "schema_version": 1, "ok": True, "component": "card_generator",
+                "resolved_executable": executable, "cli_version": cli_version,
+                "detected_auth_mode": "chatgpt_account", "checks": checks,
+            }
+        reader = self.config.pdf_reader
+        if not reader.server_file.is_file():
+            checks.append(
+                _check("pdf_reader_server", "fail", "项目内置 PDF MCP 服务文件不存在")
+            )
+            return self._failure(
+                checks,
+                "PDF_READER_SERVER_NOT_FOUND",
+                "找不到项目内置 PDF MCP 服务文件；请检查 card_generator.pdf_reader.server_file",
+                resolved_executable=executable,
+                cli_version=cli_version,
+                detected_auth_mode="chatgpt_account",
+            )
+        checks.append(
+            _check("pdf_reader_server", "pass", "项目内置只读 PDF MCP 服务文件可用")
+        )
+
+        dependency_requests = {
+            "python": reader.python_executable or sys.executable,
+            "pdfinfo": reader.pdfinfo_executable,
+            "pdftotext": reader.pdftotext_executable,
+            "pdftoppm": reader.pdftoppm_executable,
+        }
+        resolved_dependencies: dict[str, str] = {}
+        for name, requested in dependency_requests.items():
+            resolved = self._executable_finder(requested)
+            if resolved is None:
+                checks.append(
+                    _check(
+                        f"pdf_reader_{name}",
+                        "fail",
+                        f"找不到 PDF 读取依赖：{name}",
+                    )
+                )
+                return self._failure(
+                    checks,
+                    "PDF_READER_DEPENDENCY_NOT_FOUND",
+                    f"找不到 PDF 读取依赖 {name}；请检查 card_generator.pdf_reader 配置",
+                    resolved_executable=executable,
+                    cli_version=cli_version,
+                    detected_auth_mode="chatgpt_account",
+                )
+            resolved_dependencies[name] = resolved
+            checks.append(
+                _check(
+                    f"pdf_reader_{name}",
+                    "pass",
+                    f"已找到 PDF 读取依赖：{name}",
+                )
+            )
         return {
             "schema_version": 1,
             "ok": True,
@@ -360,6 +823,18 @@ class CodexCliAdapter:
             "configured_auth_mode": self.config.auth_mode,
             "detected_auth_mode": "chatgpt_account",
             "cli_version": cli_version,
+            "pdf_reader": {
+                "adapter": reader.adapter,
+                "server_name": reader.server_name,
+                "server_file": str(reader.server_file),
+                "resolved_python_executable": resolved_dependencies["python"],
+                "resolved_pdfinfo_executable": resolved_dependencies["pdfinfo"],
+                "resolved_pdftotext_executable": resolved_dependencies["pdftotext"],
+                "resolved_pdftoppm_executable": resolved_dependencies["pdftoppm"],
+                "render_dpi": reader.render_dpi,
+                "max_pages_per_call": reader.max_pages_per_call,
+                "output_token_limit": reader.output_token_limit,
+            },
             "checks": checks,
         }
 
@@ -505,11 +980,7 @@ class CodexCliAdapter:
                 model_invoked=True,
             )
 
-        failed_events = [
-            event
-            for event in events
-            if event.get("type") in {"turn.failed", "error"}
-        ]
+        failed_events = _terminal_failure_events(events)
         if failed_events:
             classification_input = json.dumps(failed_events, ensure_ascii=False)
             code, message = _classify_exec_failure(classification_input)
@@ -598,4 +1069,387 @@ class CodexCliAdapter:
             "unexpected_item_types": [],
             "usage": _usage(events),
             "checks": checks,
+        }
+
+    def _generation_failure(
+        self,
+        preflight_result: dict[str, Any],
+        code: str,
+        message: str,
+        *,
+        model_invoked: bool,
+        unexpected_item_types: list[str] | None = None,
+        diagnostic: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        result = {
+            "schema_version": 1,
+            "ok": False,
+            "component": "card_generator",
+            "operation": "evidence_card_generation",
+            "checked_at": _now(),
+            "adapter": self.config.adapter,
+            "resolved_executable": preflight_result.get("resolved_executable"),
+            "cli_version": preflight_result.get("cli_version"),
+            "configured_auth_mode": self.config.auth_mode,
+            "detected_auth_mode": preflight_result.get("detected_auth_mode"),
+            "configured_model": self.config.model,
+            "model_source": "configured" if self.config.model else "codex_default",
+            "configured_reasoning_effort": self.config.reasoning_effort,
+            "reasoning_effort_source": (
+                "configured" if self.config.reasoning_effort else "model_default"
+            ),
+            "generation_protocol_version": GENERATION_PROTOCOL_VERSION,
+            "sandbox": "read-only",
+            "ephemeral": True,
+            "model_invoked": model_invoked,
+            "unexpected_item_types": unexpected_item_types or [],
+            "error": {"code": code, "message": message},
+        }
+        if diagnostic is not None:
+            result["diagnostic"] = diagnostic
+        return result
+
+    def generate(
+        self,
+        prompt: str,
+        *,
+        working_directory: Path,
+        source_pdf_path: Path,
+        zotero_parent_key: str,
+        output_schema_path: Path,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+        timeout_seconds: float | None = None,
+        run_label: str | None = None,
+    ) -> dict[str, Any]:
+        """Run one isolated model role and return structured output without writes."""
+
+        selected_model = model if model is not None else self.config.model
+        selected_reasoning_effort = (
+            reasoning_effort
+            if reasoning_effort is not None
+            else self.config.reasoning_effort
+        )
+        selected_timeout = (
+            timeout_seconds
+            if timeout_seconds is not None
+            else self.config.generation_timeout_seconds
+        )
+
+        preflight_result = self.preflight()
+        if not preflight_result.get("ok"):
+            return self._generation_failure(
+                preflight_result,
+                preflight_result["error"]["code"],
+                preflight_result["error"]["message"],
+                model_invoked=False,
+            )
+
+        try:
+            workspace = working_directory.resolve(strict=True)
+            source_pdf = source_pdf_path.resolve(strict=True)
+            schema_path = output_schema_path.resolve(strict=True)
+        except OSError:
+            return self._generation_failure(
+                preflight_result,
+                "CODEX_GENERATION_INPUT_INVALID",
+                "制卡工作目录、原始 PDF 或输出结构文件不可访问",
+                model_invoked=False,
+            )
+        if (
+            not workspace.is_dir()
+            or not source_pdf.is_file()
+            or source_pdf.suffix.casefold() != ".pdf"
+            or source_pdf.parent != workspace
+            or not schema_path.is_file()
+            or not isinstance(zotero_parent_key, str)
+            or not zotero_parent_key.strip()
+            or not isinstance(prompt, str)
+            or not prompt.strip()
+        ):
+            return self._generation_failure(
+                preflight_result,
+                "CODEX_GENERATION_INPUT_INVALID",
+                "制卡提示、原始 PDF、工作目录或输出结构文件无效",
+                model_invoked=False,
+            )
+
+        executable = preflight_result["resolved_executable"]
+        reader = preflight_result["pdf_reader"]
+        try:
+            expected_sha256 = _sha256_file(source_pdf)
+        except OSError:
+            return self._generation_failure(
+                preflight_result,
+                "CODEX_GENERATION_INPUT_INVALID",
+                "无法计算本次原始 PDF 的文件指纹",
+                model_invoked=False,
+            )
+        receipt: Any = None
+        try:
+            with tempfile.TemporaryDirectory(
+                prefix="hydro-generator-"
+            ) as temporary_directory:
+                isolated_workspace = Path(temporary_directory).resolve()
+                receipt_path = isolated_workspace / "pdf-read-receipt.json"
+                server_name = reader["server_name"]
+                process_environment = {
+                    "HYDRO_SOURCE_PDF": str(source_pdf),
+                    "HYDRO_SOURCE_PDF_SHA256": expected_sha256,
+                    "HYDRO_PDF_RECEIPT": str(receipt_path),
+                    "HYDRO_ZOTERO_PARENT_KEY": zotero_parent_key,
+                    "HYDRO_PDFINFO_EXECUTABLE": reader[
+                        "resolved_pdfinfo_executable"
+                    ],
+                    "HYDRO_PDFTOTEXT_EXECUTABLE": reader[
+                        "resolved_pdftotext_executable"
+                    ],
+                    "HYDRO_PDFTOPPM_EXECUTABLE": reader[
+                        "resolved_pdftoppm_executable"
+                    ],
+                    "HYDRO_PDF_RENDER_DPI": str(reader["render_dpi"]),
+                    "HYDRO_PDF_MAX_PAGES_PER_CALL": str(
+                        reader["max_pages_per_call"]
+                    ),
+                    "HYDRO_PDF_DEPENDENCY_TIMEOUT_SECONDS": str(
+                        max(1, int(self.config.pdf_reader.tool_timeout_seconds))
+                    ),
+                }
+                command = [
+                    executable,
+                    "exec",
+                    "--json",
+                    "--ephemeral",
+                    "--ignore-user-config",
+                    "--ignore-rules",
+                    "--config",
+                    'approval_policy="never"',
+                    "--skip-git-repo-check",
+                    "--sandbox",
+                    "read-only",
+                    "--color",
+                    "never",
+                    "--cd",
+                    str(isolated_workspace),
+                    "--output-schema",
+                    str(schema_path),
+                    "--config",
+                    (
+                        f"mcp_servers.{server_name}.command="
+                        f"{_toml_string(reader['resolved_python_executable'])}"
+                    ),
+                    "--config",
+                    (
+                        f"mcp_servers.{server_name}.args=["
+                        f"{_toml_string(reader['server_file'])}]"
+                    ),
+                    "--config",
+                    (
+                        f"mcp_servers.{server_name}.env="
+                        f"{_toml_string_map(process_environment)}"
+                    ),
+                    "--config",
+                    f"mcp_servers.{server_name}.required=true",
+                    "--config",
+                    (
+                        f"mcp_servers.{server_name}.enabled_tools="
+                        '["read_full_source_pdf"]'
+                    ),
+                    "--config",
+                    (
+                        f"mcp_servers.{server_name}.default_tools_approval_mode="
+                        '"approve"'
+                    ),
+                    "--config",
+                    (
+                        f"mcp_servers.{server_name}.tools.read_full_source_pdf."
+                        f"output_token_limit={reader['output_token_limit']}"
+                    ),
+                    "--config",
+                    (
+                        f"mcp_servers.{server_name}.startup_timeout_sec="
+                        f"{self.config.pdf_reader.startup_timeout_seconds:g}"
+                    ),
+                    "--config",
+                    (
+                        f"mcp_servers.{server_name}.tool_timeout_sec="
+                        f"{self.config.pdf_reader.tool_timeout_seconds:g}"
+                    ),
+                ]
+                if selected_model is not None:
+                    command.extend(["--model", selected_model])
+                if selected_reasoning_effort is not None:
+                    command.extend(
+                        [
+                            "--config",
+                            (
+                                "model_reasoning_effort="
+                                f'"{selected_reasoning_effort}"'
+                            ),
+                        ]
+                    )
+                command.append("-")
+                exec_result = self._prompt_runner(
+                    command,
+                    prompt,
+                    selected_timeout,
+                    process_environment,
+                )
+                if receipt_path.is_file():
+                    try:
+                        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                    except (OSError, json.JSONDecodeError):
+                        receipt = None
+        except ExecutionStopped as exc:
+            diagnostic = _safe_exec_diagnostic(exc.result, exc.code, stage="connection_guard")
+            diagnostic["connection_guard"] = exc.diagnostic
+            return self._generation_failure(
+                preflight_result, exc.code, str(exc), model_invoked=True,
+                diagnostic=diagnostic,
+            )
+        except subprocess.TimeoutExpired as exc:
+            return self._generation_failure(
+                preflight_result,
+                "CODEX_GENERATION_TIMEOUT",
+                "Codex 证据卡生成超时",
+                model_invoked=True,
+                diagnostic=_safe_exec_diagnostic(
+                    subprocess.CompletedProcess([], -1, _timeout_text(exc.output), _timeout_text(exc.stderr)),
+                    "CODEX_GENERATION_TIMEOUT", stage="execution_timeout",
+                ),
+            )
+        except (OSError, subprocess.SubprocessError):
+            return self._generation_failure(
+                preflight_result,
+                "CODEX_CLI_UNAVAILABLE",
+                "Codex CLI 无法启动证据卡生成",
+                model_invoked=True,
+            )
+
+        if exec_result.returncode != 0:
+            raw_failure = _combined_output(exec_result)
+            code, message = _classify_exec_failure(raw_failure)
+            return self._generation_failure(
+                preflight_result,
+                code,
+                message,
+                model_invoked=True,
+                diagnostic=_safe_exec_diagnostic(exec_result, code),
+            )
+
+        try:
+            events = _parse_jsonl(exec_result.stdout or "")
+        except ValueError:
+            return self._generation_failure(
+                preflight_result,
+                "CODEX_EXEC_PROTOCOL_ERROR",
+                "Codex CLI 返回格式不符合 JSONL 协议",
+                model_invoked=True,
+            )
+
+        failed_events = _terminal_failure_events(events)
+        if failed_events:
+            code, message = _classify_exec_failure(
+                json.dumps(failed_events, ensure_ascii=False)
+            )
+            return self._generation_failure(
+                preflight_result,
+                code,
+                message,
+                model_invoked=True,
+                diagnostic=_safe_exec_diagnostic(
+                    exec_result,
+                    code,
+                    stage="codex_event",
+                ),
+            )
+
+        unexpected = _unexpected_item_types(
+            events,
+            disallowed=DISALLOWED_GENERATION_ITEM_TYPES,
+        )
+        if unexpected:
+            return self._generation_failure(
+                preflight_result,
+                "CODEX_GENERATION_UNEXPECTED_ACTIVITY",
+                "制卡调用只能使用专用 PDF MCP，不得执行命令、修改文件或联网搜索",
+                model_invoked=True,
+                unexpected_item_types=unexpected,
+            )
+        if not any(event.get("type") == "turn.completed" for event in events):
+            return self._generation_failure(
+                preflight_result,
+                "CODEX_EXEC_PROTOCOL_ERROR",
+                "Codex CLI 没有返回 turn.completed 事件",
+                model_invoked=True,
+            )
+
+        final_message = _last_agent_message(events)
+        try:
+            output = json.loads(final_message) if final_message is not None else None
+        except json.JSONDecodeError:
+            output = None
+
+        source_access, access_error_code, access_error_message = (
+            _source_pdf_access_from_receipt(
+                receipt,
+                expected_sha256=expected_sha256,
+                server_name=reader["server_name"],
+            )
+        )
+        if source_access is None:
+            return self._generation_failure(
+                preflight_result,
+                access_error_code or "CODEX_PDF_NOT_ACCESSED",
+                access_error_message
+                or "Codex 没有通过专用读取器完整读取本次原始 PDF",
+                model_invoked=True,
+                diagnostic=_pdf_access_diagnostic(
+                    events,
+                    server_name=reader["server_name"],
+                    output=output,
+                ),
+            )
+
+        if not isinstance(output, dict):
+            return self._generation_failure(
+                preflight_result,
+                "CODEX_GENERATION_OUTPUT_INVALID",
+                "Codex 已完成调用，但没有返回有效的结构化制卡结果",
+                model_invoked=True,
+            )
+        if output.get("source_page_count") != source_access["page_count"]:
+            return self._generation_failure(
+                preflight_result,
+                "CODEX_PDF_PAGE_COUNT_MISMATCH",
+                "Codex 返回的 PDF 页数与专用读取器回执不一致",
+                model_invoked=True,
+            )
+
+        return {
+            "schema_version": 1,
+            "ok": True,
+            "component": "card_generator",
+            "operation": "evidence_card_generation",
+            "checked_at": _now(),
+            "adapter": self.config.adapter,
+            "resolved_executable": executable,
+            "cli_version": preflight_result["cli_version"],
+            "configured_auth_mode": self.config.auth_mode,
+            "detected_auth_mode": preflight_result["detected_auth_mode"],
+            "configured_model": selected_model,
+            "model_source": "configured" if selected_model else "codex_default",
+            "configured_reasoning_effort": selected_reasoning_effort,
+            "reasoning_effort_source": (
+                "configured" if selected_reasoning_effort else "model_default"
+            ),
+            "run_label": run_label,
+            "generation_protocol_version": GENERATION_PROTOCOL_VERSION,
+            "sandbox": "read-only",
+            "ephemeral": True,
+            "model_invoked": True,
+            "unexpected_item_types": [],
+            "source_access": source_access,
+            "usage": _usage(events),
+            "output": output,
         }

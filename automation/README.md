@@ -1,28 +1,16 @@
 # 自动化程序
 
-本目录将承载以下自动化能力：
+当前默认单 Agent、模板驱动、详细粗卡。一个会话读原始 PDF、自动选型并详细填写；Python 验证来源、归因和模板结构，保留信息不确定性，不设人工核卡任务。八类模板 1.1.0，新流程 rough-card-single-agent-v1。已有卡用 evidence-generate-trial，未有卡用 evidence-generate。
 
-1. 读取指定的 Zotero 共享群组库；
-2. 检测新增父条目和后续补充的 PDF；
-3. 检查 PDF 是否存在且可读取；
-4. 防止同一父条目被重复制卡；
-5. 创建或更新共享证据包；
-6. 记录关键事件，并将可共享结果同步到 GitHub。
+当前样本下一步：
 
-当前已完成 US-01 至 US-07B1 的代码、自动化测试和真实正向验收。现有能力包括 Zotero 检测、PDF 门禁、任务状态机、证据包骨架、原始 PDF 只读交付、Codex CLI 登录预检和无论文模型调用探针。正式制卡、Git 自动同步和调度尚未实现。详细证据卡模板不是运行探针的前置条件。
+```powershell
+python automation/run.py evidence-generate-trial --item-key CEXH4PQA --json
+```
 
-## 可复现材料
+不会覆盖已有卡，不会推送 Git。详细操作见 [手册](../documentation/operator-manual.md) 与 [单 Agent 规则](../documentation/single-agent-rough-card.md)。原始模型输出先存本地草稿，清理失败不丢结果。真实新流程未代跑。
 
-    automation/
-    ├─ src/       自动化源代码
-    ├─ prompts/   受版本控制的 AI 提示词
-    ├─ schemas/   manifest、事件和任务的数据结构
-    ├─ setup/     新电脑安装、配置和调度脚本
-    └─ tests/     自动化与恢复测试
-
-自动化还必须支持在本地运行状态丢失时进行全量对账并重建状态。
-
-依赖及其版本必须通过锁定文件进入 Git。具体文件形式将在确定实现语言后决定。
+每日调度、统一批处理入口、关键贡献事件、Git 同步、安装及恢复脚本尚未完成。setup/ 目前只有说明，不是已经交付的换机工具。
 
 ## 当前实现：US-01
 
@@ -100,7 +88,7 @@ US-01 不修改 Zotero，不读取 PDF，也不写入 GitHub。自动启动 Zote
 
     python automation/run.py generator-preflight --json
 
-该命令只运行 `codex --version` 和 `codex login status`，不会运行 `codex exec`，也不会读取 Zotero、PDF、模板、任务或证据包。只有明确检测到 ChatGPT 登录时才返回成功；API Key 登录、未登录或无法确认认证方式都会失败。登录凭据和登录命令的原始输出不会写入结果。
+该命令只运行 `codex --version` 和 `codex login status`，读取共用读取指引，并定位所选本机工具。当前 `local_path` 不检查或启动 MCP，pypdf 模式不要求 pdftotext。不会调用模型、读取 Zotero PDF、任务或证据包，也不会保存登录凭据。
 
 这只是运行环境预检，不代表已调用模型或已经具备正式制卡能力，也不能证明订阅档位或剩余额度。
 
@@ -112,8 +100,24 @@ US-01 不修改 Zotero，不读取 PDF，也不写入 GitHub。自动启动 Zote
 
 该命令先执行 US-07A 预检，再在系统临时创建的空目录中通过 `codex exec` 期待固定响应 `HYDRO_GENERATOR_OK`。调用强制使用只读沙箱、临时会话、忽略用户 MCP/配置和 JSONL 输出；项目仓库不是模型工作目录，临时目录在调用结束后删除，不会读取 PDF、模板、任务或证据包，也不会写入模型输出文件。模型、推理强度和 120 秒调用超时来自 `config/config.json`；模型或推理强度为 `null` 时使用模型默认值。
 
-它能验证当前时刻的真实调用链，并区分认证、限流、额度、模型、推理强度兼容性、超时和协议错误；它不是证据卡生成器。真实论文、模板路由、正式制卡所选推理强度、输出结构和写卡保护属于 US-07B2。真实验收即使只返回固定标记，也消耗了 16,324 个输入 token，因此本命令不能作为每日健康检查，只应在安装、认证、模型或推理强度变化后受控执行一次。
+它能验证当前时刻的真实调用链，并区分认证、限流、额度、模型、推理强度兼容性、超时和协议错误；它不是证据卡生成器。真实论文、模板路由、制卡配置、输出结构和写卡保护属于 US-07B4。真实验收即使只返回固定标记，也消耗了 16,324 个输入 token，因此本命令不能作为每日健康检查，只应在安装、认证、模型或推理强度变化后受控执行一次。
+
+## 当前实现：US-07B2
+
+校验八类证据卡模板的目录、来源、版本和机器字段：
+
+    python automation/run.py evidence-templates-validate --json
+
+模板目录和清单文件由 `config/config.json` 的 `paths.evidence_card_templates_dir` 与 `paths.evidence_card_template_catalog_file` 指定。命令会检查模板 ID 和文件唯一、文件未逃出配置目录、来源 commit 与 blob SHA 已记录、本地版本格式正确、front matter 含平台必填字段，以及适配后内容 SHA-256 没有静默变化。
+
+八类模板都已启用，供单 Agent 自动选择唯一模板；不设置“待人工确认类型”。分类置信度和理由将被记录但不阻塞生成，非法模板 ID 由 US-07B4 按质量合约失败处理。该命令不访问 Zotero、不调用模型、不读取 PDF，也不修改现有证据包。
+
+## 制卡实现与历史兼容
+
+US-07B3 验证过单调用技术链路；US-07B4 六角色试运行暴露耗时与结果保全问题。当前实现替代为单 Agent 详细粗卡，保留旧代码、旧审计与测试以读取历史结果；不自动回退。现有卡仍跳过，试运行只写 .runtime/card-trials。
+
+实时进度显示 [1/1 全文阅读与详细制卡]。模型、强度和一次会话时限来自总配置；当前 1200 秒是上限，不是预期耗时。连接保护未改动，不等于网络已修复。
 
 ## 配置原则
 
-程序不依赖调用命令时的工作目录。所有可调整的项目路径和固定运行参数由 `config/config.json` 集中管理；运行时产生的 Key、哈希、时间和任务状态不属于配置；Codex CLI 登录凭据、API Key、Token 等秘密不得写入配置或 Git。当前制卡适配层位于 `automation/src/hydro_platform/card_generators/`，只注册了 `codex_cli`。
+程序不依赖调用命令时的工作目录。所有可调整的项目路径和固定运行参数由 `config/config.json` 集中管理；运行时产生的 Key、哈希、时间和任务状态不属于配置；Codex CLI 登录凭据、API Key、Token 等秘密不得写入配置或 Git。当前制卡适配层位于 `automation/src/hydro_platform/card_generators/`；当前默认单 Agent，底层只注册了 `codex_cli` 提供者。

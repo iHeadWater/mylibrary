@@ -18,6 +18,7 @@ from hydro_platform.zotero import ZoteroClient
 
 
 READY_STATE = "READY_FOR_EXTRACTION"
+QUALITY_FAILED_STATE = "QUALITY_FAILED"
 CLAIMABLE_STATES = {READY_STATE, "RETRY_PENDING"}
 
 
@@ -352,7 +353,12 @@ def reconcile_tasks(
             reason_code = "LEASE_EXPIRED"
             message = "上一次处理租约已过期，可以安全重试"
             task["lease"] = None
-        elif not new_input and current_state in {"PROCESSING", "RETRY_PENDING", "COMPLETED"} and target_state == READY_STATE:
+        elif (
+            not new_input
+            and current_state
+            in {"PROCESSING", "RETRY_PENDING", "COMPLETED", QUALITY_FAILED_STATE}
+            and target_state == READY_STATE
+        ):
             target_state = current_state
             reason_code = str(task.get("reason_code") or gate_result.get("reason_code") or "STATE_PRESERVED")
             message = str(task.get("message") or gate_result.get("message") or "保持现有处理状态")
@@ -494,6 +500,7 @@ def claim_task(
     task_path: str | Path,
     lock_path: str | Path,
     *,
+    allow_quality_failed: bool = False,
     now: datetime | None = None,
     token_factory: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
@@ -514,7 +521,10 @@ def claim_task(
                 at=at,
                 max_history_entries=task_config.max_history_entries,
             )
-        if task.get("state") not in CLAIMABLE_STATES:
+        claimable_states = set(CLAIMABLE_STATES)
+        if allow_quality_failed:
+            claimable_states.add(QUALITY_FAILED_STATE)
+        if task.get("state") not in claimable_states:
             raise TaskStoreError(
                 "TASK_NOT_CLAIMABLE",
                 f"任务当前状态不可领取：{task.get('state')}",
@@ -549,6 +559,7 @@ def finish_task(
     lock_path: str | Path,
     *,
     completed: bool,
+    terminal_quality_failure: bool = False,
     reason_code: str,
     message: str,
     now: datetime | None = None,
@@ -566,7 +577,18 @@ def finish_task(
         if not secrets.compare_digest(str(lease.get("token") or ""), lease_token):
             raise TaskStoreError("LEASE_TOKEN_MISMATCH", "任务租约不匹配，拒绝更新状态")
         task["lease"] = None
-        state = "COMPLETED" if completed else "RETRY_PENDING"
+        if completed and terminal_quality_failure:
+            raise TaskStoreError(
+                "TASK_FINISH_INVALID",
+                "任务不能同时标记完成和质量失败",
+            )
+        state = (
+            "COMPLETED"
+            if completed
+            else QUALITY_FAILED_STATE
+            if terminal_quality_failure
+            else "RETRY_PENDING"
+        )
         _set_state(
             task,
             state=state,

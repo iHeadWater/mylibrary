@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "catalog_version": "1.1.0",
+  "source": {
+    "repository": "https://github.com/wangxinyu20429-dotcom/Water-Conservancy-Intelligent-Platform",
+    "commit": "457d5a420959f543773fc0a5c955cc64b1ca0ecb",
+    "retrieved_at": "2026-09-06",
+    "license_status": "no_license_declared_in_source_repository",
+    "authorization_basis": "user_confirmed_team_collaboration_reuse_permission"
+  },
+  "adaptation": {
+    "owner": "hydro-platform",
+    "policy": "content_template_only",
+    "notes": "保留八类内容模板及原始来源提交/blob；1.1.0 适配单 Agent 详细粗卡：区分原文陈述、转述、AI 推理和信息边界，去除人工复查字段和摘录要求；不复用来源脚本或工作流。"
+  },
+  "required_template_ids": [
+    "original-research",
+    "review-synthesis",
+    "survey-monitoring-statistics",
+    "engineering-report",
+    "book-chapter",
+    "standard-guideline-policy",
+    "dataset-data-product",
+    "software-model-code"
+  ],
+  "templates": [
+    {
+      "template_id": "original-research",
+      "name": "原创研究证据卡",
+      "local_version": "1.1.0",
+      "enabled": true,
+      "file": "01_original-research.md",
+      "source_path": "skills/hydrology-evidence-cards/assets/templates/01_original-research.md",
+      "source_blob_sha": "af6aca7ffc7137a0ac0f207d67c0fe683fbb43fc",
+      "content_sha256": "a6bcd5f22640eefd6ebaa12e4536bee8a6b586db46eaec786337caa85ccb0da7"
+    },
+    {
+      "template_id": "review-synthesis",
+      "name": "综述与证据综合证据卡",
+      "local_version": "1.1.0",
+      "enabled": true,
+      "file": "02_review-synthesis.md",
+      "source_path": "skills/hydrology-evidence-cards/assets/templates/02_review-synthesis.md",
+      "source_blob_sha": "a517e73b9a5e1de5e6567e2de03bd1da241b3042",
+      "content_sha256": "88c3ee94ee6cda6ed59a5498bc0a0d1d5c73325336574081c47f95cdf9fdc293"
+    },
+    {
+      "template_id": "survey-monitoring-statistics",
+      "name": "调查监测与统计报告证据卡",
+      "local_version": "1.1.0",
+      "enabled": true,
+      "file": "03_survey-monitoring-statistics.md",
+      "source_path": "skills/hydrology-evidence-cards/assets/templates/03_survey-monitoring-statistics.md",
+      "source_blob_sha": "bfcf7be38da9317003ada14bb8d98e1ee60f0fd9",
+      "content_sha256": "9dec26ffc7c04994115b7af62824f36adc3f3a2f1d12549eb24dc50f3fd52b6d"
+    },
+    {
+      "template_id": "engineering-report",
+      "name": "工程项目报告证据卡",
+      "local_version": "1.1.0",
+      "enabled": true,
+      "file": "04_engineering-report.md",
+      "source_path": "skills/hydrology-evidence-cards/assets/templates/04_engineering-report.md",
+      "source_blob_sha": "b461b17958002f10a54dc7ffa82245e9bf7e22aa",
+      "content_sha256": "4382fa7bbc4de3d1fc89ca51e6e9c5ff410982eac52e299c316f48be7d00abd8"
+    },
+    {
+      "template_id": "book-chapter",
+      "name": "图书与章节证据卡",
+      "local_version": "1.1.0",
+      "enabled": true,
+      "file": "05_book-chapter.md",
+      "source_path": "skills/hydrology-evidence-cards/assets/templates/05_book-chapter.md",
+      "source_blob_sha": "f98c9444e8199f298dfac2d4bd180874a1072e71",
+      "content_sha256": "016c812d613375f2d9694a400e0c75d141f26e84c156a4610cc87889beeee2a3"
+    },
+    {
+      "template_id": "standard-guideline-policy",
+      "name": "标准指南与政策证据卡",
+      "local_version": "1.1.0",
+      "enabled": true,
+      "file": "06_standard-guideline-policy.md",
+      "source_path": "skills/hydrology-evidence-cards/assets/templates/06_standard-guideline-policy.md",
+      "source_blob_sha": "46e8296c31c5579f74c5ae3a42c40013fec31f24",
+      "content_sha256": "7a58d4bcbb8b036af1aa14b873966a48cc7866662a83e97a6c3eea6b6425a711"
+    },
+    {
+      "template_id": "dataset-data-product",
+      "name": "数据集及数据产品证据卡",
+      "local_version": "1.1.0",
+      "enabled": true,
+      "file": "07_dataset-data-product.md",
+      "source_path": "skills/hydrology-evidence-cards/assets/templates/07_dataset-data-product.md",
+      "source_blob_sha": "8ad6d6bd318a99a21d2fd1eb04fa67c218e0532b",
+      "content_sha256": "53587393d95cd7dc6998629c6e1f2703b74e67d9d92261f35defb2bcec9bc0b2"
+    },
+    {
+      "template_id": "software-model-code",
+      "name": "软件模型与代码证据卡",
+      "local_version": "1.1.0",
+      "enabled": true,
+      "file": "08_software-model-code.md",
+      "source_path": "skills/hydrology-evidence-cards/assets/templates/08_software-model-code.md",
+      "source_blob_sha": "55c1108dbe4ac36a78ba05aaea469ea8635fe349",
+      "content_sha256": "d9ca802c8513100639974c9931906f97ecfbe839ea58e2a800fe6d53be14fba9"
+    }
+  ]
+}

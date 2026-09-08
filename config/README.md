@@ -10,16 +10,29 @@
 
 当前可配置项：
 
-- `paths`：项目根目录、运行区、快照、任务、锁、日志，以及证据包、模板、主题、成员、事件、报告、提示词和数据结构目录；
+- `paths`：项目根目录、运行区、快照、任务、锁、日志、试运行结果，以及证据包、模板、证据卡模板目录、模板清单、主题、成员、事件、报告、提示词和数据结构目录；
 - `zotero`：本地 API 地址、目标共享群组 ID、HTTP 超时和进程检查超时；
 - `scan.page_size`：每页读取条目数；
 - `pdf_gate`：最小 PDF 体积、最小可提取文字数和计算哈希时的分块大小；
 - `tasks`：处理租约时长、死锁恢复时间和每篇论文保留的最大状态历史条数。
-- `card_generator`：当前已注册的制卡适配器、Codex CLI 可执行程序、认证方式、预检超时，以及最小模型调用使用的模型、推理强度和超时。
+- `card_generator`：制卡提供者、Codex CLI/认证/模型/推理强度/超时、本机 PDF 读取方式、共用读取环境及 workflow_mode。
+
+证据卡模板路径：
+
+| 字段 | 当前含义 | 规则 |
+|---|---|---|
+| `paths.templates_dir` | 所有公共模板的根目录 | 必须位于项目根目录内 |
+| `paths.evidence_card_templates_dir` | 八类证据卡 Markdown 模板目录 | 必须位于 `templates_dir` 内 |
+| `paths.evidence_card_template_catalog_file` | 模板来源、版本和内容哈希清单 | 必须位于证据卡模板目录内 |
+| `paths.evidence_card_generation_prompt_file` | 正式制卡提示词 | 必须位于 `paths.prompts_dir` 内，并声明 `prompt_version` |
+| `paths.card_generation_output_schema_file` | Codex 结构化输出约束 | 必须位于 `paths.schemas_dir` 内 |
+| `paths.card_trials_dir` | 既有卡制卡试运行结果 | 必须位于 `paths.runtime_dir` 内，不提交 Git |
+
+修改路径后可运行 `python automation/run.py evidence-templates-validate --json` 验证。目录位置可以调整，但不得将证据卡模板或清单配置到项目之外。
 
 后续功能实现时计划补充但当前尚未生效的配置类别：
 
-- `card_generator` 的正式制卡字段：正式调用超时、重试策略、提示词和输出结构路径；这些字段要等 US-07B2 有实际消费代码时再增加；
+- `card_generator` 的总用量预算和频率限制；当前普通运行故障进入 `RETRY_PENDING`，质量门失败进入 `QUALITY_FAILED`，两者都不立即循环调用；
 - `git`：远端、分支和自动同步策略；
 - `scheduler`：每日运行时间、错过后的补跑规则和并发限制；
 - `reports`：摘要生成范围和保留规则。
@@ -30,13 +43,60 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 | 字段 | 当前含义 | 允许值或规则 |
 |---|---|---|
+| `workflow_mode` | 制卡编排方式 | 当前 single_agent；兼容旧 multi_agent，不自动回退；单 Agent 必须移除 multi_agent_workflow |
 | `adapter` | Python 调用哪一种制卡运行时适配器 | 当前只能是 `codex_cli` |
 | `executable` | 要查找和运行的 Codex CLI 命令名或路径 | 默认为 `codex`；非空字符串 |
 | `auth_mode` | 本阶段能够确认的认证方式 | 当前只能是 `chatgpt_account` |
 | `preflight_timeout_seconds` | 版本和登录状态两项检查各自的最长等待秒数 | 大于 0 |
-| `model` | US-07B1 最小调用指定的模型 | `null` 表示使用 Codex 内置默认；也可填写非空模型名称 |
-| `reasoning_effort` | US-07B1 最小调用指定的推理强度 | `null` 表示使用模型默认；可选 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`，实际支持范围取决于模型 |
+| `model` | 单 Agent 制卡及探针模型 | `null` 表示使用 Codex 内置默认；也可填写非空模型名称 |
+| `reasoning_effort` | 单 Agent 制卡及探针思考强度 | `null` 表示使用模型默认；可选 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`，实际支持范围取决于模型 |
 | `smoke_test_timeout_seconds` | US-07B1 单次最小模型调用的最长等待秒数 | 大于 0；当前为 120 |
+| `generation_timeout_seconds` | 单 Agent 一次模型会话的最长等待秒数 | 大于 0；当前为 1200 |
+| `progress.enabled` | 正式制卡及试运行是否显示 stderr 实时进度 | `true` / `false`；默认 `true`；`--no-progress` 可关闭本次显示 |
+| `progress.heartbeat_interval_seconds` | 无论是否收到模型事件，定期报告等待状态的间隔 | 1–300 秒；默认 15；不改变模型超时和重试策略 |
+
+`progress` 在旧配置中整体缺失时使用上述默认值；一旦填写，必须同时提供两个字段。当前进度包含 1/1 单 Agent 启动、工具调用、归因校验和最终保存状态。心跳表示本地程序仍在等待，不证明远端模型健康。进度不会写入最终 JSON，也不会回显模型正文、原始工具输出或凭据。
+
+`card_generator.workflow_mode=single_agent` 是当前模式，主提示词 evidence-card-generation-v7.md、八类模板 1.1.0。模型、强度、会话超时直接用上表，不再有角色覆盖或固定事实/批评条数。v7 允许图表和小节扩展，保存只要求必需二级章节存在，排版差异记录为提示。草稿预览导出位置由 `paths.card_trials_dir` 控制，无需硬编码输出目录。
+
+旧配置未填 workflow_mode 时按 multi_agent 解释，必须提供完整 multi_agent_workflow，且 local_path/v2 或 project_mcp/v1 配套。当前 single_agent 要求 local_path，若仍提供 multi_agent_workflow 则配置报错，避免看似生效的角色设置误导；不会自动回退。未知提供者仍报错，不凭空支持任意 API。
+
+`card_generator.connection_guard` 是 Python 对每个制卡 Agent 子进程实施的停止保护，不依赖 Codex 自身的重试次数，也不受 `progress.enabled` 或 `--no-progress` 影响：
+
+| 字段 | 当前配置 / 示例值 | 含义与边界 |
+|---|---|---|
+| `reconnect_stop_enabled` | `false` | 是否因重连次数或恢复超时停止；必须为布尔值。当前关闭，仅记录重连状态，不执行下面两项停止条件；不关闭其他保护。旧配置不填此字段时为 `true` |
+| `reconnect_event_limit` | `10` | 仅在开关为 `true` 时生效：同一角色累计收到第 10 条重连事件时停止；1–10 的整数；不是底层 TCP 尝试次数，中间工具返回不会清零计数 |
+| `recovery_timeout_seconds` | `300` | 仅在开关为 `true` 时生效：每次进入断线状态后等待模型进展恢复的最长秒数；1–300；再次重连、心跳和本地工具返回不延长这个期限 |
+| `idle_timeout_seconds` | `1200` | 无可识别进展事件的最长秒数；1–3600；当前与单 Agent 总时限同为 20 分钟。不是模型思考计时器 |
+| `pdf_tool_call_limit` | `2` | 每个角色的整篇 PDF 工具调用预算；1–5 的整数；检测到超额调用开始事件后终止子进程，防止反复整篇回传 |
+
+2026-09-08 在宽松档仍因断线 5 分钟未恢复而失败后，按用户要求在当前配置及示例中关闭 `reconnect_stop_enabled`，并将无进展时限改为 1200 秒。`10 / 300` 仍保存以便重新启用，但开关为 `false` 时不会因这两项终止。当前单 Agent 总时限为 1200 秒，不因重连重新计时；总超时、无进展时限、PDF 调用预算等仍生效，先触发者停止。底层 CLI 如果自行退出、`turn.failed` 或输出无效，仍按失败处理，不自动启动新会话重跑，也不继续下一个 Agent。
+
+旧配置整体缺失本节时，程序仍兼容保守后备值 `2 / 60 / 300 / 2` 且开关为 `true`；只有四个限额字段的旧配置也继续启用原保护。填写本节时必须包含全部四个限额字段，新开关可选；即使关闭也不接受非法限额值。修改后从下一次启动命令生效，不会热更新已运行的子进程。完整全文及页面图像读取、输出校验、单 Agent 来源、归因和结构校验均未放宽。这只影响项目启动的制卡子进程，不改变 Codex/ChatGPT 桌面客户端自身的重连行为，也不保证网络恢复。
+
+官方的 `stream_max_retries` 等为提供者配置；不能通过新增 `[model_providers.openai]` 覆盖内置提供者。因此本项目使用可本地验证的子进程保护，不修改个人 Codex 配置、登录、代理或服务端地址。参见 [OpenAI 高级配置说明](https://learn.chatgpt.com/docs/config-file/config-advanced)。
+
+失败诊断由 CLI 保存到 `paths.logs_dir`（默认 `.runtime/logs`），最终 JSON 的 `diagnostic_log_path` 给出位置。只保存已脱敏的公开错误和上下文，不保存原始事件、提示词或论文全文；首个工具错误和最后一个连接错误分开保留，避免被整体摘要截断。日志不提交 Git。日志目录不可写时保留原失败结果并给出 `diagnostic_log_warning`。
+
+`card_generator.pdf_reader` 字段说明：
+
+| 字段 | 当前含义 | 允许值或规则 |
+|---|---|---|
+| `adapter` | 原始 PDF 的读取方式 | 当前 `local_path`；兼容历史 `project_mcp`，与工作流协议版本配套，不自动回退 |
+| `server_name` | 本次 Codex 调用中注册的 MCP 服务名 | 只能含字母、数字、下划线和连字符 |
+| `python_executable` | 启动项目内置 MCP 的 Python | `null` 表示复用运行 `automation/run.py` 的解释器；也可填命令名或绝对路径 |
+| `server_file` | 项目内置 PDF MCP 服务脚本 | 相对 `paths.project_root` 解析，且必须位于项目内 |
+| `pdfinfo_executable` | 获取 PDF 页数的程序 | 命令名或绝对路径 |
+| `pdftotext_executable` | 逐页提取文字的程序 | 命令名或绝对路径 |
+| `pdftoppm_executable` | 逐页渲染页面图像的程序 | 命令名或绝对路径 |
+| `render_dpi` | 页面图像渲染分辨率 | 72–300；当前为 120 |
+| `max_pages_per_call` | 完整读取工具内部每批处理多少页 | 1–10；当前为 4；不会暴露成需要模型自行循环的步骤 |
+| `output_token_limit` | 完整 PDF 工具结果的 Codex 输出预算 | 大于 0 且不超过 200000；当前为 60000 |
+| `startup_timeout_seconds` | MCP 启动超时 | 大于 0 |
+| `tool_timeout_seconds` | 单次 MCP 工具调用及底层 PDF 工具的超时上限 | 大于 0 |
+
+团队示例配置使用 `pdfinfo`、`pdftotext`、`pdftoppm` 命令名；本机没有加入 `PATH` 时，可像当前 `config.json` 一样填写绝对路径。迁移电脑后只修改这些配置，不修改 Python 源码。
 
 例如，使用 GPT-5.6 Sol 和高推理强度：
 
@@ -54,13 +114,51 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 程序会把显式推理强度转换为 Codex CLI 的 `--config model_reasoning_effort="..."` 参数。配置校验只能防止未知档位和拼写错误；账号是否能使用指定模型、该模型是否支持指定档位，必须由 `generator-smoke-test` 真实验收。
 
-修改后可运行 `python automation/run.py generator-preflight --json` 验证。填写未实现的适配器或认证方式会返回配置错误，不会静默回退。
+修改后可运行 `python automation/run.py generator-preflight --json`。当前 `local_path` 检查共用指引和本机工具位置，不检查 MCP 脚本；旧 `project_mcp` 才检查 MCP 及其依赖。未知适配器或认证方式会报错，不静默回退。
 
 注意：`chatgpt_account` 只表示 CLI 明确报告为 ChatGPT 登录。US-07B1 的 `generator-smoke-test` 可以验证一次真实模型调用是否成功，但仍不能证明订阅档位或未来一直有剩余额度。
 
 父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `.runtime/` 或证据包 `manifest.json`。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](../documentation/variables.md)。
 
 ## US-01 本地配置
+
+### 独立 PDF 路径直读实验配置
+
+#### 正式单 Agent 与实验共用的读取环境
+
+当前 `card_generator.pdf_reader.adapter` 为 `local_path`，单 Agent 使用与已通过实验相同的读取环境。为避免两套工具路径漂移，沿用下方 `pdf_direct_trial` 对象中的 `windows_sandbox`、`shell_executable`、`python_executable`、`text_extractor`、`preflight_timeout_seconds`。新增 `reading_prompt_file` 指向 `automation/prompts/pdf-local-reading-v1.md`，用于正式制卡共用读取指引。
+
+`prompt_file`、`schema_file`、`timeout_seconds` 仍只属于独立读取实验。当前单 Agent 使用 generation_timeout_seconds（1200 秒）及总配置 paths 中的制卡提示词/schema；不会套用实验报告字段。运行目录统一来自 `paths.runtime_dir`。迁移电脑只需改总配置中的工具位置并重新登录 Codex，不把账号凭据写入 Git。
+
+旧 `pdf_reader` 中的 `server_name`、`server_file`、`python_executable`、MCP 批次/输出预算/启动超时只对历史 `project_mcp` 生效，当前不调用。`pdf_tool_call_limit` 也只统计旧 MCP 整篇调用，不限制新路径的 shell/看图次数；总超时和无进展保护保留。
+
+`pdf-direct-read-trial` 读取同一份总配置，模型和思考强度复用 `card_generator.model`、`card_generator.reasoning_effort`，不读取历史多 Agent 的角色覆盖值。
+
+```json
+"pdf_direct_trial": {
+  "prompt_file": "automation/prompts/pdf-direct-read-trial-v2.md",
+  "reading_prompt_file": "automation/prompts/pdf-local-reading-v1.md",
+  "schema_file": "automation/schemas/pdf-direct-read-trial-output.schema.json",
+  "timeout_seconds": 1200,
+  "windows_sandbox": "elevated",
+  "shell_executable": "powershell",
+  "preflight_timeout_seconds": 120,
+  "python_executable": null,
+  "text_extractor": "pypdf"
+}
+```
+
+以上对象位于 `card_generator` 内。两个文件路径相对 `paths.project_root`，必须分别位于配置的 `paths.prompts_dir`、`paths.schemas_dir` 内；旧配置未填该对象时采用这些默认文件名和 1200 秒。超时必须大于零。
+
+`windows_sandbox` 显式传给 CLI，不依赖被 `--ignore-user-config` 忽略的个人设置；只接受 `elevated` / `unelevated`，不自动降级，默认使用现有的 `elevated`。`shell_executable` 是 PowerShell 的命令名或绝对路径。`preflight_timeout_seconds` 是不调用模型的本机沙箱检查时限。
+
+`python_executable` 是正式路径制卡与直读实验共用的 Python 命令名或路径，`null` 表示复用运行入口的 Python。`text_extractor=pypdf` 时，这个 Python 必须装有 pypdf；本机总配置已经指向自带 pypdf 6.10.0 的 Codex 运行时，不需要安装或初始化 MiKTeX。迁移时可指定另一个已具备 pypdf 的解释器，或在选定解释器中安装项目的 `pdf-direct` 可选依赖（`pypdf==6.10.0`）。不能只换成一个没有该模块的 Python。
+
+旧配置未填写文字引擎时仍为 `pdftotext`；当前总配置显式为 `pypdf`，不自动换引擎。`pdfinfo_executable`、`pdftoppm_executable`、`render_dpi` 和单工具超时复用 `card_generator.pdf_reader`；仅 pdftotext 引擎使用它的路径。路径模式不启动或检查 MCP 服务脚本。模型收到原 PDF 路径和工具位置，不预塞全文，也不要求固定页摘录。自定义配置仍引用旧直读实验提示词时，应改为 v2；当前单 Agent 使用主提示词 v7 与 workflow_mode=single_agent。
+
+临时目录位于 `paths.runtime_dir`；报告位于 `paths.card_trials_dir/pdf-direct-read/`。继承现有进度和连接保护配置；不使用旧 MCP 的整篇读取次数限制，不自动重新启动一次失败实验。`--timeout` 仍只是 Zotero HTTP 请求超时，模型调用时限应改上述 `timeout_seconds`。
+
+仅检查本机，不花模型额度：`python automation/run.py pdf-direct-read-trial --item-key CEXH4PQA --preflight-only --json`。正常直读命令也会自动先做同一检查，失败就停止。
 
 团队目标库已经确定为 qinjiajun，群组 ID 为 6618088，保存在可复现的 `config.json` 中。群组 ID 不是密钥，可以进入 Git。
 

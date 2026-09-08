@@ -26,8 +26,13 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
             "tasks_file": ".runtime/tasks.json",
             "lock_file": ".runtime/worker.lock",
             "logs_dir": ".runtime/logs",
+            "card_trials_dir": ".runtime/card-trials",
             "evidence_packs_dir": "evidence-packs",
             "templates_dir": "templates",
+            "evidence_card_templates_dir": "templates/evidence-cards",
+            "evidence_card_template_catalog_file": "templates/evidence-cards/_catalog.json",
+            "evidence_card_generation_prompt_file": "automation/prompts/evidence-card-generation-v4.md",
+            "card_generation_output_schema_file": "automation/schemas/card-generation-output.schema.json",
             "themes_dir": "themes",
             "members_dir": "members",
             "activity_dir": "activity",
@@ -60,6 +65,57 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
             "model": None,
             "reasoning_effort": None,
             "smoke_test_timeout_seconds": 120,
+            "generation_timeout_seconds": 900,
+            "pdf_reader": {
+                "adapter": "project_mcp",
+                "server_name": "hydro_pdf_reader",
+                "python_executable": None,
+                "server_file": "automation/src/hydro_platform/pdf_reader_mcp.py",
+                "pdfinfo_executable": "pdfinfo",
+                "pdftotext_executable": "pdftotext",
+                "pdftoppm_executable": "pdftoppm",
+                "render_dpi": 120,
+                "max_pages_per_call": 4,
+                "output_token_limit": 60000,
+                "startup_timeout_seconds": 15,
+                "tool_timeout_seconds": 120,
+            },
+            "multi_agent_workflow": {
+                "protocol_version": "rough-card-multi-agent-v1",
+                "prompts": {
+                    "fact_extraction": "automation/prompts/fact-extraction-v1.md",
+                    "fact_adjudication": "automation/prompts/fact-adjudication-v1.md",
+                    "critical_analysis": "automation/prompts/critical-analysis-v1.md",
+                    "adversarial_review": "automation/prompts/adversarial-review-v1.md",
+                },
+                "schemas": {
+                    "fact_extraction": "automation/schemas/fact-extraction-output.schema.json",
+                    "fact_adjudication": "automation/schemas/fact-adjudication-output.schema.json",
+                    "critical_analysis": "automation/schemas/critical-analysis-output.schema.json",
+                    "adversarial_review": "automation/schemas/adversarial-review-output.schema.json",
+                },
+                "quality_gate": {
+                    "minimum_verified_facts": 8,
+                    "minimum_critical_analyses": 5,
+                    "minimum_adversarial_challenges": 5,
+                    "maximum_unresolved_high_severity": 0,
+                },
+                "roles": {
+                    name: {
+                        "model": None,
+                        "reasoning_effort": "high",
+                        "timeout_seconds": 1200,
+                    }
+                    for name in (
+                        "fact_extractor_a",
+                        "fact_extractor_b",
+                        "fact_adjudicator",
+                        "critical_analyst",
+                        "card_synthesizer",
+                        "adversarial_reviewer",
+                    )
+                },
+            },
         },
     }
     if overrides:
@@ -90,6 +146,22 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.paths.project_root, root)
             self.assertEqual(config.paths.snapshot_file, root / ".runtime" / "zotero-snapshot.json")
             self.assertEqual(config.paths.evidence_packs_dir, root / "evidence-packs")
+            self.assertEqual(
+                config.paths.evidence_card_templates_dir,
+                root / "templates" / "evidence-cards",
+            )
+            self.assertEqual(
+                config.paths.evidence_card_template_catalog_file,
+                root / "templates" / "evidence-cards" / "_catalog.json",
+            )
+            self.assertEqual(
+                config.paths.evidence_card_generation_prompt_file,
+                root / "automation" / "prompts" / "evidence-card-generation-v4.md",
+            )
+            self.assertEqual(
+                config.paths.card_generation_output_schema_file,
+                root / "automation" / "schemas" / "card-generation-output.schema.json",
+            )
 
     def test_rejects_path_outside_project_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -111,6 +183,62 @@ class ConfigTests(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(ConfigError, "runtime_dir"):
+                load_config(config_path)
+
+    def test_rejects_evidence_template_directory_outside_templates_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root,
+                {"paths": {"evidence_card_templates_dir": "evidence-card-templates"}},
+            )
+
+            with self.assertRaisesRegex(ConfigError, "templates_dir"):
+                load_config(config_path)
+
+    def test_rejects_template_catalog_outside_evidence_template_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root,
+                {
+                    "paths": {
+                        "evidence_card_template_catalog_file": "templates/_catalog.json"
+                    }
+                },
+            )
+
+            with self.assertRaisesRegex(ConfigError, "evidence_card_templates_dir"):
+                load_config(config_path)
+
+    def test_rejects_generation_prompt_outside_prompt_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root,
+                {
+                    "paths": {
+                        "evidence_card_generation_prompt_file": "templates/prompt.md"
+                    }
+                },
+            )
+
+            with self.assertRaisesRegex(ConfigError, "prompts_dir"):
+                load_config(config_path)
+
+    def test_rejects_generation_schema_outside_schema_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root,
+                {
+                    "paths": {
+                        "card_generation_output_schema_file": "automation/output.json"
+                    }
+                },
+            )
+
+            with self.assertRaisesRegex(ConfigError, "schemas_dir"):
                 load_config(config_path)
 
     def test_allows_custom_loopback_port(self) -> None:
@@ -158,6 +286,58 @@ class ConfigTests(unittest.TestCase):
             self.assertIsNone(config.card_generator.model)
             self.assertIsNone(config.card_generator.reasoning_effort)
             self.assertEqual(config.card_generator.smoke_test_timeout_seconds, 120)
+            self.assertEqual(config.card_generator.generation_timeout_seconds, 900)
+            self.assertEqual(config.card_generator.pdf_reader.server_name, "hydro_pdf_reader")
+            self.assertEqual(config.card_generator.pdf_reader.render_dpi, 120)
+            self.assertEqual(
+                config.card_generator.pdf_reader.server_file,
+                root / "automation" / "src" / "hydro_platform" / "pdf_reader_mcp.py",
+            )
+            workflow = config.card_generator.multi_agent_workflow
+            self.assertIsNotNone(workflow)
+            assert workflow is not None
+            self.assertEqual(workflow.protocol_version, "rough-card-multi-agent-v1")
+            self.assertEqual(len(workflow.roles), 6)
+            self.assertEqual(workflow.roles["critical_analyst"].reasoning_effort, "high")
+
+    def test_rejects_missing_required_multi_agent_role(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(root)
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            del data["card_generator"]["multi_agent_workflow"]["roles"][
+                "adversarial_reviewer"
+            ]
+            config_path.write_text(json.dumps(data), encoding="utf-8")
+
+            with self.assertRaisesRegex(ConfigError, "roles 必须且只能包含"):
+                load_config(config_path)
+
+    def test_rejects_multi_agent_prompt_outside_prompt_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(root)
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            data["card_generator"]["multi_agent_workflow"]["prompts"][
+                "fact_extraction"
+            ] = "outside.md"
+            config_path.write_text(json.dumps(data), encoding="utf-8")
+
+            with self.assertRaisesRegex(ConfigError, "prompts.fact_extraction"):
+                load_config(config_path)
+
+    def test_rejects_unknown_multi_agent_protocol_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(root)
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            data["card_generator"]["multi_agent_workflow"][
+                "protocol_version"
+            ] = "skip-review-v1"
+            config_path.write_text(json.dumps(data), encoding="utf-8")
+
+            with self.assertRaisesRegex(ConfigError, "protocol_version"):
+                load_config(config_path)
 
     def test_loads_explicit_smoke_test_model(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -263,6 +443,20 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 ConfigError,
                 "card_generator.smoke_test_timeout_seconds",
+            ):
+                load_config(config_path)
+
+    def test_rejects_nonpositive_generation_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root,
+                {"card_generator": {"generation_timeout_seconds": 0}},
+            )
+
+            with self.assertRaisesRegex(
+                ConfigError,
+                "card_generator.generation_timeout_seconds",
             ):
                 load_config(config_path)
 

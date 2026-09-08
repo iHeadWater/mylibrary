@@ -6,7 +6,7 @@
 
 当前不会因为任务状态为 `READY_FOR_EXTRACTION` 就自动调用制卡 Agent。该状态名是已发布的程序协议，当前含义是“Zotero 原始 PDF 已通过门禁，可以交给后续处理器”，不代表必须生成全文缓存。
 
-US-05 的 `packages-sync` 可以为该状态创建证据包骨架，US-06 的 `pdf-delivery` 可以只读复核并形成原始 PDF 交付对象；两者都不会领取任务或改变任务状态。只有后续正式制卡处理器才能把任务推进到 `PROCESSING` 和 `COMPLETED`。
+US-05 的 `packages-sync` 可以为该状态创建证据包骨架，US-06 的 `pdf-delivery` 可以只读复核并形成原始 PDF 交付对象；两者都不会领取任务或改变任务状态。`evidence-generate` 会领取单篇任务：制卡成功进入 `COMPLETED`，网络或运行故障进入 `RETRY_PENDING`，强制质量门未通过进入 `QUALITY_FAILED`。
 
 ## 身份与唯一性
 
@@ -25,9 +25,10 @@ US-05 的 `packages-sync` 可以为该状态创建证据包骨架，US-06 的 `p
 | `WAITING` | 其他可重试等待情况 | `tasks-sync` |
 | `BLOCKED` | 多 PDF、损坏文件或文字不可提取 | `tasks-sync` |
 | `READY_FOR_EXTRACTION` | PDF 门禁通过，可以把原始 PDF 交给后续处理器 | `tasks-sync` |
-| `PROCESSING` | 后续处理器已领取任务 | 任务领取接口 |
-| `RETRY_PENDING` | 处理失败或租约过期，可以重试 | 任务完成接口或租约恢复 |
-| `COMPLETED` | 后续处理器确认处理完成 | 任务完成接口；当前尚无真实处理器调用 |
+| `PROCESSING` | 制卡处理器已领取任务 | `evidence-generate` / 任务领取接口 |
+| `RETRY_PENDING` | 处理失败或租约过期，可以重试 | `evidence-generate` / 任务完成接口或租约恢复 |
+| `QUALITY_FAILED` | 多 Agent 质量门拒绝；默认不自动重试，也没有正式卡片 | `evidence-generate` / 任务完成接口 |
+| `COMPLETED` | 粗证据卡通过校验并写入 | `evidence-generate` / 任务完成接口 |
 | `REMOVED` | 父条目已不在目标共享库 | `tasks-sync` |
 
 ## 主要转换
@@ -43,8 +44,10 @@ US-05 的 `packages-sync` 可以为该状态创建证据包骨架，US-06 的 `p
 READY_FOR_EXTRACTION ─领取→ PROCESSING
 PROCESSING ─成功──────────→ COMPLETED
 PROCESSING ─失败──────────→ RETRY_PENDING
+PROCESSING ─质量门拒绝────→ QUALITY_FAILED
 PROCESSING ─租约过期──────→ RETRY_PENDING
 RETRY_PENDING ─重新领取───→ PROCESSING
+QUALITY_FAILED ─显式重试──→ PROCESSING
 
 任意状态 ─PDF 输入变化────→ 按新 PDF 门禁结果重新确定状态
 任意状态 ─父条目移除──────→ REMOVED
@@ -54,6 +57,7 @@ RETRY_PENDING ─重新领取───→ PROCESSING
 
 - 相同 Zotero 输入和相同门禁结果重复同步，不新建第二条任务，不重复写相同历史；
 - 已经 `COMPLETED` 且输入指纹未变化的任务保持完成；
+- 已经 `QUALITY_FAILED` 且输入指纹未变化的任务保持失败，不会被 `tasks-sync` 静默改回就绪；
 - PDF 附件 Key 或 SHA-256 变化时产生新的 `task_id`，处理次数清零；
 - 新任务可以重新进入待处理，但已有非占位 card.md 是独立的写入保护边界；后续处理器必须停止自动覆盖并报告输入变化；
 - 任务清单损坏或群组不一致时拒绝覆盖；
@@ -67,6 +71,7 @@ RETRY_PENDING ─重新领取───→ PROCESSING
 - 处理器领取任务时获得租约令牌，同一任务在租约有效期内不能再次领取；
 - 租约超过 `tasks.lease_seconds` 后，任务可以转为 `RETRY_PENDING` 并重新领取；
 - 只有持有当前租约令牌的处理器能够标记成功或失败。
+- `QUALITY_FAILED` 不属于普通可领取状态；操作人排查提示词、模型或阈值后，必须用 `evidence-generate --retry-quality-failed` 显式授权一次重试。
 
 ## 数据边界
 
@@ -74,6 +79,5 @@ RETRY_PENDING ─重新领取───→ PROCESSING
 
 ## 当前未接入
 
-- 后续 AI 制卡处理器；
 - 后台定时调度；
 - 面向教师的共享状态摘要。

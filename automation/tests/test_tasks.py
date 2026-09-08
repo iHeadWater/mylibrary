@@ -295,6 +295,77 @@ class TaskTests(unittest.TestCase):
         self.assertEqual(changed, 0)
         self.assertEqual(completed_registry["tasks"][PARENT_KEY]["state"], "COMPLETED")
 
+    def test_quality_failed_is_preserved_and_requires_explicit_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            task_path = Path(directory) / "tasks.json"
+            lock_path = Path(directory) / "worker.lock"
+            registry = self._registry()
+            reconcile_tasks(
+                registry,
+                snapshot(),
+                {PARENT_KEY: ready_gate()},
+                self.config,
+                now=self.now,
+            )
+            save_task_registry(task_path, registry)
+            claim_task(
+                GROUP_ID,
+                PARENT_KEY,
+                self.config,
+                task_path,
+                lock_path,
+                now=self.now,
+                token_factory=lambda: "lease-token",
+            )
+            finish_task(
+                GROUP_ID,
+                PARENT_KEY,
+                "lease-token",
+                self.config,
+                task_path,
+                lock_path,
+                completed=False,
+                terminal_quality_failure=True,
+                reason_code="CARD_QUALITY_FAILED",
+                message="quality gate rejected the card",
+                now=self.now + timedelta(seconds=10),
+            )
+
+            failed_registry = load_task_registry(task_path, GROUP_ID)
+            changed = reconcile_tasks(
+                failed_registry,
+                snapshot(),
+                {PARENT_KEY: ready_gate()},
+                self.config,
+                now=self.now + timedelta(minutes=2),
+            )
+            save_task_registry(task_path, failed_registry)
+
+            with self.assertRaises(TaskStoreError) as caught:
+                claim_task(
+                    GROUP_ID,
+                    PARENT_KEY,
+                    self.config,
+                    task_path,
+                    lock_path,
+                    now=self.now + timedelta(minutes=3),
+                )
+            claimed = claim_task(
+                GROUP_ID,
+                PARENT_KEY,
+                self.config,
+                task_path,
+                lock_path,
+                allow_quality_failed=True,
+                now=self.now + timedelta(minutes=4),
+                token_factory=lambda: "retry-token",
+            )
+
+        self.assertEqual(changed, 0)
+        self.assertEqual(caught.exception.code, "TASK_NOT_CLAIMABLE")
+        self.assertEqual(claimed["task"]["state"], "PROCESSING")
+        self.assertEqual(claimed["lease_token"], "retry-token")
+
     def test_changed_pdf_hash_resets_completed_task_to_ready(self) -> None:
         registry = self._registry()
         reconcile_tasks(

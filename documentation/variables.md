@@ -4,10 +4,10 @@
 
 | 类型 | 示例 | 保存位置 | 是否进入 Git |
 |---|---|---|---|
-| 团队级可调整配置 | 项目目录、运行区、证据包目录、Zotero 群组 ID、超时、分页大小、PDF 门禁阈值、任务租约和锁时长、制卡适配器及预检参数 | `config/config.json` | 是 |
+| 团队级可调整配置 | 项目目录、运行区、证据包目录、证据卡模板与清单路径、Zotero 群组 ID、超时、分页大小、PDF 门禁阈值、任务租约和锁时长、制卡适配器及预检参数 | `config/config.json` | 是 |
 | 本机覆盖配置 | 本机临时路径或不同端口 | `config/config.local.json` | 否 |
-| 运行时状态 | 扫描快照、任务状态、锁、原始日志和可删除的临时处理文件 | `paths.runtime_dir` 指向的目录 | 否 |
-| 证据事实 | 父条目 Key、附件 Key、PDF 哈希、生成版本、创建与更新时间 | 证据包 `manifest.json` | 是 |
+| 运行时状态 | 扫描快照、任务状态、锁、原始日志、试运行卡和可删除的临时处理文件 | `paths.runtime_dir` 指向的目录 | 否 |
+| 证据事实 | 父条目/附件 Key、PDF 哈希、读取方式、来源检查、模型阅读声明、生成审计、版本与时间 | `manifest.json` 和 `quality-audit.json`；旧 MCP 才有页面交付回执 | 是 |
 | 本机凭据与密钥 | Codex CLI 登录凭据、GitHub Token；未来可能使用的大模型 API Key | Codex 或操作系统凭据存储、环境变量 | 否 |
 | 程序协议常量 | Zotero API 路由、事件名称、Schema 版本 | 代码及受版本控制的 Schema | 是 |
 
@@ -16,15 +16,16 @@
 1. `paths.project_root` 相对于总配置文件所在目录解析，也可以填写绝对路径；
 2. 其余项目路径相对于 `project_root` 解析，也可以填写位于项目根目录内的绝对路径；
 3. 所有项目路径不得逃出 `project_root`；
-4. `snapshot_file`、`tasks_file`、`lock_file` 和 `logs_dir` 必须位于 `runtime_dir`；
-5. 配置中的环境变量会在启动时展开，但密钥不得通过路径配置间接写入仓库。
-6. 所有路径字段必须显式存在；程序不会用散落在源码里的路径默认值补齐漏项。
+4. `snapshot_file`、`tasks_file`、`lock_file`、`logs_dir` 和 `card_trials_dir` 必须位于 `runtime_dir`；
+5. `evidence_card_templates_dir` 必须位于 `templates_dir`，`evidence_card_template_catalog_file` 必须位于证据卡模板目录；
+6. 配置中的环境变量会在启动时展开，但密钥不得通过路径配置间接写入仓库。
+7. 所有路径字段必须显式存在；程序不会用散落在源码里的路径默认值补齐漏项。
 
 ## 当前限制
 
-总配置已经驱动 Zotero 预检、变化扫描、PDF 门禁、任务状态机、证据包骨架写入、原始 PDF 交付、US-07A 的 Codex CLI/ChatGPT 登录预检，以及 US-07B1 的模型、推理强度和调用超时。US-06 已删除未被使用的 `paths.pdf_work_dir`，因为当前流程直接交付 Zotero 原始文件，不制造全文副本或持久解析缓存。后续事件记录和报告功能在实现时必须复用同一配置对象，不得重新引入散落路径。
+总配置驱动路径、Zotero、模板、模型和读取工具。当前 workflow_mode=single_agent；model、reasoning_effort、generation_timeout_seconds 直接控制一个会话。pdf_direct_trial 中的读取环境与正式路径读取共用，但实验的 prompt/schema/timeout 不用于制卡。
 
-US-07A 已加入 `card_generator.adapter`、`executable`、`auth_mode` 和 `preflight_timeout_seconds`；US-07B1 又加入 `model`、`reasoning_effort` 和 `smoke_test_timeout_seconds`，七项都由实际代码读取和校验。`model = null` 表示最小调用使用 Codex 内置默认，显式模型名则传给 `--model`；`reasoning_effort = null` 表示使用模型默认，显式档位则通过 `--config model_reasoning_effort="..."` 传给 Codex CLI。不同模型支持的档位可能不同，真实兼容性由最小调用探针验收。正式制卡超时和订阅用量保护规则尚未进入配置，因为 US-07B2 还没有实际消费这些字段的代码。Codex CLI 的账号登录凭据属于本机秘密，不得写入 config.json、日志、manifest.json 或 Git。未来增加独立 API 适配器时，API Key 同样只存在本机密钥环境。
+runtime_dir 下还保留 generation-drafts 未校验输出，仅用于故障排查，不供主题使用、不提交 Git。旧 multi_agent_workflow 仅用于旧模式，当前配置已移除；旧 MCP 专用字段在 local_path 下不执行。订阅总预算和每日频率限制尚未实现。账号凭据不得写入仓库。
 
 ## 新功能的配置验收规则
 

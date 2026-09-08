@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from hydro_platform.config import TaskConfig
+from hydro_platform.config import MULTI_AGENT_PROTOCOL_VERSION, LOCAL_PATH_PROTOCOL_VERSION, SINGLE_AGENT_PROTOCOL_VERSION, TaskConfig
+from hydro_platform.source_access import source_access_acceptable
 from hydro_platform.tasks import RuntimeLock, build_task_id, load_task_registry
 
 
@@ -19,6 +20,7 @@ PLACEHOLDER_CARD = "# 待生成证据卡\n\n状态：PLACEHOLDER\n"
 _KEY_PATTERN = re.compile(r"^[A-Za-z0-9]+$")
 _HASH_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 _TASK_ID_PATTERN = re.compile(r"^TASK-[0-9a-f]{64}$")
+_CARD_STATUSES = frozenset({"PLACEHOLDER", "ROUGH"})
 
 
 class EvidencePackageError(RuntimeError):
@@ -159,11 +161,110 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
         or not _KEY_PATTERN.fullmatch(data["attachment_key"])
         or not _HASH_PATTERN.fullmatch(data["pdf_sha256"])
         or not _TASK_ID_PATTERN.fullmatch(data["source_task_id"])
-        or data["card_status"] != "PLACEHOLDER"
+        or data["card_status"] not in _CARD_STATUSES
     ):
         raise EvidencePackageError(
             "EVIDENCE_MANIFEST_INVALID",
             f"证据包清单字段格式无效：{path}",
+        )
+    if data["card_status"] == "ROUGH":
+        generation = data.get("generation")
+        required_generation_strings = (
+            "generator_adapter",
+            "generator_protocol_version",
+            "cli_version",
+            "model",
+            "reasoning_effort",
+            "prompt_version",
+            "prompt_sha256",
+            "output_schema_sha256",
+            "template_catalog_version",
+            "template_id",
+            "template_version",
+            "template_source_commit",
+            "template_content_sha256",
+            "classification_reason",
+            "reading_scope",
+            "source_access_method",
+            "source_read_status",
+            "visual_content_status",
+            "source_read_evidence",
+            "generated_at",
+            "card_sha256",
+        )
+        if not isinstance(generation, dict) or any(
+            not isinstance(generation.get(name), str) or not generation[name]
+            for name in required_generation_strings
+        ):
+            raise EvidencePackageError(
+                "EVIDENCE_MANIFEST_INVALID",
+                f"已生成证据包缺少必要生成记录：{path}",
+            )
+        confidence = generation.get("classification_confidence")
+        source_page_count = generation.get("source_page_count")
+        source_pages_served = generation.get("source_pages_served")
+        source_visual_pages_served = generation.get("source_visual_pages_served")
+        direct = generation.get("source_access_method") == "local_pdf_path"
+        single = generation.get("workflow_protocol_version") == SINGLE_AGENT_PROTOCOL_VERSION
+        expected_quality_status = "STRUCTURE_VALIDATED" if single else "VALIDATED"
+        if direct:
+            access = generation.get("source_access")
+            source_ok = (source_access_acceptable(access, expected_sha256=data["pdf_sha256"],
+                                                  expected_parent_key=data["parent_key"])
+                         and access.get("method") == "local_pdf_path" and access.get("page_count") == source_page_count
+                         and generation.get("source_access_verified") is False
+                         and generation.get("source_access_server") is None
+                         and generation.get("source_access_receipt_schema_version") is None
+                         and source_pages_served is None and source_visual_pages_served is None
+                         and generation.get("quality_status") == expected_quality_status
+                         and generation.get("workflow_protocol_version") in {LOCAL_PATH_PROTOCOL_VERSION, SINGLE_AGENT_PROTOCOL_VERSION})
+        else:
+            source_ok = (generation.get("source_access_method") == "bound_local_pdf_mcp"
+                         and generation.get("source_access_verified") is True
+                         and isinstance(generation.get("source_access_server"), str) and bool(generation["source_access_server"])
+                         and generation.get("source_access_receipt_schema_version") == 1
+                         and type(source_pages_served) is int and source_pages_served == source_page_count
+                         and type(source_visual_pages_served) is int and source_visual_pages_served == source_page_count)
+        if (
+            isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not 0 <= confidence <= 1
+            or generation.get("output_schema_version") != 2
+            or generation.get("reading_scope") != "FULL_PDF"
+            or not source_ok
+            or isinstance(source_page_count, bool)
+            or not isinstance(source_page_count, int)
+            or source_page_count < 1
+            or generation.get("source_read_status") != "FULL_PDF_REVIEWED"
+            or generation.get("visual_content_status") not in {"REVIEWED", "NOT_PRESENT"}
+            or not _HASH_PATTERN.fullmatch(generation["prompt_sha256"])
+            or not _HASH_PATTERN.fullmatch(generation["output_schema_sha256"])
+            or not _HASH_PATTERN.fullmatch(generation["template_content_sha256"])
+            or not _HASH_PATTERN.fullmatch(generation["card_sha256"])
+            or not re.fullmatch(r"[0-9a-f]{40}", generation["template_source_commit"])
+        ):
+            raise EvidencePackageError(
+                "EVIDENCE_MANIFEST_INVALID",
+                f"已生成证据包的生成记录格式无效：{path}",
+            )
+        if "quality_status" in generation and (
+            generation.get("quality_status") != expected_quality_status
+            or generation.get("workflow_protocol_version")
+            != (SINGLE_AGENT_PROTOCOL_VERSION if single and direct else LOCAL_PATH_PROTOCOL_VERSION if direct else MULTI_AGENT_PROTOCOL_VERSION)
+            or type(generation.get("workflow_role_count")) is not int
+            or generation.get("workflow_role_count") != (1 if single else 6)
+            or generation.get("quality_audit_file") != "quality-audit.json"
+            or not isinstance(generation.get("quality_audit_sha256"), str)
+            or not _HASH_PATTERN.fullmatch(generation["quality_audit_sha256"])
+        ):
+            raise EvidencePackageError(
+                "EVIDENCE_MANIFEST_INVALID",
+                f"已生成证据包的工作流记录无效：{path}",
+            )
+    elif "generation" in data:
+        raise EvidencePackageError(
+            "EVIDENCE_MANIFEST_INVALID",
+            f"占位证据包不得包含生成记录：{path}",
         )
     return data
 
