@@ -2,6 +2,26 @@
 
 ## 1. 手册用途
 
+主题现已改为统一文献池与主题池：日常仍用 `python automation/run.py run-once --json`，结果统一看 [themes/index.md](../themes/index.md)。候选支持自动更新、合并、拆分与精读复用；正式主题不自动覆盖。旧batch只保留历史。旧成果已实际迁移，无需重读；需要在其他副本仅迁移时用 `themes-run --migrate-only --json`，只读预览仍用 `themes-run --dry-run --json`。[详细规则与验收](unified-theme-pool.md)。下方旧batch入口记录为历史，不再是主要阅读入口。
+
+Zotero就绪等待已接入原run-once与每日任务：缺失时按配置单次启动，已有进程不重启，默认最多等120秒。待PDF/延后项不再误记为全部完成，而是由调度有限补查；字段和真实验收边界见[启动与等待手册](zotero-readiness.md)。doctor仍只读，不代启动应用。
+
+每日计划已在本机启用：09:00日常处理，30分钟轻量唤醒检查、登录后补最近到期一轮；成功后日内跳过，失败60分钟冷却、每个日任务最多3次。Windows用户必须登录，Zotero需可用。`python automation/run.py schedule-status --json` 看实际定义/状态，`schedule-plan`预览，`schedule-install`按配置注册/更新，`schedule-remove`明确卸载。配置改为enabled=false可停用新轮次。完整步骤和实测范围见 [调度手册](cron.md)。本机按需启动真实任务已成功，不冒充完成关机/登录恢复验收。
+
+项目依赖安装已可运行：`python automation/run.py bootstrap --json` 只读计划，`bootstrap --install --json` 创建项目独立环境，`bootstrap-native --install --json` 安装项目PDF工具。当前读取器使用 `.venv/Scripts/python.exe` 与 `.tools/poppler/Library/bin/`，原日常命令不变；旧解释器/工具保留。无模型的独立验证不是日常附加步骤。[Python安装](deployment.md) · [PDF工具、字段与失败处理](native-deployment.md)。每日计划另行注册。
+
+现在可统一执行：`python automation/run.py setup --json`只读预检，`setup --apply --json`自动按顺序完成上述项目安装、环境检查、运行状态恢复及配置中启用的每日计划。只改总配置、不必记分步顺序；失败看failed_step，同命令可继续。基础软件和私人账号仍需本人准备。[完整说明及新路径验收](workstation-setup.md)。日常命令仍是run-once。
+
+2026-09-09 关键事件/日报更新：run-once 已自动记录新增论文、PDF、卡片完成与阻塞；日报保存到 reports/daily/YYYY-MM-DD.md。不调用额外AI，不把首次启用前的历史文献计入当天贡献。可用 activity-sync / daily-report 分别维护；当前本地接口不提供贡献者字段时标记未知。[操作与边界](activities-and-daily-report.md)。
+
+2026-09-09 运行维护补充：`python automation/run.py doctor --json` 集中检查环境；`python automation/run.py recover --json` 只对账恢复任务与扫描基线，不调用 AI。安全验收使用全新运行目录，不删除原状态。完整说明见 [环境检查与恢复](runtime-maintenance.md)，整体剩余工作见 [工程化状态](engineering-status.md)。
+
+2026-09-09 更新：已接入「粗卡 → 候选主题 → 原始 PDF 定向精读 → 回填修订」；操作和保存位置详见 [主题工作流](themes-workflow.md)。`run-once --json` 在现配置下自动继续主题流程，`themes-run --json` 单独处理已有粗卡。模板只指导写作，不用正文格式或标签卡住保存。
+
+本手册后面的旧验收记录保留历史错误码和旧状态；其中关于“归因格式/标题层级/模板结构不符而拦截”的旧说明已被 [当前保存规则](single-agent-rough-card.md) 取代，不能作为现流程操作要求。
+
+主题真实联调已通过：现有3篇→2个候选→3份原始PDF定向精读→2个修订候选；完整 run-once 再跑1.14秒、3张旧卡跳过、主题复用6步、模型调用0。[查看修订结果入口](../themes/candidates/BATCH-ae9692ecedb0a052a607/index.md)。这是流程验收，不代表科学质量被独立验证，未自动转正式主题、未推送 Git。
+
 本手册记录 `hydro-platform` 当前真正可以执行的命令、预期结果、异常处理和已完成的真实验收。它是持续维护的操作入口：以后每新增或修改一项自动化能力，都必须同步更新这里，不能只保留在聊天记录中。
 
 当前只实现：
@@ -17,10 +37,11 @@
 9. 预检 Codex CLI 是否可运行并明确使用 ChatGPT 账号登录；
 10. 执行一次不带论文和模板、不会写文件的最小模型调用；
 11. 由单 Agent 读取完整 PDF、自动选型、按模板生成详细粗卡并区分原文与 AI 推理；
-12. 通过 Python 质量门后原子写入粗卡、manifest 和质量审计；
-13. 对已有卡执行不覆盖正式文件的多 Agent 试运行。
+12. 通过 Python 来源、非空、去重与写入流程检查后保存粗卡、manifest 和运行审计；不代表质量被独立验证；
+13. 按配置执行不覆盖正式文件的制卡试运行，当前默认单 Agent；
+14. 从已有粗卡形成候选，逐篇原始 PDF 定向精读，回填修订候选并保存；中断后重跑自动复用步骤。
 
-US-07B1 和模板接入已有真实验收。历史单调用卡质量未达目标，六角色试运行又出现耗时和末阶段失败；2026-09-08 经用户确认改为单 Agent 详细粗卡。当前新实现已做离线测试，尚未代跑真实制卡。每日调度与 Git 自动同步尚未实现。
+US-07B1 和模板接入已有真实验收。历史单调用卡质量未达目标，六角色试运行又出现耗时和末阶段失败；2026-09-08 经用户确认改为单 Agent 详细粗卡。当前保存放宽后的流程、旧草稿恢复及主题链路已有验收，具体来源和限制见[验证地图](tests.md)。每日计划已启用并实测Windows启动和轻量定时检查；不自动Git同步，提交/推送仍必须由用户明确要求。
 
 ## 2. 运行前提
 
@@ -490,6 +511,31 @@ SINGLE_CARD_CONTRACT_FAILED 表示归因格式、引用 C 编号或人工核验�
 
 quality-audit.json 沿用文件名，但实际是单会话生成记录；independent_review、scientific_correctness_verified 固定 false。source_access.full_read_verified 和 visual_understanding_verified 也为 false。结构通过不是独立科学验证。本次未替用户运行新方案；真实耗时与卡片质量尚待确认。
 
+## 13A. 一条命令自动运行（US-11A）
+
+现已新增 run-once，不需要逐篇输入 item-key。只读查看本地任务和限额：
+
+```powershell
+Set-Location 'E:\phd\hydro-platform'
+python automation/run.py run-once --dry-run --json
+```
+
+该预览不扫描 Zotero、不检查模型、不写文件，不代表真实链路验收通过。准备好 Zotero 和 Codex 登录后运行：
+
+```powershell
+python automation/run.py run-once --json
+```
+
+它扫描目标共享库、处理后补 PDF、跳过完整已有卡，为待处理论文建骨架并调用现有单 Agent 制卡器。默认自动逐篇处理本轮全部可制卡论文，每篇完成立即写入正式证据包，不需要逐批改配置或手工转正；不改已完成卡，不执行 Git。进度和最终 items[].card_path 显示正式卡位置；report_path 指向本地摘要，counts 含完成、恢复、跳过、等待、阻塞、失败和延后。
+
+config/config.json 中 pipeline 默认 max_items_per_run=null、max_run_seconds=null、max_attempts_per_item=3、retry_cooldown_seconds=3600。前两项不用因论文数量而修改；单篇模型仍保留自己的超时。需要主动限制单轮规模时才填写正整数。正常使用只运行上面一条命令，程序负责排队和保存，详见 [统一入口说明](run-once.md)。
+
+2026-09-09 已修复【AI推理】与【AI 推理】空格差异的误拦截，无需修改模板或重读论文。JUKFEIFC 已从原草稿直接恢复正式保存；此前失败报告保留为历史记录，当前任务清单三篇均已完成。
+
+最新规则：正文按模型输出保存，不再检查标题、列数、标签、编号、占位词或措辞。模板仍是详细写作指引；结果 PROCESS_VALIDATED / 正文 NOT_CHECKED 只表示流程通过。原命令不变，无需改配置。重复启动返回 ALREADY_RUNNING；完整包可补任务状态，待保存记录可恢复文件，冲突或人工修改不覆盖。认证、读取、空/损坏输出等流程故障不盲目重跑，暂时性服务故障受冷却和次数限制。
+
+当前仍需手动启动这条统一命令。每日定时任务尚未安装，不能把“一键运行”说成“每天已经自动运行”。
+
 ## 14. 查看本地快照
 
 快照默认保存在：
@@ -912,7 +958,7 @@ python automation/run.py pdf-direct-read-trial --item-key CEXH4PQA --preflight-o
 | `card_generator.pdf_direct_trial.windows_sandbox` | Windows 原生沙箱；当前 elevated，显式传参，不依赖个人配置 |
 | `card_generator.pdf_direct_trial.shell_executable` | 本机预检 PowerShell；命令名或完整路径 |
 | `card_generator.pdf_direct_trial.preflight_timeout_seconds` | 本机沙箱预检时限，默认 120 秒 |
-| `card_generator.pdf_direct_trial.python_executable` | 直读专用 Python；当前指向 Codex 自带解释器，null 表示复用入口 Python |
+| `card_generator.pdf_direct_trial.python_executable` | 路径读取共用 Python；当前为 `.venv/Scripts/python.exe`，null 表示复用入口 Python |
 | `card_generator.pdf_direct_trial.text_extractor` | 当前 pypdf；该解释器需装有 pypdf，兼容选项 pdftotext 不自动切换 |
 | `card_generator.pdf_reader` 中的工具路径 | 复用 pdfinfo、pdftoppm；仅选择 pdftotext 引擎时用它的路径，不启动 MCP |
 | `paths.runtime_dir` / `paths.card_trials_dir` | 临时目录 / 保留报告的目录 |

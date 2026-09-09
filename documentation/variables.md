@@ -13,6 +13,10 @@
 
 ## 路径解析规则
 
+`zotero.startup`由统一入口读取，作用域是制卡机，来源为总配置，不含密码、不需要密钥轮换。可执行程序路径只由维护者配置/安装目录定位，不接受模型输出；开关/等待时间在下一轮生效。运行环境和账号仍属外部前提；[字段与风险](zotero-readiness.md)。
+
+本机配置需用 `--config config/config.local.json`（或 HYDRO_PLATFORM_CONFIG）显式选择，并填写完整配置；当前没有自动覆盖/合并机制。
+
 1. `paths.project_root` 相对于总配置文件所在目录解析，也可以填写绝对路径；
 2. 其余项目路径相对于 `project_root` 解析，也可以填写位于项目根目录内的绝对路径；
 3. 所有项目路径不得逃出 `project_root`；
@@ -20,6 +24,23 @@
 5. `evidence_card_templates_dir` 必须位于 `templates_dir`，`evidence_card_template_catalog_file` 必须位于证据卡模板目录；
 6. 配置中的环境变量会在启动时展开，但密钥不得通过路径配置间接写入仓库。
 7. 所有路径字段必须显式存在；程序不会用散落在源码里的路径默认值补齐漏项。
+
+部署配置 `deployment` 的Python字段见 [安装配置表](deployment.md#单一配置入口)，三个native字段见 [PDF工具配置](native-deployment.md#总配置)。新增字段有集中兼容默认值，实际配置/示例均显式列出；旧 `paths` 必填规则不变。相对可执行程序路径基于项目根目录，裸命令名按 PATH 查找。当前 PDF Python 为 `.venv/Scripts/python.exe`，三个原生工具在 `.tools/poppler/Library/bin/`，不再依赖旧Windows用户的解释器或Codex缓存绝对路径。
+
+## 配置与秘密风险
+
+每日计划的 `scheduler.*` 参数来自同一总配置，使用者为本机注册器与日任务门控。Windows当前身份只在安装时解析，不将密码写入仓库/任务。计划名称归属、时间、重试上限及停用规则见 [cron.md](cron.md)；配置enabled=true不是安装证据，须查询Windows真实定义。运行进度是`.runtime/scheduler-state.json`，不是共享配置。
+
+| 名称 | 使用者 / 范围 | 来源与更新 | 风险与处理 |
+|---|---|---|---|
+| `deployment.*`、依赖锁 | 本机安装器 | 总配置/锁文件；新环境验证 | 供应链输入，只安装核对后的 wheel/Poppler包；不是密钥，不执行任意远程脚本 |
+| `zotero.group_id/base_url` | 本机 Python | 总配置 | 错库/数据源风险；再次核对源身份，群组 ID 不是认证 |
+| `card_generator.*` | 本机适配器 | 总配置；变更后检查 | 外部处理方/额度改变；不能填写未实现适配器 |
+| Codex 登录信息 | 本机 CLI | 外部凭据存储；过期重新登录，泄露后撤销 | 不放 JSON/提示词/命令参数；项目不复制认证文件 |
+| GitHub 令牌 | 操作者 Git | 外部凭据管理，泄露后轮换 | 日常链路不用、不主动推送；日志不得包含令牌 |
+| 成员映射 | 事件记录/报告 | `members/` 明确映射 | 可共享身份信息；无来源不猜身份 |
+
+没有浏览器客户端包，不存在密钥打包进前端的路径；仓库、提示词和日志仍是泄露面，不能由此宣称完成秘密扫描。启用前核对 Git 暂存范围、忽略运行/环境/PDF目录、登录本机账号、检查共享库和处理方、验证恢复与实际触发。`config.local.json` 是完整替代配置，不是自动合并层。
 
 ## 当前限制
 

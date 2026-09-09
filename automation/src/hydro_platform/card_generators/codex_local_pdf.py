@@ -20,6 +20,7 @@ from hydro_platform.card_generators.codex_cli import (
 from hydro_platform.card_generators.streaming import ExecutionStopped
 from hydro_platform.pdf_sandbox import check_pdf_sandbox
 from hydro_platform.progress import report_progress
+from hydro_platform.publication import atomic_text
 
 
 class _LocalReadError(RuntimeError):
@@ -235,6 +236,17 @@ class CodexLocalPdfAdapter(CodexCliAdapter):
                       "page_count": count, "source_unchanged": True, "sandbox_preflight_passed": True,
                       "model_reading_report_accepted": True, "model_claim_full_text": True, "model_claim_visuals": True,
                       "command_event_count": command_count, "full_read_verified": False, "visual_understanding_verified": False}
+            if draft_path:
+                try:
+                    retained = json.loads(Path(draft_path).read_text(encoding="utf-8"))
+                    retained["provider_reading_record"] = {
+                        "source_access": access, "ephemeral": True, "cli_version": ready.get("cli_version"),
+                        "reading_prompt_version": "pdf-local-reading-v1",
+                        "reading_prompt_sha256": ready["pdf_reader"]["reading_prompt_sha256"],
+                        "usage": _usage(events)}
+                    atomic_text(Path(draft_path), json.dumps(retained, ensure_ascii=False, indent=2) + "\n")
+                except (OSError, ValueError):
+                    warnings.append({"code": "DRAFT_READING_RECORD_NOT_SAVED", "message": "未能补存读取记录；继续保存本次正常制卡结果"})
             return {**ready, "schema_version": 1, "ok": True, "operation": "evidence_card_generation",
                     "configured_model": selected_model, "configured_reasoning_effort": effort, "run_label": run_label,
                     "generation_protocol_version": "codex-local-pdf-v1", "sandbox": "workspace-write",

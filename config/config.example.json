@@ -1,5 +1,47 @@
 {
   "schema_version": 1,
+  "scheduler": {
+    "enabled": false,
+    "task_name": "HydroPlatform-daily",
+    "daily_time": "09:00",
+    "poll_interval_minutes": 30,
+    "retry_interval_minutes": 60,
+    "max_attempts_per_slot": 3,
+    "logon_delay_seconds": 120,
+    "execution_time_limit_seconds": 0,
+    "powershell_executable": "powershell",
+    "command_timeout_seconds": 30
+  },
+  "deployment": {
+    "native_tools_dir": ".tools/poppler",
+    "native_lock_file": "automation/setup/native-tools.lock.json",
+    "native_cache_dir": ".runtime/native-cache",
+    "environment_dir": ".venv",
+    "dependency_lock_file": "automation/setup/dependencies.lock.json",
+    "wheel_cache_dir": ".runtime/wheel-cache",
+    "base_python": null,
+    "install_timeout_seconds": 300,
+    "download_timeout_seconds": 30
+  },
+  "activity_reporting": {
+    "enabled": true,
+    "utc_offset_minutes": 480,
+    "system_actor_id": "SYS-CARD-01"
+  },
+  "theme_pipeline": {
+    "enabled": true,
+    "research_goal": null,
+    "model": null,
+    "reasoning_effort": null,
+    "timeout_seconds": null,
+    "assets_dir": "templates/themes"
+  },
+  "pipeline": {
+    "max_items_per_run": null,
+    "max_run_seconds": null,
+    "max_attempts_per_item": 3,
+    "retry_cooldown_seconds": 3600
+  },
   "paths": {
     "project_root": "..",
     "runtime_dir": ".runtime",
@@ -12,7 +54,7 @@
     "templates_dir": "templates",
     "evidence_card_templates_dir": "templates/evidence-cards",
     "evidence_card_template_catalog_file": "templates/evidence-cards/_catalog.json",
-    "evidence_card_generation_prompt_file": "automation/prompts/evidence-card-generation-v7.md",
+    "evidence_card_generation_prompt_file": "automation/prompts/evidence-card-generation-v8.md",
     "card_generation_output_schema_file": "automation/schemas/card-generation-output.schema.json",
     "themes_dir": "themes",
     "members_dir": "members",
@@ -22,6 +64,13 @@
     "schemas_dir": "automation/schemas"
   },
   "zotero": {
+    "startup": {
+      "enabled": true,
+      "launch_if_missing": true,
+      "executable": null,
+      "wait_timeout_seconds": 120,
+      "poll_interval_seconds": 5
+    },
     "base_url": "http://127.0.0.1:23119",
     "group_id": "REPLACE_WITH_ZOTERO_GROUP_ID",
     "timeout_seconds": 5,
@@ -49,7 +98,7 @@
       "windows_sandbox": "elevated",
       "shell_executable": "powershell",
       "preflight_timeout_seconds": 120,
-      "python_executable": null,
+      "python_executable": ".venv/Scripts/python.exe",
       "text_extractor": "pypdf"
     },
     "connection_guard": {
@@ -76,9 +125,9 @@
       "server_name": "hydro_pdf_reader",
       "python_executable": null,
       "server_file": "automation/src/hydro_platform/pdf_reader_mcp.py",
-      "pdfinfo_executable": "pdfinfo",
-      "pdftotext_executable": "pdftotext",
-      "pdftoppm_executable": "pdftoppm",
+      "pdfinfo_executable": ".tools/poppler/Library/bin/pdfinfo.exe",
+      "pdftotext_executable": ".tools/poppler/Library/bin/pdftotext.exe",
+      "pdftoppm_executable": ".tools/poppler/Library/bin/pdftoppm.exe",
       "render_dpi": 120,
       "max_pages_per_call": 4,
       "output_token_limit": 60000,

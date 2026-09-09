@@ -24,3 +24,5 @@ config/config.local.json
 __pycache__/
 *.py[cod]
 .venv/
+.tools/
+*.bootstrap.lock

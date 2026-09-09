@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from hydro_platform.config import MULTI_AGENT_PROTOCOL_VERSION, LOCAL_PATH_PROTOCOL_VERSION, SINGLE_AGENT_PROTOCOL_VERSION, TaskConfig
+from hydro_platform.config import MULTI_AGENT_PROTOCOL_VERSION, LOCAL_PATH_PROTOCOL_VERSION, SINGLE_AGENT_PROTOCOL_VERSION, LEGACY_SINGLE_AGENT_PROTOCOL_VERSION, TaskConfig
 from hydro_platform.source_access import source_access_acceptable
 from hydro_platform.tasks import RuntimeLock, build_task_id, load_task_registry
 
@@ -169,6 +169,11 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
         )
     if data["card_status"] == "ROUGH":
         generation = data.get("generation")
+        if isinstance(generation, dict) and generation.get("workflow_protocol_version") == "rough-card-draft-recovery-v1":
+            from hydro_platform.recovered_manifest import recovered_generation_valid
+            if not recovered_generation_valid(generation):
+                raise EvidencePackageError("EVIDENCE_MANIFEST_INVALID", "草稿恢复记录无效，不得伪装成完整执行审计")
+            return data
         required_generation_strings = (
             "generator_adapter",
             "generator_protocol_version",
@@ -205,8 +210,10 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
         source_pages_served = generation.get("source_pages_served")
         source_visual_pages_served = generation.get("source_visual_pages_served")
         direct = generation.get("source_access_method") == "local_pdf_path"
-        single = generation.get("workflow_protocol_version") == SINGLE_AGENT_PROTOCOL_VERSION
-        expected_quality_status = "STRUCTURE_VALIDATED" if single else "VALIDATED"
+        protocol = generation.get("workflow_protocol_version")
+        single = protocol in {SINGLE_AGENT_PROTOCOL_VERSION, LEGACY_SINGLE_AGENT_PROTOCOL_VERSION}
+        expected_quality_status = ("PROCESS_VALIDATED" if protocol == SINGLE_AGENT_PROTOCOL_VERSION
+                                   else "STRUCTURE_VALIDATED" if single else "VALIDATED")
         if direct:
             access = generation.get("source_access")
             source_ok = (source_access_acceptable(access, expected_sha256=data["pdf_sha256"],
@@ -217,7 +224,7 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
                          and generation.get("source_access_receipt_schema_version") is None
                          and source_pages_served is None and source_visual_pages_served is None
                          and generation.get("quality_status") == expected_quality_status
-                         and generation.get("workflow_protocol_version") in {LOCAL_PATH_PROTOCOL_VERSION, SINGLE_AGENT_PROTOCOL_VERSION})
+                         and protocol in {LOCAL_PATH_PROTOCOL_VERSION, SINGLE_AGENT_PROTOCOL_VERSION, LEGACY_SINGLE_AGENT_PROTOCOL_VERSION})
         else:
             source_ok = (generation.get("source_access_method") == "bound_local_pdf_mcp"
                          and generation.get("source_access_verified") is True
@@ -226,9 +233,8 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
                          and type(source_pages_served) is int and source_pages_served == source_page_count
                          and type(source_visual_pages_served) is int and source_visual_pages_served == source_page_count)
         if (
-            isinstance(confidence, bool)
-            or not isinstance(confidence, (int, float))
-            or not 0 <= confidence <= 1
+            (confidence is not None and (isinstance(confidence, bool)
+             or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1))
             or generation.get("output_schema_version") != 2
             or generation.get("reading_scope") != "FULL_PDF"
             or not source_ok
@@ -250,7 +256,7 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
         if "quality_status" in generation and (
             generation.get("quality_status") != expected_quality_status
             or generation.get("workflow_protocol_version")
-            != (SINGLE_AGENT_PROTOCOL_VERSION if single and direct else LOCAL_PATH_PROTOCOL_VERSION if direct else MULTI_AGENT_PROTOCOL_VERSION)
+            != (protocol if single and direct else LOCAL_PATH_PROTOCOL_VERSION if direct else MULTI_AGENT_PROTOCOL_VERSION)
             or type(generation.get("workflow_role_count")) is not int
             or generation.get("workflow_role_count") != (1 if single else 6)
             or generation.get("quality_audit_file") != "quality-audit.json"
@@ -366,6 +372,7 @@ def sync_evidence_packages(
     evidence_packs_path: str | Path,
     *,
     now: datetime | None = None,
+    parent_keys: set[str] | None = None,
 ) -> dict[str, Any]:
     moment = now or datetime.now(timezone.utc)
     at = _timestamp(moment)
@@ -384,6 +391,8 @@ def sync_evidence_packages(
         packages: list[dict[str, Any]] = []
         eligible_count = 0
         for _, raw_task in sorted(registry["tasks"].items()):
+            if parent_keys is not None and raw_task.get("parent_key") not in parent_keys:
+                continue
             if raw_task.get("state") != ELIGIBLE_STATE:
                 continue
             eligible_count += 1

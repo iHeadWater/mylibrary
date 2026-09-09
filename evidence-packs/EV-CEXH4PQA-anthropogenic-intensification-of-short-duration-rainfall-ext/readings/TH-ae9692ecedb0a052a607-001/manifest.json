@@ -1,0 +1,19 @@
+{
+  "batch_id": "BATCH-ae9692ecedb0a052a607",
+  "focus": "核查综述所依赖的关键观测、对流允许模拟和亚日尺度洪水研究：分别记录地区、历时指标、温度变量、记录长度、趋势或标度方法、流域尺度及归因边界；特别确认表观标度与长期气候标度的区分、风暴面积变化证据，以及“局地山洪增强”所依据的原始研究数量和直接性。",
+  "reading_sha256": "8c83e8b371b1370d6836c8de4e39cf80e1230f9189702126e56c78659fedff36",
+  "result_sha256": "e0b9927a873d9f128ef2132544c28ff778ce698969f9de3d5c435ab3cf00eebe",
+  "scientific_correctness_verified": false,
+  "source": {
+    "attachment_key": "JNCB9BGP",
+    "card_sha256": "b96f134625cff5fe59661fecd45f8c34b2ab2f03f658674e6363f73090267889",
+    "evidence_id": "EV-CEXH4PQA",
+    "group_id": 6618088,
+    "package_directory": "EV-CEXH4PQA-anthropogenic-intensification-of-short-duration-rainfall-ext",
+    "parent_key": "CEXH4PQA",
+    "pdf_sha256": "115fe50efabc0130ed20d1b8465aaa861b29497ae56949677bb59863c8dbd6e6"
+  },
+  "status": "FOCUSED_READING_SAVED",
+  "theme_id": "TH-ae9692ecedb0a052a607-001",
+  "theme_sha256": "5e44c6cfbed5186b82269075aa9c9e8cff0f936365c31c88804aea970ce442e5"
+}

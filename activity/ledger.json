@@ -1,0 +1,27 @@
+{
+  "record": {
+    "baseline": {
+      "cards": [
+        "7F8QLSNY",
+        "CEXH4PQA",
+        "JUKFEIFC"
+      ],
+      "parents": [
+        "7F8QLSNY",
+        "CEXH4PQA",
+        "JUKFEIFC"
+      ],
+      "pdf_attachments": [
+        "5HRAIKKE",
+        "DZHJDJ3V",
+        "JNCB9BGP"
+      ]
+    },
+    "created_at": "2026-09-08T18:50:46.039895Z",
+    "events": {},
+    "group_id": 6618088,
+    "schema_version": 1
+  },
+  "schema_version": 1,
+  "sha256": "e43a80c484929191586639d63176195db6306c82911e08ec503044faf7f68a2f"
+}

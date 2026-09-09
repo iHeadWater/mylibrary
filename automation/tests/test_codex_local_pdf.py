@@ -223,7 +223,7 @@ class LocalPdfProviderTests(unittest.TestCase):
             self.assertIsInstance(adapter, SingleAgentCardGeneratorAdapter)
             self.assertEqual(app.card_generator.workflow_mode, "single_agent")
             self.assertIsNone(app.card_generator.multi_agent_workflow)
-            self.assertEqual(app.paths.evidence_card_generation_prompt_file.name, "evidence-card-generation-v7.md")
+            self.assertEqual(app.paths.evidence_card_generation_prompt_file.name, "evidence-card-generation-v8.md")
 
     def test_mismatched_adapter_protocol_and_escaping_prompt_rejected(self):
         data = json.loads(self.f.config_file.read_text())

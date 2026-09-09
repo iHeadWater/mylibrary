@@ -1,23 +1,17 @@
-# 数据结构
+# 数据结构与流程检查
 
-本目录存放机器可校验的数据结构。当前默认 rough-card-single-agent-v1，仍使用 card-generation-output.schema.json（版本 2）。manifest 记录 STRUCTURE_VALIDATED / 1 个角色；旧 VALIDATED / 6 个角色仅用于历史协议。结构通过不是独立语义验证。
+当前制卡协议 rough-card-single-agent-v2，正常生成使用 card-generation-output.schema.json（版本2）；PROCESS_VALIDATED 表示流程通过，不是科学质量认证。历史记录中的 STRUCTURE_VALIDATED、VALIDATED 或 DRAFT_RECOVERED 保留原含义，不追改成新协议。
 
-当前已有：
+| 文件 / 位置 | 用途 |
+|---|---|
+| evidence-manifest.schema.json | 证据包身份、PLACEHOLDER/ROUGH 状态、当前或历史生成/恢复记录 |
+| card-generation-output.schema.json | PDF 阅读声明、模板路由、分类说明和 Markdown 正文的传输结构 |
+| pdf-direct-read-trial-output.schema.json | 独立 PDF 读取实验报告；不替代正式制卡，不要求原文摘录 |
+| ../../templates/themes/*.schema.json | 全池 CREATE/UPDATE/MERGE/SPLIT 规划、定向精读与回填传输 |
+| fact-extraction、fact-adjudication、critical-analysis、adversarial-review 的 schema | 旧多 Agent 兼容与测试，非当前默认流程 |
 
-- `pdf-direct-read-trial-output.schema.json`：独立路径直读实验的读取声明、图表观察和限制，已移除原文摘录字段；Python 检查结构及声明的完整性，不将阅读声明作为独立全文或视觉证明，不得用来放行正式证据卡；
-- `evidence-manifest.schema.json`：证据包 manifest.json 的版本 1 结构，支持 `PLACEHOLDER` 和带完整生成记录的 `ROUGH`；
-- `card-generation-output.schema.json`：单 Agent 制卡或旧合成角色的输出协议版本 2，约束全文/视觉阅读声明、模板分类、置信度、理由和 Markdown 正文；
-- `fact-extraction-output.schema.json`：两个独立事实提取角色的事实、页码、证据定位、覆盖范围和图表清单；
-- `fact-adjudication-output.schema.json`：原文裁决角色的已验证事实、双路来源映射、分歧和覆盖缺口；
-- `critical-analysis-output.schema.json`：批判分析角色的前提事实、证据强弱、因果边界、方法漏洞和外推限制；
-- `adversarial-review-output.schema.json`：对抗复核角色的五类强制挑战、七项覆盖检查、修正问题和最终裁决。
+Python 核对原始来源、非空结果、有效模板/引用、重复和完整写入，不检查 Markdown 标题层级、归因措辞、表格形式或固定数量。主题操作数量、父子关系、正式主题保护属于流程约束，仍必须检查。
 
-模型输出 schema 使用结构化输出的最小兼容子集；Python 检查来源身份、页数、归因格式和模板；跨角色 ID、数量阈值和对抗裁决仅存在于旧多 Agent 模式。证据包 manifest 同时兼容历史 MCP 回执和当前 `local_pdf_path`：后者保存来源记录但不伪造 `pages_served`，`source_access_verified=false` 不代表质量流程失败，而是未独立证明逐页阅读。
+本地任务、主题注册表、事件和运行报告已经有版本字段与对应 Python 读写校验，并非每种记录都有本目录下的独立 JSON Schema。清单损坏或来源不符不能静默覆盖。
 
-后续还需补充：
-
-- 关键贡献事件；
-- 本地任务状态；
-- 自动化运行结果。
-
-数据结构需要版本号和升级规则，保证新电脑能够读取已有结果并恢复运行。
+模型声称“读完”与独立证明“理解正确”不同；当前路径读取保留来源与执行记录，不伪造历史 MCP 的逐页工具回执。详见[数据边界](../../documentation/variables.md)、[验证地图](../../documentation/tests.md)。

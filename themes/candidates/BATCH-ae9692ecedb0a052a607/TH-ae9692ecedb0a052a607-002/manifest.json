@@ -1,0 +1,21 @@
+{
+  "batch_id": "BATCH-ae9692ecedb0a052a607",
+  "formal_confirmation": null,
+  "initial_sha256": "e6854e014f3863f075496cedd5368253b60db541f4d7aab4733240ef0fec71e0",
+  "reading_references": [
+    {
+      "evidence_id": "EV-7F8QLSNY",
+      "path": "../../../../evidence-packs/EV-7F8QLSNY-infrastructure-failure-cascades-quintuple-risk-of-storm-and/readings/TH-ae9692ecedb0a052a607-002/reading.md",
+      "result_sha256": "047a2a8b746036b491023ac8aa48fa3e54be1ba5140bc3e563c7011c42dc3523"
+    },
+    {
+      "evidence_id": "EV-JUKFEIFC",
+      "path": "../../../../evidence-packs/EV-JUKFEIFC-reviewing-and-visualizing-the-interactions-of-natural-hazard/readings/TH-ae9692ecedb0a052a607-002/reading.md",
+      "result_sha256": "76a0a509352cd9a808915048eb3bb49775ff130d1a769b1772389a5dbe98cb73"
+    }
+  ],
+  "revised_sha256": "e22c0aca53ec5c3be8378e0f3d4e1ae90502a667a189d3c8099169ae549afae4",
+  "scientific_correctness_verified": false,
+  "status": "CANDIDATE_REFINED",
+  "theme_id": "TH-ae9692ecedb0a052a607-002"
+}

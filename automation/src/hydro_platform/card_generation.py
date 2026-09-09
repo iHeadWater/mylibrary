@@ -18,6 +18,7 @@ from hydro_platform.config import (
     REQUIRED_CARD_WORKFLOW_ROLES,
     LOCAL_PATH_PROTOCOL_VERSION,
     SINGLE_AGENT_PROTOCOL_VERSION,
+    LEGACY_SINGLE_AGENT_PROTOCOL_VERSION,
     MULTI_AGENT_PROTOCOL_VERSION,
     PdfGateConfig,
     TaskConfig,
@@ -48,6 +49,7 @@ from hydro_platform.tasks import (
     load_task_registry,
 )
 from hydro_platform.zotero import ZoteroClient
+from hydro_platform.publication import prepare_publication, recover_publication
 
 
 CARD_STATE = "ROUGH"
@@ -59,10 +61,6 @@ ACCEPTED_VISUAL_CONTENT_STATUSES = frozenset({"REVIEWED", "NOT_PRESENT"})
 PROMPT_VERSION_PATTERN = re.compile(
     r'^---\s*\r?\nprompt_version:\s*["\']([^"\']+)["\']\s*\r?\n---',
     re.MULTILINE,
-)
-UNRESOLVED_CONTENT_PATTERN = re.compile(
-    r"\{\{[^{}]+\}\}|〔[^〕]*〕|待填写|待补充|待核|\bTODO\b|\bTBD\b",
-    re.IGNORECASE,
 )
 TABLE_SEPARATOR_PATTERN = re.compile(
     r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$"
@@ -280,6 +278,12 @@ def _inspect_target(
                 "EVIDENCE_INPUT_MISMATCH",
                 "证据包 manifest 与当前任务输入不一致，拒绝制卡",
             )
+        try:
+            if recover_publication(package_path, lock_path, manifest):
+                manifest = load_evidence_manifest(manifest_path)
+                card_content = card_path.read_text(encoding="utf-8")
+        except EvidencePackageError as exc:
+            raise CardGenerationError(exc.code, str(exc)) from exc
         if card_content != PLACEHOLDER_CARD:
             return {
                 "skip": True,
@@ -356,6 +360,10 @@ def _headings(markdown: str) -> list[str]:
                 fence = None
             continue
         if fence is None and re.match(r"^#{1,6}\s+\S", line):
+            # Match the attribution validator's whitespace-equivalent AI label.
+            # Normalize only for checking; the saved Markdown is never rewritten.
+            line = re.sub(r"^(#{1,6})[^\S\r\n]+AI[^\S\r\n]*推理[^\S\r\n]*$",
+                          r"\1 AI 推理", line)
             headings.append(line.rstrip())
     return headings
 
@@ -369,7 +377,7 @@ def _table_count(markdown: str) -> int:
 
 
 def _validate_template_structure(body: str, expected_body: str) -> dict[str, Any]:
-    """Require major sections, not a byte-for-byte copy of a template's layout."""
+    """Historical v1 inspection only; not invoked by current generation/export/recovery."""
     expected = _headings(expected_body)
     actual = _headings(body)
     required = [heading for heading in expected if heading.startswith("## ")]
@@ -431,7 +439,8 @@ def _validate_model_output_fields(
     *,
     title: str,
 ) -> dict[str, Any]:
-    if not isinstance(output, dict) or set(output) != MODEL_OUTPUT_FIELDS:
+    required_fields = MODEL_OUTPUT_FIELDS - {"classification_confidence", "classification_reason"}
+    if not isinstance(output, dict) or not required_fields.issubset(output):
         raise CardGenerationError(
             "CARD_GENERATION_OUTPUT_INVALID",
             "模型输出字段与制卡协议不一致",
@@ -467,7 +476,6 @@ def _validate_model_output_fields(
     if (
         not isinstance(source_read_evidence, str)
         or not source_read_evidence.strip()
-        or len(source_read_evidence.strip()) > 2000
     ):
         raise CardGenerationError(
             "CODEX_PDF_READ_UNVERIFIED",
@@ -485,56 +493,30 @@ def _validate_model_output_fields(
         or not isinstance(confidence, (int, float))
         or not 0 <= confidence <= 1
     ):
-        raise CardGenerationError(
-            "CARD_GENERATION_CLASSIFICATION_INVALID",
-            "分类置信度必须是 0 到 1 的数值",
-        )
+        confidence = None  # Unknown metadata is not a reason to discard usable Markdown.
     reason = output.get("classification_reason")
-    if not isinstance(reason, str) or not reason.strip() or len(reason.strip()) > 1000:
-        raise CardGenerationError(
-            "CARD_GENERATION_CLASSIFICATION_INVALID",
-            "分类理由必须是 1 到 1000 字的非空文本",
-        )
+    if not isinstance(reason, str) or not reason.strip():
+        reason = "模型未提供分类理由"
     body = output.get("card_body_markdown")
     if not isinstance(body, str) or not body.strip():
         raise CardGenerationError(
             "CARD_GENERATION_OUTPUT_INVALID",
             "模型没有返回证据卡 Markdown 正文",
         )
-    normalized_body = body.replace("\r\n", "\n").strip() + "\n"
-    if normalized_body.lstrip().startswith("---"):
-        raise CardGenerationError(
-            "CARD_GENERATION_OUTPUT_INVALID",
-            "模型不得自行生成证据卡 front matter",
-        )
-    unresolved = UNRESOLVED_CONTENT_PATTERN.search(normalized_body)
-    if unresolved is not None:
-        raise CardGenerationError(
-            "CARD_GENERATION_PLACEHOLDER_REMAINED",
-            f"模型输出仍包含占位内容：{unresolved.group(0)}",
-        )
-    human_review_lines = [
-        line.strip()
-        for line in normalized_body.splitlines()
-        if re.match(r"^-\s*本人.*复查\s*[:：]", line.strip())
-    ]
-    if any("未进行人工复核" not in line for line in human_review_lines):
-        raise CardGenerationError(
-            "CARD_GENERATION_FALSE_HUMAN_REVIEW",
-            "模型不得把自动生成或自动质检写成人工复查",
-        )
-
-    expected_body = templates[template_id]["body"].replace("{{TITLE}}", title)
-    structure_validation = _validate_template_structure(normalized_body, expected_body)
+    # Template wording and Markdown are model instructions, not publication gates.
+    # Keep this legacy result key explicit so existing consumers cannot read it as PASS.
+    structure_validation = {"policy_version": "workflow-only-v1", "status": "NOT_CHECKED",
+                            "content_validation_performed": False, "scientific_correctness_verified": False,
+                            "note": "正文按模型输出保存；程序不检查模板结构、标签、编号、占位词或内容质量"}
     return {
         "source_read_status": source_read_status,
         "source_page_count": source_page_count,
         "visual_content_status": visual_content_status,
         "source_read_evidence": source_read_evidence.strip(),
         "template_id": template_id,
-        "classification_confidence": float(confidence),
+        "classification_confidence": float(confidence) if confidence is not None else None,
         "classification_reason": reason.strip(),
-        "card_body_markdown": normalized_body,
+        "card_body_markdown": body,
         "structure_validation": structure_validation,
     }
 
@@ -544,19 +526,21 @@ def _validate_workflow_result(
 ) -> tuple[dict[str, Any], dict[str, Any], str]:
     workflow_report = generator_result.get("workflow")
     quality_audit = generator_result.get("quality_audit")
-    if isinstance(workflow_report, dict) and workflow_report.get("protocol_version") == SINGLE_AGENT_PROTOCOL_VERSION:
-        from hydro_platform.card_generators.single_agent import validate_attribution
+    if isinstance(workflow_report, dict) and workflow_report.get("protocol_version") in {SINGLE_AGENT_PROTOCOL_VERSION, LEGACY_SINGLE_AGENT_PROTOCOL_VERSION}:
+        process_only = workflow_report["protocol_version"] == SINGLE_AGENT_PROTOCOL_VERSION
         access = generator_result.get("source_access")
         gates = workflow_report.get("gates", {})
         roles = quality_audit.get("roles", {}) if isinstance(quality_audit, dict) else {}
         writer = roles.get("card_writer", {}) if isinstance(roles, dict) else {}
-        if (workflow_report.get("status") != "STRUCTURE_VALIDATED"
+        if (workflow_report.get("status") != ("PROCESS_VALIDATED" if process_only else "STRUCTURE_VALIDATED")
             or type(workflow_report.get("completed_role_count")) is not int
             or workflow_report["completed_role_count"] != 1
             or workflow_report.get("required_roles") != ["card_writer"]
             or not isinstance(gates, dict)
             or any(gates.get(k) is not True for k in
-                   ("isolated_session", "source_identity", "reading_report_accepted", "attribution_contract"))
+                   ("isolated_session", "source_identity", "reading_report_accepted",
+                    "nonempty_output" if process_only else "attribution_contract"))
+            or (process_only and gates.get("content_validation_performed") is not False)
             or gates.get("independent_review") is not False
             or gates.get("scientific_correctness_verified") is not False
             or not source_access_acceptable(access) or access.get("method") != "local_pdf_path"
@@ -569,10 +553,9 @@ def _validate_workflow_result(
             or writer.get("output") != generator_result.get("output")
             or quality_audit.get("source_pdf_sha256") != access["source_sha256"]):
             raise CardGenerationError("CARD_QUALITY_UNVERIFIED", "单 Agent 生成记录不完整或错误声称独立复核")
-        try:
-            validate_attribution(generator_result.get("output", {}).get("card_body_markdown"))
-        except ValueError as exc:
-            raise CardGenerationError("SINGLE_CARD_CONTRACT_FAILED", str(exc)) from exc
+        body = generator_result["output"].get("card_body_markdown")
+        if not isinstance(body, str) or not body.strip():
+            raise CardGenerationError("CARD_GENERATION_OUTPUT_INVALID", "模型没有返回可保存的 Markdown 正文")
         return workflow_report, quality_audit, json.dumps(quality_audit, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     required_quality_gates = {
         "isolated_required_roles",
@@ -649,7 +632,9 @@ def _render_card(
     *,
     generated_at: str,
 ) -> str:
-    confidence = format(validated_output["classification_confidence"], ".4f").rstrip("0").rstrip(".")
+    confidence_value = validated_output["classification_confidence"]
+    confidence = (format(confidence_value, ".4f").rstrip("0").rstrip(".")
+                  if confidence_value is not None else "unknown")
     front_matter = [
         "---",
         "schema_version: 1",
@@ -703,6 +688,8 @@ def _write_generated_package(
     generated_manifest: dict[str, Any],
     task_config: TaskConfig,
     lock_path: Path,
+    *,
+    recovery_task_check: tuple[Path, dict[str, Any]] | None = None,
 ) -> None:
     package_path = target["package_path"]
     card_path = package_path / "card.md"
@@ -714,8 +701,15 @@ def _write_generated_package(
     rollback_temporary: Path | None = None
     quality_audit_written = False
     package_committed = False
+    prepared_path: Path | None = None
 
     with RuntimeLock(lock_path, stale_seconds=task_config.lock_stale_seconds):
+        if recovery_task_check is not None:
+            recovery_task_path, expected_task = recovery_task_check
+            current_task = load_task_registry(recovery_task_path, target["manifest"]["group_id"])["tasks"].get(expected_task["parent_key"])
+            if not current_task or any(current_task.get(k) != expected_task.get(k) for k in
+                                       ("state", "reason_code", "task_id", "input", "updated_at", "lease")):
+                raise CardGenerationError("EVIDENCE_INPUT_MISMATCH", "恢复写入前任务已变化，保留原文件")
         try:
             current_card = card_path.read_text(encoding="utf-8")
             current_manifest = load_evidence_manifest(manifest_path)
@@ -795,6 +789,11 @@ def _write_generated_package(
                     "CARD_GENERATION_AUDIT_INVALID",
                     "多 Agent 质量审计没有通过写入前校验",
                 )
+            try:
+                prepared_path = prepare_publication(lock_path, current_manifest, generated_manifest,
+                                                    card_content, quality_audit_content)
+            except EvidencePackageError as exc:
+                raise CardGenerationError(exc.code, str(exc)) from exc
             os.replace(quality_audit_temporary, quality_audit_path)
             quality_audit_temporary = None
             quality_audit_written = True
@@ -820,6 +819,11 @@ def _write_generated_package(
                 "无法安全替换证据卡和 manifest；原占位卡已尽量保留",
             ) from exc
         finally:
+            if package_committed and prepared_path is not None:
+                try:
+                    prepared_path.unlink(missing_ok=True)
+                except OSError:
+                    pass  # a leftover matching record is safely reconciled next time
             if quality_audit_written and not package_committed:
                 quality_audit_path.unlink(missing_ok=True)
             for temporary in (
@@ -1306,7 +1310,7 @@ def generate_evidence_card(
                 lock_path,
                 completed=True,
                 reason_code="CARD_GENERATED",
-                message="粗证据卡已通过结构校验并写入证据包",
+                message="粗证据卡已通过流程检查并写入证据包；未校验正文内容质量",
                 now=now,
             )
         except TaskStoreError as exc:

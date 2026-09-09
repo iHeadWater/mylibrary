@@ -1,0 +1,37 @@
+{
+  "record": {
+    "markdown": "# 科研平台每日进度 · 2026-09-09\n\n报告生成时间：2026-09-09 13:44:30；以下时间均为 UTC+08:00。\n\n本日新发现论文：0；新发现 PDF：0；新确认卡片完成：0。\n当前有效粗卡：3；待处理/等待/阻塞事项：0。\n\n## 运行状态\n\n最近统一运行：已完成；结束时间：2026-09-09 13:44:30。\n本日是否有统一运行记录：是。\n任务清单存在：是；账本已启用：是。\n系统异常代码：当前记录未报告。\n最近一轮主题处理：CANDIDATES\\_REFINED；候选数：2；已回填数：2（不是正式主题审批）。\n\n## 本日关键事件\n\n本日没有新关键事件；首次启用前的历史文献不计入当日贡献。\n\n## 当前待处理与阻塞\n\n在当前可读取的任务和证据包记录中没有发现待处理事项；不代表已实时扫描 Zotero。\n\n## 解释边界\n\n- 事件按系统首次观测日期统计，不把发现日期冒充文献实际入库日期；原发生时间保存在 JSON 中。\n- CARD_COMPLETED 表示首次确认卡片已保存，可能来自草稿恢复；不代表本日新调用了模型。\n- 没有身份元数据时记录未知，不用论文作者、当前登录账号或最后修改者代替新增者。\n- 只用于掌握进度和发现阻塞，不是个人排名，也不是卡片或主题科学质量评价。\n- 本命令不访问 Zotero、不调用模型；任务与最近运行记录可能滞后。实际每日计划状态请用 schedule-status 查询。\n",
+    "previous_markdown_sha256": "c86886c220539b74a2957071e1710839f9989e6601e3d0a81415ea58555019d0",
+    "report": {
+      "date": "2026-09-09",
+      "events": [],
+      "generated_at": "2026-09-09T05:44:30.368611Z",
+      "group_id": 6618088,
+      "last_run": {
+        "error_code": null,
+        "finished_at": "2026-09-09T05:44:30.361300+00:00",
+        "status": "COMPLETED"
+      },
+      "ledger_initialized": true,
+      "open_items": [],
+      "run_observed_today": true,
+      "schema_version": 1,
+      "system_issues": [],
+      "task_registry_exists": true,
+      "task_registry_updated_at": "2026-09-08T17:11:06.607531Z",
+      "task_state_counts": {
+        "COMPLETED": 3
+      },
+      "theme_summary": {
+        "candidate_count": 2,
+        "refined_count": 2,
+        "status": "CANDIDATES_REFINED"
+      },
+      "today_counts": {},
+      "utc_offset": "+08:00",
+      "valid_card_count": 3
+    }
+  },
+  "schema_version": 1,
+  "sha256": "be54c8a326d154f2ce44959149be588aca762efa41459fa7345bec37a3a3b07c"
+}

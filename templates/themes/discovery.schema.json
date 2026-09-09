@@ -1,0 +1,19 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["problem_clusters_markdown", "themes"],
+  "properties": {
+    "problem_clusters_markdown": {"type": "string"},
+    "themes": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["title", "candidate_markdown", "paper_tasks"],
+      "properties": {
+        "title": {"type": "string"}, "candidate_markdown": {"type": "string"},
+        "paper_tasks": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["evidence_id", "focus"],
+          "properties": {"evidence_id": {"type": "string"}, "focus": {"type": "string"}}
+        }}
+      }
+    }}
+  }
+}

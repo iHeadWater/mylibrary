@@ -67,6 +67,7 @@ class ZoteroClient:
                 raw = response.read()
                 return raw, dict(response.headers.items()), response.status
         except HTTPError as exc:
+            exc.close()
             if exc.code == 403:
                 code = "GROUP_PERMISSION_DENIED"
             elif exc.code == 404:
@@ -88,6 +89,7 @@ def zotero_process_running(timeout_seconds: float = 5.0) -> bool | None:
                 capture_output=True,
                 text=True,
                 timeout=timeout_seconds,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             if result.returncode != 0:
                 return None

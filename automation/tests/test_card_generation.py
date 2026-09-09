@@ -473,7 +473,7 @@ class CardGenerationTests(unittest.TestCase):
             self.assertFalse(result["model_invoked"])
             self.assertEqual(second_adapter.calls, [])
 
-    def test_placeholder_in_model_output_keeps_original_card_and_retries(self) -> None:
+    def test_placeholder_words_in_body_are_not_a_saving_gate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = GenerationFixture(Path(directory))
             adapter = FakeAdapter(
@@ -493,21 +493,16 @@ class CardGenerationTests(unittest.TestCase):
                 }
             )
 
-            with self.assertRaisesRegex(CardGenerationError, "占位内容") as caught:
-                fixture.generate(adapter)
-
-            self.assertEqual(caught.exception.code, "CARD_GENERATION_PLACEHOLDER_REMAINED")
-            self.assertEqual(
-                (fixture.package / "card.md").read_text(encoding="utf-8"),
-                PLACEHOLDER_CARD,
-            )
-            self.assertFalse((fixture.package / "quality-audit.json").exists())
+            result = fixture.generate(adapter)
+            self.assertEqual(result["structure_validation"]["status"], "NOT_CHECKED")
+            self.assertTrue((fixture.package / "card.md").read_text(encoding="utf-8").endswith(adapter.output["card_body_markdown"]))
+            self.assertTrue((fixture.package / "quality-audit.json").exists())
             manifest = json.loads(
                 (fixture.package / "manifest.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(manifest["card_status"], "PLACEHOLDER")
+            self.assertEqual(manifest["card_status"], "ROUGH")
             registry = json.loads(fixture.task_path.read_text(encoding="utf-8"))
-            self.assertEqual(registry["tasks"][PARENT_KEY]["state"], "RETRY_PENDING")
+            self.assertEqual(registry["tasks"][PARENT_KEY]["state"], "COMPLETED")
 
     def test_model_failure_keeps_placeholder_and_records_retry_reason(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -621,7 +616,7 @@ class CardGenerationTests(unittest.TestCase):
                 PLACEHOLDER_CARD,
             )
 
-    def test_missing_template_section_is_rejected(self) -> None:
+    def test_missing_template_section_does_not_block_saving(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = GenerationFixture(Path(directory))
             adapter = FakeAdapter(
@@ -638,16 +633,11 @@ class CardGenerationTests(unittest.TestCase):
                 }
             )
 
-            with self.assertRaises(CardGenerationError) as caught:
-                fixture.generate(adapter)
+            result = fixture.generate(adapter)
+            self.assertEqual(result["structure_validation"]["status"], "NOT_CHECKED")
+            self.assertTrue((fixture.package / "card.md").read_text(encoding="utf-8").endswith(adapter.output["card_body_markdown"]))
 
-            self.assertEqual(caught.exception.code, "CARD_GENERATION_STRUCTURE_INVALID")
-            self.assertEqual(
-                (fixture.package / "card.md").read_text(encoding="utf-8"),
-                PLACEHOLDER_CARD,
-            )
-
-    def test_false_human_review_claim_is_rejected(self) -> None:
+    def test_body_wording_is_not_scanned_or_endorsed_by_saving(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = GenerationFixture(Path(directory))
             output = dict(FakeAdapter().output)
@@ -655,17 +645,9 @@ class CardGenerationTests(unittest.TestCase):
                 VALID_BODY + "\n- 本人复查：已完成全文复查\n"
             )
 
-            with self.assertRaises(CardGenerationError) as caught:
-                fixture.generate(FakeAdapter(output))
-
-            self.assertEqual(
-                caught.exception.code,
-                "CARD_GENERATION_FALSE_HUMAN_REVIEW",
-            )
-            self.assertEqual(
-                (fixture.package / "card.md").read_text(encoding="utf-8"),
-                PLACEHOLDER_CARD,
-            )
+            result = fixture.generate(FakeAdapter(output))
+            self.assertFalse(result["structure_validation"]["scientific_correctness_verified"])
+            self.assertTrue((fixture.package / "card.md").read_text(encoding="utf-8").endswith(output["card_body_markdown"]))
 
     def test_manifest_replace_failure_rolls_card_back_to_placeholder(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

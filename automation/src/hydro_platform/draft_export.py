@@ -13,13 +13,12 @@ from hydro_platform.card_generation import (
     CardGenerationError, _load_template_bundle, _normalize_parent_key,
     _timestamp, _validate_model_output,
 )
-from hydro_platform.card_generators.single_agent import validate_attribution
 from hydro_platform.config import AppConfig
 from hydro_platform.evidence_packages import find_evidence_package, load_evidence_manifest
 
 
-def export_evidence_draft(config: AppConfig, draft_path: Path) -> dict:
-    """Keep the model body unchanged; check current structure without calling a model/PDF tool."""
+def inspect_evidence_draft(config: AppConfig, draft_path: Path) -> dict:
+    """Read and validate only; preserve the original body and provenance."""
     draft_path = draft_path.resolve()
     draft_root = (config.paths.runtime_dir / "generation-drafts").resolve()
     if draft_path.parent != draft_root or draft_path.suffix.lower() != ".json":
@@ -47,12 +46,21 @@ def export_evidence_draft(config: AppConfig, draft_path: Path) -> dict:
     catalog, templates = _load_template_bundle(
         config.paths.evidence_card_templates_dir, config.paths.evidence_card_template_catalog_file)
     validated = _validate_model_output(output, templates, title=manifest["title"], draft_path=str(draft_path))
-    try:
-        attribution = validate_attribution(validated["card_body_markdown"])
-    except ValueError as exc:
-        raise CardGenerationError("SINGLE_CARD_CONTRACT_FAILED", str(exc)) from exc
+    attribution = {"status": "NOT_CHECKED", "content_validation_performed": False}
 
     template = templates[validated["template_id"]]
+    return {"draft": draft, "raw_draft": raw_draft, "output": output, "validated": validated,
+            "package": package, "manifest": manifest, "template": template, "catalog": catalog,
+            "attribution": attribution, "draft_path": draft_path}
+
+
+def export_evidence_draft(config: AppConfig, draft_path: Path) -> dict:
+    """Explicit preview command remains non-publishing for backwards compatibility."""
+    checked = inspect_evidence_draft(config, draft_path)
+    draft, raw_draft, output = (checked[k] for k in ("draft", "raw_draft", "output"))
+    manifest, validated, template, catalog = (checked[k] for k in ("manifest", "validated", "template", "catalog"))
+    attribution, draft_path = checked["attribution"], checked["draft_path"]
+    key = manifest["parent_key"]
     draft_sha256 = hashlib.sha256(raw_draft).hexdigest()
     # Keep exactly the generated Markdown, not a new ROUGH/validated production front matter.
     card_content = output["card_body_markdown"]
@@ -74,7 +82,7 @@ def export_evidence_draft(config: AppConfig, draft_path: Path) -> dict:
         "checked_against_catalog_version": catalog["catalog_version"],
         "structure_validation": validated["structure_validation"], "attribution": attribution,
         "card_sha256": hashlib.sha256(card_content.encode("utf-8")).hexdigest(),
-        "note": "从已有模型输出导出原样 Markdown；只校验当前模板结构、归因格式及记录中的来源身份。"
+        "note": "从已有模型输出导出原样 Markdown；只校验非空输出、模板索引及记录中的来源身份，不检查正文格式或内容质量。"
                 "原草稿未保存完整执行审计，不补造阅读回执、生成时间或原模板版本，不自动发布到正式证据包。",
     }
     parent_dir = (config.paths.card_trials_dir / "recovered" / key).resolve()

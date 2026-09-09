@@ -11,7 +11,7 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SOURCE_ROOT))
 
 from hydro_platform.config import ZoteroConfig
-from hydro_platform.snapshot import SnapshotError, scan_group
+from hydro_platform.snapshot import SnapshotError, compare_snapshots, fetch_snapshot, scan_group
 from hydro_platform.zotero import ApiResponse
 
 
@@ -59,6 +59,50 @@ class FakeClient:
 class SnapshotTests(unittest.TestCase):
     def setUp(self) -> None:
         self.config = ZoteroConfig(group_id=6618088)
+
+    def test_contributor_is_only_read_from_group_creation_metadata(self):
+        paper = item("PARENT01", "journalArticle", title="Paper")
+        paper["meta"] = {"createdByUser": {"id": 101, "username": "student", "links": {"private": "not copied"}},
+                         "lastModifiedByUser": {"id": 102}, "creatorSummary": "Author"}
+        result = fetch_snapshot(self.config, page_size=100, client=FakeClient([paper]))
+        self.assertEqual(result["parents"]["PARENT01"]["created_by_user"], {"id": 101, "username": "student"})
+        paper["meta"].pop("createdByUser")
+        unknown = fetch_snapshot(self.config, page_size=100, client=FakeClient([paper]))
+        self.assertIsNone(unknown["parents"]["PARENT01"]["created_by_user"])
+
+    def test_adding_actor_metadata_is_not_a_pdf_replacement(self):
+        old = {"parents": {}, "pdf_attachments": {"PDF00001": {"parent_key": "PARENT01", "version": 1}}}
+        new = {"parents": {}, "pdf_attachments": {"PDF00001": {"parent_key": "PARENT01", "version": 1,
+                "created_by_user": {"id": 101}, "date_added": "2026-09-09T00:00:00Z"}}}
+        self.assertEqual(compare_snapshots(old, new), [])
+
+    def test_missing_total_header_still_reads_later_pages(self):
+        class Pages:
+            def get_json(self, path):
+                rows = [item("PARENT01", "journalArticle")] if "start=0" in path else []
+                return ApiResponse(data=rows, headers={})
+        result = fetch_snapshot(self.config, page_size=1, client=Pages())
+        self.assertEqual(result["counts"]["parents"], 1)
+
+    def test_version_change_between_pages_does_not_create_a_false_baseline(self):
+        class Pages:
+            def get_json(self, path):
+                first = "start=0" in path
+                return ApiResponse(data=[item("PARENT01" if first else "PARENT02", "journalArticle")],
+                                   headers={"Total-Results": "2", "Last-Modified-Version": "1" if first else "2"})
+        with self.assertRaises(SnapshotError) as context:
+            fetch_snapshot(self.config, page_size=1, client=Pages())
+        self.assertEqual(context.exception.code, "SNAPSHOT_CHANGED_DURING_READ")
+
+    def test_premature_end_or_duplicate_page_fails_closed(self):
+        for duplicate in (False, True):
+            class Pages:
+                def get_json(self, path):
+                    rows = [item("PARENT01", "journalArticle")] if "start=0" in path or duplicate else []
+                    return ApiResponse(data=rows, headers={"Total-Results": "2"})
+            with self.subTest(duplicate=duplicate), self.assertRaises(SnapshotError) as context:
+                fetch_snapshot(self.config, page_size=1, client=Pages())
+            self.assertEqual(context.exception.code, "SNAPSHOT_INCOMPLETE")
 
     def test_first_scan_creates_baseline_without_changes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

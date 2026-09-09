@@ -28,6 +28,48 @@ class TaskStoreError(RuntimeError):
         self.code = code
 
 
+class PipelineRunLock(AbstractContextManager):
+    """OS-held whole-run lock: released on process exit, never steal a live owner's lock."""
+    def __init__(self, path):
+        self.path = Path(path)
+        self.descriptor = None
+
+    def __enter__(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                # Lock byte zero even for a newly created empty file. Keep the inode on disk.
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            os.close(descriptor)
+            if exc.errno in {11, 13, 35, 36}:
+                raise TaskStoreError("TASK_STORE_BUSY", "已有统一运行实例，跳过本轮") from exc
+            raise
+        self.descriptor = descriptor
+        return self
+
+    def __exit__(self, *args):
+        if self.descriptor is None:
+            return
+        try:
+            if os.name == "nt":
+                import msvcrt
+                os.lseek(self.descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(self.descriptor, msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(self.descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(self.descriptor)
+            self.descriptor = None
+
+
 class RuntimeLock(AbstractContextManager["RuntimeLock"]):
     def __init__(self, path: str | Path, *, stale_seconds: int):
         self.path = Path(path)
@@ -116,6 +158,24 @@ def _utc_now() -> datetime:
 def _pid_running(pid: int) -> bool:
     if pid <= 0:
         return False
+    if os.name == "nt":
+        # os.kill(pid, 0) is not a harmless liveness probe on Windows.
+        import ctypes
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() != 87  # invalid PID; other errors conservatively mean busy
+        try:
+            code = wintypes.DWORD()
+            return not kernel.GetExitCodeProcess(handle, ctypes.byref(code)) or code.value == 259
+        finally:
+            kernel.CloseHandle(handle)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -442,12 +502,15 @@ def sync_tasks(
     page_size: int,
     client: ZoteroClient | None = None,
     now: datetime | None = None,
+    snapshot_consumer: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     if zotero.group_id is None:
         raise TaskStoreError("CONFIG_ERROR", "任务同步需要目标 Zotero 群组 ID")
     with RuntimeLock(lock_path, stale_seconds=task_config.lock_stale_seconds):
         registry = load_task_registry(task_path, zotero.group_id, now=now)
         snapshot = fetch_snapshot(zotero, page_size=page_size, client=client)
+        if snapshot_consumer is not None:
+            snapshot_consumer(snapshot)
         gates = {
             parent_key: evaluate_pdf_gate(
                 zotero,
@@ -477,6 +540,36 @@ def list_tasks(
 ) -> dict[str, Any]:
     registry = load_task_registry(task_path, group_id, now=now)
     return _summary(registry, task_path)
+
+
+def reconcile_completed_package(registry, parent_key, manifest, task_config, *, now=None):
+    """In-memory reconciliation; caller verifies the package and owns the store lock."""
+    moment = now or _utc_now()
+    task = registry["tasks"].get(parent_key)
+    if (not isinstance(task, dict) or registry["group_id"] != manifest.get("group_id")
+        or parent_key != manifest.get("parent_key")
+        or task.get("task_id") != manifest.get("source_task_id")
+        or task.get("input", {}).get("pdf_sha256") != manifest.get("pdf_sha256")
+        or task.get("input", {}).get("attachment_key") != manifest.get("attachment_key")):
+        raise TaskStoreError("EVIDENCE_INPUT_MISMATCH", "完成记录与当前任务来源不一致")
+    if task.get("state") == "PROCESSING" and not _lease_expired(task, moment):
+        raise TaskStoreError("TASK_NOT_CLAIMABLE", "任务租约仍有效，暂不对账完成状态")
+    changed = task.get("state") != "COMPLETED"
+    if changed:
+        task["lease"] = None
+        at = _timestamp(moment)
+        _set_state(task, state="COMPLETED", reason_code="PACKAGE_RECONCILED",
+                   message="已核对完整证据包，恢复完成状态，未调用模型", at=at,
+                   max_history_entries=task_config.max_history_entries)
+        registry["updated_at"] = at
+    return {"changed": changed}
+
+
+def complete_task_from_package(group_id, parent_key, manifest, task_config, task_path, lock_path, *, now=None):
+    """Reconcile a hash-checked committed package without another model invocation."""
+    def action(registry):
+        return reconcile_completed_package(registry, parent_key, manifest, task_config, now=now)
+    return _with_registry_lock(group_id, task_config, task_path, lock_path, action)
 
 
 def _with_registry_lock(

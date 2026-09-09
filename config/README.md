@@ -1,8 +1,26 @@
 # 总配置
 
+日常只编辑完整总配置，不改源码。默认使用 [config.json](config.json)；[config.example.json](config.example.json) 是可复制的完整示例。私人配置必须显式用 --config 或 HYDRO_PLATFORM_CONFIG 选择，不自动合并。查看目录与存储概览请回到[仓库首页](../README.md)。
+
+## 关键事件与日报
+
+`activity_reporting.enabled=true` 让 run-once 在制卡前后记录关键事件并在结束后生成日报，不额外调用AI；`utc_offset_minutes=480` 按UTC+08:00划分日期，`system_actor_id=SYS-CARD-01` 标记系统行为。根目录分别使用 paths.activity_dir、paths.members_dir、paths.reports_dir。显式的 activity-sync / daily-report 命令可独立执行。[完整说明](../documentation/activities-and-daily-report.md)。本项不是每日触发器；本机已注册的定时计划由scheduler配置。
+
+`zotero.startup`控制统一入口的应用启动和有限等待：当前enabled=true、launch_if_missing=true、executable=null、wait_timeout_seconds=120、poll_interval_seconds=5。null按PATH/常用目录查找，也可填zotero.exe路径；不附加参数，不改账号/同步设置。doctor只核对路径、不启动。旧配置缺本节默认关闭。[字段、关闭方法与待PDF补查](../documentation/zotero-readiness.md)。
+
+## 统一主题池
+
+`theme_pipeline.enabled=true` 已开启完整入口后半段。`research_goal=null` 表示无预设目标；`model`、`reasoning_effort`、`timeout_seconds` 为 null 时继承 card_generator 对应设置。`assets_dir` 指定主题模板与 schema 的目录，默认 templates/themes，当前包含 discovery、pool-discovery、focused-reading、refinement。结果目录沿用 paths.themes_dir，定向精读保存在各论文证据包 readings/ 下。模型/目标/模板内容变化产生新的 CHANGE 记录，仍使用统一主题池；候选更新沿用编号，合并/拆分另建编号，适用旧精读可复用。[现行规则](../documentation/unified-theme-pool.md)。
+
+## 统一入口限额（US-11A）
+
+`pipeline` 默认 `max_items_per_run=null`、`max_run_seconds=null`：一次命令处理本轮扫描到的全部可制卡论文，无需按篇数修改配置。只有主动限制一次运行的规模/时长时才填正整数，旧配置中的明确限额仍会遵守。`max_attempts_per_item=3`（当前输入累计次数含首次）、`retry_cooldown_seconds=3600`（暂时性失败后冷却）仍必须是正整数。省略字段采用默认值，未知字段拒绝；单篇模型超时仍由 `card_generator.generation_timeout_seconds` 控制。详见 [统一入口](../documentation/run-once.md)。
+
+整轮锁和待保存记录的目录由 `paths.lock_file` 派生，摘要由 `paths.logs_dir` 派生，均位于配置的 `runtime_dir`；没有写死某台电脑的盘符。每日时间、补查与启停已经由 scheduler 配置；修改 Windows 触发定义后需 schedule-install，不能把配置已填等同于计划已注册。
+
 `config.json` 是自动化唯一的团队级总配置入口。需要迁移目录、更换 Zotero 本地接口、调整扫描参数时，只修改这个文件，不修改程序源码。所有路径字段必须显式填写；缺失时程序直接报配置错误，不使用源码中的隐含目录默认值。
 
-以后实现 Codex 制卡、其他模型适配器、Git 同步、定时调度和报告时，凡是团队可能主动调整的非敏感参数，也必须加入这个总配置并由代码读取，不能写死在源码或命令中。新增配置项必须和对应的解析校验、功能实现、测试及本说明同时交付；禁止先放入程序并不读取的“假配置”。
+制卡、主题、部署、调度及摘要的可调整参数已经集中在总配置；以后增加新适配器等能力时也必须由配置与实现共同交付。当前没有自动 Git 同步，普通运行不会提交或推送。新增配置项必须和对应的解析校验、功能实现、测试及本说明同时交付；禁止先放入程序并不读取的“假配置”。
 
 配置只能在程序已经实现的能力之间切换。例如将制卡后端从 `codex_cli` 改为另一种适配器，前提是仓库中已经存在并测试过该适配器；任意填写一个 API 名称不能凭空获得相应能力，程序必须对不支持的值立即报错。
 
@@ -30,12 +48,15 @@
 
 修改路径后可运行 `python automation/run.py evidence-templates-validate --json` 验证。目录位置可以调整，但不得将证据卡模板或清单配置到项目之外。
 
-后续功能实现时计划补充但当前尚未生效的配置类别：
+其他已启用配置类别：
 
-- `card_generator` 的总用量预算和频率限制；当前普通运行故障进入 `RETRY_PENDING`，质量门失败进入 `QUALITY_FAILED`，两者都不立即循环调用；
-- `git`：远端、分支和自动同步策略；
-- `scheduler`：每日运行时间、错过后的补跑规则和并发限制；
-- `reports`：摘要生成范围和保留规则。
+- `theme_pipeline`：全池主题规划、研究目标和模型继承；
+- `pipeline`：整轮数量/时间限额、逐条重试次数与冷却；
+- `activity_reporting`：关键事件和日报、系统身份、日期时区；
+- `deployment`：项目 Python/PDF 工具与下载/依赖锁；
+- `scheduler`：每日运行时间、补跑和并发规则。
+
+尚未实现任意提供者 API、总 token 预算、自动 Git 同步或可配置的日报清理策略；不要添加程序不读取的配置冒充已有能力。
 
 Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制卡机本地凭据存储或环境变量中，不得提交到仓库。`config.json` 最多记录所使用的凭据类型或环境变量名称，不能记录秘密本身。
 
@@ -55,9 +76,9 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 | `progress.enabled` | 正式制卡及试运行是否显示 stderr 实时进度 | `true` / `false`；默认 `true`；`--no-progress` 可关闭本次显示 |
 | `progress.heartbeat_interval_seconds` | 无论是否收到模型事件，定期报告等待状态的间隔 | 1–300 秒；默认 15；不改变模型超时和重试策略 |
 
-`progress` 在旧配置中整体缺失时使用上述默认值；一旦填写，必须同时提供两个字段。当前进度包含 1/1 单 Agent 启动、工具调用、归因校验和最终保存状态。心跳表示本地程序仍在等待，不证明远端模型健康。进度不会写入最终 JSON，也不会回显模型正文、原始工具输出或凭据。
+`progress` 在旧配置中整体缺失时使用上述默认值；一旦填写，必须同时提供两个字段。当前进度包含 1/1 单 Agent 启动、工具调用、流程检查和最终保存状态，不含归因或正文结构检查。心跳表示本地程序仍在等待，不证明远端模型健康。进度不会写入最终 JSON，也不会回显模型正文、原始工具输出或凭据。
 
-`card_generator.workflow_mode=single_agent` 是当前模式，主提示词 evidence-card-generation-v7.md、八类模板 1.1.0。模型、强度、会话超时直接用上表，不再有角色覆盖或固定事实/批评条数。v7 允许图表和小节扩展，保存只要求必需二级章节存在，排版差异记录为提示。草稿预览导出位置由 `paths.card_trials_dir` 控制，无需硬编码输出目录。
+`card_generator.workflow_mode=single_agent` 是当前模式，主提示词 evidence-card-generation-v8.md、八类模板 1.1.0。模型、强度和超时直接用上表。v8 保留详细写作要求，但保存只检验流程，不校验正文标题、表格、标签、编号或措辞；没有另一个需要用户开启的“宽松模式”。当前配置与示例已更新，仍使用 run-once。草稿预览目录由 `paths.card_trials_dir` 控制。
 
 旧配置未填 workflow_mode 时按 multi_agent 解释，必须提供完整 multi_agent_workflow，且 local_path/v2 或 project_mcp/v1 配套。当前 single_agent 要求 local_path，若仍提供 multi_agent_workflow 则配置报错，避免看似生效的角色设置误导；不会自动回退。未知提供者仍报错，不凭空支持任意 API。
 
@@ -73,9 +94,9 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 2026-09-08 在宽松档仍因断线 5 分钟未恢复而失败后，按用户要求在当前配置及示例中关闭 `reconnect_stop_enabled`，并将无进展时限改为 1200 秒。`10 / 300` 仍保存以便重新启用，但开关为 `false` 时不会因这两项终止。当前单 Agent 总时限为 1200 秒，不因重连重新计时；总超时、无进展时限、PDF 调用预算等仍生效，先触发者停止。底层 CLI 如果自行退出、`turn.failed` 或输出无效，仍按失败处理，不自动启动新会话重跑，也不继续下一个 Agent。
 
-旧配置整体缺失本节时，程序仍兼容保守后备值 `2 / 60 / 300 / 2` 且开关为 `true`；只有四个限额字段的旧配置也继续启用原保护。填写本节时必须包含全部四个限额字段，新开关可选；即使关闭也不接受非法限额值。修改后从下一次启动命令生效，不会热更新已运行的子进程。完整全文及页面图像读取、输出校验、单 Agent 来源、归因和结构校验均未放宽。这只影响项目启动的制卡子进程，不改变 Codex/ChatGPT 桌面客户端自身的重连行为，也不保证网络恢复。
+旧配置整体缺失本节时，程序仍兼容保守后备值 `2 / 60 / 300 / 2` 且开关为 `true`；只有四个限额字段的旧配置也继续启用原保护。填写本节时必须包含全部四个限额字段，新开关可选；即使关闭也不接受非法限额值。修改后从下一次启动命令生效，不会热更新已运行的子进程。该节只影响连接保护，不改变 PDF 阅读流程。正文格式/归因门禁已由最新产品决策独立移除。这不改变 Codex/ChatGPT 桌面客户端自身的重连行为，也不保证网络恢复。
 
-官方的 `stream_max_retries` 等为提供者配置；不能通过新增 `[model_providers.openai]` 覆盖内置提供者。因此本项目使用可本地验证的子进程保护，不修改个人 Codex 配置、登录、代理或服务端地址。参见 [OpenAI 高级配置说明](https://learn.chatgpt.com/docs/config-file/config-advanced)。
+本节描述本项目对子进程的停止保护，不修改个人 Codex 配置、登录、代理或服务端地址，也不等于控制服务端重试或修复网络。
 
 失败诊断由 CLI 保存到 `paths.logs_dir`（默认 `.runtime/logs`），最终 JSON 的 `diagnostic_log_path` 给出位置。只保存已脱敏的公开错误和上下文，不保存原始事件、提示词或论文全文；首个工具错误和最后一个连接错误分开保留，避免被整体摘要截断。日志不提交 Git。日志目录不可写时保留原失败结果并给出 `diagnostic_log_warning`。
 
@@ -87,16 +108,16 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 | `server_name` | 本次 Codex 调用中注册的 MCP 服务名 | 只能含字母、数字、下划线和连字符 |
 | `python_executable` | 启动项目内置 MCP 的 Python | `null` 表示复用运行 `automation/run.py` 的解释器；也可填命令名或绝对路径 |
 | `server_file` | 项目内置 PDF MCP 服务脚本 | 相对 `paths.project_root` 解析，且必须位于项目内 |
-| `pdfinfo_executable` | 获取 PDF 页数的程序 | 命令名或绝对路径 |
-| `pdftotext_executable` | 逐页提取文字的程序 | 命令名或绝对路径 |
-| `pdftoppm_executable` | 逐页渲染页面图像的程序 | 命令名或绝对路径 |
+| `pdfinfo_executable` | 获取 PDF 页数的程序 | 命令名、项目相对路径或绝对路径 |
+| `pdftotext_executable` | 逐页提取文字的程序 | 命令名、项目相对路径或绝对路径 |
+| `pdftoppm_executable` | 逐页渲染页面图像的程序 | 命令名、项目相对路径或绝对路径 |
 | `render_dpi` | 页面图像渲染分辨率 | 72–300；当前为 120 |
 | `max_pages_per_call` | 完整读取工具内部每批处理多少页 | 1–10；当前为 4；不会暴露成需要模型自行循环的步骤 |
 | `output_token_limit` | 完整 PDF 工具结果的 Codex 输出预算 | 大于 0 且不超过 200000；当前为 60000 |
 | `startup_timeout_seconds` | MCP 启动超时 | 大于 0 |
 | `tool_timeout_seconds` | 单次 MCP 工具调用及底层 PDF 工具的超时上限 | 大于 0 |
 
-团队示例配置使用 `pdfinfo`、`pdftotext`、`pdftoppm` 命令名；本机没有加入 `PATH` 时，可像当前 `config.json` 一样填写绝对路径。迁移电脑后只修改这些配置，不修改 Python 源码。
+当前配置与示例均使用项目相对工具路径 `.tools/poppler/Library/bin/`，PDF Python 使用 `.venv/Scripts/python.exe`，由锁定安装入口恢复。也支持明确配置已有工具路径，但统一 setup 对工具/环境归属有检查；改目录时须同步对应字段，不需要改 Python 源码。
 
 例如，使用 GPT-5.6 Sol 和高推理强度：
 
@@ -120,7 +141,7 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `.runtime/` 或证据包 `manifest.json`。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](../documentation/variables.md)。
 
-## US-01 本地配置
+## PDF 路径读取与实验配置
 
 ### 独立 PDF 路径直读实验配置
 
@@ -152,9 +173,17 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 `windows_sandbox` 显式传给 CLI，不依赖被 `--ignore-user-config` 忽略的个人设置；只接受 `elevated` / `unelevated`，不自动降级，默认使用现有的 `elevated`。`shell_executable` 是 PowerShell 的命令名或绝对路径。`preflight_timeout_seconds` 是不调用模型的本机沙箱检查时限。
 
-`python_executable` 是正式路径制卡与直读实验共用的 Python 命令名或路径，`null` 表示复用运行入口的 Python。`text_extractor=pypdf` 时，这个 Python 必须装有 pypdf；本机总配置已经指向自带 pypdf 6.10.0 的 Codex 运行时，不需要安装或初始化 MiKTeX。迁移时可指定另一个已具备 pypdf 的解释器，或在选定解释器中安装项目的 `pdf-direct` 可选依赖（`pypdf==6.10.0`）。不能只换成一个没有该模块的 Python。
+`python_executable` 是正式路径制卡与直读实验共用的 Python 命令名或路径，`null` 表示复用运行入口的 Python。当前总配置与示例为 `.venv/Scripts/python.exe`，通过 `python automation/run.py bootstrap --install --json` 安装锁定的 pypdf 6.18.0；旧 Codex 环境保留不动，不需初始化 MiKTeX。相对工具路径基于项目根目录，不受当前 PowerShell 目录影响；不能指向缺依赖的 Python。
 
-旧配置未填写文字引擎时仍为 `pdftotext`；当前总配置显式为 `pypdf`，不自动换引擎。`pdfinfo_executable`、`pdftoppm_executable`、`render_dpi` 和单工具超时复用 `card_generator.pdf_reader`；仅 pdftotext 引擎使用它的路径。路径模式不启动或检查 MCP 服务脚本。模型收到原 PDF 路径和工具位置，不预塞全文，也不要求固定页摘录。自定义配置仍引用旧直读实验提示词时，应改为 v2；当前单 Agent 使用主提示词 v7 与 workflow_mode=single_agent。
+## 项目安装配置 deployment
+
+每日计划另由 `scheduler` 控制：enabled（本机true、示例false）、task_name、daily_time、poll_interval_minutes、retry_interval_minutes、max_attempts_per_slot、logon_delay_seconds、execution_time_limit_seconds、powershell_executable、command_timeout_seconds。字段含义、修改后是否需重新install和暂停方式见 [调度配置表](../documentation/cron.md#总配置字段)。仅填配置不代表新机器已经注册任务，需读回schedule-status。
+
+`environment_dir` 选择项目独立环境；`dependency_lock_file` 选择版本/来源/哈希锁；`wheel_cache_dir` 选择下载缓存；`base_python` 是已有基础 Python（null 为当前解释器）；`install_timeout_seconds` 与 `download_timeout_seconds` 分别限制子进程等待和下载套接字。均在总配置修改，无需编辑代码。[字段与换机边界](../documentation/deployment.md)。更改环境目录后同步改 `pdf_direct_trial.python_executable`，安装器不改生产配置。
+
+`native_tools_dir` 选择项目 PDF 工具目录（默认 `.tools/poppler`）；`native_lock_file` 为 `automation/setup/native-tools.lock.json`；`native_cache_dir` 为 `.runtime/native-cache`。运行 `bootstrap-native --install --json` 安装。当前三项读取工具均为 `.tools/poppler/Library/bin/` 下的同名 exe，不依赖旧用户 Codex/MiKTeX 缓存。改工具目录时在本配置同步改三项 exe 路径；未知目录不会被安装器接管。[原生工具安装、校验与限制](../documentation/native-deployment.md)。
+
+旧配置未填写文字引擎时仍为 `pdftotext`；当前总配置显式为 `pypdf`，不自动换引擎。`pdfinfo_executable`、`pdftoppm_executable`、`render_dpi` 和单工具超时复用 `card_generator.pdf_reader`；仅 pdftotext 引擎使用它的路径。路径模式不启动或检查 MCP 服务脚本。模型收到原 PDF 路径和工具位置，不预塞全文，也不要求固定页摘录。自定义配置仍引用旧直读实验提示词时，应改为 v2；当前单 Agent 使用主提示词 v8 与 workflow_mode=single_agent。
 
 临时目录位于 `paths.runtime_dir`；报告位于 `paths.card_trials_dir/pdf-direct-read/`。继承现有进度和连接保护配置；不使用旧 MCP 的整篇读取次数限制，不自动重新启动一次失败实验。`--timeout` 仍只是 Zotero HTTP 请求超时，模型调用时限应改上述 `timeout_seconds`。
 
@@ -163,6 +192,8 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 团队目标库已经确定为 qinjiajun，群组 ID 为 6618088，保存在可复现的 `config.json` 中。群组 ID 不是密钥，可以进入 Git。
 
 `config.example.json` 用于解释配置结构。只有本机需要覆盖团队配置时，才复制为被 Git 忽略的 `config.local.json`。
+
+`config.local.json` 是完整的另一份配置，不会被自动发现，也不会与 `config.json` 合并。使用时显式传入 `--config config/config.local.json`，或令 `HYDRO_PLATFORM_CONFIG` 指向该文件；无需改代码。环境检查与恢复也使用同一选择规则。[操作说明](../documentation/runtime-maintenance.md)。
 
 如果还不知道群组 ID，可以先运行发现命令：
 

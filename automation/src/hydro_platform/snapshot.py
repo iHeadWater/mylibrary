@@ -57,6 +57,16 @@ def _is_pdf_attachment(data: dict[str, Any]) -> bool:
     return content_type == "application/pdf" or filename.endswith(".pdf")
 
 
+def _created_by(record):
+    """Only group creation metadata identifies a contributor, never paper authors."""
+    meta = record.get("meta")
+    actor = meta.get("createdByUser") if isinstance(meta, dict) else None
+    if not isinstance(actor, dict) or type(actor.get("id")) is not int or actor["id"] <= 0:
+        return None
+    username = actor.get("username")
+    return {"id": actor["id"], "username": username if isinstance(username, str) else None}
+
+
 def fetch_snapshot(
     config: ZoteroConfig,
     *,
@@ -74,7 +84,7 @@ def fetch_snapshot(
     total: int | None = None
     library_version: int | None = None
 
-    while total is None or start < total:
+    while True:
         response = api.get_json(
             f"/api/groups/{config.group_id}/items?limit={page_size}&start={start}"
         )
@@ -83,23 +93,33 @@ def fetch_snapshot(
         if any(not isinstance(record, dict) for record in response.data):
             raise SnapshotError("INVALID_API_RESPONSE", "Zotero 条目记录格式异常")
 
-        records.extend(response.data)
         page_total = _positive_int(_header(response.headers, "Total-Results"))
-        if total is None:
-            total = page_total if page_total is not None else len(response.data)
+        if total is not None and page_total is not None and total != page_total:
+            raise SnapshotError("SNAPSHOT_CHANGED_DURING_READ", "读取期间库条目数变化，请重新扫描，不保存不完整基线")
+        if page_total is not None:
+            total = page_total
         page_version = _positive_int(_header(response.headers, "Last-Modified-Version"))
+        if library_version is not None and page_version is not None and page_version != library_version:
+            raise SnapshotError("SNAPSHOT_CHANGED_DURING_READ", "分页读取期间库版本变化，请重新扫描")
         if page_version is not None:
-            library_version = max(library_version or 0, page_version)
-
-        if not response.data:
-            break
+            library_version = page_version
+        records.extend(response.data)
         start += len(response.data)
-        if page_total is None and len(response.data) < page_size:
+        if total is not None and start > total:
+            raise SnapshotError("SNAPSHOT_INCOMPLETE", "条目数量超出接口声明，未保存基线")
+        if total is not None and start == total:
+            break
+        if not response.data:
+            if total is not None and start < total:
+                raise SnapshotError("SNAPSHOT_INCOMPLETE", "分页结果提前结束，未保存基线")
+            break
+        if total is None and len(response.data) < page_size:
             break
 
     parents: dict[str, dict[str, Any]] = {}
     pdf_attachments: dict[str, dict[str, Any]] = {}
 
+    seen_keys = set()
     for record in records:
         data = record.get("data")
         if not isinstance(data, dict):
@@ -107,6 +127,9 @@ def fetch_snapshot(
         key = _item_key(record, data)
         if key is None:
             raise SnapshotError("INVALID_API_RESPONSE", "Zotero 条目缺少 Key")
+        if key in seen_keys:
+            raise SnapshotError("SNAPSHOT_INCOMPLETE", "分页结果包含重复条目，未保存基线")
+        seen_keys.add(key)
 
         item_type = str(data.get("itemType") or "")
         parent_key = data.get("parentItem")
@@ -118,6 +141,8 @@ def fetch_snapshot(
                 "filename": data.get("filename"),
                 "link_mode": data.get("linkMode"),
                 "date_modified": data.get("dateModified"),
+                "date_added": data.get("dateAdded"),
+                "created_by_user": _created_by(record),
             }
         elif item_type not in IGNORED_ITEM_TYPES and not parent_key:
             parents[key] = {
@@ -125,6 +150,8 @@ def fetch_snapshot(
                 "item_type": item_type,
                 "title": data.get("title"),
                 "date_modified": data.get("dateModified"),
+                "date_added": data.get("dateAdded"),
+                "created_by_user": _created_by(record),
             }
 
     return {
@@ -216,7 +243,9 @@ def compare_snapshots(previous: dict[str, Any], current: dict[str, Any]) -> list
     for key in sorted(new_pdfs.keys() & old_pdfs.keys()):
         before = old_pdfs[key]
         after = new_pdfs[key]
-        if before != after:
+        # Adding optional actor metadata to a legacy snapshot is not a PDF change.
+        pdf_fields = ("parent_key", "version", "content_type", "filename", "link_mode", "date_modified")
+        if any(before.get(field) != after.get(field) for field in pdf_fields):
             changes.append(
                 {
                     "type": "PDF_ATTACHMENT_CHANGED",

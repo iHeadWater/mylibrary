@@ -1,9 +1,23 @@
 # AI 提示词
 
-所有参与证据卡生成或更新的提示词都必须纳入版本控制，并有稳定的版本标识。
+提示词负责指导分析方式，程序负责来源、路由、重复和写入保护；不把提示词要求误当成已经独立验证的科学质量。
 
-独立实验提示词 `pdf-direct-read-trial-v2.md` 仅用于 `pdf-direct-read-trial`：要求从给定本地路径自主读文字和页面图像，返回读取声明、图表观察和读取限制；不要求摘录，不使用 MCP、不制卡，不替代正式卡片生成。位置由 `card_generator.pdf_direct_trial.prompt_file` 配置，总配置、示例和默认路径已同步。
+## 当前启用
 
-当前提示词为 evidence-card-generation-v7.md，共用 pdf-local-reading-v1.md，协议 rough-card-single-agent-v1。一个 Agent 完成自动选型及详细粗卡，区分原文陈述/转述、AI 推理和信息边界；不加子 Agent、摘录任务、固定数量门槛或人工复核要求。v7 保留必需二级章节，允许额外小节、图表和排版变化，避免扩展详细内容反而无法保存；不改变内容与来源要求。v6 及 v1/v2 六角色提示词保留为历史兼容，当前配置不引用。
+| 文件 | 用途 |
+|---|---|
+| [evidence-card-generation-v8.md](evidence-card-generation-v8.md) | 单 Agent 自动选型、完整阅读并按模板生成详细粗卡；协议 rough-card-single-agent-v2 |
+| [pdf-local-reading-v1.md](pdf-local-reading-v1.md) | 制卡与主题精读共用的本机 PDF 路径读取指引，允许读取文字和看页面图像 |
+| [../../templates/themes/](../../templates/themes/README.md) | 全池关联规划、定向精读和精读后回填的提示模板 |
 
-成功生成后，证据包清单记录合成提示词版本和 SHA-256、模型配置、输出 schema 指纹及工作流协议；模型输出、执行参数和质量门结果写入 `quality-audit.json`。模型再次运行时允许文字不同，但流程与验收规则必须一致。模板正文仍保存在 `templates/evidence-cards/`，不复制到提示词文件中；Python 在运行时读取已启用模板并拼接请求。
+主制卡指引由 paths.evidence_card_generation_prompt_file 选择；共用阅读指引由 card_generator.pdf_direct_trial.reading_prompt_file 选择。Python 读取 [八类模板](../../templates/evidence-cards/README.md) 并组装请求，不需要每个学生复制一套提示词。
+
+当前要求把原文陈述与 AI 推理表达清楚，但不做固定摘录、章节/标签匹配、数量门槛或逐卡人工复核。不因为排版差异重跑模型。
+
+## 实验与历史
+
+pdf-direct-read-trial-v2.md 仅供独立读取实验使用，不是正常制卡入口。v3～v7、事实提取/裁决、批判/对抗提示词保留历史；六 Agent 与旧 MCP 不是当前默认流程，也不会在失败后自动回退。
+
+生成/精读记录保留实际模型、提示词指纹、来源和输出。旧成果保留原来的协议，不因新提示词上线自动重制。提示词修改与版本更新应同步维护配置、测试和说明，不修改原有证据结果。
+
+[制卡规则](../../documentation/single-agent-rough-card.md) · [总配置](../../config/README.md)

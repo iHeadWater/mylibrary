@@ -25,6 +25,17 @@ from hydro_platform.pdf_direct_trial import PdfDirectTrialError, run_pdf_direct_
 from hydro_platform.pdf_gate import PdfGateError, evaluate_pdf_gate
 from hydro_platform.failure_records import save_failure_record
 from hydro_platform.progress import ConsoleProgress
+from hydro_platform.pipeline import run_once
+from hydro_platform.themes import run_themes
+from hydro_platform.doctor import doctor
+from hydro_platform.deployment import bootstrap
+from hydro_platform.native_deployment import bootstrap_native
+from hydro_platform.workstation_setup import setup_workstation
+from hydro_platform.windows_schedule import manage_schedule
+from hydro_platform.scheduled import scheduled_tick
+from hydro_platform.runtime_recovery import recover_runtime
+from hydro_platform.activity import sync_activity
+from hydro_platform.daily_report import daily_report
 from hydro_platform.snapshot import SnapshotError, scan_group
 from hydro_platform.tasks import TaskStoreError, list_tasks, sync_tasks
 from hydro_platform.zotero import ZoteroApiError, discover_groups, preflight
@@ -54,6 +65,18 @@ def _parser() -> argparse.ArgumentParser:
     for name, help_text in (
         ("discover-groups", "列出本机 Zotero 当前可见的群组库"),
         ("preflight", "检查目标 Zotero 群组库能否被后台读取"),
+        ("doctor", "集中检查配置、依赖、登录及 Zotero；不调用模型、不安装或修复"),
+        ("bootstrap", "预览项目依赖安装计划；加 --install 创建独立 Python 环境，不改全局环境"),
+        ("bootstrap-native", "预览项目Poppler安装计划；加 --install 按哈希安装，不改系统PATH"),
+        ("setup", "统一安装/检查/恢复入口；默认只读计划，--apply才安装依赖、恢复状态及配置的每日计划"),
+        ("schedule-plan", "预览 Windows 计划任务定义，不注册或运行"),
+        ("schedule-status", "检查 Windows 计划任务定义、下一次启动和补跑状态"),
+        ("schedule-install", "按总配置安装/更新本项目 Windows 计划任务，不覆盖其他任务"),
+        ("schedule-remove", "移除本项目 Windows 计划任务，保留知识和运行记录"),
+        ("schedule-tick", "执行一次每日到期/补跑检查，到期才进入原流水线"),
+        ("recover", "全量对账并恢复本地任务和扫描基线；不调用模型、不覆盖共享知识"),
+        ("activity-sync", "只读扫描共享库并记录关键贡献；首次建立基线，不调用模型"),
+        ("daily-report", "从现有任务和事件生成老师每日摘要；不扫描 Zotero、不调用模型"),
         ("scan", "建立基线或检测目标群组中的文献变化"),
         ("pdf-gate", "检查一个父条目的 PDF 全文是否可进入后续处理"),
         ("pdf-delivery", "复核并交付一个任务对应的 Zotero 原始 PDF"),
@@ -65,6 +88,8 @@ def _parser() -> argparse.ArgumentParser:
         ("generator-smoke-test", "执行一次无论文、只读的 Codex 最小模型调用"),
         ("evidence-generate", "读取一篇 Zotero PDF 并生成首张粗证据卡"),
         ("evidence-draft-export", "离线导出已完成的制卡草稿为 Markdown 预览，不调用模型或修改正式卡"),
+        ("run-once", "自动检查共享库并串行生成待处理证据卡；不安装调度、不推送 Git"),
+        ("themes-run", "粗卡生成候选主题，逐篇定向精读并回填修订；自动续跑、不转正式主题"),
         ("pdf-direct-read-trial", "仅验证 Codex 自主读取本地 PDF 路径，不生成卡片、不使用 PDF MCP"),
         (
             "evidence-generate-trial",
@@ -78,10 +103,14 @@ def _parser() -> argparse.ArgumentParser:
             help="总配置文件路径；默认读取项目 config/config.json",
         )
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
-        if name not in {"generator-preflight", "generator-smoke-test", "evidence-draft-export"}:
+        if not name.startswith("schedule-") and name not in {"setup", "bootstrap", "bootstrap-native", "generator-preflight", "generator-smoke-test", "evidence-draft-export"}:
             command.add_argument("--base-url", help="覆盖本机 Zotero API 地址")
             command.add_argument("--timeout", type=float, help="请求超时秒数")
         if name in {
+            "doctor",
+            "recover",
+            "activity-sync",
+            "daily-report",
             "preflight",
             "scan",
             "pdf-gate",
@@ -92,6 +121,8 @@ def _parser() -> argparse.ArgumentParser:
             "pdf-direct-read-trial",
             "evidence-generate",
             "evidence-generate-trial",
+            "run-once",
+            "themes-run",
         }:
             command.add_argument("--group-id", help="覆盖目标 Zotero 群组 ID")
         if name == "scan":
@@ -101,6 +132,16 @@ def _parser() -> argparse.ArgumentParser:
             )
         if name == "evidence-draft-export":
             command.add_argument("--draft", required=True, help="失败结果中的 diagnostic.draft_path；相对路径基于当前目录")
+        if name in {"run-once", "themes-run"}:
+            command.add_argument("--dry-run", action="store_true", help="只预览本地任务/粗卡输入和配置；不扫描 Zotero、不写文件、不调用模型")
+        if name == "themes-run":
+            command.add_argument("--migrate-only", action="store_true", help="仅将已完成旧主题接入统一池；不调用模型、不重新精读")
+        if name == "recover":
+            command.add_argument("--dry-run", action="store_true", help="读取 Zotero 并预览对账；不写文件、不调用模型；预览不占用运行锁")
+        if name in {"bootstrap", "bootstrap-native"}:
+            command.add_argument("--install", action="store_true", help="安装到配置的项目独立环境；不覆盖未知环境、不修改总配置")
+        if name == "setup":
+            command.add_argument("--apply", action="store_true", help="执行项目安装、无模型对账、按配置恢复每日计划；不代登录或推Git")
         if name in {
             "pdf-gate",
             "pdf-delivery",
@@ -122,7 +163,7 @@ def _parser() -> argparse.ArgumentParser:
         if name == "pdf-direct-read-trial":
             command.add_argument("--preflight-only", action="store_true",
                                  help="仅检查 Windows 沙箱读 PDF 和渲染能力，不调用模型")
-        if name in {"evidence-generate", "evidence-generate-trial", "pdf-direct-read-trial"}:
+        if name in {"setup", "evidence-generate", "evidence-generate-trial", "pdf-direct-read-trial", "run-once", "themes-run"}:
             command.add_argument(
                 "--no-progress", action="store_true",
                 help="关闭 stderr 实时进度，仅保留最终结果",
@@ -132,11 +173,57 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _render_human(result: dict[str, Any]) -> str:
+    if result.get("operation") == "setup":
+        return "\n".join(["安装与恢复：" + result["status"]] +
+            [f"- {row['name']}: {row['status']}" for row in result["steps"]] +
+            [result.get("error", {}).get("message", result["note"])])
+    if result.get("operation", "").startswith("schedule"):
+        return (f"每日调度：{result.get('status')}\n"
+                f"{result.get('error', {}).get('message', result.get('note', ''))}")
+    if result.get("operation") == "bootstrap_native":
+        return (f"项目PDF工具：{result.get('status')}\n目录：{result.get('tools_dir', '未确定')}\n"
+                f"{result.get('error', {}).get('message', result.get('note', ''))}")
+    if result.get("operation") == "bootstrap":
+        return (f"项目依赖：{result.get('status')}\nPython：{result.get('python_executable', '未确定')}\n"
+                f"{result.get('error', {}).get('message', result['note'])}")
+    if result.get("ok") and result.get("operation") in {"activity_sync", "daily_report"}:
+        return (f"完成：{result['operation']}；模型调用0\n"
+                f"{result.get('report_path') or result.get('ledger_path')}\n"
+                f"{result.get('note', '')}")
+    if result.get("operation") == "doctor":
+        return "\n".join(["环境检查通过" if result["ok"] else "环境检查未全部通过"] +
+                         [f"- {row['name']}: {row['status']}" for row in result["checks"]] + [result["note"]])
+    if result.get("operation") == "recover":
+        return (f"本地状态对账：{result.get('status')}\n任务统计：{result.get('counts', {})}\n"
+                f"模型调用：0；共享知识未修改\n{result.get('error', {}).get('message', result.get('note', ''))}")
+    if result.get("operation") == "themes_run":
+        return (f"主题流程：{result['status']}"
+                f"\n- 粗卡：{result.get('source_count', 0)}；候选：{result['candidate_count']}；已回填：{result['refined_count']}"
+                f"\n- 本轮模型调用：{result['model_call_count']}；复用步骤：{result['reused_step_count']}"
+                f"\n- 统一主题入口：{result.get('index_path', '尚未创建')}"
+                "\n- 修订结果仍为候选，不会自动成为正式主题"
+                + (f"\n- 错误：{result['error']['message']}" if result.get("error") else ""))
+    if result.get("operation") == "run_once":
+        if result.get("dry_run"):
+            cap = result['limits']['max_items_per_run']
+            return ("本地任务预览（未扫描 Zotero、未写入、未调用模型）"
+                    f"\n- 已记录任务：{len(result['tasks'])}"
+                    + (f"\n- 每轮最多尝试：{cap} 篇" if cap is not None else "\n- 处理范围：本轮扫描到的全部可制卡论文"))
+        counts = result["counts"]
+        return (f"统一运行：{result['status']}"
+                f"\n- 新发现：{result['new_discovered_count']}；新生成：{counts['completed']}；恢复：{counts['recovered']}"
+                f"\n- 跳过：{counts['skipped']}；等待：{counts['waiting']}；延后：{counts['deferred']}"
+                f"\n- 阻塞：{counts['blocked']}；失败：{counts['failed']}"
+                f"\n- 摘要：{result.get('report_path', '未保存')}"
+                + (f"\n- 主题阶段：{result['theme_pipeline']['status']}"
+                   + (f"\n- 统一主题入口：{result['theme_pipeline']['index_path']}" if result['theme_pipeline'].get('index_path') else "")
+                   if result.get("theme_pipeline") else "")
+                + (f"\n- 错误：{result['error']['message']}" if result.get("error") else ""))
     if result.get("ok"):
         if result.get("operation") == "evidence_draft_export":
             return ("已从草稿导出 Markdown 预览；未调用模型、未修改正式卡或任务"
                     f"\n- 卡片：{result['card_path']}"
-                    f"\n- 结构检查：{result['structure_validation']['status']}"
+                    f"\n- 正文检查：{result['structure_validation']['status']}（不作为保存门槛）"
                     "\n- 仅预览，不是重新完成的生产验收")
         if result.get("operation") == "pdf_direct_read_trial":
             if result.get("preflight_only"):
@@ -278,6 +365,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             timeout_seconds=getattr(args, "timeout", None),
             require_group=args.command
             in {
+                "setup",
+                "doctor",
+                "recover",
+                "activity-sync",
+                "daily-report",
                 "preflight",
                 "scan",
                 "pdf-gate",
@@ -289,6 +381,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "evidence-generate",
                 "evidence-generate-trial",
                 "evidence-draft-export",
+                "run-once",
+                "themes-run",
+                "schedule-plan", "schedule-status", "schedule-install", "schedule-remove", "schedule-tick",
             },
         )
     except ConfigError as exc:
@@ -304,6 +399,33 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = discover_groups(app_config.zotero)
     elif args.command == "preflight":
         result = preflight(app_config.zotero)
+    elif args.command == "doctor":
+        result = doctor(app_config)
+    elif args.command == "bootstrap":
+        result = bootstrap(app_config, install=args.install)
+    elif args.command == "bootstrap-native":
+        result = bootstrap_native(app_config, install=args.install)
+    elif args.command == "setup":
+        with ConsoleProgress(enabled=args.apply and app_config.card_generator.progress.enabled and not args.no_progress,
+            heartbeat_interval_seconds=app_config.card_generator.progress.heartbeat_interval_seconds,
+            label="安装进度", initial_activity="检查项目安装与恢复条件（不调用模型）") as progress:
+            result = setup_workstation(app_config, apply=args.apply, progress=progress)
+            if args.apply:
+                progress.finish(result)
+        if result.get("status") == "CANCELLED":
+            _emit(result, args.json)
+            return 130
+    elif args.command.startswith("schedule-"):
+        result = scheduled_tick(app_config) if args.command == "schedule-tick" else manage_schedule(app_config, args.command.split("-", 1)[1])
+    elif args.command == "recover":
+        result = recover_runtime(app_config, dry_run=args.dry_run)
+    elif args.command in {"activity-sync", "daily-report"}:
+        try:
+            result = (sync_activity if args.command == "activity-sync" else daily_report)(app_config)
+        except (OSError, RuntimeError, ValueError, TypeError, KeyError) as exc:
+            result = {"schema_version": 1, "ok": False, "operation": args.command.replace("-", "_"),
+                      "model_call_count": 0, "error": {"code": getattr(exc, "code", "REPORTING_FAILED"),
+                      "message": "共享事件或日报处理失败；保留现有文件，不调用模型，请检查来源/路径或文件冲突"}}
     elif args.command == "scan":
         readiness = preflight(app_config.zotero)
         if not readiness["ok"]:
@@ -429,6 +551,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "ok": False,
                 "error": {"code": exc.code, "message": str(exc)},
             }
+    elif args.command in {"run-once", "themes-run"}:
+        try:
+            operation = run_once if args.command == "run-once" else run_themes
+            extra = {"migration_only": args.migrate_only} if args.command == "themes-run" else {}
+            if args.dry_run:
+                result = operation(app_config, dry_run=True, **extra)
+            else:
+                with ConsoleProgress(enabled=app_config.card_generator.progress.enabled and not args.no_progress,
+                    heartbeat_interval_seconds=app_config.card_generator.progress.heartbeat_interval_seconds) as progress:
+                    result = operation(app_config, progress=progress, **extra)
+                    progress.finish(result)
+        except (TaskStoreError, OSError, ValueError) as exc:
+            result = {"schema_version": 1, "ok": False, "error": {
+                "code": getattr(exc, "code", "PIPELINE_LOCAL_ERROR"), "message": "无法读取本地任务或运行配置"}}
+        if result.get("status") == "CANCELLED":
+            _emit(result, args.json)
+            return 130
     elif args.command == "evidence-draft-export":
         try:
             result = export_evidence_draft(app_config, Path(args.draft))

@@ -65,7 +65,7 @@ class SingleAgentTests(unittest.TestCase):
             manifest_path = f.package / "manifest.json"
             manifest = load_evidence_manifest(manifest_path)
             self.assertEqual(manifest["generation"]["workflow_role_count"], 1)
-            self.assertEqual(manifest["generation"]["quality_status"], "STRUCTURE_VALIDATED")
+            self.assertEqual(manifest["generation"]["quality_status"], "PROCESS_VALIDATED")
             self.assertFalse(manifest["generation"]["source_access_verified"])
             audit = json.loads((f.package / "quality-audit.json").read_text(encoding="utf-8"))
             self.assertFalse(audit["quality_report"]["gates"]["independent_review"])
@@ -94,7 +94,7 @@ class SingleAgentTests(unittest.TestCase):
             before = [p.read_bytes() for p in protected]
             result = f.trial(SingleAgentCardGeneratorAdapter(provider.adapter))
             self.assertEqual(result["action"], "VALIDATED_TRIAL_SAVED")
-            self.assertEqual(result["quality_status"], "STRUCTURE_VALIDATED")
+            self.assertEqual(result["quality_status"], "PROCESS_VALIDATED")
             self.assertEqual(len(provider.calls), 1)
             self.assertEqual(before, [p.read_bytes() for p in protected])
             self.assertTrue((Path(result["trial_path"]) / "card.md").exists())
@@ -115,21 +115,123 @@ class SingleAgentTests(unittest.TestCase):
                 validate_attribution(body)
         self.assertEqual(validate_attribution(BODY.replace("结果甲 | 【原文", "结果甲含 \\| 符号 | 【原文"))["claim_count"], 2)
 
-    def test_bad_attribution_keeps_draft_and_no_formal_write(self):
+    def test_source_marker_accepts_subtypes_without_changing_body(self):
+        for marker in ("【原文陈述·方法】", "【原文陈述·结果及解释】", "【原文转述·案例证据】",
+                       "**【原文陈述：局限】**", "【原文陈述】结果"):
+            with self.subTest(marker=marker):
+                body = BODY.replace("【原文陈述】结果", marker)
+                self.assertEqual(validate_attribution(body)["claim_count"], 2)
+        for marker in ("【AI 推理·方法】", "【原文陈述可能】", "【原文陈述", "【原文转述·】"):
+            with self.subTest(marker=marker), self.assertRaises(ValueError):
+                validate_attribution(BODY.replace("【原文陈述】结果", marker))
+
+    def test_ai_marker_whitespace_variants_and_explicit_annotations(self):
+        for marker in ("【AI推理】", "【AI  推理】", "【AI\t推理】", "【AI\u3000推理】",
+                       "【 AI推理 】", "【AI推理；依据C01】", "【AI 推理·适用性】"):
+            with self.subTest(marker=marker):
+                body = BODY.replace("【AI 推理】", marker)
+                self.assertEqual(validate_attribution(body)["claim_count"], 2)
+        for heading in ("## AI推理", "##\tAI\t推理", "## AI\u3000推理"):
+            with self.subTest(heading=heading):
+                body = BODY.replace("## AI 推理", heading).replace("【AI 推理】", "【AI推理】")
+                self.assertEqual(validate_attribution(body)["claim_count"], 2)
+
+    def test_missing_or_mislabeled_inference_is_still_rejected(self):
+        for marker in ("【非AI推理】", "【AI推理可能】", "【原文陈述】", "AI推理"):
+            with self.subTest(marker=marker), self.assertRaisesRegex(ValueError, "章节缺少明确的性质标记"):
+                validate_attribution(BODY.replace("【AI 推理】", marker))
+        # A marker in a different section must not satisfy the inference section.
+        body = BODY.replace("【AI 推理】", "无标记") + "\n【AI推理】别处的文字。\n"
+        with self.assertRaisesRegex(ValueError, "章节缺少明确的性质标记"):
+            validate_attribution(body)
+        with self.assertRaisesRegex(ValueError, "缺少独立的 AI 推理 章节"):
+            validate_attribution(BODY.replace("## AI 推理", "## 其他内容"))
+
+    def test_compact_ai_labels_generate_formally_once_and_preserve_markdown(self):
         digest = hashlib.sha256(b"%PDF-1.7\nfixture").hexdigest()
         with tempfile.TemporaryDirectory() as directory, patch("test_card_generation.PDF_HASH", digest):
             root = Path(directory)
             f = GenerationFixture(root)
             configure_template(f)
             provider = LocalProviderFixture(root / "provider")
-            provider.outputs = [{**FakeAdapter().output, "card_body_markdown": BODY + "\n请导师复核\n"}]
+            body = BODY.replace("AI 推理", "AI推理")
+            provider.outputs = [{**FakeAdapter().output, "card_body_markdown": body}]
+            result = f.generate(SingleAgentCardGeneratorAdapter(provider.adapter))
+            self.assertTrue(result["ok"])
+            self.assertEqual(len(provider.calls), 1)
+            self.assertTrue((f.package / "card.md").read_text(encoding="utf-8").endswith(body))
+
+    def test_process_only_generation_and_trial_never_call_content_checkers(self):
+        digest = hashlib.sha256(b"%PDF-1.7\nfixture").hexdigest()
+        bodies = [
+            "# 自选标题\n按自然段说明论文，不使用固定标签或编号。\n",
+            "| 编号 | 内容 |\n| --- | --- |\n| C01 | 甲 |\n| C01 | 乙 |\n引用 C99。\n",
+            BODY.replace("## AI 推理", "## 综合讨论").replace("【AI 推理】", "我的分析"),
+            "---\ncard_state: MODEL_VALUE\n---\n正文内出现 TODO、待补充和〔字段〕。\n",
+            BODY + "\n请导师复核\n- 本人复查：模型中的措辞\n",
+        ]
+        for body in bodies:
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as directory, \
+                 patch("test_card_generation.PDF_HASH", digest), \
+                 patch("hydro_platform.card_generators.single_agent.validate_attribution", side_effect=AssertionError("no content inspection")), \
+                 patch("hydro_platform.card_generation._validate_template_structure", side_effect=AssertionError("no layout inspection")):
+                root = Path(directory)
+                f = GenerationFixture(root)
+                configure_template(f)
+                provider = LocalProviderFixture(root / "provider")
+                provider.outputs = [{**FakeAdapter().output, "card_body_markdown": body}] * 2
+                adapter = SingleAgentCardGeneratorAdapter(provider.adapter)
+                result = f.generate(adapter)
+                self.assertEqual(result["quality_status"], "PROCESS_VALIDATED")
+                self.assertEqual(result["structure_validation"]["status"], "NOT_CHECKED")
+                self.assertTrue((f.package / "card.md").read_text(encoding="utf-8").endswith(body))
+                audit = json.loads((f.package / "quality-audit.json").read_text(encoding="utf-8"))
+                self.assertFalse(audit["quality_report"]["gates"]["content_validation_performed"])
+                self.assertFalse(audit["quality_report"]["gates"]["scientific_correctness_verified"])
+                before = (f.package / "card.md").read_bytes()
+                trial = f.trial(adapter)
+                self.assertTrue(Path(trial["card_path"]).read_text(encoding="utf-8").endswith(body))
+                self.assertEqual(before, (f.package / "card.md").read_bytes())
+                self.assertEqual(len(provider.calls), 2)  # One per explicit operation, no repair/review calls.
+
+    def test_legacy_v1_manifest_remains_readable(self):
+        digest = hashlib.sha256(b"%PDF-1.7\nfixture").hexdigest()
+        with tempfile.TemporaryDirectory() as directory, patch("test_card_generation.PDF_HASH", digest):
+            root = Path(directory)
+            f = GenerationFixture(root)
+            configure_template(f)
+            provider = LocalProviderFixture(root / "provider")
+            provider.outputs = [{**FakeAdapter().output, "card_body_markdown": BODY}]
+            f.generate(SingleAgentCardGeneratorAdapter(provider.adapter))
+            path = f.package / "manifest.json"
+            manifest = load_evidence_manifest(path)
+            manifest["generation"].update(workflow_protocol_version="rough-card-single-agent-v1", quality_status="STRUCTURE_VALIDATED")
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            self.assertEqual(load_evidence_manifest(path)["generation"]["quality_status"], "STRUCTURE_VALIDATED")
+            manifest["generation"]["workflow_protocol_version"] = SINGLE_AGENT_PROTOCOL_VERSION
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaises(EvidencePackageError):
+                load_evidence_manifest(path)  # New saves may not claim the old content-validation status.
+
+    def test_empty_body_keeps_draft_and_no_formal_write(self):
+        digest = hashlib.sha256(b"%PDF-1.7\nfixture").hexdigest()
+        with tempfile.TemporaryDirectory() as directory, patch("test_card_generation.PDF_HASH", digest):
+            root = Path(directory)
+            f = GenerationFixture(root)
+            configure_template(f)
+            provider = LocalProviderFixture(root / "provider")
+            provider.outputs = [{**FakeAdapter().output, "card_body_markdown": " "}]
             before = (f.package / "card.md").read_bytes()
             with self.assertRaises(CardGenerationError) as caught:
                 f.generate(SingleAgentCardGeneratorAdapter(provider.adapter))
-            self.assertEqual(caught.exception.code, "SINGLE_CARD_CONTRACT_FAILED")
+            self.assertEqual(caught.exception.code, "SINGLE_CARD_PROCESS_FAILED")
             self.assertTrue(Path(caught.exception.diagnostic["draft_path"]).exists())
+            draft = json.loads(Path(caught.exception.diagnostic["draft_path"]).read_text(encoding="utf-8"))
+            reading = draft["provider_reading_record"]["source_access"]
+            self.assertTrue(reading["source_identity_verified"])
+            self.assertFalse(reading["full_read_verified"])
             self.assertEqual((f.package / "card.md").read_bytes(), before)
-            self.assertEqual(json.loads(f.task_path.read_text(encoding="utf-8"))["tasks"][PARENT_KEY]["state"], "QUALITY_FAILED")
+            self.assertEqual(json.loads(f.task_path.read_text(encoding="utf-8"))["tasks"][PARENT_KEY]["state"], "RETRY_PENDING")
             self.assertEqual(len(provider.calls), 1)
 
     def test_independent_review_claim_or_malformed_audit_rejected(self):

@@ -34,8 +34,10 @@ class ConsoleProgress:
     def __init__(
         self, *, enabled: bool = True, heartbeat_interval_seconds: float = 15,
         stream: TextIO | None = None,
+        label: str = "AI进度", initial_activity: str = "检查 Zotero、任务及 PDF",
     ) -> None:
         self.enabled = enabled
+        self.label = label
         self.interval = heartbeat_interval_seconds
         self.stream = stream if stream is not None else sys.stderr
         self._lock = threading.Lock()
@@ -43,7 +45,7 @@ class ConsoleProgress:
         self._thread: threading.Thread | None = None
         self._started = self._stage_started = self._last_event = time.monotonic()
         self._stage = "准备"
-        self._activity = "检查 Zotero、任务及 PDF"
+        self._activity = initial_activity
 
     def __enter__(self) -> ConsoleProgress:
         self._started = self._stage_started = self._last_event = time.monotonic()
@@ -57,7 +59,7 @@ class ConsoleProgress:
         # An unavailable terminal must not fail or retry a costly model operation.
         try:
             elapsed = _duration(time.monotonic() - self._started)
-            print(f"[AI进度 {elapsed}] [{self._stage}] {message}", file=self.stream, flush=True)
+            print(f"[{self.label} {elapsed}] [{self._stage}] {message}", file=self.stream, flush=True)
         except (OSError, ValueError):
             self.enabled = False
             self._stop.set()
@@ -76,12 +78,15 @@ class ConsoleProgress:
                 self._stage_started = now
                 message = "开始独立会话，检查模型运行环境"
             elif kind == "role_completed":
-                message = f"阶段校验通过，用时 {_duration(now - self._stage_started)}"
+                message = f"模型阶段完成，用时 {_duration(now - self._stage_started)}"
             elif kind == "workflow_completed":
                 self._stage = "保存"
                 self._stage_started = now
-                message = "模型处理已完成，正在执行最终卡片结构校验与保存"
+                message = "模型处理已完成，正在检查来源、重复与写入状态并保存"
             elif kind == "phase":
+                if event.get("stage") and event["stage"] != self._stage:
+                    self._stage = str(event["stage"])
+                    self._stage_started = now
                 message = event["message"]
             else:
                 return

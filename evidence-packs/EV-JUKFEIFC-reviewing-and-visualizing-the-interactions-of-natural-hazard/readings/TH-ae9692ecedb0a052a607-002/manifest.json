@@ -1,0 +1,19 @@
+{
+  "batch_id": "BATCH-ae9692ecedb0a052a607",
+  "focus": "核查与风暴—洪水、洪水—滑坡及其他水文级联有关的矩阵条目、机制、案例数量和证据等级；明确哪些关系仅有机制假设、哪些有多个案例，并复核空间重叠、时间可能性和OLF为何不能作为条件概率，以界定自然灾害级联与基础设施功能级联的接口。",
+  "reading_sha256": "d70aab91da963e6279717763cf7220ddd2b26e7cc97d1851f1431c68069b4c00",
+  "result_sha256": "76a0a509352cd9a808915048eb3bb49775ff130d1a769b1772389a5dbe98cb73",
+  "scientific_correctness_verified": false,
+  "source": {
+    "attachment_key": "5HRAIKKE",
+    "card_sha256": "783a5031362f8897da6d11a77c5b155848b7fcfbcc813d1db642daf25d1d5366",
+    "evidence_id": "EV-JUKFEIFC",
+    "group_id": 6618088,
+    "package_directory": "EV-JUKFEIFC-reviewing-and-visualizing-the-interactions-of-natural-hazard",
+    "parent_key": "JUKFEIFC",
+    "pdf_sha256": "2c38812dd10eef9e87bbda3432bed46e41ef93c6189e0e8ec13f7ae6f32533e9"
+  },
+  "status": "FOCUSED_READING_SAVED",
+  "theme_id": "TH-ae9692ecedb0a052a607-002",
+  "theme_sha256": "2c9ab07e0806a7aa8b2123555b4d30e6b54ce153e2ce1e89c3524f3fa1ca9253"
+}

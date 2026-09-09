@@ -56,6 +56,9 @@
       ]
     },
     "generation": {
+      "anyOf": [
+        { "$ref": "#/$defs/recoveredGeneration" },
+        {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -147,7 +150,7 @@
           "pattern": "^[0-9a-f]{64}$"
         },
         "classification_confidence": {
-          "type": "number",
+          "type": ["number", "null"],
           "minimum": 0,
           "maximum": 1
         },
@@ -225,7 +228,8 @@
         "quality_status": {
           "enum": [
             "VALIDATED",
-            "STRUCTURE_VALIDATED"
+            "STRUCTURE_VALIDATED",
+            "PROCESS_VALIDATED"
           ]
         },
         "workflow_protocol_version": {
@@ -289,7 +293,8 @@
               "workflow_protocol_version": {
                 "enum": [
                   "rough-card-multi-agent-v2",
-                  "rough-card-single-agent-v1"
+                  "rough-card-single-agent-v1",
+                  "rough-card-single-agent-v2"
                 ]
               }
             }
@@ -324,7 +329,7 @@
             ],
             "properties": {
               "workflow_protocol_version": {
-                "const": "rough-card-single-agent-v1"
+                "enum": ["rough-card-single-agent-v1", "rough-card-single-agent-v2"]
               }
             }
           },
@@ -338,12 +343,17 @@
                 "const": "local_pdf_path"
               },
               "quality_status": {
-                "const": "STRUCTURE_VALIDATED"
+                "enum": ["STRUCTURE_VALIDATED", "PROCESS_VALIDATED"]
               },
               "workflow_role_count": {
                 "const": 1
               }
-            }
+            },
+            "allOf": [{
+              "if": {"properties": {"workflow_protocol_version": {"const": "rough-card-single-agent-v2"}}},
+              "then": {"properties": {"quality_status": {"const": "PROCESS_VALIDATED"}}},
+              "else": {"properties": {"quality_status": {"const": "STRUCTURE_VALIDATED"}}}
+            }]
           },
           "else": {
             "properties": {
@@ -357,6 +367,8 @@
           }
         }
       ]
+        }
+      ]
     },
     "created_at": {
       "type": "string",
@@ -365,6 +377,48 @@
     "updated_at": {
       "type": "string",
       "format": "date-time"
+    }
+  },
+  "$defs": {
+    "recoveredGeneration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workflow_protocol_version", "quality_status", "recovered_at", "card_sha256", "quality_audit_file", "quality_audit_sha256", "recovery"],
+      "properties": {
+        "workflow_protocol_version": {"const": "rough-card-draft-recovery-v1"},
+        "quality_status": {"const": "DRAFT_RECOVERED"},
+        "recovered_at": {"type": "string", "minLength": 1},
+        "card_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "quality_audit_file": {"const": "quality-audit.json"},
+        "quality_audit_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "recovery": {
+          "type": "object",
+          "required": ["protocol_version", "status", "recovered_at", "model_invoked_during_recovery", "original_generation_time", "original_template_version", "original_prompt_sha256", "draft_sha256", "source_record_identity_matched", "full_read_verified", "visual_understanding_verified", "scientific_correctness_verified", "checked_against_template_id", "checked_against_template_version", "checked_against_template_sha256", "checked_against_catalog_version", "source_read_status_reported_by_model", "source_page_count_reported_by_model", "visual_content_status_reported_by_model", "source_read_evidence_reported_by_model", "note"],
+          "properties": {
+            "protocol_version": {"const": "rough-card-draft-recovery-v1"},
+            "status": {"const": "DRAFT_RECOVERED"},
+            "recovered_at": {"type": "string", "minLength": 1},
+            "model_invoked_during_recovery": {"const": false},
+            "original_generation_time": {"type": "null"},
+            "original_template_version": {"type": "null"},
+            "original_prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "draft_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "source_record_identity_matched": {"const": true},
+            "full_read_verified": {"const": false},
+            "visual_understanding_verified": {"const": false},
+            "scientific_correctness_verified": {"const": false},
+            "checked_against_template_id": {"type": "string", "minLength": 1},
+            "checked_against_template_version": {"type": "string", "minLength": 1},
+            "checked_against_template_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "checked_against_catalog_version": {"type": "string", "minLength": 1},
+            "source_read_status_reported_by_model": {"const": "FULL_PDF_REVIEWED"},
+            "source_page_count_reported_by_model": {"type": "integer", "minimum": 1},
+            "visual_content_status_reported_by_model": {"enum": ["REVIEWED", "NOT_PRESENT"]},
+            "source_read_evidence_reported_by_model": {"type": "string", "minLength": 1},
+            "note": {"type": "string", "minLength": 1}
+          }
+        }
+      }
     }
   },
   "allOf": [

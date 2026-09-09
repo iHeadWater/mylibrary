@@ -6,7 +6,7 @@ requires-python = ">=3.12,<3.15"
 dependencies = []
 
 [project.optional-dependencies]
-pdf-direct = ["pypdf==6.10.0"]
+pdf-direct = ["pypdf==6.18.0"]
 
 [project.scripts]
 hydro-platform = "hydro_platform.cli:main"

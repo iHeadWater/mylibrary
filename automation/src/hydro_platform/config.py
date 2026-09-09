@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import math
 import os
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -16,7 +18,8 @@ SUPPORTED_REASONING_EFFORTS = frozenset(
 )
 MULTI_AGENT_PROTOCOL_VERSION = "rough-card-multi-agent-v1"
 LOCAL_PATH_PROTOCOL_VERSION = "rough-card-multi-agent-v2"
-SINGLE_AGENT_PROTOCOL_VERSION = "rough-card-single-agent-v1"
+LEGACY_SINGLE_AGENT_PROTOCOL_VERSION = "rough-card-single-agent-v1"
+SINGLE_AGENT_PROTOCOL_VERSION = "rough-card-single-agent-v2"
 REQUIRED_CARD_WORKFLOW_ROLES = (
     "fact_extractor_a",
     "fact_extractor_b",
@@ -32,11 +35,21 @@ class ConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class ZoteroStartupConfig:
+    enabled: bool = False
+    launch_if_missing: bool = True
+    executable: str | None = None
+    wait_timeout_seconds: float = 120.0
+    poll_interval_seconds: float = 5.0
+
+
+@dataclass(frozen=True)
 class ZoteroConfig:
     base_url: str = DEFAULT_BASE_URL
     group_id: int | None = None
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
     process_timeout_seconds: float = DEFAULT_PROCESS_TIMEOUT_SECONDS
+    startup: ZoteroStartupConfig = ZoteroStartupConfig()
 
 
 @dataclass(frozen=True)
@@ -170,6 +183,58 @@ class PathConfig:
 
 
 @dataclass(frozen=True)
+class PipelineConfig:
+    max_items_per_run: int | None = None
+    max_run_seconds: int | None = None
+    max_attempts_per_item: int = 3
+    retry_cooldown_seconds: int = 3600
+
+
+@dataclass(frozen=True)
+class ThemePipelineConfig:
+    enabled: bool = False
+    research_goal: str | None = None
+    model: str | None = None
+    reasoning_effort: str | None = None
+    timeout_seconds: float | None = None
+    assets_dir: Path | None = None
+
+
+@dataclass(frozen=True)
+class ActivityReportingConfig:
+    enabled: bool = False
+    utc_offset_minutes: int = 480
+    system_actor_id: str = "SYS-CARD-01"
+
+
+@dataclass(frozen=True)
+class DeploymentConfig:
+    environment_dir: Path | None = None
+    dependency_lock_file: Path | None = None
+    wheel_cache_dir: Path | None = None
+    base_python: str | None = None
+    install_timeout_seconds: float = 300
+    download_timeout_seconds: float = 30
+    native_tools_dir: Path | None = None
+    native_lock_file: Path | None = None
+    native_cache_dir: Path | None = None
+
+
+@dataclass(frozen=True)
+class SchedulerConfig:
+    enabled: bool = False
+    task_name: str = "HydroPlatform-daily"
+    daily_time: str = "09:00"
+    poll_interval_minutes: int = 30
+    retry_interval_minutes: int = 60
+    max_attempts_per_slot: int = 3
+    logon_delay_seconds: int = 120
+    execution_time_limit_seconds: int = 0
+    powershell_executable: str = "powershell"
+    command_timeout_seconds: float = 30
+
+
+@dataclass(frozen=True)
 class AppConfig:
     source_file: Path | None
     zotero: ZoteroConfig
@@ -178,6 +243,11 @@ class AppConfig:
     tasks: TaskConfig
     card_generator: CardGeneratorConfig
     paths: PathConfig
+    pipeline: PipelineConfig = PipelineConfig()
+    theme_pipeline: ThemePipelineConfig = ThemePipelineConfig()
+    activity_reporting: ActivityReportingConfig = ActivityReportingConfig()
+    deployment: DeploymentConfig = DeploymentConfig()
+    scheduler: SchedulerConfig = SchedulerConfig()
 
 
 PATH_FIELDS = (
@@ -361,6 +431,17 @@ def _require_inside(path: Path, parent: Path, *, name: str, parent_name: str) ->
         raise ConfigError(f"paths.{name} 必须位于 paths.{parent_name} 内")
 
 
+def _resolve_executable(value, root):
+    if value is None:
+        return None
+    expanded = os.path.expandvars(value)
+    if "/" in expanded or "\\" in expanded or expanded.startswith("~"):
+        path = Path(expanded).expanduser()
+        # Keep existing absolute spellings compatible; anchor only relative tools.
+        return expanded if path.is_absolute() and not expanded.startswith("~") else str((root / path).resolve())
+    return expanded  # Bare executable names are resolved via PATH, not the current directory.
+
+
 def _read_config_file(config_path: str | Path | None) -> tuple[Path | None, dict[str, Any]]:
     if config_path is None:
         raise ConfigError("必须提供总配置文件路径")
@@ -447,7 +528,28 @@ def load_config(
         raise ConfigError("缺少 zotero.timeout_seconds")
     if "process_timeout_seconds" not in raw_zotero:
         raise ConfigError("缺少 zotero.process_timeout_seconds")
+    raw_startup = raw_zotero.get("startup", {})
+    if not isinstance(raw_startup, dict) or set(raw_startup) - set(ZoteroStartupConfig.__dataclass_fields__):
+        raise ConfigError("zotero.startup 包含未知字段或不是 JSON 对象")
+    startup = ZoteroStartupConfig(**raw_startup)
+    for name in ("enabled", "launch_if_missing"):
+        if type(getattr(startup, name)) is not bool:
+            raise ConfigError(f"zotero.startup.{name} 必须是布尔值")
+    startup_values = {}
+    for name, upper in (("wait_timeout_seconds", 600), ("poll_interval_seconds", 30)):
+        value = getattr(startup, name)
+        if isinstance(value, bool):
+            raise ConfigError(f"zotero.startup.{name} 必须是有限正数")
+        value = _validate_seconds("zotero.startup." + name, value)
+        if not math.isfinite(value) or value > upper:
+            raise ConfigError(f"zotero.startup.{name} 必须大于0且不超过{upper}")
+        startup_values[name] = value
+    if startup_values["poll_interval_seconds"] > startup_values["wait_timeout_seconds"]:
+        raise ConfigError("Zotero轮询间隔不能大于等待预算")
+    startup = replace(startup, **startup_values, executable=_resolve_executable(
+        _validate_optional_non_empty_string("zotero.startup.executable", startup.executable), path_config.project_root))
     zotero_config = ZoteroConfig(
+        startup=startup,
         base_url=_validate_base_url(
             base_url if base_url is not None else raw_zotero["base_url"]
         ),
@@ -928,6 +1030,115 @@ def load_config(
         runtime_dir=path_config.runtime_dir,
     )
 
+    raw_pipeline = data.get("pipeline", {})
+    pipeline_defaults = PipelineConfig()
+    if not isinstance(raw_pipeline, dict) or set(raw_pipeline) - set(PipelineConfig.__dataclass_fields__):
+        raise ConfigError("pipeline 包含未知字段或不是 JSON 对象")
+    pipeline_values = {}
+    for name in PipelineConfig.__dataclass_fields__:
+        value = raw_pipeline.get(name, getattr(pipeline_defaults, name))
+        if name in {"max_items_per_run", "max_run_seconds"} and value is None:
+            pipeline_values[name] = None
+            continue
+        if type(value) is not int or value < 1:
+            raise ConfigError(f"pipeline.{name} 必须是正整数；仅篇数和整轮时间上限允许 null")
+        pipeline_values[name] = value
+
+    raw_themes = data.get("theme_pipeline", {})
+    if not isinstance(raw_themes, dict) or set(raw_themes) - set(ThemePipelineConfig.__dataclass_fields__):
+        raise ConfigError("theme_pipeline 包含未知字段或不是 JSON 对象")
+    theme_values = dict(raw_themes)
+    if type(theme_values.get("enabled", False)) is not bool:
+        raise ConfigError("theme_pipeline.enabled 必须是布尔值")
+    for name in ("research_goal", "model", "reasoning_effort"):
+        value = theme_values.get(name)
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            raise ConfigError(f"theme_pipeline.{name} 必须是非空字符串或 null")
+    if theme_values.get("reasoning_effort") not in SUPPORTED_REASONING_EFFORTS | {None}:
+        raise ConfigError("theme_pipeline.reasoning_effort 不受支持")
+    if theme_values.get("timeout_seconds") is not None:
+        theme_values["timeout_seconds"] = _validate_seconds("theme_pipeline.timeout_seconds", theme_values["timeout_seconds"])
+        if not math.isfinite(theme_values["timeout_seconds"]):
+            raise ConfigError("theme_pipeline.timeout_seconds 必须是有限正数")
+    asset_value = theme_values.get("assets_dir")
+    if asset_value is not None and (not isinstance(asset_value, str) or not asset_value.strip()):
+        raise ConfigError("theme_pipeline.assets_dir 必须是路径字符串或 null")
+    theme_values["assets_dir"] = (path_config.project_root / asset_value).resolve() if asset_value else path_config.templates_dir / "themes"
+
+    raw_activity = data.get("activity_reporting", {})
+    if not isinstance(raw_activity, dict) or set(raw_activity) - set(ActivityReportingConfig.__dataclass_fields__):
+        raise ConfigError("activity_reporting 包含未知字段或不是 JSON 对象")
+    activity = ActivityReportingConfig(**raw_activity)
+    if type(activity.enabled) is not bool:
+        raise ConfigError("activity_reporting.enabled 必须是布尔值")
+    if type(activity.utc_offset_minutes) is not int or not -840 <= activity.utc_offset_minutes <= 840:
+        raise ConfigError("activity_reporting.utc_offset_minutes 必须是 -840 至 840 之间的整数")
+    if not isinstance(activity.system_actor_id, str) or not activity.system_actor_id.strip():
+        raise ConfigError("activity_reporting.system_actor_id 必须是非空字符串")
+
+    raw_deployment = data.get("deployment", {})
+    if not isinstance(raw_deployment, dict) or set(raw_deployment) - set(DeploymentConfig.__dataclass_fields__):
+        raise ConfigError("deployment 包含未知字段或不是 JSON 对象")
+    deploy_values = dict(raw_deployment)
+    deploy_defaults = {"environment_dir": ".venv", "dependency_lock_file": "automation/setup/dependencies.lock.json",
+                       "wheel_cache_dir": str(path_config.runtime_dir / "wheel-cache"),
+                       "native_tools_dir": ".tools/poppler", "native_lock_file": "automation/setup/native-tools.lock.json",
+                       "native_cache_dir": str(path_config.runtime_dir / "native-cache")}
+    for name, default in deploy_defaults.items():
+        deploy_values[name] = _resolve_project_path({name: deploy_values.get(name, default)}, name, path_config.project_root)
+    protected = [path_config.evidence_packs_dir, path_config.themes_dir, path_config.templates_dir,
+                 path_config.activity_dir, path_config.members_dir, path_config.reports_dir,
+                 path_config.project_root / ".git", path_config.project_root / "automation", config_file.parent]
+    install_targets = ("environment_dir", "wheel_cache_dir", "native_tools_dir", "native_cache_dir")
+    for name in install_targets:
+        target = deploy_values[name]
+        if target == path_config.project_root or any(target.is_relative_to(p) or p.is_relative_to(target) for p in protected):
+            raise ConfigError(f"deployment.{name} 不能与源码、配置、知识或 Git 目录重叠")
+    for index, name in enumerate(install_targets):
+        if any(deploy_values[name].is_relative_to(deploy_values[other]) or
+               deploy_values[other].is_relative_to(deploy_values[name]) for other in install_targets[index + 1:]):
+            raise ConfigError("deployment 的环境、原生工具和缓存目录不能重叠")
+    if any(deploy_values[name].is_relative_to(deploy_values[target]) for name in ("dependency_lock_file", "native_lock_file")
+           for target in install_targets):
+        raise ConfigError("依赖锁文件不能位于安装目标或缓存目录内")
+    deploy_values["base_python"] = _resolve_executable(_validate_optional_non_empty_string(
+        "deployment.base_python", deploy_values.get("base_python")), path_config.project_root)
+    for name in ("install_timeout_seconds", "download_timeout_seconds"):
+        value = _validate_seconds("deployment." + name, deploy_values.get(name, getattr(DeploymentConfig(), name)))
+        if not math.isfinite(value):
+            raise ConfigError("deployment 超时必须是有限正数")
+        deploy_values[name] = value
+    card_generator_config = replace(card_generator_config,
+        executable=_resolve_executable(card_generator_config.executable, path_config.project_root),
+        pdf_reader=replace(pdf_reader_config, **{name: _resolve_executable(getattr(pdf_reader_config, name), path_config.project_root)
+            for name in ("python_executable", "pdfinfo_executable", "pdftotext_executable", "pdftoppm_executable")}),
+        pdf_direct_trial=replace(direct_trial_config, **{name: _resolve_executable(getattr(direct_trial_config, name), path_config.project_root)
+            for name in ("python_executable", "shell_executable")}))
+
+    raw_scheduler = data.get("scheduler", {})
+    if not isinstance(raw_scheduler, dict) or set(raw_scheduler) - set(SchedulerConfig.__dataclass_fields__):
+        raise ConfigError("scheduler 包含未知字段或不是 JSON 对象")
+    scheduler = SchedulerConfig(**raw_scheduler)
+    if type(scheduler.enabled) is not bool:
+        raise ConfigError("scheduler.enabled 必须是布尔值")
+    if not isinstance(scheduler.task_name, str) or not re.fullmatch(r"HydroPlatform-[A-Za-z0-9_-]{1,80}", scheduler.task_name):
+        raise ConfigError("scheduler.task_name 必须以 HydroPlatform- 开头，后接字母、数字、短横线或下划线")
+    if not isinstance(scheduler.daily_time, str) or not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", scheduler.daily_time):
+        raise ConfigError("scheduler.daily_time 必须为 24 小时 HH:MM")
+    for name, low, high in (("poll_interval_minutes", 5, 1440), ("retry_interval_minutes", 1, 1440),
+                            ("max_attempts_per_slot", 1, 24), ("logon_delay_seconds", 0, 3600),
+                            ("execution_time_limit_seconds", 0, 604800)):
+        value = getattr(scheduler, name)
+        if type(value) is not int or not low <= value <= high:
+            raise ConfigError(f"scheduler.{name} 必须为 {low} 至 {high} 的整数")
+    timeout = _validate_seconds("scheduler.command_timeout_seconds", scheduler.command_timeout_seconds)
+    if not math.isfinite(timeout):
+        raise ConfigError("scheduler.command_timeout_seconds 必须为有限正数")
+    shell = _validate_optional_non_empty_string("scheduler.powershell_executable", scheduler.powershell_executable)
+    if shell is None:
+        raise ConfigError("scheduler.powershell_executable 不能为空")
+    scheduler = replace(scheduler, powershell_executable=_resolve_executable(shell, path_config.project_root),
+                        command_timeout_seconds=timeout)
     return AppConfig(
         source_file=config_file,
         zotero=zotero_config,
@@ -936,4 +1147,9 @@ def load_config(
         tasks=task_config,
         card_generator=card_generator_config,
         paths=path_config,
+        pipeline=PipelineConfig(**pipeline_values),
+        theme_pipeline=ThemePipelineConfig(**theme_values),
+        activity_reporting=activity,
+        deployment=DeploymentConfig(**deploy_values),
+        scheduler=scheduler,
     )
