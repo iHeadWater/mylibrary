@@ -24,6 +24,48 @@ import test_multi_agent_card_generator as workflow_fixtures
 
 
 class ProgressTests(unittest.TestCase):
+    def test_default_heartbeat_waits_sixty_seconds_without_delaying_events(self):
+        stream = io.StringIO()
+        progress = ConsoleProgress(stream=stream)
+        self.assertEqual(progress.interval, 60)
+        # Simulate the wait so the test itself does not spend 60 seconds idle.
+        progress._stop = Mock()
+        progress._stop.is_set.return_value = False
+        progress._stop.wait.side_effect = [False, True]
+        progress._heartbeat()
+        self.assertEqual([call.args[0] for call in progress._stop.wait.call_args_list], [60, 60])
+        self.assertEqual(stream.getvalue().count("等待中"), 1)
+        progress({"event": "phase", "message": "正式卡片已保存"})
+        self.assertIn("正式卡片已保存", stream.getvalue())
+
+    def test_pipeline_partial_failure_is_not_misreported_as_last_card_save_failure(self):
+        stream = io.StringIO()
+        progress = ConsoleProgress(stream=stream)
+        progress({"event": "workflow_completed"})
+        progress.finish({"operation": "run_once", "ok": False, "status": "COMPLETED_WITH_BLOCKERS",
+            "counts": {"completed": 1, "skipped": 3, "failed": 1, "deferred": 2},
+            "items": [{"parent_key": "FAILED01", "status": "FAILED", "error": {"code": "CODEX_GENERATION_TIMEOUT"}},
+                      {"parent_key": "COOLDOWN", "status": "DEFERRED", "reason_code": "RETRY_COOLDOWN"},
+                      {"parent_key": "SUCCESS1", "status": "COMPLETED"}],
+            "theme_pipeline": {"status": "DEFERRED"}, "report_path": "local-report.json"})
+        output = stream.getvalue()
+        self.assertIn("[整轮汇总] 本轮结束，仍有失败或阻塞", output)
+        self.assertIn("本轮新完成 1", output)
+        self.assertIn("未完成项 FAILED01：FAILED，CODEX_GENERATION_TIMEOUT", output)
+        self.assertIn("延后 2", output)
+        self.assertIn("主题流程暂缓", output)
+        self.assertIn("运行报告：local-report.json", output)
+        self.assertNotIn("未完成项 SUCCESS1", output)
+        self.assertNotIn("失败，停在本阶段", output)
+
+    def test_pipeline_pending_or_cancelled_never_claims_all_saved(self):
+        for status in ("COMPLETED_WITH_PENDING", "CANCELLED", "ALREADY_RUNNING", "LOCAL_PREVIEW"):
+            with self.subTest(status=status):
+                stream = io.StringIO()
+                ConsoleProgress(stream=stream).finish({"operation": "run_once", "ok": True, "status": status})
+                self.assertIn("[整轮汇总]", stream.getvalue())
+                self.assertNotIn("处理完成，结果已保存", stream.getvalue())
+
     def test_heartbeat_is_visible_before_finish_and_stops_afterwards(self):
         heartbeat = threading.Event()
 
@@ -216,10 +258,27 @@ class WorkflowProgressTests(unittest.TestCase):
 
 
 class ProgressConfigTests(unittest.TestCase):
-    def test_default_preserves_existing_configuration(self):
+    def test_missing_progress_uses_sixty_second_default(self):
         with tempfile.TemporaryDirectory() as directory:
             config = load_config(config_fixtures.write_config(Path(directory)))
-        self.assertEqual(config.card_generator.progress, ProgressConfig(True, 15))
+        self.assertEqual(config.card_generator.progress, ProgressConfig(True, 60))
+
+    def test_shipped_generation_and_idle_limits_are_twenty_five_minutes(self):
+        root = Path(__file__).resolve().parents[2]
+        for name in ("config.json", "config.example.json"):
+            with self.subTest(config=name):
+                config = load_config(root / "config" / name, group_id=42)
+                self.assertEqual(config.card_generator.progress.heartbeat_interval_seconds, 60)
+                self.assertEqual(config.card_generator.generation_timeout_seconds, 1500)
+                self.assertEqual(config.card_generator.connection_guard.idle_timeout_seconds, 1500)
+                self.assertGreater(config.tasks.lease_seconds, config.card_generator.generation_timeout_seconds)
+
+    def test_explicit_old_interval_remains_configurable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = load_config(config_fixtures.write_config(Path(directory), {
+                "card_generator": {"progress": {"enabled": True, "heartbeat_interval_seconds": 15}},
+            }))
+        self.assertEqual(config.card_generator.progress.heartbeat_interval_seconds, 15)
 
     def test_custom_progress_configuration(self):
         with tempfile.TemporaryDirectory() as directory:

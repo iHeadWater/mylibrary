@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from hydro_platform.card_generators.codex_text import CodexTextAdapter
-from hydro_platform.config import load_config
+from hydro_platform.config import CodexProxyConfig, load_config
 from test_config import write_config
 from test_card_generator import smoke_jsonl
 
@@ -53,6 +53,15 @@ class TextAdapterTests(unittest.TestCase):
         result = self.run_adapter()
         self.assertFalse(result["ok"])
         self.assertTrue(Path(result["error"]["draft_path"]).exists())
+
+    def test_theme_model_inherits_only_configured_child_proxy(self):
+        self.adapter.config = replace(self.config, proxy=CodexProxyConfig(True, "http://127.0.0.1:17897"))
+        self.assertTrue(self.run_adapter()["ok"])
+        command, prompt, _, env = self.prompt_runner.call_args.args
+        self.assertEqual(env["HTTPS_PROXY"], "http://127.0.0.1:17897")
+        self.assertEqual(env["WSS_PROXY"], env["HTTPS_PROXY"])
+        self.assertNotIn(env["HTTPS_PROXY"], prompt)
+        self.assertNotIn(env["HTTPS_PROXY"], " ".join(command))
 
     def test_incomplete_turn_not_accepted(self):
         self.prompt_runner.return_value.stdout = json.dumps({"type": "item.completed", "item": {

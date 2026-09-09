@@ -50,12 +50,16 @@ def prepare_publication(lock_path, original_manifest, manifest, card, audit):
 
 def validate_saved_package(package_path):
     package_path = Path(package_path)
+    if not (package_path / "manifest.json").is_file() or not (package_path / "card.md").is_file():
+        raise EvidencePackageError("EVIDENCE_PACKAGE_INCOMPLETE", "证据包缺少正文或清单，不能认定为完成；保留现有文件")
     manifest = load_evidence_manifest(package_path / "manifest.json")
     card = (package_path / "card.md").read_text(encoding="utf-8")
     if manifest["card_status"] == "PLACEHOLDER":
         if card != PLACEHOLDER_CARD or (package_path / "quality-audit.json").exists():
             raise EvidencePackageError("EVIDENCE_PACKAGE_INCONSISTENT", "占位状态与卡片或审计文件不一致；保留现有文件")
         return None
+    if not card.strip() or card.strip() == PLACEHOLDER_CARD.strip():
+        raise EvidencePackageError("EVIDENCE_CARD_EMPTY_OR_PLACEHOLDER", "生成记录存在，但正文为空或仍为占位卡，不能认定为完成")
     generation = manifest["generation"]
     if text_hash(card) != generation["card_sha256"]:
         raise EvidencePackageError("EVIDENCE_CARD_CHANGED", "卡片与清单指纹不一致；保留现有文件，不自动覆盖")
@@ -81,7 +85,7 @@ def recover_publication(package_path, lock_path, current_manifest):
         card, audit = record["card"], record["audit"]
         if (identity(manifest) != identity(current_manifest) or identity(original) != identity(manifest)
             or current_manifest not in (original, manifest) or original["card_status"] != "PLACEHOLDER"
-            or manifest["card_status"] != "ROUGH" or card == PLACEHOLDER_CARD
+            or manifest["card_status"] != "ROUGH" or not card.strip() or card.strip() == PLACEHOLDER_CARD.strip()
             or text_hash(card) != manifest["generation"]["card_sha256"]
             or text_hash(audit) != manifest["generation"]["quality_audit_sha256"]
             or json.loads(audit).get("quality_report", {}).get("status") != manifest["generation"]["quality_status"]):

@@ -60,6 +60,36 @@
 
 Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制卡机本地凭据存储或环境变量中，不得提交到仓库。`config.json` 最多记录所使用的凭据类型或环境变量名称，不能记录秘密本身。
 
+## Codex 子进程独立代理
+
+`card_generator.proxy` 只影响本平台启动的 Codex CLI 子进程环境，不修改 Python 主进程的 `os.environ`、系统/用户环境变量、Windows 系统代理、Clash/TUN、Codex 个人配置或客户端，也不重启客户端。Zotero 本地 API 与其他独立程序保持原有网络设置。Codex 内部启动的后代进程可能继承该环境，原有工具网络沙箱仍保留。
+
+当前制卡机已配置为读取到的 Clash 本地 HTTP 监听地址；不是模型服务/API 地址：
+
+```json
+"proxy": {
+  "enabled": true,
+  "url": "http://127.0.0.1:7897",
+  "no_proxy": ["localhost", "127.0.0.1", "::1"]
+}
+```
+
+| 字段 | 含义与修改方法 |
+|---|---|
+| `enabled` | `true`：只对子进程显式设置代理；`false`：恢复原来的环境继承方式，不等于强制直连。旧配置缺失本节也按 `false` 处理 |
+| `url` | 本机代理软件的 HTTP/HTTPS 监听地址，须含端口；换端口只改此处。启用时必填；关闭时可为 `null`。当前不支持 SOCKS-only 地址 |
+| `no_proxy` | 额外直连主机名/IP 数组；本机三项始终补齐，避免本地流量外送。不能填 URL、逗号拼接字符串或 `*` |
+
+启用时，程序在传给 Codex 子进程的环境副本中设置大小写两套 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`WS_PROXY`、`WSS_PROXY`，并以本节覆盖该子进程的 `NO_PROXY`。这样不会因原终端存在 `NO_PROXY=*` 而绕过显式代理。关闭时不删除终端已有的代理配置。
+
+正式制卡、制卡试运行、PDF 直读实验、主题生成/修订/定向精读及 `generator-smoke-test` 共用本项。下次启动命令生效；不会热更新或中断已经运行的客户端、队列。自动调度的下一轮也会读取它。不改模型、推理强度、超时、重试次数和账号登录方式。
+
+`generator-preflight --json` 返回的 `proxy` 只展示配置及作用范围，`connectivity_verified=false` 表示**没有验证到模型服务的连通性**。这项改动不能保证消除重连、降低单篇处理时间或修复节点故障。代理未启动/端口错误时不会自动删掉显式配置并改走另一出口。
+
+换机请填写新机器的代理端口或设置 `enabled=false`；示例配置默认关闭且地址为 `null`，不强迫新机器使用这台电脑的端口。不要把节点订阅链接、带用户名/密码或令牌的 URL 写入 Git；配置会拒绝这些 URL，错误消息不回显输入。
+
+## 制卡字段
+
 当前 `card_generator` 字段说明：
 
 | 字段 | 当前含义 | 允许值或规则 |
@@ -72,11 +102,13 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 | `model` | 单 Agent 制卡及探针模型 | `null` 表示使用 Codex 内置默认；也可填写非空模型名称 |
 | `reasoning_effort` | 单 Agent 制卡及探针思考强度 | `null` 表示使用模型默认；可选 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`，实际支持范围取决于模型 |
 | `smoke_test_timeout_seconds` | US-07B1 单次最小模型调用的最长等待秒数 | 大于 0；当前为 120 |
-| `generation_timeout_seconds` | 单 Agent 一次模型会话的最长等待秒数 | 大于 0；当前为 1200 |
+| `generation_timeout_seconds` | 单 Agent 一次模型会话的最长等待秒数 | 大于 0；当前为 1500，即 25 分钟 |
 | `progress.enabled` | 正式制卡及试运行是否显示 stderr 实时进度 | `true` / `false`；默认 `true`；`--no-progress` 可关闭本次显示 |
-| `progress.heartbeat_interval_seconds` | 无论是否收到模型事件，定期报告等待状态的间隔 | 1–300 秒；默认 15；不改变模型超时和重试策略 |
+| `progress.heartbeat_interval_seconds` | 无论是否收到模型事件，定期报告等待状态的间隔 | 1–300 秒；默认及当前值为 60；不改变模型超时和重试策略 |
 
 `progress` 在旧配置中整体缺失时使用上述默认值；一旦填写，必须同时提供两个字段。当前进度包含 1/1 单 Agent 启动、工具调用、流程检查和最终保存状态，不含归因或正文结构检查。心跳表示本地程序仍在等待，不证明远端模型健康。进度不会写入最终 JSON，也不会回显模型正文、原始工具输出或凭据。
+
+2026-09-09 最新要求：本机配置、示例和缺省心跳统一改为 60 秒。只减少周期性的“等待中”提示；工具开始/结束、单篇保存、错误等实际事件仍立即显示。下次启动命令生效，不热更新现有队列。显式填写其他合法间隔的自定义配置仍按其原值执行。`run-once` 结尾独立显示“整轮汇总”，按本轮新完成、恢复、跳过、失败、阻塞、等待和延后分别统计，并列出未完成项与主题状态，不沿用最后一篇的保存阶段。
 
 `card_generator.workflow_mode=single_agent` 是当前模式，主提示词 evidence-card-generation-v8.md、八类模板 1.1.0。模型、强度和超时直接用上表。v8 保留详细写作要求，但保存只检验流程，不校验正文标题、表格、标签、编号或措辞；没有另一个需要用户开启的“宽松模式”。当前配置与示例已更新，仍使用 run-once。草稿预览目录由 `paths.card_trials_dir` 控制。
 
@@ -89,10 +121,10 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 | `reconnect_stop_enabled` | `false` | 是否因重连次数或恢复超时停止；必须为布尔值。当前关闭，仅记录重连状态，不执行下面两项停止条件；不关闭其他保护。旧配置不填此字段时为 `true` |
 | `reconnect_event_limit` | `10` | 仅在开关为 `true` 时生效：同一角色累计收到第 10 条重连事件时停止；1–10 的整数；不是底层 TCP 尝试次数，中间工具返回不会清零计数 |
 | `recovery_timeout_seconds` | `300` | 仅在开关为 `true` 时生效：每次进入断线状态后等待模型进展恢复的最长秒数；1–300；再次重连、心跳和本地工具返回不延长这个期限 |
-| `idle_timeout_seconds` | `1200` | 无可识别进展事件的最长秒数；1–3600；当前与单 Agent 总时限同为 20 分钟。不是模型思考计时器 |
+| `idle_timeout_seconds` | `1500` | 无可识别进展事件的最长秒数；1–3600；当前与单 Agent 总时限同为 25 分钟。不是模型思考计时器 |
 | `pdf_tool_call_limit` | `2` | 每个角色的整篇 PDF 工具调用预算；1–5 的整数；检测到超额调用开始事件后终止子进程，防止反复整篇回传 |
 
-2026-09-08 在宽松档仍因断线 5 分钟未恢复而失败后，按用户要求在当前配置及示例中关闭 `reconnect_stop_enabled`，并将无进展时限改为 1200 秒。`10 / 300` 仍保存以便重新启用，但开关为 `false` 时不会因这两项终止。当前单 Agent 总时限为 1200 秒，不因重连重新计时；总超时、无进展时限、PDF 调用预算等仍生效，先触发者停止。底层 CLI 如果自行退出、`turn.failed` 或输出无效，仍按失败处理，不自动启动新会话重跑，也不继续下一个 Agent。
+2026-09-08 按用户要求关闭 `reconnect_stop_enabled`，当时无进展/会话上限为 1200 秒；2026-09-09 最新要求将两项同时延长至 1500 秒。`10 / 300` 仍保存以便重新启用，但开关为 `false` 时不会因这两项终止。当前单 Agent 总时限为 25 分钟，不因重连重新计时；总超时、无进展时限、PDF 调用预算等仍生效，先触发者停止。底层 CLI 如果自行退出、`turn.failed` 或输出无效，仍按失败处理；没有新增会话内自动重跑机制。延长时间不保证连接恢复，逐条重试仍受 pipeline 冷却和次数约束。
 
 旧配置整体缺失本节时，程序仍兼容保守后备值 `2 / 60 / 300 / 2` 且开关为 `true`；只有四个限额字段的旧配置也继续启用原保护。填写本节时必须包含全部四个限额字段，新开关可选；即使关闭也不接受非法限额值。修改后从下一次启动命令生效，不会热更新已运行的子进程。该节只影响连接保护，不改变 PDF 阅读流程。正文格式/归因门禁已由最新产品决策独立移除。这不改变 Codex/ChatGPT 桌面客户端自身的重连行为，也不保证网络恢复。
 
@@ -149,7 +181,7 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 当前 `card_generator.pdf_reader.adapter` 为 `local_path`，单 Agent 使用与已通过实验相同的读取环境。为避免两套工具路径漂移，沿用下方 `pdf_direct_trial` 对象中的 `windows_sandbox`、`shell_executable`、`python_executable`、`text_extractor`、`preflight_timeout_seconds`。新增 `reading_prompt_file` 指向 `automation/prompts/pdf-local-reading-v1.md`，用于正式制卡共用读取指引。
 
-`prompt_file`、`schema_file`、`timeout_seconds` 仍只属于独立读取实验。当前单 Agent 使用 generation_timeout_seconds（1200 秒）及总配置 paths 中的制卡提示词/schema；不会套用实验报告字段。运行目录统一来自 `paths.runtime_dir`。迁移电脑只需改总配置中的工具位置并重新登录 Codex，不把账号凭据写入 Git。
+`prompt_file`、`schema_file`、`timeout_seconds` 仍只属于独立读取实验。当前单 Agent 使用 generation_timeout_seconds（1500 秒）及总配置 paths 中的制卡提示词/schema；不会套用实验报告字段。独立 `pdf-direct-read-trial` 实验的时限仍单独配置为 1200 秒，本次不改。运行目录统一来自 `paths.runtime_dir`。迁移电脑只需改总配置中的工具位置并重新登录 Codex，不把账号凭据写入 Git。
 
 旧 `pdf_reader` 中的 `server_name`、`server_file`、`python_executable`、MCP 批次/输出预算/启动超时只对历史 `project_mcp` 生效，当前不调用。`pdf_tool_call_limit` 也只统计旧 MCP 整篇调用，不限制新路径的 shell/看图次数；总超时和无进展保护保留。
 

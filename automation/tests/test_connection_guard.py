@@ -417,7 +417,7 @@ class GuardConfigTests(unittest.TestCase):
                 Path(directory), {"card_generator": {"connection_guard": guard}},
             ))
         self.assertEqual(config.card_generator.connection_guard,
-                         ConnectionGuardConfig(10, 300, 1200, 2, reconnect_stop_enabled=False))
+                         ConnectionGuardConfig(10, 300, 1500, 2, reconnect_stop_enabled=False))
 
     def test_old_four_field_config_keeps_reconnect_stop_enabled(self):
         guard = asdict(ConnectionGuardConfig(10, 300, 900, 2))

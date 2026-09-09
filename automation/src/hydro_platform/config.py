@@ -115,7 +115,7 @@ class CardQualityWorkflowConfig:
 @dataclass(frozen=True)
 class ProgressConfig:
     enabled: bool = True
-    heartbeat_interval_seconds: float = 15
+    heartbeat_interval_seconds: float = 60
 
 
 @dataclass(frozen=True)
@@ -125,6 +125,13 @@ class ConnectionGuardConfig:
     idle_timeout_seconds: float = 300
     pdf_tool_call_limit: int = 2
     reconnect_stop_enabled: bool = True
+
+
+@dataclass(frozen=True)
+class CodexProxyConfig:
+    enabled: bool = False
+    url: str | None = None
+    no_proxy: tuple[str, ...] = ("localhost", "127.0.0.1", "::1")
 
 
 @dataclass(frozen=True)
@@ -157,6 +164,7 @@ class CardGeneratorConfig:
     connection_guard: ConnectionGuardConfig = ConnectionGuardConfig()
     pdf_direct_trial: PdfDirectTrialConfig | None = None
     runtime_dir: Path | None = None
+    proxy: CodexProxyConfig = CodexProxyConfig()
 
 
 @dataclass(frozen=True)
@@ -270,6 +278,45 @@ PATH_FIELDS = (
     "prompts_dir",
     "schemas_dir",
 )
+
+
+def _validate_codex_proxy(value: Any) -> CodexProxyConfig:
+    name = "card_generator.proxy"
+    if not isinstance(value, dict) or set(value) - {"enabled", "url", "no_proxy"}:
+        raise ConfigError(f"{name} 必须是对象，且只能包含 enabled、url、no_proxy")
+    enabled = value.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError(f"{name}.enabled 必须是布尔值")
+    url = value.get("url")
+    if url is not None:
+        # Never echo input: a mistakenly pasted URL may contain a password/token.
+        error = f"{name}.url 必须是带端口的 HTTP/HTTPS 代理地址，不得包含账号、密码、路径、查询参数或片段"
+        if not isinstance(url, str) or not url or any(c.isspace() or ord(c) < 32 for c in url):
+            raise ConfigError(error)
+        try:
+            parsed = urlparse(url)
+            valid = (
+                parsed.scheme in {"http", "https"}
+                and parsed.hostname and re.fullmatch(r"[A-Za-z0-9_.:\-]+", parsed.hostname)
+                and parsed.port is not None and 1 <= parsed.port <= 65535
+                and parsed.username is None and parsed.password is None
+                and parsed.path in {"", "/"} and not parsed.params
+                and not parsed.query and not parsed.fragment
+                and "?" not in url and "#" not in url
+            )
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ConfigError(error)
+    if enabled and url is None:
+        raise ConfigError(f"{name}.enabled=true 时必须填写 url")
+    bypass = value.get("no_proxy", list(CodexProxyConfig().no_proxy))
+    if not isinstance(bypass, list) or any(
+        not isinstance(host, str) or not re.fullmatch(r"[A-Za-z0-9_.:\[\]\-]+", host)
+        for host in bypass
+    ):
+        raise ConfigError(f"{name}.no_proxy 必须是主机名/IP 字符串数组，不接受 *、URL 或逗号拼接")
+    return CodexProxyConfig(enabled=enabled, url=url, no_proxy=tuple(bypass))
 
 
 def _validate_base_url(value: Any) -> str:
@@ -636,7 +683,7 @@ def load_config(
         if name not in raw_card_generator:
             raise ConfigError(f"缺少 card_generator.{name}")
     raw_progress = raw_card_generator.get("progress", {
-        "enabled": True, "heartbeat_interval_seconds": 15,
+        "enabled": True, "heartbeat_interval_seconds": ProgressConfig().heartbeat_interval_seconds,
     })
     if not isinstance(raw_progress, dict) or set(raw_progress) != {
         "enabled", "heartbeat_interval_seconds",
@@ -1028,6 +1075,7 @@ def load_config(
         connection_guard=connection_guard,
         pdf_direct_trial=direct_trial_config,
         runtime_dir=path_config.runtime_dir,
+        proxy=_validate_codex_proxy(raw_card_generator.get("proxy", {})),
     )
 
     raw_pipeline = data.get("pipeline", {})

@@ -27,6 +27,25 @@ python automation/run.py setup --apply --json
 
 ## 实际顺序与副作用
 
+### 另一台 Windows 电脑的手动复现
+
+先用有私有仓库访问权的 GitHub 账号取回 `hanfandada/hydro-platform`。准备好上述基础软件、本人登录及 `qinjiajun` 共享库的本地 PDF 同步后，在新副本的根目录操作：
+
+1. 首次复制 `config/config.json` 为 `config/config.local.json`；已有私人配置时不要覆盖。它是完整配置，不是增量覆盖文件，且已被 Git 忽略。
+2. 在私人配置中将 `scheduler.enabled` 改为 `false`，先手动演练，不创建第二台机器的自动制卡计划。若要真正移交制卡职责，应先暂停原制卡机；当前跨机器没有共同任务锁。
+3. 检查 `card_generator.proxy`：仓库配置的 `http://127.0.0.1:7897` 只适用于该端口确有代理的电脑。有代理则填写新电脑的实际地址；不需显式指定则将 `enabled` 设为 `false`，恢复继承该电脑环境。不会更改系统或 Codex 客户端设置。
+4. 使用同一份私人配置执行下列命令。依赖和 PDF 工具会在新副本内重建，不要复制旧 `.venv`、`.tools`、`.runtime` 或账号凭据。
+
+```powershell
+python automation/run.py setup --config config/config.local.json --json
+python automation/run.py setup --apply --config config/config.local.json --json
+python automation/run.py run-once --config config/config.local.json --json
+```
+
+关闭调度时安装预期返回 `READY_MANUAL`。已有 7 张完整粗卡和主题成果随 Git 保存；同一文献库/PDF、模型及主题输入未变时，已有成果应复用，而不是再次制卡。恢复成功只是换机恢复验收；验证新电脑确实能调用模型制卡，还需由用户加入一篇有完整 PDF 的新论文，再运行同一个 `run-once`。不要删除现有卡片来强迫重生成，也不要把“复用了旧卡”当作新电脑已经生成过新卡。
+
+### 安装流程
+
 | 顺序 | 做什么 | 写入与失败边界 |
 |---|---|---|
 | 配置与安装计划 | 核对路径、环境所有权、依赖锁、基础Python | 只读；不覆盖未知环境/工具目录 |

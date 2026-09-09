@@ -15,6 +15,7 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from hydro_platform.card_generators.codex_cli import CodexCliAdapter
+from hydro_platform.config import CodexProxyConfig
 from hydro_platform.card_generators.streaming import _status_event
 from hydro_platform.cli import main
 from hydro_platform.config import ConfigError, load_config
@@ -89,6 +90,15 @@ class PdfDirectTrialTests(unittest.TestCase):
         return run_pdf_direct_trial(self.config, self.delivery, adapter=self.adapter,
                                     runner=self.runner, local_runner=self.local,
                                     executable_finder=self.finder, sandbox_checker=self.sandbox_check, **options)
+
+    def test_direct_trial_receives_same_child_proxy_configuration(self):
+        self.config = replace(self.config, card_generator=replace(self.config.card_generator,
+            proxy=CodexProxyConfig(True, "http://127.0.0.1:17897")))
+        self.assertTrue(self.run_trial()["ok"])
+        env = self.runner.call_args.kwargs["environment"]
+        self.assertEqual(env["HTTPS_PROXY"], "http://127.0.0.1:17897")
+        self.assertIn("127.0.0.1", env["NO_PROXY"])
+        self.assertNotIn(env["HTTPS_PROXY"], self.prompt)
 
     def test_success_is_limited_and_only_writes_trial_outputs(self):
         result = self.run_trial()

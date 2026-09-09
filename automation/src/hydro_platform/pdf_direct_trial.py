@@ -18,6 +18,7 @@ from hydro_platform.card_generators.codex_cli import (
     _timeout_text, _toml_string, _usage, _sanitize_diagnostic_text,
 )
 from hydro_platform.card_generators.streaming import ExecutionStopped, run_streaming_prompt
+from hydro_platform.card_generators.proxy import codex_proxy_environment
 from hydro_platform.config import AppConfig
 from hydro_platform.pdf_delivery import PdfDelivery
 from hydro_platform.pdf_sandbox import check_pdf_sandbox
@@ -183,6 +184,7 @@ def run_pdf_direct_trial(
             base["model_invoked"] = True
             completed = runner(_command(ready["resolved_executable"], config, workspace), prompt,
                                trial.timeout_seconds, progress=progress,
+                               environment=codex_proxy_environment(config.card_generator.proxy),
                                connection_guard=config.card_generator.connection_guard)
             try:
                 events = _parse_jsonl(completed.stdout)

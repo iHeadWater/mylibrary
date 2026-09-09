@@ -32,7 +32,7 @@ class ConsoleProgress:
     """Human progress on stderr only; a heartbeat is not evidence of model activity."""
 
     def __init__(
-        self, *, enabled: bool = True, heartbeat_interval_seconds: float = 15,
+        self, *, enabled: bool = True, heartbeat_interval_seconds: float = 60,
         stream: TextIO | None = None,
         label: str = "AI进度", initial_activity: str = "检查 Zotero、任务及 PDF",
     ) -> None:
@@ -116,7 +116,36 @@ class ConsoleProgress:
         if not self.enabled:
             return
         with self._lock:
-            if not result.get("ok"):
+            if result.get("operation") == "run_once":
+                # The last paper's stage is not the outcome of the entire queue.
+                self._stage = "整轮汇总"
+                status = result.get("status", "UNKNOWN")
+                labels = {"COMPLETED": "本轮处理完成", "COMPLETED_WITH_BLOCKERS": "本轮结束，仍有失败或阻塞",
+                          "COMPLETED_WITH_PENDING": "本轮结束，仍有等待或延后项", "CANCELLED": "本轮已取消",
+                          "FAILED": "本轮运行失败", "ALREADY_RUNNING": "已有运行实例，本次未启动",
+                          "LOCAL_PREVIEW": "本地预览完成，未执行处理"}
+                self._write(labels.get(status, f"本轮状态：{status}"))
+                counts = result.get("counts")
+                if isinstance(counts, dict):
+                    self._write("；".join(f"{label} {counts.get(key, 0)}" for key, label in (
+                        ("completed", "本轮新完成"), ("recovered", "恢复完成"), ("skipped", "跳过"),
+                        ("failed", "失败"), ("blocked", "阻塞"), ("waiting", "等待"), ("deferred", "延后"))))
+                for item in result.get("items", []):
+                    if item.get("status") in {"FAILED", "BLOCKED", "WAITING", "DEFERRED"}:
+                        reason = item.get("reason_code") or (item.get("error") or {}).get("code", "未提供原因码")
+                        self._write(f"未完成项 {item.get('parent_key', '未知')}：{item['status']}，{reason}")
+                theme = result.get("theme_pipeline")
+                if isinstance(theme, dict):
+                    self._write("主题流程暂缓，本轮未生成新主题" if theme.get("status") == "DEFERRED"
+                                else f"主题流程状态：{theme.get('status', 'UNKNOWN')}")
+                if result.get("error"):
+                    self._write(f"整轮错误：{result['error'].get('code', '未提供原因码')}（详见最终结果）")
+                for key in ("monitoring_warning", "report_warning"):
+                    if result.get(key):
+                        self._write(str(result[key]))
+                if result.get("report_path"):
+                    self._write(f"运行报告：{result['report_path']}")
+            elif not result.get("ok"):
                 code = result.get("error", {}).get("code", "FAILED")
                 self._write(f"失败，停在本阶段；错误码：{code}（详见最终结果）")
             elif result.get("action") == "SKIPPED_EXISTING_CARD":

@@ -49,7 +49,7 @@ from hydro_platform.tasks import (
     load_task_registry,
 )
 from hydro_platform.zotero import ZoteroClient
-from hydro_platform.publication import prepare_publication, recover_publication
+from hydro_platform.publication import prepare_publication, recover_publication, validate_saved_package
 
 
 CARD_STATE = "ROUGH"
@@ -282,21 +282,24 @@ def _inspect_target(
             if recover_publication(package_path, lock_path, manifest):
                 manifest = load_evidence_manifest(manifest_path)
                 card_content = card_path.read_text(encoding="utf-8")
+            completed = validate_saved_package(package_path)
         except EvidencePackageError as exc:
             raise CardGenerationError(exc.code, str(exc)) from exc
-        if card_content != PLACEHOLDER_CARD:
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            raise CardGenerationError("EVIDENCE_CARD_INVALID", "无法完整核对正文及生成记录；保留现有文件，不当作完成") from exc
+        if completed is not None:
             return {
                 "skip": True,
                 "task": task,
                 "task_state": raw_task.get("state"),
-                "manifest": manifest,
+                "manifest": completed,
                 "package_path": package_path,
                 "card_path": card_path,
             }
-        if manifest.get("card_status") != "PLACEHOLDER":
+        if raw_task.get("state") == "COMPLETED":
             raise CardGenerationError(
                 "EVIDENCE_PACKAGE_INCONSISTENT",
-                "manifest 已不是占位状态，但 card.md 仍是占位卡",
+                "任务标为完成，但证据包仍是占位卡；保留记录，不自动覆盖或重跑",
             )
         return {
             "skip": False,

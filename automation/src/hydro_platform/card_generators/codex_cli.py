@@ -15,6 +15,7 @@ from typing import Any, Callable, Mapping, Sequence
 from hydro_platform.config import CardGeneratorConfig
 from hydro_platform.card_generators.streaming import ExecutionStopped, run_streaming_prompt
 from hydro_platform.card_generators.connection_guard import is_reconnect_event
+from hydro_platform.card_generators.proxy import codex_proxy_environment, proxy_summary
 from hydro_platform.progress import ProgressCallback
 
 
@@ -78,7 +79,10 @@ def _check(name: str, status: str, detail: str) -> dict[str, str]:
 def _run_command(
     command: Sequence[str],
     timeout_seconds: float,
+    environment: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    process_environment = os.environ.copy()
+    process_environment.update(environment or {})
     return subprocess.run(
         list(command),
         check=False,
@@ -87,6 +91,7 @@ def _run_command(
         encoding="utf-8",
         errors="replace",
         timeout=timeout_seconds,
+        env=process_environment,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
 
@@ -589,13 +594,21 @@ class CodexCliAdapter:
         self.config = config
         self._executable_finder = executable_finder
         self._runner = runner
-        self._prompt_runner = prompt_runner
+        if runner is _run_command:
+            # Includes version/login-status and smoke calls; no global env assignment.
+            self._runner = lambda command, timeout: runner(
+                command, timeout, codex_proxy_environment(self.config.proxy),
+            )
+        delegate_prompt_runner = prompt_runner
         if prompt_runner is _run_prompt_command:
-            self._prompt_runner = lambda command, prompt, timeout, environment: run_streaming_prompt(
+            delegate_prompt_runner = lambda command, prompt, timeout, environment: run_streaming_prompt(
                 command, prompt, timeout, environment,
                 progress=progress, server=config.pdf_reader.server_name,
                 connection_guard=config.connection_guard,
             )
+        self._prompt_runner = lambda command, prompt, timeout, environment: delegate_prompt_runner(
+            command, prompt, timeout, codex_proxy_environment(self.config.proxy, environment),
+        )
 
     def _failure(
         self,
@@ -614,6 +627,7 @@ class CodexCliAdapter:
             "checked_at": _now(),
             "adapter": self.config.adapter,
             "configured_executable": self.config.executable,
+            "proxy": proxy_summary(self.config.proxy),
             "resolved_executable": resolved_executable,
             "configured_auth_mode": self.config.auth_mode,
             "detected_auth_mode": detected_auth_mode,
@@ -761,6 +775,7 @@ class CodexCliAdapter:
                 "schema_version": 1, "ok": True, "component": "card_generator",
                 "resolved_executable": executable, "cli_version": cli_version,
                 "detected_auth_mode": "chatgpt_account", "checks": checks,
+                "proxy": proxy_summary(self.config.proxy),
             }
         reader = self.config.pdf_reader
         if not reader.server_file.is_file():
@@ -821,6 +836,7 @@ class CodexCliAdapter:
             "configured_executable": self.config.executable,
             "resolved_executable": executable,
             "configured_auth_mode": self.config.auth_mode,
+            "proxy": proxy_summary(self.config.proxy),
             "detected_auth_mode": "chatgpt_account",
             "cli_version": cli_version,
             "pdf_reader": {
