@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import re
 import subprocess
 import sys
@@ -509,18 +510,95 @@ def sync_to_zotero(pdf_path: Path, doi: str) -> int:
         "uv", "run", "python", "-m",
         "hydrolitagent.literature.zotero_sync", str(pdf_path), doi,
     ]
-    return subprocess.run(cmd).returncode
+    # Windows consoles default to GBK; force UTF-8 so the Chinese GDrive path
+    # and CJK titles printed by zotero_sync don't crash with a UnicodeEncodeError.
+    env = dict(os.environ)
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    return subprocess.run(cmd, env=env).returncode
+
+
+def _load_dotenv() -> None:
+    """Load <repo>/.env (best-effort) so env-var checks match CLI runs."""
+    env_file = Path(__file__).resolve().parent.parent / ".env"
+    if env_file.exists():
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(env_file)
+        except Exception:
+            pass
+
+
+def setup_check() -> int:
+    """Verify a bare-host Zotero/GDrive setup is ready before the first sync."""
+    try:  # Windows consoles default to GBK; emit UTF-8 so captured output is clean
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+    _load_dotenv()
+    ok = True
+    required = ("ZOTERO_API_KEY", "ZOTERO_LIBRARY_ID", "GDRIVE_PAPERS_PATH")
+    missing = [k for k in required if not os.environ.get(k)]
+    print("── Zotero/GDrive setup check ──")
+    if missing:
+        ok = False
+        print(f"  [FAIL] missing in .env: {', '.join(missing)}")
+        print("         → cp .env.example .env and fill them (see comments)")
+    else:
+        print("  [ok]   env keys present")
+
+    gd = os.environ.get("GDRIVE_PAPERS_PATH", "")
+    if gd:
+        p = Path(gd)
+        if p.is_dir():
+            probe = p / ".setup-check-write-test"
+            try:
+                probe.write_text("x", encoding="utf-8")
+                probe.unlink()
+                print(f"  [ok]   GDrive papers dir writable: {p}")
+            except OSError as e:
+                ok = False
+                print(f"  [FAIL] GDrive papers dir not writable: {e}")
+        else:
+            ok = False
+            print(f"  [FAIL] GDRIVE_PAPERS_PATH not a directory: {p}")
+
+    api_key = os.environ.get("ZOTERO_API_KEY", "")
+    lib_id = os.environ.get("ZOTERO_LIBRARY_ID", "")
+    if api_key and lib_id:
+        try:
+            from pyzotero import zotero
+            z = zotero.Zotero(lib_id, "user", api_key)
+            z.items(limit=1)
+            print("  [ok]   Zotero Web API credentials valid")
+        except Exception as e:
+            ok = False
+            print(f"  [FAIL] Zotero Web API error: {e}")
+
+    print()
+    print("One-time Zotero Desktop setup (per machine):")
+    print("  Settings → Advanced → Files and Folders → Linked Attachment Base Directory")
+    print(f"  must point to: {gd}")
+    print("  ('Automatically rename/move attached files' — ZotMoov — should be OFF for that folder)")
+    print("Then just run:  uv run python scripts/download_paper.py --arxiv <id> --sync")
+    return 0 if ok else 1
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    g = ap.add_mutually_exclusive_group(required=True)
+    g = ap.add_mutually_exclusive_group(required=False)
     g.add_argument("--doi", help="Paper DOI, e.g. 10.1029/2026GL125188")
     g.add_argument("--arxiv", help="arXiv id, e.g. 2608.18495")
+    ap.add_argument("--setup-check", action="store_true",
+                    help="Verify .env / Zotero API / GDrive dir, print next steps")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT, help="Output directory")
     ap.add_argument("--resolve-only", action="store_true", help="Show metadata and exit")
     ap.add_argument("--sync", action="store_true", help="Sync to Zotero after download")
     args = ap.parse_args()
+
+    if args.setup_check:
+        return setup_check()
+    if not (args.doi or args.arxiv):
+        ap.error("one of --doi / --arxiv / --setup-check is required")
 
     if args.arxiv:
         dest = args.out / f"arXiv.{args.arxiv}.pdf"

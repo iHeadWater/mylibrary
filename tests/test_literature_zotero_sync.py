@@ -147,159 +147,115 @@ def test_copy_to_gdrive_creates_parent_dirs(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _fetch_crossref_metadata
+# Metadata delegation -> paper_to_zotero.build_item (arXiv-aware)
 # ---------------------------------------------------------------------------
 
-from hydrolitagent.literature.zotero_sync import _fetch_crossref_metadata  # noqa: E402
 
+def test_builds_arxiv_preprint_when_crossref_missing(monkeypatch):
+    """arXiv DOI (Crossref 404) -> correct preprint record via build_item.
 
-def test_fetch_crossref_metadata_returns_message_on_success(monkeypatch):
-    """Returns the message dict from a successful Crossref response."""
-    mock_resp = MagicMock()
-    mock_resp.__enter__.return_value = mock_resp
-    mock_resp.read.return_value = (
-        b'{"status":"ok","message":{"title":["Test Paper"],"type":"journal-article"}}'
-    )
-    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **kw: mock_resp)
+    Regression: zotero_sync used to be Crossref-only and produced a sparse
+    journalArticle from PDF-embedded metadata for arXiv papers.
+    """
+    from hydrolitagent.zotero import paper_to_zotero as p2z
 
-    result = _fetch_crossref_metadata("10.1234/test.1")
-    assert result is not None
-    assert result["title"] == ["Test Paper"]
-    assert result["type"] == "journal-article"
-
-
-def test_fetch_crossref_metadata_returns_none_on_http_error(monkeypatch):
-    """Returns None when the Crossref API call raises an exception."""
+    monkeypatch.setattr(p2z, "fetch_crossref", lambda doi: None)
+    monkeypatch.setattr(p2z, "fetch_published_doi_s2", lambda arxiv_id: None)
     monkeypatch.setattr(
-        "urllib.request.urlopen", lambda *a, **kw: (_ for _ in ()).throw(OSError("network down"))
+        p2z,
+        "fetch_arxiv",
+        lambda arxiv_id: {
+            "title": "Earth System Foundation Model (ESFM): A unified framework",
+            "summary": "An abstract about earth system modelling.",
+            "authors": ["Firat Ozdemir", "Yun Cheng", "Torsten Hoefler"],
+            "published": "2026-04-20",
+            "primary_category": "cs.LG",
+            "published_doi": None,
+            "journal_ref": None,
+        },
     )
 
-    result = _fetch_crossref_metadata("10.1234/test.1")
-    assert result is None
+    item, extra = p2z.build_item("10.48550/arXiv.2605.00850", {"title": "", "author": ""})
+
+    assert item["itemType"] == "preprint"
+    assert item["date"] == "2026-04-20"
+    assert item["abstractNote"] == "An abstract about earth system modelling."
+    assert len(item["creators"]) == 3
+    assert extra["repository"] == "arXiv"
+    assert extra["archiveID"] == "arXiv:2605.00850"
 
 
-def test_fetch_crossref_metadata_returns_none_on_json_decode_error(monkeypatch):
-    """Returns None when the response body is not valid JSON."""
-    mock_resp = MagicMock()
-    mock_resp.__enter__.return_value = mock_resp
-    mock_resp.read.return_value = b"not json"
-    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **kw: mock_resp)
+def test_builds_journal_article_from_crossref(monkeypatch):
+    """Journal DOI still maps to journalArticle through build_item."""
+    from hydrolitagent.zotero import paper_to_zotero as p2z
 
-    result = _fetch_crossref_metadata("10.1234/test.1")
-    assert result is None
-
-
-# ---------------------------------------------------------------------------
-# _build_zotero_item
-# ---------------------------------------------------------------------------
-
-from hydrolitagent.literature.zotero_sync import _build_zotero_item  # noqa: E402
-
-
-def test_build_zotero_item_from_crossref():
-    """Builds a full Zotero item from Crossref metadata."""
     cr = _make_crossref_message()
-    pdf = _make_pdf_meta()
+    monkeypatch.setattr(p2z, "fetch_crossref", lambda doi: cr)
 
-    item, extra = _build_zotero_item("10.1234/test.1", cr, pdf)
+    item, extra = p2z.build_item("10.1016/j.jhydrol.2026.135902", {"title": "", "author": ""})
 
-    assert item["title"] == "Environmental modulation of storm–flood response"
-    assert item["DOI"] == "10.1234/test.1"
-    assert item["url"] == "https://doi.org/10.1234/test.1"
     assert item["itemType"] == "journalArticle"
-    assert item["language"] == "en"
-    assert item["date"] == "2026-05-15"
-    assert item["abstractNote"] == "<p>This paper investigates environmental modulation effects.</p>"
-
-    # Authors
-    assert len(item["creators"]) == 2
-    assert item["creators"][0] == {
-        "creatorType": "author",
-        "firstName": "Alice",
-        "lastName": "Brown",
-    }
-
-    # Journal fields — now in item dict, not extra
     assert item["publicationTitle"] == "Journal of Hydrology"
     assert item["volume"] == "635"
-    assert item["issue"] == "3"
-    assert item["pages"] == "135902"
-    assert item["ISSN"] == "0022-1694"
-    assert item["publisher"] == "Elsevier"
-    # extra dict is empty when all fields map to Zotero item fields
-    assert extra == {}
+    assert item["date"] == "2026-05-15"
+    assert len(item["creators"]) == 2
 
 
-def test_build_zotero_item_falls_back_to_pdf_metadata():
-    """When Crossref data is None, uses PDF-embedded metadata."""
-    pdf = _make_pdf_meta(title="A PDF-only paper", authors=["Doe, Jane"])
+# ---------------------------------------------------------------------------
+# Idempotence: DOI index (server scan + local cache)
+# ---------------------------------------------------------------------------
 
-    item, extra = _build_zotero_item("10.1234/test.1", None, pdf)
-
-    assert item["title"] == "A PDF-only paper"
-    assert item["DOI"] == "10.1234/test.1"
-    assert item["itemType"] == "journalArticle"
-    assert len(item["creators"]) == 1
-    # "Doe, Jane" rsplit(" ", 1) → firstName="Doe,", lastName="Jane"
-    assert item["creators"][0]["lastName"] == "Jane"
-    assert item["creators"][0]["firstName"] == "Doe,"
-    # No extra fields when Crossref is unavailable
-    assert extra == {}
+from hydrolitagent.literature.zotero_sync import (  # noqa: E402
+    _load_index,
+    _save_index,
+    _scan_server_dois,
+)
 
 
-def test_build_zotero_item_uses_pdf_title_when_crossref_title_empty():
-    """Falls back to PDF title when Crossref title list is empty."""
-    cr = {"title": [], "type": "journal-article"}
-    pdf = _make_pdf_meta(title="Fallback Title")
-
-    item, extra = _build_zotero_item("10.1234/test.1", cr, pdf)
-
-    assert item["title"] == "Fallback Title"
+def _mock_zot_scan(items):
+    """MagicMock of a Zotero client: ``top()`` returns items, scan iterates them."""
+    mock_zot = MagicMock()
+    mock_zot.top.return_value = items
+    mock_zot.everything.side_effect = lambda it: iter(it)
+    return mock_zot
 
 
-def test_build_zotero_item_handles_date_parts_with_year_only():
-    """Handles date-parts that only have a year (e.g. [[2026]])."""
-    cr = {
-        "title": ["Annual Report"],
-        "issued": {"date-parts": [[2026]]},
-        "type": "journal-article",
-    }
-    pdf = _make_pdf_meta()
-
-    item, extra = _build_zotero_item("10.1234/test.1", cr, pdf)
-    assert item["date"] == "2026"
+def test_scan_server_dois_maps_doi_to_key():
+    mock_zot = _mock_zot_scan([
+        {"key": "AAAA1111", "data": {"itemType": "journalArticle", "DOI": "10.1234/test.1"}},
+    ])
+    assert _scan_server_dois(mock_zot) == {"10.1234/test.1": "AAAA1111"}
 
 
-def test_build_zotero_item_handles_missing_date():
-    """No date field when Crossref has no date information."""
-    cr = {"title": ["No-date paper"], "type": "journal-article"}
-    pdf = _make_pdf_meta()
-
-    item, extra = _build_zotero_item("10.1234/test.1", cr, pdf)
-    assert "date" not in item
+def test_scan_server_dois_skips_attachments():
+    mock_zot = _mock_zot_scan([
+        {"key": "CCCC3333", "data": {"itemType": "attachment", "DOI": "10.1234/test.1"}},
+    ])
+    assert _scan_server_dois(mock_zot) == {}
 
 
-def test_build_zotero_item_handles_missing_optional_fields():
-    """Builds a minimal item when Crossref has only title and type."""
-    cr = {"title": ["Minimal paper"], "type": "book"}
-    pdf = _make_pdf_meta()
+def test_scan_server_dois_matches_extra_doi_line():
+    mock_zot = _mock_zot_scan([
+        {"key": "BBBB2222", "data": {
+            "itemType": "preprint",
+            "DOI": "",
+            "extra": "\n".join([
+                "repository: arXiv",
+                "archiveID: arXiv:2501.08086",
+                "DOI: 10.48550/arXiv.2501.08086",
+            ]),
+        }},
+    ])
+    assert _scan_server_dois(mock_zot) == {"10.48550/arXiv.2501.08086": "BBBB2222"}
 
-    item, extra = _build_zotero_item("10.1234/test.1", cr, pdf)
 
-    assert item["title"] == "Minimal paper"
-    assert item["itemType"] == "journalArticle"  # non-journal-article → journalArticle default
-    assert "abstractNote" not in item
-    assert "date" not in item
-    assert extra == {}
+def test_index_load_save_roundtrip(tmp_path):
+    _save_index(tmp_path, {"10.1234/test.1": "AAAA1111"})
+    assert _load_index(tmp_path) == {"10.1234/test.1": "AAAA1111"}
 
 
-def test_build_zotero_item_with_preprint_type():
-    """Maps Crossref 'journal-article' type to 'journalArticle'."""
-    cr = {"title": ["Preprint test"], "type": "journal-article"}
-    pdf = _make_pdf_meta()
-
-    item, extra = _build_zotero_item("10.1234/test.1", cr, pdf)
-    assert item["itemType"] == "journalArticle"
+def test_index_load_returns_empty_when_missing(tmp_path):
+    assert _load_index(tmp_path) == {}
 
 
 # ---------------------------------------------------------------------------

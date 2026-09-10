@@ -2,26 +2,65 @@
 name: paper-to-zotero
 description: Use when the user wants to download a paper AND add it to Zotero — by DOI, arXiv ID, or paper title. Trigger on "下载并加到Zotero", "同步至Zotero", "同步到Zotero文库", "下载论文并导入", "加到文献库", "加到Zotero", "download and add to Zotero", "save paper to Zotero", "put this paper in my library", "download X paper and sync to Zotero", or ANY phrase that combines obtaining a paper (下载/找/获取/download/find/fetch/get) with Zotero/library (Zotero/文献库/library/references).
 homepage: https://github.com/Agents365-ai/myopenclaw
-metadata: {"author":"owen","version":"6.0","category":"research","tags":["paper","pdf","zotero","google-drive","literature"]}
+metadata: {"author":"owen","version":"6.1","category":"research","tags":["paper","pdf","zotero","google-drive","literature"]}
 ---
 
-# Paper-to-Zotero Pipeline
+# Paper-to-Zotero (双模式)
 
-Run this command. Nothing else.
+本 skill 被**两个环境**消费,命令不同——先判断所在环境再执行。
 
-**Primary path — always try this first:**
+## 模式 A · myopenclaw/hermes 容器(爱码士 / hermes-coder)
+
+本 skill 由 myopenclaw 在 build 时打包到镜像 `/opt/mylibrary-skills` 并挂给 Hermes agent
+(`run_paper_pipeline.sh` 也在 build 时从本仓库 `scripts/` 拷到 `/opt/hermes/scripts/`)。
+
+**容器 canonical(爱码士日常,从宿主机执行):**
 
 ```bash
-bash /opt/hermes/scripts/run-paper-pipeline.sh "<DOI_OR_TITLE>"
+docker compose exec hermes-coder /opt/hermes/scripts/run-paper-pipeline.sh "<DOI_OR_TITLE>"
 ```
 
 **PDF 直链 — when the user provides a direct PDF download URL:**
 
 ```bash
-bash /opt/hermes/scripts/run-paper-pipeline.sh --pdf-url "<PDF_URL>" "<DOI>"
+docker compose exec hermes-coder /opt/hermes/scripts/run-paper-pipeline.sh --pdf-url "<PDF_URL>" "<DOI>"
 ```
 
-This variant downloads the PDF directly via Python urllib (no `--no-check-certificate` needed), uploads to Google Drive via rclone, and creates a Zotero entry with a `linked_file` attachment — the same attachment mechanism used for arXiv papers. All tools and credentials are pre-configured — do NOT install packages, do NOT pip install, do NOT ask for API keys.
+内部流程:paper-fetch 下载 → rclone 传 GDrive → `python3 -m hydrolitagent.zotero.paper_to_zotero` 建条目
+(`linked_file` 附件,凭据在 TOML `/opt/data/.config/zot/config.toml`)。容器内工具与凭据已预置——不要装包、不要 pip install、不要问 API key。
+
+## 模式 B · 裸 host / 本仓库直跑(无 hermes 容器)
+
+在 `~/code/mylibrary`(或任何只装了本包的机器)上。**新机器先自检一次:**
+
+```bash
+uv run python scripts/download_paper.py --setup-check
+```
+
+然后下载 + 同步(一条命令):
+
+```bash
+uv run python scripts/download_paper.py --arxiv 2605.00850 --sync     # arXiv
+uv run python scripts/download_paper.py --doi 10.5194/hess-... --sync # 期刊 DOI
+```
+
+- 走 curl/urllib(arXiv、science.org、Copernicus 等 OA 源)无需 playwright;付费墙(SD/Wiley/Nature)才需要浏览器 + 机构会话。
+- 建条目统一由 `paper_to_zotero.build_item()` 生成:arXiv 记录为 `preprint`(真实摘要/日期/`archiveID: arXiv:…`),不再有 Crossref-404 的 PDF 兜底错配。
+- **幂等**:同 DOI 已存在时提示并跳过;强制重建加 `--allow-duplicate`。
+- 凭据来自 `.env`(`ZOTERO_API_KEY`/`ZOTERO_LIBRARY_ID`/`GDRIVE_PAPERS_PATH`),不依赖容器 TOML。
+
+## 用后必查(两种模式都适用)
+
+```
+1. 标题与用户要求一致;arXiv 应为 preprint 类型、extra 含 archiveID
+2. 作者数合理;日期存在
+3. child attachment 是 linked_file → attachments:<file>.pdf
+4. PDF 已在 GDrive 文献夹(模式 B 的 Linked Attachment Base Directory)
+```
+
+> 以下「container / paper-fetch」小节(Manual Fallback、Slow Downloads、Known Issues)主要面向
+> **模式 A 容器**(paper-fetch 偶发低置信错配)。模式 B 元数据由 arXiv API / Crossref 直取、且幂等,
+> 极少需要手动恢复。
 
 ---
 IMPORTANT: After the pipeline completes, ALWAYS verify the result by checking the paper title and DOI against what the user requested. The pipeline's `paper-fetch` tool sometimes resolves arXiv IDs / DOIs incorrectly via low-confidence Crossref matches (score < 30). Known failure mode: `arXiv:2501.08086` → matched to `10.1017/cts.2017.287` (completely wrong paper).

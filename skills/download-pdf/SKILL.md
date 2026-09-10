@@ -45,6 +45,9 @@ stealth temp profile when MCP is unavailable. Try this first; fall back to the
 MCP-browser phases only when it can't run.
 
 ```bash
+# Fresh machine: verify .env / Zotero API / GDrive dir once
+uv run python scripts/download_paper.py --setup-check
+
 # Metadata check only (Crossref title/PII, no download)
 uv run python scripts/download_paper.py --doi <doi> --resolve-only
 
@@ -54,6 +57,12 @@ uv run python scripts/download_paper.py --doi <doi> [--sync] [--out DIR]
 # arXiv preprint
 uv run python scripts/download_paper.py --arxiv <id> --sync
 ```
+
+- **arXiv 记录质量**:`--sync` 走 `zotero_sync`,建条目委托给 `paper_to_zotero.build_item()`
+  (Crossref → arXiv API → Semantic Scholar)。arXiv DOI 在 Crossref 是 404,因此记录来自 arXiv API:
+  `preprint` 类型、真实标题/摘要/日期、`extra` 含 `archiveID: arXiv:<id>`。重跑同 DOI 会**幂等跳过**(强制加 `--allow-duplicate`)。
+- **post-sync 核验**:Zotero 条目标题/作者与论文一致、`itemType=preprint`、child 为
+  `linked_file → attachments:<file>.pdf`、PDF 已在 `GDRIVE_PAPERS_PATH`(= Zotero Desktop 的 Linked Attachment Base Directory)。
 
 Routing: `10.5194` Copernicus → curl · `10.1126` science.org → curl two-step ·
 `10.1016` → SD flow · `10.1029`/`10.1002` → Wiley pdfdirect · `10.1175` → AMS ·

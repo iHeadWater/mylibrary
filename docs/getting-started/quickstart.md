@@ -48,22 +48,24 @@ uv run python -m hydrolitagent.zotero.paper_to_zotero \
   --dry-run --metadata-only "10.1038/s41586-024-07145-1"
 ```
 
-## 场景 3：完整流水线
+## 场景 3：完整流水线（下载 PDF → GDrive → Zotero 入库）
 
-使用自动化脚本完成 下载 PDF → 上传 → Zotero 入库的全流程。
+**裸 host / 本仓库直跑（推荐）**——新机器先自检一次，之后一条命令：
 
 ```bash
-# DOI 方式
-bash scripts/run_paper_pipeline.sh "10.1038/s41586-024-07145-1"
+uv run python scripts/download_paper.py --setup-check
+uv run python scripts/download_paper.py --doi "10.1038/s41586-024-07145-1" --sync
+uv run python scripts/download_paper.py --arxiv 2501.08086 --sync
+```
 
-# arXiv ID 方式（自动转为 DOI）
-bash scripts/run_paper_pipeline.sh "2501.08086"
+arXiv 与 OA DOI（science.org / Copernicus 等）走 curl，秒级；付费墙（SD/Wiley/Nature）需浏览器 + 机构会话。
+重跑同 DOI 幂等跳过（`--allow-duplicate` 强制重建）。
 
-# PDF 直链模式（已知 PDF URL 时）
-bash scripts/run_paper_pipeline.sh --pdf-url "https://example.com/paper.pdf" "10.xxx"
+**myopenclaw / hermes 容器（爱码士）**——用打包进容器的 pipeline（需要 paper-fetch）：
 
-# 预览模式
-bash scripts/run_paper_pipeline.sh --dry-run "10.1038/s41586-024-07145-1"
+```bash
+docker compose exec hermes-coder /opt/hermes/scripts/run-paper-pipeline.sh "10.1038/s41586-024-07145-1"
+docker compose exec hermes-coder /opt/hermes/scripts/run-paper-pipeline.sh --dry-run "10.xxx"
 ```
 
 ## 场景 4：链接 Google Drive PDF

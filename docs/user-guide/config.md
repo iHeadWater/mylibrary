@@ -37,7 +37,9 @@ ZOTERO_LOCAL_API_URL=http://host.docker.internal:23119
 
 > ⚠️ 凭据一律从环境变量读取,不要硬编码进源码。参见 [文献深度处理](literature.md)。
 
-> **两种 Zotero 配置模型并存**：`paper_to_zotero.py` / `zot_link_gdrive.py`（入库流水线）用 TOML 配置文件（见下节）；`zotero_sync.py`（文献深度处理）用上面的环境变量。两者都用 Web API 凭据，但读取方式不同。
+> **配置读取已统一（TOML 优先、`.env` 回退）**：`paper_to_zotero.py` / `zot_link_gdrive.py` / `zotero_sync.py` /
+> `download_paper.py` 现在都先读 TOML（若存在，容器 myopenclaw 用 `/opt/data/.config/zot/config.toml`），
+> TOML 缺失时才回退到 `.env` 的 `ZOTERO_API_KEY`/`ZOTERO_LIBRARY_ID`。裸 host 无需再手写 TOML。
 
 ## Zotero 配置文件
 
@@ -51,7 +53,8 @@ library_id = "1234567"
 api_key = "xxxxxxxxxxxxxxxxxxxxxxxx"
 ```
 
-如果未配置，脚本会退出并报错。
+**若无 TOML（裸 host）**：脚本回退读 `.env` 的 `ZOTERO_API_KEY` / `ZOTERO_LIBRARY_ID`
+（`.env.example` 已含注释）。TOML 与 env 都缺失时才退出报错。容器（myopenclaw hermes）路径不变：仍读 `/opt/data/.config/zot/config.toml`。
 
 ## Linked Attachment Base Directory
 

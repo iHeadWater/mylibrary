@@ -65,9 +65,15 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 ### Zotero
 - Start MCP Server: `uv run python -m hydrolitagent.zotero.server` (port 8002, 12 tools)
-- Add paper by DOI: `uv run python -m hydrolitagent.zotero.paper_to_zotero --metadata-only "<DOI>"`
-- Paper pipeline: `bash scripts/run_paper_pipeline.sh "<DOI|arXiv|title>"`
+- **下载+入库 canonical（裸 host / 本仓库直跑）**:`uv run python scripts/download_paper.py --arxiv <id> --sync` / `--doi <doi> --sync`;新机器先 `uv run python scripts/download_paper.py --setup-check`
+  - 建条目统一由 `paper_to_zotero.build_item()` 生成（arXiv → preprint + 摘要 + `archiveID`）;同 DOI 重跑幂等跳过
+  - arXiv 与 OA DOI 走 curl 无需 playwright;付费墙（SD/Wiley/Nature）需浏览器 + 机构会话
+- **下载+入库 canonical（myopenclaw hermes 容器 / 爱码士）**:`docker compose exec hermes-coder /opt/hermes/scripts/run-paper-pipeline.sh "<DOI|arXiv|title>"`（该脚本在 build 时从本仓库 `scripts/` 拷入镜像;详见 `skills/paper-to-zotero` 双模式说明）
+- Add paper by DOI (仅元数据):`uv run python -m hydrolitagent.zotero.paper_to_zotero --metadata-only "<DOI>"`
+- Paper pipeline (旧,需 paper-fetch):`bash scripts/run_paper_pipeline.sh "<DOI|arXiv|title>"`
 - Link GDrive PDF: `uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>`
+
+> 凭据:裸 host 用 `.env` 的 `ZOTERO_API_KEY/ZOTERO_LIBRARY_ID/GDRIVE_PAPERS_PATH`(`paper_to_zotero` 在无 TOML 时回退读它);容器/旧环境用 `~/.config/zot/config.toml`(或 `ZOTERO_CONFIG_PATH`)。`skills/paper-to-zotero` 的「双模式」节与 `scripts/download_paper.py --setup-check` 会解释所需一次性设置。
 
 ### Literature CLI (hydrolitagent/literature — 从 dailyinfo 迁入)
 用 `uv run python -m` 调用(与全仓库一致,不依赖 console_scripts):

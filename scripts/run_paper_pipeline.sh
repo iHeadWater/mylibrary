@@ -8,6 +8,12 @@
 #   PAPER_FETCH_DIR       paper-fetch 项目目录（默认: ~/code/paper-fetch）
 #   ZOTERO_SCRIPT         paper-to-zotero CLI（默认: python3 -m hydrolitagent.zotero.paper_to_zotero）
 #   PAPERS_DIR            临时下载目录（默认: mktemp -d）
+#
+# ⚠️ 注意:
+#   1. 此脚本会被 myopenclaw 在 build 时原样拷为 /opt/hermes/scripts/run-paper-pipeline.sh,
+#     是 hermes 容器(爱码士)的论文入库 canonical——请勿删除或改变其逻辑契约。
+#   2. 它依赖外部 paper-fetch(默认 ~/code/paper-fetch / 容器内 /opt/data/skills/paper-fetch)。
+#     裸 host(无 paper-fetch)请改用 scripts/download_paper.py(见 skills/paper-to-zotero 模式 B)。
 # =============================================================
 set -euo pipefail
 

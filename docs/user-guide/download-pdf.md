@@ -61,10 +61,14 @@ GDRIVE_PAPERS_PATH=<path>     # 本地 GDrive 路径(ZotMoov 目标)
 **方式一：自主脚本模式（首选，无需交互）**
 
 ```bash
+uv run python scripts/download_paper.py --setup-check          # 新机器自检一次
 uv run python scripts/download_paper.py --doi 10.1029/2026GL125188 --sync
 uv run python scripts/download_paper.py --arxiv 2608.18495 --sync
 uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元数据
 ```
+
+`--sync` 走 `zotero_sync` → `paper_to_zotero.build_item()`：arXiv 记录为 `preprint`（摘要/日期/`archiveID`），
+重跑同 DOI 幂等跳过（强制 `--allow-duplicate`）。
 
 脚本按 DOI 前缀自动路由到对应出版商流程，内置 **stealth Chrome 启动器**
 （真实 Chrome 内核 + 剥离自动化标记），Cloudflare / AMS 人机验证**自动通过**，

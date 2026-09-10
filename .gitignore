@@ -202,3 +202,7 @@ AGENTS.md
 .gitattributes
 _docx_extract.md
 .tmp/
+
+# 根目录录音 + 转写稿（MM-DD 标题.mp3 / .txt，仅匹配仓库根，不影响子目录）
+/[0-9][0-9]-[0-9][0-9] *.mp3
+/[0-9][0-9]-[0-9][0-9] *.txt

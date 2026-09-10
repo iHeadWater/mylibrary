@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Sync a downloaded PDF to Zotero as a linked_file attachment.
 
-Copies the PDF to the Google Drive papers folder (ZotMoov-managed), fetches
-rich metadata from Crossref, and creates a Zotero item with a linked_file
-attachment via pyzotero.  Zotero cloud storage is **not** used — the PDF lives
-in the GDrive folder and Zotero stores only a pointer.
+Copies the PDF to the Google Drive papers folder (the Zotero Linked Attachment
+Base Directory), enriches metadata via :func:`paper_to_zotero.build_item`
+(Crossref → arXiv API → Semantic Scholar, so arXiv preprints get a correct
+``preprint`` record instead of a sparse Crossref-404 fallback), and creates a
+Zotero item with a linked_file attachment via pyzotero.  Zotero cloud storage
+is **not** used — the PDF lives in the GDrive folder and Zotero stores only a
+pointer.  Re-runs for the same DOI are skipped (idempotent).
 
 Usage::
 
-    python scripts/zotero_sync.py <pdf_path> <doi> [--dry-run] [--json]
+    python scripts/zotero_sync.py <pdf_path> <doi> [--dry-run] [--json] [--allow-duplicate]
 
 Environment variables::
 
@@ -23,7 +26,6 @@ import json
 import os
 import shutil
 import sys
-import urllib.request
 from pathlib import Path
 
 from hydrolitagent.literature.download_pdf import (
@@ -31,8 +33,6 @@ from hydrolitagent.literature.download_pdf import (
     slug_from_doi,
     verify_pdf,
 )
-
-CROSSREF_UA = "mylibrary-zotero-sync/1.0 (mailto:wenyuouyang@outlook.com)"
 
 # Load .env so users don't need to export vars manually.
 # <repo>/hydrolitagent/literature/zotero_sync.py → <repo>/
@@ -110,139 +110,11 @@ def _copy_to_gdrive(pdf_path: str | Path, gdrive_dir: str | Path, dest_filename:
 
 
 # ---------------------------------------------------------------------------
-# Metadata enrichment
-# ---------------------------------------------------------------------------
-
-
-def _fetch_crossref_metadata(doi: str) -> dict | None:
-    """Fetch rich metadata from Crossref for a DOI.
-
-    Returns:
-        The ``message`` dict from Crossref API response, or ``None`` on failure.
-    """
-    url = f"https://api.crossref.org/works/{doi}"
-    req = urllib.request.Request(url, headers={"User-Agent": CROSSREF_UA})
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read()).get("message")
-    except Exception:
-        return None
-
-
-def _build_zotero_item(
-    doi: str,
-    crossref_data: dict | None,
-    pdf_metadata,
-) -> tuple[dict, dict]:
-    """Build a Zotero item dict from Crossref metadata, falling back to PDF metadata.
-
-    Args:
-        doi: Normalized DOI.
-        crossref_data: Crossref ``message`` dict, or ``None``.
-        pdf_metadata: :class:`PdfMetadata` from :func:`verify_pdf`.
-
-    Returns:
-        ``(item_data, extra_fields)`` tuple ready for pyzotero.
-    """
-    item: dict = {}
-    extra: dict = {}
-
-    if crossref_data:
-        # -- Title
-        titles = crossref_data.get("title", [])
-        item["title"] = titles[0] if titles else (pdf_metadata.title or "")
-
-        # -- Creators
-        creators = []
-        for a in crossref_data.get("author", []):
-            given = a.get("given", "")
-            family = a.get("family", "")
-            name = a.get("name", "")
-            if not given and not family and name:
-                # Consortium / group author (e.g. "Tabula Sapiens Consortium")
-                creators.append({"creatorType": "author", "name": name})
-            else:
-                creators.append(
-                    {
-                        "creatorType": "author",
-                        "firstName": given or "",
-                        "lastName": family or given or "",
-                    }
-                )
-        if creators:
-            item["creators"] = creators
-
-        # -- Abstract
-        abstract = crossref_data.get("abstract")
-        if abstract:
-            item["abstractNote"] = abstract
-
-        # -- Date (prefer published-print, then issued/created/deposited)
-        date_parts = (
-            crossref_data.get("published-print")
-            or crossref_data.get("created")
-            or crossref_data.get("issued")
-            or crossref_data.get("deposited")
-        )
-        if date_parts and "date-parts" in date_parts:
-            dp = date_parts["date-parts"][0]
-            if len(dp) >= 3:
-                item["date"] = f"{dp[0]:04d}-{dp[1]:02d}-{dp[2]:02d}"
-            elif len(dp) >= 1:
-                item["date"] = str(dp[0])
-
-        # -- Item type
-        cr_type = crossref_data.get("type", "")
-        item["itemType"] = "journalArticle" if cr_type == "journal-article" else "journalArticle"
-
-        # -- Journal / container info → dedicated Zotero fields
-        container = crossref_data.get("container-title", [])
-        if container:
-            item["publicationTitle"] = container[0]
-        vol = crossref_data.get("volume")
-        if vol:
-            item["volume"] = str(vol)
-        issue = crossref_data.get("issue")
-        if issue:
-            item["issue"] = str(issue)
-        page = crossref_data.get("page")
-        if page:
-            item["pages"] = str(page)
-        issn = crossref_data.get("ISSN", [])
-        if issn:
-            item["ISSN"] = issn[0] if isinstance(issn, list) else str(issn)
-        publisher = crossref_data.get("publisher")
-        if publisher:
-            item["publisher"] = publisher
-
-    else:
-        # Crossref unavailable — fall back to PDF-embedded metadata
-        item["title"] = pdf_metadata.title or ""
-        if pdf_metadata.authors:
-            creators = []
-            for author in pdf_metadata.authors:
-                parts = author.rsplit(" ", 1) if " " in author else [author, ""]
-                creators.append(
-                    {
-                        "creatorType": "author",
-                        "firstName": parts[0] if len(parts) > 1 else "",
-                        "lastName": parts[-1] if len(parts) > 1 else author,
-                    }
-                )
-            item["creators"] = creators
-        item["itemType"] = "journalArticle"
-
-    # -- Common fields
-    item["DOI"] = doi
-    item["url"] = f"https://doi.org/{doi}"
-    item["language"] = "en"
-
-    return item, extra
-
-
-# ---------------------------------------------------------------------------
 # Zotero item creation
 # ---------------------------------------------------------------------------
+# Item metadata (Crossref → arXiv API → Semantic Scholar enrichment) is
+# delegated to hydrolitagent.zotero.paper_to_zotero.build_item(), keeping a
+# single source of truth that handles arXiv preprints correctly.
 
 
 def _create_zotero_item(
@@ -255,7 +127,7 @@ def _create_zotero_item(
 
     Args:
         zot: :class:`pyzotero.zotero.Zotero` client.
-        item_data: Item dict from :func:`_build_zotero_item`.
+        item_data: Item dict from :func:`paper_to_zotero.build_item`.
         extra_fields: Extra fields to write into the ``extra`` field.
         attachment_filename: Filename for the linked_file (e.g. ``paper.pdf``).
 
@@ -305,6 +177,104 @@ def _create_zotero_item(
 # CLI
 # ---------------------------------------------------------------------------
 
+# Idempotence uses a local DOI→key index cached inside the GDrive papers folder
+# (`.zotero-sync-index.json`).  A full server scan is avoided on every sync
+# because Zotero's quick-search ``q`` does NOT index the DOI field (verified
+# live), and a top-level scan is slow on large libraries (~7k items ≈ minutes).
+# The index file is a normal file in the (Google-Drive-synced) papers folder, so
+# it persists across repo re-clones and carries over to other machines sharing
+# the same GDrive folder.  A full scan is triggered only when the index is
+# missing or stale, or with ``--refresh-index``.
+
+INDEX_FILENAME = ".zotero-sync-index.json"
+INDEX_STALE_DAYS = 30
+
+
+def _index_path(gdrive_dir: str | Path) -> Path:
+    return Path(gdrive_dir) / INDEX_FILENAME
+
+
+def _load_index(gdrive_dir: str | Path) -> dict[str, str]:
+    """Load {doi: zotero_key} from the cached index (best-effort)."""
+    p = _index_path(gdrive_dir)
+    if p.exists():
+        try:
+            payload = json.loads(p.read_text(encoding="utf-8"))
+            items = payload.get("items")
+            if isinstance(items, dict):
+                return items
+        except Exception:
+            pass
+    return {}
+
+
+def _save_index(gdrive_dir: str | Path, items: dict[str, str]) -> None:
+    """Persist {doi: zotero_key}. Best-effort — never fails the sync."""
+    try:
+        from datetime import datetime, timezone
+        payload = {
+            "version": 1,
+            "updated": datetime.now(timezone.utc).isoformat(),
+            "items": items,
+        }
+        _index_path(gdrive_dir).write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+        )
+    except OSError:
+        pass
+
+
+def _index_is_stale(gdrive_dir: str | Path) -> bool:
+    """True when the cached index is older than INDEX_STALE_DAYS."""
+    p = _index_path(gdrive_dir)
+    if not p.exists():
+        return True
+    try:
+        import time as _time
+        age_days = (_time.time() - p.stat().st_mtime) / 86400
+        return age_days > INDEX_STALE_DAYS
+    except OSError:
+        return True
+
+
+def _scan_server_dois(zot) -> dict[str, str]:
+    """Full top-level scan → {doi: key}. Expensive — only run on (re)build.
+
+    Zotero items returned by the API carry the key at the object top level
+    (``it["key"]``), with fields under ``it["data"]``.
+    """
+    items: dict[str, str] = {}
+    for it in zot.everything(zot.top(limit=100)):
+        key = it.get("key")
+        d = it.get("data", {}) or {}
+        if not key or d.get("itemType") == "attachment":
+            continue
+        doi = (d.get("DOI") or "").strip()
+        if doi:
+            items.setdefault(doi, key)
+        extra = d.get("extra") or ""
+        for line in extra.splitlines():
+            line = line.strip()
+            if line.startswith("DOI: "):
+                items.setdefault(line[5:].strip(), key)
+    return items
+
+
+def _existing_key(zot, doi: str, gdrive_dir: str | Path, refresh: bool) -> str | None:
+    """Return an existing Zotero key for ``doi``, or None.
+
+    Uses the local cached index when fresh; runs a one-time full scan when the
+    index is missing/stale or ``refresh=True`` (result is re-cached).
+    """
+    items = _load_index(gdrive_dir)
+    path = _index_path(gdrive_dir)
+    need_scan = refresh or not path.exists() or (doi not in items and _index_is_stale(gdrive_dir))
+    if need_scan:
+        print("   Building DOI index (one-time server scan — may take a while)...", flush=True)
+        items = _scan_server_dois(zot)
+        _save_index(gdrive_dir, items)
+    return items.get(doi)
+
 
 def main():
     """Console script entry point — argparse CLI matching ``download_pdf.py`` style."""
@@ -327,6 +297,16 @@ def main():
     )
     parser.add_argument(
         "--json", action="store_true", help="Output result as JSON"
+    )
+    parser.add_argument(
+        "--allow-duplicate",
+        action="store_true",
+        help="Create a new item even if one with this DOI already exists",
+    )
+    parser.add_argument(
+        "--refresh-index",
+        action="store_true",
+        help="Rebuild the local DOI index from a full server scan before checking",
     )
 
     args = parser.parse_args()
@@ -354,9 +334,19 @@ def main():
         print(f"Error: Invalid PDF: {e}", file=sys.stderr)
         sys.exit(3)
 
-    # -- Enrich metadata via Crossref -------------------------------------
-    crossref_data = _fetch_crossref_metadata(doi)
-    item_data, extra_fields = _build_zotero_item(doi, crossref_data, pdf_meta)
+    # -- Enrich metadata ------------------------------------------------
+    # Single source of truth = paper_to_zotero.build_item() (Crossref →
+    # arXiv API → Semantic Scholar). arXiv DOIs (10.48550/arXiv.*) are not
+    # registered with Crossref, so the old Crossref-only builder produced
+    # sparse/mangled records for preprints; delegating fixes that.
+    # (Lazy import: keeps zotero_sync importable without pyzotero.)
+    from hydrolitagent.zotero.paper_to_zotero import build_item
+
+    fallback_meta = {
+        "title": pdf_meta.title or "",
+        "author": pdf_meta.authors[0] if pdf_meta.authors else "",
+    }
+    item_data, extra_fields = build_item(doi, fallback_meta)
 
     # -- Dry-run: preview only --------------------------------------------
     if args.dry_run:
@@ -372,6 +362,30 @@ def main():
         print(f"  Attachment:  linked_file → attachments:{dest_filename}")
         return
 
+    try:
+        zot = get_zotero_client()
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    # -- Idempotence: skip when an item with this DOI already exists ------
+    if not args.allow_duplicate:
+        existing = None
+        try:
+            existing = _existing_key(zot, doi, gdrive_dir, refresh=args.refresh_index)
+        except Exception as e:  # never block the sync on a check failure
+            print(f"Note: duplicate check failed ({e}); continuing", file=sys.stderr)
+        if existing:
+            print(
+                f"SKIP — item already in library (key {existing}) for DOI {doi}; "
+                "use --allow-duplicate to force"
+            )
+            if args.json:
+                print(json.dumps(
+                    {"ok": False, "skipped": True, "zotero_key": existing, "doi": doi}
+                ))
+            return
+
     # -- Copy PDF to Google Drive folder ----------------------------------
     try:
         gdrive_path = _copy_to_gdrive(pdf_path, gdrive_dir, dest_filename)
@@ -381,13 +395,17 @@ def main():
 
     # -- Create Zotero item + linked_file attachment ----------------------
     try:
-        zot = get_zotero_client()
         parent_key, attach_key = _create_zotero_item(
             zot, item_data, extra_fields, dest_filename
         )
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(5)
+
+    # -- Record in the local dedupe index (merge, don't clobber) ----------
+    _idx = _load_index(gdrive_dir)
+    _idx[doi] = parent_key
+    _save_index(gdrive_dir, _idx)
 
     # -- Report -----------------------------------------------------------
     result = {

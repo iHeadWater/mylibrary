@@ -637,3 +637,80 @@ class TestArxivUpgrade:
 
         # Crossref called exactly once with the published DOI
         mock_cr.assert_called_once_with(self.PUBLISHED_DOI)
+
+
+# ── Creators (group author) + credential resolution ──────────────────
+
+
+class TestCrossrefGroupAuthorFallback:
+    """Crossref consortium authors carry only ``name`` — no empty given/family."""
+
+    def test_group_author_uses_name_field(self):
+        mock_cr = {
+            "type": "journal-article",
+            "title": ["Consortium Paper"],
+            "author": [{"name": "Tabula Sapiens Consortium"}],
+        }
+
+        with patch.object(paper_to_zotero, "fetch_crossref", return_value=mock_cr):
+            item, _ = paper_to_zotero.build_item("10.1234/test", {})
+
+        assert item["creators"] == [{"creatorType": "author", "name": "Tabula Sapiens Consortium"}]
+
+    def test_person_authors_keep_first_last(self):
+        mock_cr = {
+            "type": "journal-article",
+            "title": ["Paper"],
+            "author": [
+                {"given": "Alice", "family": "Brown"},
+                {"name": "Some Consortium"},
+            ],
+        }
+
+        with patch.object(paper_to_zotero, "fetch_crossref", return_value=mock_cr):
+            item, _ = paper_to_zotero.build_item("10.1234/test", {})
+
+        assert item["creators"][0] == {
+            "creatorType": "author", "firstName": "Alice", "lastName": "Brown",
+        }
+        assert item["creators"][1] == {"creatorType": "author", "name": "Some Consortium"}
+
+
+class TestResolveZoteroCredentials:
+    """_resolve_zotero_credentials(): TOML preferred, env fallback."""
+
+    def test_falls_back_to_env_when_no_toml(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("ZOTERO_API_KEY", "env-key")
+        monkeypatch.setenv("ZOTERO_LIBRARY_ID", "6789")
+        monkeypatch.delenv("ZOTERO_CONFIG_PATH", raising=False)
+        # Point the default config path into tmp_path where no TOML exists.
+        monkeypatch.setattr(
+            "os.path.expanduser", lambda p: str(tmp_path / "config.toml")
+        )
+
+        lib_id, api_key = paper_to_zotero._resolve_zotero_credentials()
+
+        assert (lib_id, api_key) == ("6789", "env-key")
+
+    def test_toml_takes_precedence_over_env(self, monkeypatch, tmp_path):
+        cfg = tmp_path / "zot.toml"
+        cfg.write_text('[zotero]\nlibrary_id = "111"\napi_key = "toml-key"\n', encoding="utf-8")
+        monkeypatch.setenv("ZOTERO_CONFIG_PATH", str(cfg))
+        monkeypatch.setenv("ZOTERO_API_KEY", "env-key")
+        monkeypatch.setenv("ZOTERO_LIBRARY_ID", "999")
+
+        lib_id, api_key = paper_to_zotero._resolve_zotero_credentials()
+
+        assert (lib_id, api_key) == ("111", "toml-key")
+
+    def test_returns_empty_when_both_missing(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("ZOTERO_API_KEY", "")
+        monkeypatch.setenv("ZOTERO_LIBRARY_ID", "")
+        monkeypatch.delenv("ZOTERO_CONFIG_PATH", raising=False)
+        monkeypatch.setattr(
+            "os.path.expanduser", lambda p: str(tmp_path / "config.toml")
+        )
+
+        lib_id, api_key = paper_to_zotero._resolve_zotero_credentials()
+
+        assert (lib_id, api_key) == ("", "")

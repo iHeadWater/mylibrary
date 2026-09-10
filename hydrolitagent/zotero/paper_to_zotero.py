@@ -25,11 +25,21 @@ import tomllib
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 from pyzotero import zotero as zt
 
 CROSSREF_UA = "zotero-bridge/1.0 (mailto:wenyuouyang@outlook.com)"
 ARXIV_API = "http://export.arxiv.org/api/query"
+
+# Load the repo .env so bare-host runs (no Zotero TOML) can read credentials
+# from ZOTERO_API_KEY / ZOTERO_LIBRARY_ID, same source as the Zotero MCP
+# server and hydrolitagent.literature.zotero_sync.
+# <repo>/hydrolitagent/zotero/paper_to_zotero.py → <repo>/
+_ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
+if _ENV_FILE.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_ENV_FILE)
 
 
 def fetch_crossref(doi: str) -> dict | None:
@@ -155,11 +165,19 @@ def build_item(doi: str, pf_meta: dict) -> tuple[dict, dict]:
         # Creators
         creators = []
         for a in cr.get("author", []):
-            creators.append({
-                "creatorType": "author",
-                "firstName": a.get("given", ""),
-                "lastName": a.get("family", ""),
-            })
+            given = (a.get("given") or "").strip()
+            family = (a.get("family") or "").strip()
+            name = (a.get("name") or "").strip()
+            if not given and not family and name:
+                # Consortium / group author (e.g. "Tabula Sapiens Consortium").
+                # Zotero rejects creators with empty first/last names (HTTP 400).
+                creators.append({"creatorType": "author", "name": name})
+            else:
+                creators.append({
+                    "creatorType": "author",
+                    "firstName": given,
+                    "lastName": family or given,
+                })
         if creators:
             item["creators"] = creators
 
@@ -356,6 +374,32 @@ def build_item(doi: str, pf_meta: dict) -> tuple[dict, dict]:
     return item, extra
 
 
+def _resolve_zotero_credentials() -> tuple[str, str]:
+    """Return ``(library_id, api_key)`` — TOML config preferred, env fallback.
+
+    The TOML (``ZOTERO_CONFIG_PATH`` or ``~/.config/zot/config.toml``) is what
+    the myopenclaw hermes container provides.  When it is absent or lacks the
+    keys, fall back to ``ZOTERO_API_KEY`` / ``ZOTERO_LIBRARY_ID`` (loaded from
+    the repo ``.env`` at import time).  TOML values win when present, so the
+    container path is unchanged.
+    """
+    zotero_config_path = os.environ.get(
+        "ZOTERO_CONFIG_PATH", os.path.expanduser("~/.config/zot/config.toml")
+    )
+    lib_id = os.environ.get("ZOTERO_LIBRARY_ID", "")
+    api_key = os.environ.get("ZOTERO_API_KEY", "")
+    if os.path.exists(zotero_config_path):
+        try:
+            with open(zotero_config_path, "rb") as f:
+                cfg = tomllib.load(f)
+        except Exception:
+            cfg = None
+        if cfg:
+            lib_id = cfg.get("zotero", {}).get("library_id", "") or lib_id
+            api_key = cfg.get("zotero", {}).get("api_key", "") or api_key
+    return lib_id, api_key
+
+
 def main():
     dry_run = False
     metadata_only = False
@@ -414,16 +458,16 @@ def main():
     # This makes linked_file paths portable across OSes and user accounts.
     attachment_path = f"attachments:{pf_filename}" if pf_filename else None
 
-    # Read Zotero config (configurable via ZOTERO_CONFIG_PATH env var)
-    zotero_config_path = os.environ.get(
-        "ZOTERO_CONFIG_PATH", os.path.expanduser("~/.config/zot/config.toml")
-    )
-    config = tomllib.load(open(zotero_config_path, "rb"))
-    lib_id = config["zotero"]["library_id"]
-    api_key = config["zotero"]["api_key"]
+    # Read Zotero credentials (TOML-preferred, .env fallback).
+    lib_id, api_key = _resolve_zotero_credentials()
 
     if not lib_id or not api_key:
-        print("Error: Zotero API credentials not configured", file=sys.stderr)
+        print(
+            "Error: Zotero API credentials not configured. Set ZOTERO_API_KEY / "
+            "ZOTERO_LIBRARY_ID in .env, or provide a Zotero config TOML "
+            "(ZOTERO_CONFIG_PATH).",
+            file=sys.stderr,
+        )
         sys.exit(6)
 
     # Build item data

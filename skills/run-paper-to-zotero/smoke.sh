@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # smoke.sh — paper-to-zotero pipeline end-to-end verification
 # Run from repo root: bash .claude/skills/run-paper-to-zotero/smoke.sh
+#
+# ⚠️ 容器专用 smoke test:仅在 myopenclaw 宿主(hermes-coder 容器 + paper-fetch +
+#    rclone + TOML 凭据)上运行。裸 host 模式(scripts/download_paper.py + .env)不适用。
+#    脚本引用旧路径(/opt/hermes/scripts/paper-to-zotero.py、/opt/uv-tools/zotero-cli-cc),
+#    若与当前 hermes 镜像不符,请先按镜像实际路径更新再跑。属可选验证,不影响入库功能。
 set -euo pipefail
 
 DOI="${1:-10.48550/arXiv.1706.03762}"  # default: Attention Is All You Need
