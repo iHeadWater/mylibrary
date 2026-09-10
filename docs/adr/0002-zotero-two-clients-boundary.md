@@ -34,7 +34,12 @@ Accepted
 
 `hydro-platform` 运行在**裸 host** 上，所以走直连——这与 `CLAUDE.md` 那句"8002 是唯一访问入口"**并不冲突**：后者描述的是容器侧的服务契约（同一句也写着"不要改动它的技术架构——已有其他服务依赖"），只是原文缺少"在容器部署中"这个作用域限定。
 
-> 一个必须记住的操作事实：**在裸 host 上启动 8002 服务必须设 `ZOTERO_LOCAL_BASE_URL=http://127.0.0.1:23119`**，否则默认的 `host.docker.internal` 在裸 host 上不解析（`getaddrinfo failed`）。那个默认值是容器契约，不要改它。
+> 一个必须记住的操作事实：**在裸 host 上启动 8002 服务必须设 `ZOTERO_LOCAL_API_URL=http://127.0.0.1:23119`**（`hydrolitagent/zotero/server.py:42`），否则默认的 `host.docker.internal` 在裸 host 上不解析（`getaddrinfo failed`）。那个默认值是容器契约，不要改它。
+>
+> ⚠️ 别把这个变量名搞混：仓库里有**两个名字相近但不同**的变量——
+> `ZOTERO_LOCAL_API_URL` 只被 8002 的 MCP server 读取；
+> `ZOTERO_LOCAL_BASE_URL` 只被 `hydrolitagent/literature/zotero_notebooklm.py` 读取（默认已是 `127.0.0.1:23119`）。
+> 设错一个不会报错，只会让另一个组件继续用它的默认值。
 
 ## Decision
 
