@@ -4,7 +4,7 @@
 
 | 类型 | 示例 | 保存位置 | 是否进入 Git |
 |---|---|---|---|
-| 团队级可调整配置 | 项目目录、运行区、证据包目录、证据卡模板与清单路径、Zotero 群组 ID、超时、分页大小、PDF 门禁阈值、任务租约和锁时长、制卡适配器及预检参数 | `hydro-platform/config/config.json` | 是 |
+| 团队级可调整配置 | 项目目录、运行区、证据包目录、证据卡模板与清单路径、**科研产物根（证据卡/主题/运行记录/文献链接的落点，可指向共享盘）**、Zotero 群组 ID、超时、分页大小、PDF 门禁阈值、任务租约和锁时长、制卡适配器及预检参数 | `hydro-platform/config/config.json` | 是 |
 | 本机覆盖配置 | 本机临时路径或不同端口 | `hydro-platform/config/config.local.json` | 否 |
 | 运行时状态 | 扫描快照、任务状态、锁、原始日志、试运行卡和可删除的临时处理文件 | `paths.runtime_dir` 指向的目录 | 否 |
 | 证据事实 | 父条目/附件 Key、PDF 哈希、读取方式、来源检查、模型阅读声明、生成审计、版本与时间 | `manifest.json` 和 `quality-audit.json`；旧 MCP 才有页面交付回执 | 是 |
@@ -19,11 +19,14 @@
 
 1. `paths.project_root` 相对于总配置文件所在目录解析，也可以填写绝对路径；
 2. 其余项目路径相对于 `project_root` 解析，也可以填写位于项目根目录内的绝对路径；
-3. 所有项目路径不得逃出 `project_root`；
+3. 除下述第 8 条的科研产物根外，所有项目路径不得逃出 `project_root`；
 4. `snapshot_file`、`tasks_file`、`lock_file`、`logs_dir` 和 `card_trials_dir` 必须位于 `runtime_dir`；
 5. `evidence_card_templates_dir` 必须位于 `templates_dir`，`evidence_card_template_catalog_file` 必须位于证据卡模板目录；
 6. 配置中的环境变量会在启动时展开，但密钥不得通过路径配置间接写入仓库。
 7. 所有路径字段必须显式存在；程序不会用散落在源码里的路径默认值补齐漏项。
+8. `artifact_root` 是科研产物（证据卡 / 主题 / 运行记录 / 文献链接）的总落点，**默认解析到工作区根（仓库根）**。它若位于 `project_root` 之外，必须同时显式写出 `artifact_root_external = true`，否则加载即报错；
+9. `evidence_cards_dir`、`themes_vault_dir`、`run_records_dir`、`literature_index_dir` 均相对 `artifact_root` 解析，且必须位于 `artifact_root` 内。四者必须同属一个产物根——证据卡与主题互相引用，只挪其一会让相对定位失效；
+10. 归属随位置划分：产物根在项目内 = 平台所有（可清理）；产物根在项目外（共享盘等）= 操作者所有，平台只写不清理。
 
 部署配置 `deployment` 的Python字段见 [安装配置表](deployment.md#单一配置入口)，三个native字段见 [PDF工具配置](native-deployment.md#总配置)。新增字段有集中兼容默认值，实际配置/示例均显式列出；旧 `paths` 必填规则不变。相对可执行程序路径基于项目根目录，裸命令名按 PATH 查找。当前 PDF Python 为 uv 工作区共享的仓库根 `.venv`（`../.venv/Scripts/python.exe`，相对项目根），三个原生工具在 `hydro-platform/.tools/poppler/Library/bin/`，不再依赖旧Windows用户的解释器或Codex缓存绝对路径。[字段与默认值](config.md)。
 

@@ -188,6 +188,14 @@ class PathConfig:
     reports_dir: Path
     prompts_dir: Path
     schemas_dir: Path
+    # 科研产物根：证据卡 / 主题 / 运行记录 / 文献链接的落点。
+    # 默认在工作区根（仓库根），也可指向仓库外的共享位置（见 artifact_root_external）。
+    artifact_root: Path
+    artifact_root_external: bool
+    evidence_cards_dir: Path
+    themes_vault_dir: Path
+    run_records_dir: Path
+    literature_index_dir: Path
 
 
 @dataclass(frozen=True)
@@ -277,6 +285,14 @@ PATH_FIELDS = (
     "reports_dir",
     "prompts_dir",
     "schemas_dir",
+)
+
+# 产物根下的子目录。它们相对 paths.artifact_root 解析，且不得离开产物根。
+ARTIFACT_PATH_FIELDS = (
+    "evidence_cards_dir",
+    "themes_vault_dir",
+    "run_records_dir",
+    "literature_index_dir",
 )
 
 
@@ -483,6 +499,46 @@ def _require_inside(path: Path, parent: Path, *, name: str, parent_name: str) ->
         raise ConfigError(f"paths.{name} 必须位于 paths.{parent_name} 内")
 
 
+def _resolve_artifact_root(
+    paths: dict[str, Any], project_root: Path
+) -> tuple[Path, bool]:
+    """解析科研产物根，返回 (解析后路径, 是否位于项目外)。
+
+    默认解析到工作区根（仓库根），即 ``project_root`` 的上一级，与王新宇分支
+    原有的磁盘布局一致。落在 ``project_root`` 之外必须显式声明
+    ``paths.artifact_root_external = true``——与 ``deployment.environment_dir``
+    借用共享 ``.venv`` 同一思路：外部位置是允许的，但必须是写明的意图，
+    而不是被相对路径（如 ``../outside``）悄悄带出去。
+    """
+    if "artifact_root" not in paths:
+        raise ConfigError("缺少 paths.artifact_root")
+    raw_root = _path_value(paths["artifact_root"], name="artifact_root")
+    resolved = (raw_root if raw_root.is_absolute() else project_root / raw_root).resolve()
+    declared = paths.get("artifact_root_external", False)
+    if not isinstance(declared, bool):
+        raise ConfigError("paths.artifact_root_external 必须是布尔值")
+    external = not resolved.is_relative_to(project_root)
+    if external and not declared:
+        raise ConfigError(
+            "paths.artifact_root 必须位于 paths.project_root 内；"
+            "确需指向项目外（如共享盘）时必须显式设置 "
+            "paths.artifact_root_external = true"
+        )
+    return resolved, external
+
+
+def _resolve_artifact_path(paths: dict[str, Any], name: str, artifact_root: Path) -> Path:
+    if name not in paths:
+        raise ConfigError(f"缺少 paths.{name}")
+    raw_path = _path_value(paths[name], name=name)
+    resolved = (
+        raw_path if raw_path.is_absolute() else artifact_root / raw_path
+    ).resolve()
+    if not resolved.is_relative_to(artifact_root):
+        raise ConfigError(f"paths.{name} 必须位于 paths.artifact_root 内")
+    return resolved
+
+
 def _resolve_executable(value, root):
     if value is None:
         return None
@@ -526,11 +582,18 @@ def load_config(
     if not isinstance(raw_paths, dict):
         raise ConfigError("paths 必须是 JSON 对象")
     project_root = _resolve_project_root(raw_paths, config_file)
+    artifact_root, artifact_root_external = _resolve_artifact_root(raw_paths, project_root)
     path_config = PathConfig(
         project_root=project_root,
         **{
             name: _resolve_project_path(raw_paths, name, project_root)
             for name in PATH_FIELDS
+        },
+        artifact_root=artifact_root,
+        artifact_root_external=artifact_root_external,
+        **{
+            name: _resolve_artifact_path(raw_paths, name, artifact_root)
+            for name in ARTIFACT_PATH_FIELDS
         },
     )
     for name in (
@@ -1116,7 +1179,18 @@ def load_config(
     asset_value = theme_values.get("assets_dir")
     if asset_value is not None and (not isinstance(asset_value, str) or not asset_value.strip()):
         raise ConfigError("theme_pipeline.assets_dir 必须是路径字符串或 null")
-    theme_values["assets_dir"] = (path_config.project_root / asset_value).resolve() if asset_value else path_config.templates_dir / "themes"
+    if asset_value:
+        # 此前该值直接 project_root / asset_value 后 resolve，给绝对路径即可静默
+        # 逃出 project_root。它是唯一没走 containment 的路径值，这里补上。
+        raw_asset = _path_value(asset_value, name="theme_pipeline.assets_dir")
+        resolved_asset = (
+            raw_asset if raw_asset.is_absolute() else path_config.project_root / raw_asset
+        ).resolve()
+        if not resolved_asset.is_relative_to(path_config.project_root):
+            raise ConfigError("theme_pipeline.assets_dir 必须位于 paths.project_root 内")
+        theme_values["assets_dir"] = resolved_asset
+    else:
+        theme_values["assets_dir"] = path_config.templates_dir / "themes"
 
     raw_activity = data.get("activity_reporting", {})
     if not isinstance(raw_activity, dict) or set(raw_activity) - set(ActivityReportingConfig.__dataclass_fields__):

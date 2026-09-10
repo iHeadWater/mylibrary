@@ -4,7 +4,7 @@
 
 本仓库是团队共享的知识与工作流仓库：保存 Markdown、模板、Skill、校验脚本、来源链接、任务和 Git 历史；不保存文献 PDF、Zotero 数据库、OneDrive 实体数据、账号凭据和个人机器路径。
 
-> 当前正式远端：[wangxinyu20429-dotcom/Water-Conservancy-Intelligent-Platform](https://github.com/wangxinyu20429-dotcom/Water-Conservancy-Intelligent-Platform)。历史迁移来源只在 [MIGRATION.md](MIGRATION.md) 中留档，不再作为运行入口。
+> 当前正式远端：[wangxinyu20429-dotcom/Water-Conservancy-Intelligent-Platform](https://github.com/iHeadWater/mylibrary)。历史迁移来源只在 [MIGRATION.md](migration-20260904.md) 中留档，不再作为运行入口。
 
 ## 当前材料状态
 
@@ -74,15 +74,15 @@ flowchart LR
 
 | 来源类型 | 模板入口 | 科学重点 |
 | --- | --- | --- |
-| 原创研究 | [01 原创研究](docs/证据卡模板/01_原创研究证据卡模板.md) | 对象、真实数据、分析单位、方法链、比较/验证、关键结果和边界 |
-| 综述与证据综合 | [02 综述](docs/证据卡模板/02_综述与证据综合证据卡模板.md) | 检索范围、纳入排除、重叠、偏倚、异质性和综合结论 |
-| 调查监测与统计报告 | [03 调查监测](docs/证据卡模板/03_调查监测与统计报告证据卡模板.md) | 覆盖范围、测量口径、分母、修订、不确定性和可比性 |
-| 工程项目报告 | [04 工程报告](docs/证据卡模板/04_工程项目报告证据卡模板.md) | 证据层级、判据、边界条件、实测/模拟、失效和剩余风险 |
-| 图书与章节 | [05 图书章节](docs/证据卡模板/05_图书与章节证据卡模板.md) | 命题、定义、推导、来源谱系和适用域 |
-| 标准指南与政策 | [06 标准指南政策](docs/证据卡模板/06_标准指南与政策证据卡模板.md) | 权威性、条款、效力、适用条件、版本和科学边界 |
-| 数据集与数据产品 | [07 数据产品](docs/证据卡模板/07_数据集及数据产品证据卡模板.md) | 固定版本、生成过程、变量、质量、许可和适用性 |
-| 软件模型与代码 | [08 软件模型代码](docs/证据卡模板/08_软件模型与代码证据卡模板.md) | 固定制品、输入输出、实际运行、实现验证和科学验证 |
-| 平台综合决策 | [09 决策卡](docs/证据卡模板/09_平台证据综合与决策卡模板.md) | 跨来源 Claim、独立性、冲突、迁移边界和当前决定 |
+| 原创研究 | [01 原创研究](证据卡模板/01_原创研究证据卡模板.md) | 对象、真实数据、分析单位、方法链、比较/验证、关键结果和边界 |
+| 综述与证据综合 | [02 综述](证据卡模板/02_综述与证据综合证据卡模板.md) | 检索范围、纳入排除、重叠、偏倚、异质性和综合结论 |
+| 调查监测与统计报告 | [03 调查监测](证据卡模板/03_调查监测与统计报告证据卡模板.md) | 覆盖范围、测量口径、分母、修订、不确定性和可比性 |
+| 工程项目报告 | [04 工程报告](证据卡模板/04_工程项目报告证据卡模板.md) | 证据层级、判据、边界条件、实测/模拟、失效和剩余风险 |
+| 图书与章节 | [05 图书章节](证据卡模板/05_图书与章节证据卡模板.md) | 命题、定义、推导、来源谱系和适用域 |
+| 标准指南与政策 | [06 标准指南政策](证据卡模板/06_标准指南与政策证据卡模板.md) | 权威性、条款、效力、适用条件、版本和科学边界 |
+| 数据集与数据产品 | [07 数据产品](证据卡模板/07_数据集及数据产品证据卡模板.md) | 固定版本、生成过程、变量、质量、许可和适用性 |
+| 软件模型与代码 | [08 软件模型代码](证据卡模板/08_软件模型与代码证据卡模板.md) | 固定制品、输入输出、实际运行、实现验证和科学验证 |
+| 平台综合决策 | [09 决策卡](证据卡模板/09_平台证据综合与决策卡模板.md) | 跨来源 Claim、独立性、冲突、迁移边界和当前决定 |
 
 L0 只登记身份；L1 用于分析性筛选；L2 至少有一条带原文位置并完成 source check 的可用 Claim；L3 只在明确决策、决定性缺口和新材料可能改变判断三门同时满足时启动。
 
@@ -98,7 +98,7 @@ L0 只登记身份；L1 用于分析性筛选；L2 至少有一条带原文位�
 
 运行账冻结问题、输入提交、路线、初步主题、人工决定、既定主题、阅读资源、全文队列、反馈、重算和导师决定。它只保存过程和链接，不复制主题正文。
 
-公开模板：[主题工作流运行账 V1.3](docs/主题模板/03_主题工作流运行账模板_V1.3.md)。
+公开模板：[主题工作流运行账 V1.3](主题模板/03_主题工作流运行账模板_V1.3.md)。
 
 ### 7. 形成初步主题
 
@@ -114,7 +114,7 @@ L0 只登记身份；L1 用于分析性筛选；L2 至少有一条带原文位�
 
 初步主题的 `allowed_use` 必须是 `screening_only`。它可以重叠、拆分、观察或被拒绝，不能承载领域共识、研究空白、创新点和论文结论。
 
-公开模板：[初步主题与人工筛选 V1.3](docs/主题模板/01_初步主题与人工筛选模板_V1.3.md)。
+公开模板：[初步主题与人工筛选 V1.3](主题模板/01_初步主题与人工筛选模板_V1.3.md)。
 
 ### 8. 逐项完成人工筛选
 
@@ -136,7 +136,7 @@ L0 只登记身份；L1 用于分析性筛选；L2 至少有一条带原文位�
 
 既定主题必须回链来源初步主题和人工决定，冻结核心问题、纳入排除边界、跨主题材料处理和首批全文范围。`watch`、`supplement_before_decision`、`reject` 和尚未重新筛选的拆分项不能生成既定主题。
 
-公开模板：[既定主题深度综合 V1.3](docs/主题模板/02_既定主题深度综合模板_V1.3.md)。
+公开模板：[既定主题深度综合 V1.3](主题模板/02_既定主题深度综合模板_V1.3.md)。
 
 ### 10. 分两层安排全文阅读资源
 
@@ -274,6 +274,8 @@ python skills/hydrology-evidence-cards/scripts/zotero_reader.py packet ITEMKEY -
 
 ### G. 建立和校验证据卡
 
+> **产物路径可配置。** 下面命令里的 `证据卡/…`、`主题/…`、`运行记录/…` 都是**相对科研产物根**的写法。产物根由总配置的 `paths.artifact_root` 决定：默认是仓库根，也可以指向共享盘等任意位置（需同时设 `paths.artifact_root_external = true`）。四个子目录名同样可配（`paths.evidence_cards_dir` 等），默认即中文名。把产物根指到仓库外时，脚本不需要改任何代码——它们本来就只通过 `--output` / `--index-root` / `--cards-dir` 接收路径。详见[总配置字段说明](config.md)与[路径解析规则](variables.md)。
+
 以下命令生成骨架，不能代替阅读原文：
 
 ```powershell
@@ -287,7 +289,7 @@ python skills/hydrology-evidence-cards/scripts/validate_card.py "证据卡/EC-YY
 python skills/hydrology-evidence-cards/scripts/validate_batch.py 证据卡 --mode draft
 ```
 
-完整命令和边界见 [Zotero 本地读取](skills/hydrology-evidence-cards/references/zotero-access.md)、[证据卡工作流](skills/hydrology-evidence-cards/references/workflow.md) 和 [安装说明](skills/hydrology-evidence-cards/references/installation.md)。
+完整命令和边界见 [Zotero 本地读取](https://github.com/iHeadWater/mylibrary/blob/main/skills/hydrology-evidence-cards/references/zotero-access.md)、[证据卡工作流](https://github.com/iHeadWater/mylibrary/blob/main/skills/hydrology-evidence-cards/references/workflow.md) 和 [安装说明](https://github.com/iHeadWater/mylibrary/blob/main/skills/hydrology-evidence-cards/references/installation.md)。
 
 ### H. 建立主题运行账和初步主题
 
@@ -306,7 +308,7 @@ python skills/hydrology-theme-synthesis/scripts/build_theme.py --theme-ref "et:e
 python skills/hydrology-theme-synthesis/scripts/validate_theme.py "主题/既定主题_示例方向.md" --mode draft --index-root .
 ```
 
-没有完成人工建立决定时，构建器应停止；不能手工绕过该准入门。完整说明见 [主题执行与交付](skills/hydrology-theme-synthesis/references/execution.md)。
+没有完成人工建立决定时，构建器应停止；不能手工绕过该准入门。完整说明见 [主题执行与交付](https://github.com/iHeadWater/mylibrary/blob/main/skills/hydrology-theme-synthesis/references/execution.md)。
 
 ### I. 提交知识文件
 
@@ -353,20 +355,22 @@ T10 的必交内容是：1 份 V1.3 运行账、5 份初步主题筛选记录或
 
 ## 目录入口
 
-- [产品与流程](docs/产品与流程)：产品说明、操作手册、工作入口、填写模板、任务顺序和验收。
-- [证据卡模板](docs/证据卡模板)：V1.7 公共骨架、八类来源入口和平台综合决策卡。
-- [证据卡模块](docs/证据卡模块)：水利情境与预测、模拟、频率气候、监测遥感、工程安全方法模块。
-- [证据卡规范](docs/证据卡规范)：科学架构、外部实践对照、原文忠实性和质量检查。
-- [主题模板](docs/主题模板)：初步主题筛选、既定主题深度综合和工作流运行账。
-- [主题规范](docs/主题规范)：文献发现、人工筛选、优先级、深度综合和反馈闭环。
-- [可安装 Skills](skills)：两套可复制到其他电脑的完整 Skill。
-- [42 张证据卡索引](证据卡/科研平台集合_20260907/README.md)：本轮真实 Zotero 来源入口。
-- [5 个待筛选主题](主题/候选主题_科研平台集合_20260907/README.md)：T10 的旧候选输入。
-- [旧批次运行记录](运行记录/ZOTERO-RUN-20260907-01_科研平台集合全量初读与候选主题.md)：保留第一次运行边界，不能代替新的 V1.3 筛选运行账。
-- [完整横版工作流](docs/主题规范/03_AI辅助水利文献发现到深度主题形成工作流_讨论稿.md)：结合 Hu 等论文的大语料发现方法和本平台证据链。
-- [迁移说明](MIGRATION.md)：旧 Project 和旧仓库内容的历史对应。
+- [产品与流程](产品与流程)：产品说明、操作手册、工作入口、填写模板、任务顺序和验收。
+- [证据卡模板](证据卡模板)：V1.7 公共骨架、八类来源入口和平台综合决策卡。
+- [证据卡模块](证据卡模块)：水利情境与预测、模拟、频率气候、监测遥感、工程安全方法模块。
+- [证据卡规范](证据卡规范)：科学架构、外部实践对照、原文忠实性和质量检查。
+- [主题模板](主题模板)：初步主题筛选、既定主题深度综合和工作流运行账。
+- [主题规范](主题规范)：文献发现、人工筛选、优先级、深度综合和反馈闭环。
+- [可安装 Skills](https://github.com/iHeadWater/mylibrary/tree/main/skills)：两套可复制到其他电脑的完整 Skill。
+- 42 张证据卡索引：产物根下的 `证据卡/科研平台集合_20260907/README.md`（本地运行产物，不入库），本轮真实 Zotero 来源入口。
+- 5 个待筛选主题：产物根下的 `主题/候选主题_科研平台集合_20260907/README.md`（本地运行产物，不入库），T10 的旧候选输入。
+- 旧批次运行记录：产物根下的 `运行记录/ZOTERO-RUN-20260907-01_科研平台集合全量初读与候选主题.md`（本地运行产物，不入库），保留第一次运行边界，不能代替新的 V1.3 筛选运行账。
+- [完整横版工作流](主题规范/03_AI辅助水利文献发现到深度主题形成工作流_讨论稿.md)：结合 Hu 等论文的大语料发现方法和本平台证据链。
+- [迁移说明](migration-20260904.md)：旧 Project 和旧仓库内容的历史对应。
 
 ## GitHub 任务与里程碑
+
+> 下表的 issue / milestone 链接指向**合并前**的跟踪仓库 `wangxinyu20429-dotcom/Water-Conservancy-Intelligent-Platform`，T01—T10 与 M0—M2 当时记录在那里，因此链接保持原样不改写到本仓库（改写到 `iHeadWater/mylibrary` 会变成指向不存在的编号）。本仓库合并后再开的新任务，应记在 `iHeadWater/mylibrary` 下。
 
 | 任务 | 内容 | 里程碑 |
 | --- | --- | --- |

@@ -44,6 +44,12 @@
   },
   "paths": {
     "project_root": "..",
+    "artifact_root": "../",
+    "artifact_root_external": true,
+    "evidence_cards_dir": "证据卡",
+    "themes_vault_dir": "主题",
+    "run_records_dir": "运行记录",
+    "literature_index_dir": "文献链接",
     "runtime_dir": ".runtime",
     "snapshot_file": ".runtime/zotero-snapshot.json",
     "tasks_file": ".runtime/tasks.json",
