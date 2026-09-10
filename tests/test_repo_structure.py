@@ -89,6 +89,17 @@ REPO_TESTS_DIR = REPO_ROOT / "tests"
 
 MIN_PLATFORM_TEST_FILES = 30
 
+# The platform's importable package, in both Path and tracked-path (posix) form.
+PLATFORM_PACKAGE_DIR = PLATFORM_SRC / "hydro_platform"
+PLATFORM_PACKAGE_PREFIX = PLATFORM_PACKAGE_DIR.relative_to(REPO_ROOT).as_posix() + "/"
+
+# Minimum amount of real platform content that must have moved for the structural
+# guards below to mean anything (see ``_tracked_platform_paths`` and test 7).
+MIN_PLATFORM_SOURCE_FILES = 20
+
+PLATFORM_DOCS_DIR = DOCS_ROOT / "hydro-platform"
+MIN_PLATFORM_DOC_FILES = 5
+
 # ``deployment.py`` must not install wheels into the environment itself; ``uv`` owns it.
 WHEEL_INSTALL_CALL = re.compile(
     r"\b_?(?:[a-z_]*install[a-z_]*wheel[a-z_]*|_wheel[a-z_]*)\s*\(",
@@ -135,19 +146,37 @@ def _tracked_platform_paths() -> list[str]:
     """Tracked paths under ``hydro-platform/``, with a non-vacuity precondition.
 
     Every assertion in tests 1 and 3 is phrased as "no tracked path under
-    ``hydro-platform/`` looks like X". Those assertions are *vacuously* true while
-    ``hydro-platform/`` contains nothing at all, so this helper first pins down
-    that the platform actually lives there. Without that guard the tests would
-    pass on a repo where the restructure never happened.
+    ``hydro-platform/`` looks like X", which is *vacuously* true whenever the
+    platform is not actually there. The precondition therefore demands that the
+    platform's real source tree has moved - at least
+    ``MIN_PLATFORM_SOURCE_FILES`` tracked ``.py`` files under
+    ``hydro-platform/automation/src/hydro_platform/`` - and NOT merely that a path
+    with the right directory name exists.
+
+    This specificity is deliberate and must not be loosened: a merge that lands
+    only ``hydro-platform/pyproject.toml`` (packaging metadata), or an empty
+    ``hydro-platform/`` skeleton, would otherwise satisfy a weak precondition and
+    flip these guards green while the platform's code and its generated products
+    are still sitting at the repo root - i.e. while the restructure has not
+    happened at all.
     """
 
-    platform_paths = [path for path in _git_ls_files() if path.startswith("hydro-platform/")]
-    assert platform_paths, (
-        "non-vacuity precondition failed: `git ls-files` reports no tracked file under "
-        f"'hydro-platform/'.\nThe platform's code and reusable assets (automation/, "
-        "templates/, config/, pyproject.toml) must be tracked under "
-        f"{PLATFORM_ROOT} - only then are the 'no generated output' assertions below "
-        "meaningful."
+    tracked = _git_ls_files()
+    platform_paths = [path for path in tracked if path.startswith("hydro-platform/")]
+
+    source_files = [
+        path
+        for path in platform_paths
+        if path.startswith(PLATFORM_PACKAGE_PREFIX) and path.endswith(".py")
+    ]
+    assert len(source_files) >= MIN_PLATFORM_SOURCE_FILES, (
+        "non-vacuity precondition failed: `git ls-files` reports "
+        f"{len(source_files)} tracked .py file(s) under '{PLATFORM_PACKAGE_PREFIX}' "
+        f"(at least {MIN_PLATFORM_SOURCE_FILES} are required).\nThe platform's actual "
+        f"source tree must have moved to {PLATFORM_ROOT} before the assertions below "
+        "mean anything - a directory of that name, or a lone pyproject.toml, is not "
+        "enough. Found under hydro-platform/:\n  "
+        + ("\n  ".join(sorted(platform_paths)) or "(nothing)")
     )
     return platform_paths
 
@@ -234,6 +263,12 @@ def test_repo_no_generated_artifacts_tracked() -> None:
     ``hydro-platform/pyproject.toml``. In particular nothing from
     ``evidence-packs/``, ``themes/``, ``reports/``, ``activity/`` or ``members/``
     may be tracked - those are runtime products written into the workspace.
+
+    Non-vacuity: the precondition requires the platform's real source tree to be
+    tracked under ``hydro-platform/`` (at least ``MIN_PLATFORM_SOURCE_FILES``
+    ``.py`` files in its package) - the platform must have actually moved, not
+    merely a directory name existing - otherwise the assertions below are
+    vacuously true while the platform still sits at the repo root.
     """
 
     platform_paths = _tracked_platform_paths()
@@ -296,6 +331,12 @@ def test_repo_no_platform_readme() -> None:
     Documentation lives in ``docs/hydro-platform/``; zero tracked files whose
     basename is ``README.md`` (in any case variant) may live under
     ``hydro-platform/``.
+
+    Non-vacuity: the precondition requires the platform's real source tree to be
+    tracked under ``hydro-platform/`` (at least ``MIN_PLATFORM_SOURCE_FILES``
+    ``.py`` files in its package) - the platform must have actually moved, not
+    merely a directory name existing - otherwise the assertion below is vacuously
+    true while the platform still sits at the repo root.
     """
 
     platform_paths = _tracked_platform_paths()
@@ -465,18 +506,31 @@ def test_docs_have_no_escaping_links() -> None:
     resolve to a path under ``<repo root>/docs/`` after being resolved relative to
     the file that contains it. External ``http(s)://`` links and ``#anchor`` links
     are fine.
+
+    The precondition pins down that the platform's OWN docs have arrived
+    (``docs/hydro-platform/`` with at least ``MIN_PLATFORM_DOC_FILES`` markdown
+    files) rather than accepting any markdown anywhere under ``docs/``. That
+    specificity is deliberate and must not be loosened: the repo already has an
+    unrelated ``docs/`` tree, so a weaker precondition is *vacuously* satisfied
+    before the restructure and would keep this guard green throughout the whole
+    refactor. The scan itself stays whole-tree, so inherited docs are covered too.
     """
 
-    assert DOCS_ROOT.is_dir(), (
-        f"the documentation root {DOCS_ROOT} does not exist - platform docs must move "
-        "into docs/hydro-platform/"
+    platform_docs_dir = DOCS_ROOT / "hydro-platform"
+    assert platform_docs_dir.is_dir(), (
+        f"the platform's documentation must live at {platform_docs_dir}, but that "
+        "directory does not exist - the platform docs have not moved"
+    )
+
+    platform_markdown_files = sorted(platform_docs_dir.rglob("*.md"))
+    assert len(platform_markdown_files) >= MIN_PLATFORM_DOC_FILES, (
+        f"only {len(platform_markdown_files)} markdown file(s) found under "
+        f"{platform_docs_dir} (at least {MIN_PLATFORM_DOC_FILES} are required).\nThe "
+        "rest of docs/ belongs to the wider project and would satisfy a weaker "
+        "precondition vacuously - the platform's own docs must actually be there."
     )
 
     markdown_files = sorted(DOCS_ROOT.rglob("*.md"))
-    assert markdown_files, (
-        f"no markdown file found under {DOCS_ROOT} - the moved platform docs must live "
-        f"there (e.g. {DOCS_ROOT / 'hydro-platform'})"
-    )
 
     docs_root_resolved = DOCS_ROOT.resolve()
     offenders: list[str] = []
