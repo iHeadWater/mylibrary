@@ -26,7 +26,7 @@ The result accumulates into a **literature knowledge base**: `papers/` organized
 | **Deep literature processing** — Literature CLI: weekly review, WeChat publish / polish / figures, Bilibili upload | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [literature](docs/user-guide/literature.md) |
 | **Knowledge graph** — build a structured, queryable knowledge base via [graphify](https://github.com/graphify) (entity extraction, community detection, Obsidian export) | `uv run hydrolitagent graph papers/your-topic/` | [architecture](docs/development/architecture.md) |
 | **Paper reproduction** — reproduce key papers in AI-driven hydrology | — | `equation_from_data/`, `google_floodhub/` |
-| **Research knowledge platform** — the *consumption* layer: detect new papers in a shared Zotero group → full-text gate → per-paper evidence packs → evolving theme pool → daily report. Unattended, deterministic, no hand-editing. **Windows-only runtime.** | `uv run hydro-platform run-once --json` | [platform docs](docs/hydro-platform/index.md) |
+| **Research knowledge platform** — the *long-term knowledge asset* branch of consumption: detect new papers in a shared Zotero group → full-text gate → per-paper evidence packs → evolving theme pool → daily report. Unattended, deterministic, no hand-editing. **Windows-only runtime.** | `uv run hydro-platform run-once --json` | [platform docs](docs/hydro-platform/index.md) |
 
 ## Quick Start
 
@@ -106,7 +106,9 @@ Each graph build writes `graph.json`, `graph.html` (D3.js), `GRAPH_REPORT.md`, a
 
 ### Research knowledge platform (`hydro-platform`)
 
-The mirror image of everything above: instead of pulling papers in, it turns papers already in a **shared Zotero group** into traceable **evidence packs** and an evolving **theme pool**. Run it from the repo root.
+**Ingestion is only two things — download a PDF, and create the Zotero entry.** Everything else in this repo is *consumption*: reading the library, close analysis, topics, knowledge graph, articles, podcasts. This platform is a distinct branch of that consumption side — where the rest produces per-issue content, it produces **long-lived, traceable knowledge assets**: it turns papers already in a **shared Zotero group** into **evidence packs** and an evolving **theme pool**. Run it from the repo root.
+
+> Note the two sides are not the same as the two packages: `hydrolitagent` spans **both** (its download/ingest commands, plus most of the consumption side), while `hydro-platform` is purely consumption.
 
 ```bash
 # One full unattended pass: detect → gate → card → themes → ledger → daily report

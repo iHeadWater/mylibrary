@@ -88,7 +88,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 ### 科研知识平台 (hydro-platform)
 
-**消费侧**:把共享 Zotero 库里已有的论文沉淀成证据包与主题池。不是交互式问答。运行时 **Windows-only**。命令一律从**仓库根**执行:
+**消费侧的长期资产支线**(入库只有两件事:下载 PDF + 建 Zotero 条目;其余都算消费):把共享 Zotero 库里已有的论文沉淀成证据包与主题池,产出的是长期可追溯的知识资产而非当期内容。不是交互式问答。运行时 **Windows-only**。命令一律从**仓库根**执行:
 
 - 跑完一整轮(检测 → 门禁 → 制卡 → 主题 → 账本 → 日报):`uv run hydro-platform run-once --json`
 - 只预览本地任务,不扫 Zotero、不调模型:`uv run hydro-platform run-once --dry-run --json`

@@ -1,30 +1,36 @@
 # 用户指南
 
-本仓库有**两条能力线**,方向相反。先确定你要走哪一条,再看对应的页面。
+本仓库的能力分**入库**与**消费**两侧。先确定你要做哪一侧的事,再看对应的页面。
 
-| | **把文献弄进来** | **从文献里沉淀认识** |
+| 侧 | 做什么 | 代码 |
 |---|---|---|
-| 代码 | `hydrolitagent`(根包) | [`hydro-platform/`](../hydro-platform/index.md)(uv workspace 成员) |
-| 起点 | DOI / arXiv / 标题,或一篇待下载的论文 | 共享 Zotero 库里**已经附好 PDF** 的论文 |
-| 做什么 | 下载 → 入库 → 精读 → 主题分类 → 知识图谱 → 公众号/播客 | 检测新增 → 全文门禁 → 逐篇证据包 → 持续演化的主题池 → 日报 |
-| 节奏 | 交互式,人驱动 | 无人值守,确定性批处理(**Windows-only** 运行时) |
-| 产物去向 | `outputs/`、`papers/`、Zotero 库 | `evidence-packs/`、`themes/`、`reports/`(**不入库**,另行共享) |
+| **入库**（采集） | 论文 PDF **下载** + **建 Zotero 条目**(含 `linked_file` 附件) | `scripts/download_paper.py`、`hydrolitagent/zotero/`、`hydrolitagent/literature/download_pdf.py` |
+| **消费** | 从 Zotero 库读出 → 精读/分析卡 → 主题分类/知识图谱 → 公众号/播客/B 站 | `hydrolitagent/literature/`、`hydrolitagent/graph/`、`skills/` |
+| **消费（长期资产）** | 共享库 → 证据包 → 主题池 → 日报,无人值守、确定性 | [`hydro-platform/`](../hydro-platform/index.md) |
 
-两条线**不重叠**:平台不下载任何 PDF,入库与下载始终属于左侧那条。
+两点容易搞混:
 
-## 把文献弄进来（`hydrolitagent`）
+- **`hydrolitagent` 横跨两侧** —— 入库的几个命令和消费的绝大部分都在它里面。它不是"入库侧"的代名词。
+- **消费侧内部分两支** —— 上面那一支产出**当期内容**(文章、播客、图谱、分析卡);`hydro-platform` 那一支产出**长期可追溯的知识资产**(证据包、主题池),且不由人逐篇驱动。
+
+## 入库：下载与入 Zotero
 
 | 页面 | 讲什么 |
 |---|---|
-| [MCP Server 工具](mcp-tools.md) | 12 个 MCP 工具的完整参考(10 个 Web API + 2 个 Local API) |
 | [论文入库流水线](paper-pipeline.md) | DOI / arXiv ID / 标题 → 下载 PDF → Zotero 条目 + `linked_file` 附件 |
 | [论文 PDF 下载（机构访问）](download-pdf.md) | 通过机构访问用 Playwright 下载,含各出版商流程与反模式 |
 | [Zotero 入库（linked_file）](zotero-sync.md) | 已下载 PDF 同步进 Zotero,零云端配额 |
-| [Zotero → NotebookLM 简报](zotero-notebooklm.md) | 新增论文整理成中文简报 / 音频 / 视频概览 |
-| [文献深度处理（Literature CLI）](literature.md) | 每周综述、公众号发布/润色/配图、B 站上传 |
-| [Zotero 配置参考](config.md) | 环境变量、TOML 配置、Linked Attachment Base Directory |
 
-## 从文献里沉淀认识（`hydro-platform`）
+## 消费：读取与深度处理
+
+| 页面 | 讲什么 |
+|---|---|
+| [MCP Server 工具](mcp-tools.md) | 12 个 MCP 工具的完整参考(10 个 Web API + 2 个 Local API)—— 读 Zotero 库的接口 |
+| [文献深度处理（Literature CLI）](literature.md) | 每周综述、精读分析卡、公众号发布/润色/配图、B 站上传 |
+| [Zotero → NotebookLM 简报](zotero-notebooklm.md) | 新增论文整理成中文简报 / 音频 / 视频概览 |
+| [Zotero 配置参考](config.md) | 环境变量、TOML 配置、Linked Attachment Base Directory(两侧共用) |
+
+## 消费：长期知识资产（`hydro-platform`）
 
 平台的文档单独成节(见左侧导航「科研知识平台」),这里给几个最常用的入口:
 
@@ -42,5 +48,5 @@
 ## 相关
 
 - [安装配置](../getting-started/installation.md) —— 本仓库是 uv workspace,用 `uv sync --all-packages` 一次装好两个包
-- [模块架构](../development/architecture.md) —— 两条线的代码结构与数据流
+- [模块架构](../development/architecture.md) —— 代码结构与数据流
 - [ADR-0002](../adr/0002-zotero-two-clients-boundary.md) —— 为什么读 Zotero 保留两套客户端、各自服务哪种运行环境

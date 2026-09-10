@@ -26,7 +26,7 @@ mylibrary 承担**情报汇集之后的深度处理**:
 | **文献深度处理** — Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [文献深度处理](docs/user-guide/literature.md) |
 | **知识图谱** — 用 [graphify](https://github.com/graphify) 构建结构化、可查询的知识库(实体提取、社区发现、Obsidian 导出) | `uv run hydrolitagent graph papers/your-topic/` | [模块架构](docs/development/architecture.md) |
 | **论文复现** — 复现 AI 驱动水文学关键论文 | — | `equation_from_data/`、`google_floodhub/` |
-| **科研知识平台** — 上面的**消费侧**:检测共享 Zotero 库新增论文 → 全文门禁 → 逐篇证据包 → 持续演化的主题池 → 日报。无人值守、确定性、不需手工编辑。**运行时为 Windows-only。** | `uv run hydro-platform run-once --json` | [平台文档](docs/hydro-platform/index.md) |
+| **科研知识平台** — **消费侧的长期资产支线**:检测共享 Zotero 库新增论文 → 全文门禁 → 逐篇证据包 → 持续演化的主题池 → 日报。无人值守、确定性、不需手工编辑。**运行时为 Windows-only。** | `uv run hydro-platform run-once --json` | [平台文档](docs/hydro-platform/index.md) |
 
 ## 快速开始
 
@@ -106,7 +106,9 @@ uv run hydrolitagent query outputs/graph/graph.json --search "LSTM"
 
 ### 科研知识平台(`hydro-platform`)
 
-与上面正好相反:它不把论文弄进来,而是把**共享 Zotero 库**里已有的论文沉淀成可追溯的**证据包**与持续演化的**主题池**。命令一律从仓库根执行。
+**入库只有两件事 —— 下载 PDF,和建 Zotero 条目。** 本仓库其余的都属于**消费**:读库、精读、主题、知识图谱、公众号、播客。这个平台是消费侧里的一支独立支线 —— 别人产出当期内容,它产出**长期可追溯的知识资产**:把**共享 Zotero 库**里已有的论文沉淀成**证据包**与持续演化的**主题池**。命令一律从仓库根执行。
+
+> 注意"两侧"不等于"两个包":`hydrolitagent` **横跨两侧**(它既有入库的命令,也含消费侧的大部分),而 `hydro-platform` 纯属消费。
 
 ```bash
 # 跑完一整轮:检测 → 门禁 → 制卡 → 主题 → 账本 → 日报

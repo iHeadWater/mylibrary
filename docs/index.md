@@ -4,14 +4,19 @@ AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:�
 
 **定位**:mylibrary 承担**情报汇集之后的深度处理**。Zotero 库是文献库的起点(深度处理典型地从读库开始);**Zotero 论文入库也是本仓库能力**——DOI / arXiv / 标题 → PDF → Zotero 条目的流水线就在本仓库。上游的兄弟仓库(dailyinfo)负责进入 Zotero 之前的情报采集。
 
-本仓库有**两条能力线**,互为反向:
+本仓库的能力分**入库**与**消费**两侧:
 
-| 能力线 | 做什么 | 代码位置 |
+| 侧 | 做什么 | 代码 |
 |---|---|---|
-| `hydrolitagent` | 把文献**弄进来** —— 下载 → 入库 → 精读 → 主题分类 → 知识图谱 → 公众号/播客 | `hydrolitagent/`(根包) |
-| `hydro-platform` | 把已有文献里的认识**沉淀出来** —— 检测共享 Zotero 库新增 → 全文门禁 → 逐篇证据包 → 持续演化的主题池 → 日报 | [`hydro-platform/`](hydro-platform/index.md) |
+| **入库**（采集） | 只有两件事:论文 PDF **下载**,以及**建 Zotero 条目**（含 `linked_file` 附件) | `scripts/download_paper.py`、`hydrolitagent/zotero/`、`hydrolitagent/literature/download_pdf.py` |
+| **消费** | 其余全部:从 Zotero 库读出 → 精读/分析卡 → 主题分类/知识图谱 → 公众号/播客/B 站;以及 `hydro-platform` 的证据包与主题池 | `hydrolitagent/literature/`、`hydrolitagent/graph/`、`skills/`、[`hydro-platform/`](hydro-platform/index.md) |
 
-二者是同一个 **uv workspace** 的两个成员,共享一个 `.venv` 与一份 `uv.lock`。注意 `hydro-platform` 的**运行时为 Windows-only**(定时调度、Poppler 原生工具、PDF 沙箱探针),编排逻辑本身与操作系统无关但只在 Windows 上验证过。
+两点容易搞混,先讲清楚:
+
+- **`hydrolitagent` 横跨两侧** —— 入库的几个命令和消费的绝大部分都在它里面,所以它不是"入库侧"的代名词。
+- **两侧产出的东西不同** —— 消费侧的其余部分产出**当期内容**(文章、播客、图谱、分析卡);`hydro-platform` 产出**长期可追溯的知识资产**(证据包、主题池、日报),特点是无人值守、确定性、**运行时为 Windows-only**。
+
+二者是同一个 **uv workspace** 的两个成员,共享一个 `.venv` 与一份 `uv.lock`。
 
 ## 能力一览
 
@@ -25,7 +30,7 @@ AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:�
 | 文献深度处理 | Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | [文献深度处理](user-guide/literature.md) |
 | 知识图谱 | 用 graphify 构建结构化、可查询的知识库(实体提取、社区发现、Obsidian 导出) | [模块架构](development/architecture.md) |
 | 论文复现 | 复现 AI 驱动水文学关键论文 | `equation_from_data/`、`google_floodhub/` |
-| 科研知识平台 | 上面的**消费侧**:检测共享 Zotero 库新增论文 → 全文门禁 → 逐篇证据包 → 持续演化的主题池 → 日报。无人值守、确定性、不需手工编辑。**运行时为 Windows-only。** | [平台文档](hydro-platform/index.md) |
+| 科研知识平台 | **消费侧的长期资产支线**:检测共享 Zotero 库新增论文 → 全文门禁 → 逐篇证据包 → 持续演化的主题池 → 日报。无人值守、确定性、不需手工编辑。**运行时为 Windows-only。** | [平台文档](hydro-platform/index.md) |
 
 ## 快速开始
 
@@ -100,4 +105,4 @@ definitions.py           # 共享常量
 - [模块架构](development/architecture.md) — 代码结构与数据流
 - [贡献指南](development/contributing.md) — 如何运行测试与添加新工具
 - [决策记录](adr/0001-zotero-linked-file-sync.md) — 为什么用 linked_file；[ADR-0002](adr/0002-zotero-two-clients-boundary.md) — 为什么保留两套 Zotero 客户端
-- [科研知识平台](hydro-platform/index.md) — **消费侧**:证据包、主题池、日报(**Windows-only**)
+- [科研知识平台](hydro-platform/index.md) — **消费侧的长期资产支线**:证据包、主题池、日报(**Windows-only**)

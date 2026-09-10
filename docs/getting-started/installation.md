@@ -18,7 +18,7 @@ uv sync --all-packages
 >
 > 必须用 `uv sync --all-packages` —— 裸 `uv sync` 只装根包的依赖，`uv run hydro-platform …` 会不可用。
 >
-> 装好之后，两条能力线的入口分别是 `uv run hydrolitagent …` 与 `uv run hydro-platform …`；分别做什么见[用户指南总览](../user-guide/index.md)。注意 `hydro-platform` 的**运行时为 Windows-only**。
+> 装好之后两个包的入口分别是 `uv run hydrolitagent …` 与 `uv run hydro-platform …`。注意 `hydrolitagent` **横跨入库与消费两侧**（入库是下载 + 入 Zotero，其余基本都属于消费），而 `hydro-platform` 是消费侧的长期资产支线、**运行时为 Windows-only**。分侧导览见[用户指南总览](../user-guide/index.md)。
 
 ## 配置 Zotero
 
