@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -137,24 +138,131 @@ def sample_fulltext_response():
 
 
 @pytest.fixture
-def sample_file_info_response():
-    """A realistic Zotero Local API file info response for stored file."""
+def sample_stored_attachment_item():
+    """A REAL Local API payload for a *stored* attachment.
+
+    Copied from a live Zotero Desktop :23119 response (item 2TAZ6RX4).  Note
+    what is NOT here: there is no `size` field, and `path` is null while
+    `filename` is set -- the mirror image of a linked attachment.
+    """
     return {
-        "filename": "paper.pdf",
-        "contentType": "application/pdf",
-        "size": 2048000,
+        "key": "STORED001",
+        "data": {
+            "key": "STORED001",
+            "itemType": "attachment",
+            "contentType": "application/pdf",
+            "linkMode": "imported_file",
+            "filename": "paper.pdf",
+            "title": "paper.pdf",
+            "path": None,
+        },
     }
 
 
 @pytest.fixture
-def sample_linked_file_info_response():
-    """File info for a linked_file attachment (not stored in Zotero)."""
+def sample_linked_attachment_item():
+    """A REAL Local API payload for a `linked_file` attachment.
+
+    Captured from a live response: `filename` is null and `path` carries the
+    ``attachments:`` prefix.  No `size` field exists.
+    """
     return {
-        "filename": "paper.pdf",
-        "contentType": "application/pdf",
-        "size": 0,
-        "path": "/Users/owen/papers/deep_learning_hydrology.pdf",
+        "key": "FXERFCH2",
+        "data": {
+            "key": "FXERFCH2",
+            "itemType": "attachment",
+            "contentType": "application/pdf",
+            "linkMode": "linked_file",
+            "filename": None,
+            "title": "Lu 等 - 2024 - The AI Scientist.pdf",
+            "path": "attachments:Lu 等 - 2024 - The AI Scientist.pdf",
+        },
     }
+
+
+@pytest.fixture
+def sample_parent_item():
+    """A journal article (non-attachment) that owns PDF children."""
+    return {
+        "key": "6HF7ADML",
+        "data": {
+            "key": "6HF7ADML",
+            "itemType": "journalArticle",
+            "title": "The AI Scientist",
+        },
+    }
+
+
+@pytest.fixture
+def sample_children_with_pdf():
+    """Children listing including a non-PDF attachment ahead of the PDF."""
+    return [
+        {
+            "key": "LINKEDURL",
+            "data": {"key": "LINKEDURL", "itemType": "attachment"},
+        },
+        {
+            "key": "FXERFCH2",
+            "data": {
+                "key": "FXERFCH2",
+                "itemType": "attachment",
+                "contentType": "application/pdf",
+                "linkMode": "linked_file",
+                "path": "attachments:Lu 等 - 2024 - The AI Scientist.pdf",
+                "filename": None,
+            },
+        },
+    ]
+
+
+@pytest.fixture
+def sample_file_view_url():
+    """GET .../file/view/url returns the local path as text/plain, not JSON."""
+    return (
+        "file:///G:/%E6%88%91%E7%9A%84%E4%BA%91%E7%AB%AF%E7%A1%AC%E7%9B%98"
+        "/Documents/Papers/Zotero_Papers/Lu%20%E7%AD%89%20-%202024%20-%20The%20AI%20Scientist.pdf"
+    )
+
+
+def _make_response(payload=None, *, status=200, raise_error=None, text=None, headers=None):
+    """Build a stand-in for an httpx.Response.
+
+    `status` drives the branch the code takes; `raise_error` mirrors
+    ``raise_for_status()`` raising on 4xx/5xx.
+    """
+    response = MagicMock()
+    response.status_code = status
+    response.headers = headers or {}
+    if payload is not None:
+        response.json.return_value = payload
+    if text is not None:
+        response.text = text
+    if raise_error is not None:
+        response.raise_for_status.side_effect = raise_error
+    else:
+        response.raise_for_status = MagicMock()
+    return response
+
+
+def _make_client(responses):
+    """Patch target for httpx.AsyncClient, returning `responses` in order.
+
+    Pass a single MagicMock for "every call returns this", or a list for a
+    scripted sequence.  ``client.get.call_args_list`` records the real URLs.
+    """
+    client = AsyncMock()
+    if isinstance(responses, list):
+        client.get.side_effect = responses
+    else:
+        client.get.return_value = responses
+    client.__aenter__.return_value = client
+    client.__aexit__.return_value = None
+    return client
+
+
+def _requested_urls(client):
+    """The URLs actually passed to client.get(), in order."""
+    return [call[0][0] for call in client.get.call_args_list]
 
 
 @pytest.fixture
@@ -683,25 +791,44 @@ class TestZoteroGetFulltext:
         assert "message" in result
 
     def test_get_fulltext_handles_item_not_indexed(self):
-        """get_fulltext returns error when item has no indexed fulltext (404)."""
-        mock_response = AsyncMock()
-        mock_response.status_code = 404
-        mock_response.raise_for_status.side_effect = Exception(
-            "HTTP 404: Fulltext not available"
-        )
+        """An item with no PDF child is reported as such, not simply 404'd.
 
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
+        The response is a MagicMock, not an AsyncMock: httpx's
+        ``raise_for_status`` and ``json`` are synchronous, and mocking them as
+        async silently skips the raise (which hid the 404 path from this test).
+        """
+        no_pdf = [{"key": "LINK", "data": {"key": "LINK", "itemType": "attachment"}}]
+        mock_client = _make_client(
+            [
+                _make_response(status=404, raise_error=Exception("HTTP 404")),
+                _make_response(no_pdf),
+            ]
+        )
 
         with patch.object(server.httpx, "AsyncClient", return_value=mock_client):
             result_json = asyncio.run(
-                server.zotero_get_fulltext(item_key="NO_FULLTEXT")
+                server.zotero_get_fulltext(item_key="NOFULLTXT")
             )
 
         result = json.loads(result_json)
         assert result["error"] is True
+        assert "pdf" in result["message"].lower()
+
+    def test_get_fulltext_distinguishes_a_failed_children_lookup(self):
+        """A broken /children must not be reported as 'no PDF'."""
+        mock_client = _make_client(
+            _make_response(status=404, raise_error=Exception("HTTP 404"))
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=mock_client):
+            result_json = asyncio.run(
+                server.zotero_get_fulltext(item_key="NOFULLTXT")
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+        assert "could not list attachments" in result["message"].lower()
+        assert "/children" in result["message"]
 
 
 # =========================================================================
@@ -712,55 +839,72 @@ class TestZoteroGetFulltext:
 class TestZoteroGetFileInfo:
     """Tests for the zotero_get_file_info tool (Local API via httpx)."""
 
-    def test_get_file_info_returns_metadata(
-        self, sample_file_info_response
+    def test_get_file_info_reports_no_size_for_a_stored_attachment(
+        self, sample_stored_attachment_item, sample_file_view_url
     ):
-        """get_file_info returns filename, contentType, and size."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = sample_file_info_response
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
+        """`size` is always 0 — the Local API exposes no file size.
 
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
+        REWRITTEN TWICE, and the second rewrite is the instructive one.  The
+        original fixture invented ``size: 2048000``.  The first rewrite guessed
+        it came from the Content-Length of ``GET .../file`` — but measured
+        against a live Zotero, that route answers **302 for stored and linked
+        attachments alike**, so the Content-Length branch was dead code and its
+        test mocked a 200 response that never occurs.  That is the same class of
+        fiction the original bug hid behind.  Nothing is fetched for size now.
+        """
+        client = _make_client(
+            [
+                _make_response(sample_stored_attachment_item),
+                _make_response(text=sample_file_view_url),
+            ]
+        )
 
-        with patch.object(server.httpx, "AsyncClient", return_value=mock_client):
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
             result_json = asyncio.run(
-                server.zotero_get_file_info(item_key="ABC12345")
+                server.zotero_get_file_info(item_key="STORED001")
             )
 
         result = json.loads(result_json)
+        assert "error" not in result
         assert result["filename"] == "paper.pdf"
         assert result["contentType"] == "application/pdf"
-        assert result["size"] == 2048000
-        assert result["itemKey"] == "ABC12345"
-        assert "error" not in result
+        assert result["linkMode"] == "imported_file"
+        assert result["size"] == 0
+        assert result["itemKey"] == "STORED001"
+        assert result["attachmentKey"] == "STORED001"
+        # No request may be made to the /file route, which cannot serve a size.
+        assert not any(
+            url.endswith("/file") for url in _requested_urls(client)
+        )
 
     def test_get_file_info_handles_linked_file(
-        self, sample_linked_file_info_response
+        self, sample_linked_attachment_item, sample_file_view_url
     ):
-        """get_file_info includes 'path' field for linked_file attachments."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = sample_linked_file_info_response
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
+        """A linked_file resolves its local path and reports size 0.
 
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
+        REWRITTEN: the old fixture hand-wrote a Unix path.  The real response
+        for a workspace PDF is a Google Drive path with a null ``filename`` and
+        an ``attachments:`` prefix on ``path``.
+        """
+        client = _make_client(
+            [
+                _make_response(sample_linked_attachment_item),
+                _make_response(text=sample_file_view_url),
+            ]
+        )
 
-        with patch.object(server.httpx, "AsyncClient", return_value=mock_client):
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
             result_json = asyncio.run(
-                server.zotero_get_file_info(item_key="LINKED_KEY")
+                server.zotero_get_file_info(item_key="FXERFCH2")
             )
 
         result = json.loads(result_json)
-        assert "path" in result
-        assert result["path"] == "/Users/owen/papers/deep_learning_hydrology.pdf"
-        assert result["size"] == 0  # linked files have size 0 in Zotero
+        assert "error" not in result
+        assert result["linkMode"] == "linked_file"
+        assert "The AI Scientist.pdf" in result["path"]
+        # Reading the file off Google Drive would trigger a hydration hang, so
+        # linked attachments deliberately report 0 rather than stat the path.
+        assert result["size"] == 0
 
     def test_get_file_info_handles_local_api_unreachable(self):
         """get_file_info returns error when Local API is unreachable."""
@@ -780,25 +924,19 @@ class TestZoteroGetFileInfo:
         assert "message" in result
 
     def test_get_file_info_handles_no_attachment(self):
-        """get_file_info returns error when item has no attachment."""
-        mock_response = AsyncMock()
-        mock_response.status_code = 404
-        mock_response.raise_for_status.side_effect = Exception(
-            "HTTP 404: No attachment found"
+        """get_file_info returns error when the key resolves to nothing."""
+        mock_client = _make_client(
+            _make_response(status=404, raise_error=Exception("HTTP 404"))
         )
-
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
 
         with patch.object(server.httpx, "AsyncClient", return_value=mock_client):
             result_json = asyncio.run(
-                server.zotero_get_file_info(item_key="NO_ATTACHMENT")
+                server.zotero_get_file_info(item_key="NOATTACH1")
             )
 
         result = json.loads(result_json)
         assert result["error"] is True
+        assert "NOATTACH1" in result["message"]
 
 
 # =========================================================================
@@ -1325,16 +1463,38 @@ class TestWebApiUnavailable:
 class TestServerInitialization:
     """Tests for server module-level initialization."""
 
-    def test_server_initializes_mcp_server(self):
-        """The MCPServer instance is created with name 'zotero'."""
-        from mcp.server import MCPServer
+    def test_exposes_twelve_zotero_tools(self):
+        """The server registers exactly 12 zotero_* tools.
 
-        assert MCPServer.called
-        MCPServer.assert_called_with("zotero")
+        Asserted as a contract on the module rather than on the stubbed
+        constructor: this file's ``sys.modules`` stubs only take effect if it
+        wins the import race against other test modules, so asserting
+        "MCPServer was called" made the result depend on collection order.
+        """
+        tool_names = sorted(n for n in dir(server) if n.startswith("zotero_"))
+        assert tool_names == [
+            "zotero_fulltext_search",
+            "zotero_get_annotations",
+            "zotero_get_attachments",
+            "zotero_get_collection_items",
+            "zotero_get_collections",
+            "zotero_get_file_info",
+            "zotero_get_fulltext",
+            "zotero_get_item",
+            "zotero_get_recent",
+            "zotero_get_tags",
+            "zotero_search",
+            "zotero_search_by_tag",
+        ]
 
-    def test_local_api_base_url_is_correct(self):
-        """LOCAL_API_BASE points to the Zotero connector server."""
-        assert server.LOCAL_API_BASE == "http://host.docker.internal:23119"
+    def test_local_api_base_url_is_correct(self, monkeypatch):
+        """The resolver's default targets the host from inside a container."""
+        monkeypatch.delenv("ZOTERO_LOCAL_BASE_URL", raising=False)
+        monkeypatch.delenv("ZOTERO_LOCAL_API_URL", raising=False)
+
+        assert (
+            server._resolve_local_api_base() == "http://host.docker.internal:23119"
+        )
 
     def test_env_vars_have_sensible_defaults(self, monkeypatch):
         """Module-level config defaults are set correctly."""
@@ -1359,3 +1519,655 @@ class TestServerInitialization:
         # Since our stubbed env has no env vars, _zot may be None
         # But the Zotero constructor pattern is imported and available
         assert hasattr(server, "_zot")
+
+
+# =========================================================================
+# Tests: Local API URL construction (regression -- the /api/users/0 segment)
+# =========================================================================
+
+
+class TestLocalApiUrlConstruction:
+    """The Local API lives under /api/users/0; omitting it 404s every call.
+
+    These assert on the *request URL* rather than the response, because the
+    pre-existing tests only ever mocked responses -- which is structurally why
+    a wrong URL could never fail them.
+    """
+
+    def test_fulltext_url_includes_local_api_user_segment(
+        self, sample_fulltext_response
+    ):
+        client = _make_client(_make_response(sample_fulltext_response))
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            asyncio.run(server.zotero_get_fulltext(item_key="FXERFCH2"))
+
+        url = _requested_urls(client)[0]
+        assert "/api/users/0/items/FXERFCH2/fulltext" in url, (
+            f"Local API fulltext needs the /api/users/0 segment, got: {url}"
+        )
+
+    def test_file_info_url_includes_local_api_user_segment(
+        self, sample_linked_attachment_item, sample_file_view_url
+    ):
+        client = _make_client(
+            [
+                _make_response(sample_linked_attachment_item),
+                _make_response(text=sample_file_view_url),
+            ]
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            asyncio.run(server.zotero_get_file_info(item_key="FXERFCH2"))
+
+        for url in _requested_urls(client):
+            assert "/api/users/0/items/" in url, (
+                f"every Local API call needs the /api/users/0 segment, got: {url}"
+            )
+
+    def test_fulltext_404_error_reports_requested_path(self):
+        """A 404 must not be reported as 'not indexed' without the path.
+
+        The original message ("Fulltext not indexed for item X") described a
+        business outcome for what was actually a misconfigured URL, which is
+        why this went unnoticed.
+        """
+        client = _make_client(
+            _make_response(status=404, raise_error=Exception("HTTP 404"))
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_fulltext(item_key="NOFULLTXT")
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+        assert "/api/users/0/items/NOFULLTXT/fulltext" in result["message"]
+
+    def test_transport_error_message_does_not_leak_the_host(self):
+        """httpx embeds the full request URL in its exception messages.
+
+        The 404 path builds its message with ``_path_only`` and was already
+        covered; this exercises the ``raise_for_status`` path, whose message
+        carries the configured host verbatim.
+        """
+        leaky = Exception(
+            "Server error '500 Internal Server Error' for url "
+            "'http://host.docker.internal:23119/api/users/0/items/ABCX0001/fulltext'"
+        )
+        client = _make_client(_make_response(status=500, raise_error=leaky))
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_fulltext(item_key="ABCX0001")
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+        assert "host.docker.internal" not in result["message"]
+        assert "/api/users/0/items/ABCX0001/fulltext" in result["message"]
+
+
+# =========================================================================
+# Tests: item_key validation at the boundary
+# =========================================================================
+
+
+class TestItemKeyValidation:
+    """`item_key` arrives from an MCP client and lands in a request path.
+    Dot segments survive httpx's normalisation, so it is validated up front."""
+
+    @pytest.mark.parametrize(
+        "bad_key",
+        [
+            "../../collections",
+            "ABC/../..",
+            "ABC?q=1",
+            "ABC#frag",
+            "x" * 33,
+            "ABC 123",
+        ],
+    )
+    def test_rejects_a_key_that_could_reshape_the_request(self, bad_key):
+        result = json.loads(
+            asyncio.run(server.zotero_get_fulltext(item_key=bad_key))
+        )
+
+        assert result["error"] is True
+        assert "well-formed" in result["message"]
+
+    def test_rejects_a_malformed_key_for_file_info_too(self):
+        result = json.loads(
+            asyncio.run(server.zotero_get_file_info(item_key="../items"))
+        )
+
+        assert result["error"] is True
+        assert "well-formed" in result["message"]
+
+    def test_accepts_a_real_zotero_key(self):
+        assert server._valid_key("6HF7ADML") is True
+        assert server._valid_key("FXERFCH2") is True
+        assert server._valid_key("") is False
+
+
+# =========================================================================
+# Tests: resolving an item key to its PDF attachment (regression)
+# =========================================================================
+
+
+class TestFulltextAttachmentResolution:
+    """`/fulltext` only answers for an *attachment* key; an item key must be
+    resolved through /children rather than surfaced as a bare 404."""
+
+    def test_attachment_key_costs_a_single_request(self, sample_fulltext_response):
+        client = _make_client(_make_response(sample_fulltext_response))
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_fulltext(item_key="FXERFCH2")
+            )
+
+        result = json.loads(result_json)
+        assert "error" not in result
+        assert len(_requested_urls(client)) == 1
+
+    def test_item_key_is_resolved_to_pdf_attachment(
+        self, sample_fulltext_response, sample_children_with_pdf
+    ):
+        client = _make_client(
+            [
+                _make_response(status=404, raise_error=Exception("HTTP 404")),
+                _make_response(sample_children_with_pdf),
+                _make_response(sample_fulltext_response),
+            ]
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_fulltext(item_key="6HF7ADML")
+            )
+
+        result = json.loads(result_json)
+        assert "error" not in result
+        assert result["attachmentKey"] == "FXERFCH2"
+        assert result["content"] == sample_fulltext_response["content"]
+
+        urls = _requested_urls(client)
+        assert urls[0].endswith("/items/6HF7ADML/fulltext")
+        assert urls[1].endswith("/items/6HF7ADML/children")
+        assert urls[2].endswith("/items/FXERFCH2/fulltext")
+
+    def test_a_lone_pdf_child_costs_no_extra_probe(
+        self, sample_fulltext_response, sample_children_with_pdf
+    ):
+        """With one candidate there is nothing to compare, so it is used as-is.
+
+        Probing it would mean reading a whole paper just to learn it is the
+        only one — and a single PDF is the common case for a normal item.
+        """
+        client = _make_client(
+            [
+                _make_response(status=404, raise_error=Exception("HTTP 404")),
+                _make_response(sample_children_with_pdf),
+                _make_response(sample_fulltext_response),
+            ]
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_fulltext(item_key="PARENT01")
+            )
+
+        result = json.loads(result_json)
+        assert "error" not in result
+        # Same keys as a probed candidate, with None meaning "not measured".
+        assert result["attachmentCandidates"] == [
+            {"key": "FXERFCH2", "chars": None, "indexed": None}
+        ]
+        # 404 -> /children -> the single fulltext fetch.  No selection probe.
+        assert len(_requested_urls(client)) == 3
+
+    def test_error_when_item_has_no_pdf_child(self):
+        no_pdf = [
+            {"key": "LINK", "data": {"key": "LINK", "itemType": "attachment"}},
+        ]
+        client = _make_client(
+            [
+                _make_response(status=404, raise_error=Exception("HTTP 404")),
+                _make_response(no_pdf),
+            ]
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_fulltext(item_key="HASNOPDF1")
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+        assert "pdf" in result["message"].lower()
+
+    def test_longest_pdf_wins_when_an_item_has_several(self):
+        """A parent item may carry the paper plus press coverage of it.
+
+        Measured live on item 6HF7ADML: five PDF children holding 6,903 /
+        11,871 / 15,286 / 61,796 / 276,543 characters, where only the longest
+        is the paper -- and it was listed LAST.  Taking the first child hands
+        back a news article while looking perfectly successful.
+        """
+        short, long = "SHORT0001", "LONG00002"
+        children = [
+            {
+                "key": short,
+                "data": {
+                    "key": short,
+                    "itemType": "attachment",
+                    "contentType": "application/pdf",
+                },
+            },
+            {
+                "key": long,
+                "data": {
+                    "key": long,
+                    "itemType": "attachment",
+                    "contentType": "application/pdf",
+                },
+            },
+        ]
+        short_payload = {"content": "x" * 6903, "indexedPages": 1, "totalPages": 1}
+        long_payload = {"content": "y" * 276543, "indexedPages": 186, "totalPages": 186}
+
+        client = _make_client(
+            [
+                _make_response(status=404, raise_error=Exception("HTTP 404")),
+                _make_response(children),
+                _make_response(short_payload),
+                _make_response(long_payload),
+            ]
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_fulltext(item_key="6HF7ADML")
+            )
+
+        result = json.loads(result_json)
+        assert "error" not in result
+        assert result["attachmentKey"] == long
+        assert result["content"] == long_payload["content"]
+        # Every candidate is reported, so a wrong pick is visible.
+        assert result["attachmentCandidates"] == [
+            {"key": short, "chars": 6903, "indexed": True},
+            {"key": long, "chars": 276543, "indexed": True},
+        ]
+
+    def test_unindexed_candidates_still_report_the_attempt(self):
+        """When no child is indexed the error names every key that was tried."""
+        children = [
+            {
+                "key": "NOPE0001",
+                "data": {
+                    "key": "NOPE0001",
+                    "itemType": "attachment",
+                    "contentType": "application/pdf",
+                },
+            },
+            {
+                "key": "NOPE0002",
+                "data": {
+                    "key": "NOPE0002",
+                    "itemType": "attachment",
+                    "contentType": "application/pdf",
+                },
+            },
+        ]
+        not_indexed = _make_response(
+            status=404, raise_error=Exception("HTTP 404")
+        )
+        client = _make_client(
+            [
+                not_indexed,  # /items/PARENT/fulltext
+                _make_response(children),  # /children
+                not_indexed,  # probe NOPE0001
+                not_indexed,  # probe NOPE0002
+                not_indexed,  # retry the fallback pick
+            ]
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_fulltext(item_key="PARENT01")
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+        assert "NOPE0001" in result["message"]
+        assert "NOPE0002" in result["message"]
+
+
+# =========================================================================
+# Tests: file_info against the real endpoint contract
+# =========================================================================
+
+
+class TestFileInfoRealContract:
+    """`GET .../file` is a 302 to a ``file://`` URL that httpx cannot follow, so
+    file_info must build its answer from the item JSON plus /file/view/url."""
+
+    def test_parent_item_key_resolves_to_attachment(
+        self, sample_parent_item, sample_children_with_pdf, sample_file_view_url
+    ):
+        client = _make_client(
+            [
+                _make_response(sample_parent_item),
+                _make_response(sample_children_with_pdf),
+                _make_response(text=sample_file_view_url),
+            ]
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_file_info(item_key="6HF7ADML")
+            )
+
+        result = json.loads(result_json)
+        assert "error" not in result
+        assert result["itemKey"] == "6HF7ADML"
+        assert result["attachmentKey"] == "FXERFCH2"
+        assert result["contentType"] == "application/pdf"
+        assert result["linkMode"] == "linked_file"
+        # A lone PDF needs no comparison, so no fulltext is fetched here.
+        assert result["attachmentCandidates"] == [
+            {"key": "FXERFCH2", "chars": None, "indexed": None}
+        ]
+        assert len(_requested_urls(client)) == 3
+        # /children is listed exactly once, not once per resolution step
+        assert sum(
+            url.endswith("/children") for url in _requested_urls(client)
+        ) == 1
+
+    def test_filename_derived_from_attachments_path_prefix(
+        self, sample_linked_attachment_item, sample_file_view_url
+    ):
+        """`filename` is null on linked attachments; strip the ``attachments:``
+        prefix from `path` instead."""
+        client = _make_client(
+            [
+                _make_response(sample_linked_attachment_item),
+                _make_response(text=sample_file_view_url),
+            ]
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_file_info(item_key="FXERFCH2")
+            )
+
+        result = json.loads(result_json)
+        assert result["filename"] == "Lu 等 - 2024 - The AI Scientist.pdf"
+        assert not result["filename"].startswith("attachments:")
+
+    def test_keyless_pdf_child_is_refused_not_mislabelled(self):
+        """A child with no key must not be reported under the parent's key.
+
+        zotero_get_fulltext already errors here; file_info used to fall back to
+        the parent item key, naming a file that is not the one described.
+        """
+        children = [
+            {"data": {"itemType": "attachment", "contentType": "application/pdf"}}
+        ]
+        client = _make_client(
+            [
+                _make_response(
+                    {
+                        "key": "PARENT01",
+                        "data": {"key": "PARENT01", "itemType": "journalArticle"},
+                    }
+                ),
+                _make_response(children),
+            ]
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_file_info(item_key="PARENT01")
+            )
+
+        result = json.loads(result_json)
+        assert result["error"] is True
+        assert "no key" in result["message"]
+
+    def test_file_view_url_failure_still_returns_metadata(
+        self, sample_linked_attachment_item
+    ):
+        """A view/url hiccup must degrade, not lose the whole answer."""
+        client = _make_client(
+            [
+                _make_response(sample_linked_attachment_item),
+                _make_response(status=500, raise_error=Exception("HTTP 500")),
+            ]
+        )
+
+        with patch.object(server.httpx, "AsyncClient", return_value=client):
+            result_json = asyncio.run(
+                server.zotero_get_file_info(item_key="FXERFCH2")
+            )
+
+        result = json.loads(result_json)
+        assert "error" not in result
+        assert result["contentType"] == "application/pdf"
+        # falls back to the raw Zotero path field
+        assert "The AI Scientist.pdf" in result["path"]
+
+
+# =========================================================================
+# Tests: .env loading must never clobber container-provided env vars
+# =========================================================================
+
+
+class TestEnvFileLoading:
+    """The server runs in a container where env comes from the host.  Loading
+    .env must therefore be additive only."""
+
+    def test_env_file_fills_missing_vars(self, tmp_path, monkeypatch):
+        env_file = tmp_path / ".env"
+        env_file.write_text("HYDROLITAGENT_TEST_FILL=from-file\n", encoding="utf-8")
+        monkeypatch.delenv("HYDROLITAGENT_TEST_FILL", raising=False)
+
+        assert server._load_env_file(env_file) is True
+        assert os.environ["HYDROLITAGENT_TEST_FILL"] == "from-file"
+
+    def test_env_file_does_not_override_existing_vars(self, tmp_path, monkeypatch):
+        env_file = tmp_path / ".env"
+        env_file.write_text("HYDROLITAGENT_TEST_KEEP=from-file\n", encoding="utf-8")
+        monkeypatch.setenv("HYDROLITAGENT_TEST_KEEP", "from-container")
+
+        assert server._load_env_file(env_file) is True
+        assert os.environ["HYDROLITAGENT_TEST_KEEP"] == "from-container"
+
+    def test_missing_dotenv_package_is_a_noop(self, tmp_path, monkeypatch):
+        """The container image has no python-dotenv; loading must not explode."""
+        env_file = tmp_path / ".env"
+        env_file.write_text("HYDROLITAGENT_TEST_X=1\n", encoding="utf-8")
+        # A None entry in sys.modules makes `from dotenv import ...` raise ImportError.
+        monkeypatch.setitem(sys.modules, "dotenv", None)
+
+        assert server._load_env_file(env_file) is False
+
+
+# =========================================================================
+# Tests: Local API best-effort helpers
+# =========================================================================
+
+
+class TestAttachmentHelpers:
+    """These degrade rather than raise -- the tools are diagnostic surfaces,
+    so a missing size or path must not lose the rest of the answer."""
+
+    def test_filename_prefers_the_explicit_field(self):
+        attachment = {"filename": "a.pdf", "path": "attachments:b.pdf"}
+
+        assert server._attachment_filename(attachment) == "a.pdf"
+
+    def test_filename_strips_the_attachments_prefix(self):
+        attachment = {"filename": None, "path": "attachments:Lu 等 - 2024.pdf"}
+
+        assert server._attachment_filename(attachment) == "Lu 等 - 2024.pdf"
+
+    def test_filename_falls_back_to_local_path(self):
+        attachment = {"filename": None}
+
+        assert (
+            server._attachment_filename(attachment, r"G:\papers\deep learning.pdf")
+            == "deep learning.pdf"
+        )
+
+    def test_filename_falls_back_to_title(self):
+        assert server._attachment_filename({"title": "paper.pdf"}) == "paper.pdf"
+
+    def test_file_url_to_path_decodes_gdrive_urls(self):
+        path = server._file_url_to_path(
+            "file:///G:/%E6%88%91%E7%9A%84%E4%BA%91%E7%AB%AF%E7%A1%AC%E7%9B%98"
+            "/Documents/Papers/x.pdf"
+        )
+
+        assert path.endswith("x.pdf")
+        assert "我的云端硬盘" in path
+        assert not path.startswith("/G:")
+
+    def test_pdf_children_returns_none_when_the_lookup_fails(self):
+        """A failed /children is distinguishable from an item with no PDF."""
+        client = _make_client(
+            _make_response(status=500, raise_error=Exception("HTTP 500"))
+        )
+
+        assert asyncio.run(server._pdf_children(client, "K")) is None
+
+    def test_pdf_children_ignores_a_non_list_payload(self):
+        client = _make_client(_make_response({"unexpected": "dict"}))
+
+        assert asyncio.run(server._pdf_children(client, "K")) == []
+
+    def test_pdf_children_skips_non_dict_and_non_pdf_entries(self):
+        client = _make_client(
+            _make_response(
+                [
+                    "junk",
+                    {"data": {"itemType": "attachment"}},
+                    {"data": {"contentType": "application/pdf", "key": "P1"}},
+                ]
+            )
+        )
+
+        assert asyncio.run(server._pdf_children(client, "K")) == [
+            {"contentType": "application/pdf", "key": "P1"}
+        ]
+
+    def test_select_pdf_attachment_falls_back_to_the_first_when_none_indexed(self):
+        children = [
+            {"key": "A1", "data": {"key": "A1", "contentType": "application/pdf"}},
+            {"key": "B2", "data": {"key": "B2", "contentType": "application/pdf"}},
+        ]
+        client = _make_client(
+            [
+                _make_response(children),
+                _make_response(status=404, raise_error=Exception("HTTP 404")),
+                _make_response(status=404, raise_error=Exception("HTTP 404")),
+            ]
+        )
+
+        best, candidates, payload = asyncio.run(
+            server._select_pdf_attachment(client, "PARENT01")
+        )
+
+        assert best["key"] == "A1"
+        assert payload is None
+        assert candidates == [
+            {"key": "A1", "chars": 0, "indexed": False},
+            {"key": "B2", "chars": 0, "indexed": False},
+        ]
+
+    def test_describe_exception_survives_an_empty_message(self):
+        """httpx transport errors stringify to ''; that must not blank the report."""
+
+        class Silent(Exception):
+            def __str__(self) -> str:
+                return ""
+
+        assert server._describe_exception(Silent()) == "Silent"
+
+    def test_describe_exception_reduces_urls_to_their_path(self):
+        """No message may carry the configured host out to the client."""
+
+        class Leaky(Exception):
+            def __str__(self) -> str:
+                return (
+                    "Server error '500' for url "
+                    "'http://host.docker.internal:23119/api/users/0/items/X/fulltext'"
+                )
+
+        described = server._describe_exception(Leaky())
+
+        assert "host.docker.internal" not in described
+        assert "/api/users/0/items/X/fulltext" in described
+
+    def test_path_only_strips_the_host(self):
+        assert (
+            server._path_only("http://h:23119/api/users/0/items/X/fulltext")
+            == "/api/users/0/items/X/fulltext"
+        )
+
+    def test_path_only_fails_closed_on_a_bare_host_url(self):
+        """A URL with no path must not fall back to the whole URL.
+
+        `urlparse("http://host:23119").path` is empty, so an `or url` fallback
+        hands the host straight back — the exact opposite of this function's
+        purpose.
+        """
+        assert server._path_only("http://host.docker.internal:23119") == "/"
+
+    def test_describe_exception_scrubs_a_bare_host_url(self):
+        leaked = server._describe_exception(
+            Exception("failed to connect to http://host.docker.internal:23119")
+        )
+
+        assert "host.docker.internal" not in leaked
+
+    def test_valid_key_rejects_a_trailing_newline(self):
+        """`$` matches before a final newline; `\\Z` does not."""
+        assert server._valid_key("6HF7ADML\n") is False
+
+    def test_pdf_children_ignores_a_string_data_field(self):
+        client = _make_client(
+            _make_response([{"key": "X", "data": "junk-string"}])
+        )
+
+        assert asyncio.run(server._pdf_children(client, "K")) == []
+
+    def test_score_pdf_children_handles_empty_input(self):
+        best, candidates, payload = asyncio.run(
+            server._score_pdf_children(None, [])
+        )
+
+        assert (best, candidates, payload) == (None, [], None)
+
+
+# =========================================================================
+# Tests: Local API base URL env var aliasing (container compatibility)
+# =========================================================================
+
+
+class TestLocalApiEnvAliasing:
+    """`ZOTERO_LOCAL_BASE_URL` is the unified name; `ZOTERO_LOCAL_API_URL` must
+    keep working because container compose files already set it."""
+
+    def test_unified_name_wins(self, monkeypatch):
+        monkeypatch.setenv("ZOTERO_LOCAL_BASE_URL", "http://from-base:23119")
+        monkeypatch.setenv("ZOTERO_LOCAL_API_URL", "http://from-legacy:23119")
+        assert server._resolve_local_api_base() == "http://from-base:23119"
+
+    def test_legacy_name_still_honored(self, monkeypatch):
+        monkeypatch.delenv("ZOTERO_LOCAL_BASE_URL", raising=False)
+        monkeypatch.setenv("ZOTERO_LOCAL_API_URL", "http://from-legacy:23119")
+        assert server._resolve_local_api_base() == "http://from-legacy:23119"

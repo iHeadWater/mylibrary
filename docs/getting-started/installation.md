@@ -39,7 +39,11 @@ ZOTERO_LIBRARY_ID=1234567
 ZOTERO_LIBRARY_TYPE=user
 
 # Zotero Local API（可选 — PDF 全文检索，需 Zotero Desktop 运行）
-ZOTERO_LOCAL_API_URL=http://host.docker.internal:23119
+# 只填 host 根；/api/users/0 由 server 自己补。
+#   服务器容器内 -> http://host.docker.internal:23119
+#   裸 host      -> http://127.0.0.1:23119（host.docker.internal 不解析）
+# 旧名 ZOTERO_LOCAL_API_URL 仍兼容。
+ZOTERO_LOCAL_BASE_URL=http://host.docker.internal:23119
 
 # GDrive 论文文件夹（论文入库必需 — 见下节）
 GDRIVE_PAPERS_PATH=G:\我的云端硬盘\Documents\Papers\Zotero_Papers
@@ -50,7 +54,7 @@ GDRIVE_PAPERS_PATH=G:\我的云端硬盘\Documents\Papers\Zotero_Papers
 | `ZOTERO_API_KEY` | 是 | Zotero Web API 密钥 |
 | `ZOTERO_LIBRARY_ID` | 是 | Zotero User ID（数字） |
 | `ZOTERO_LIBRARY_TYPE` | 否 | `user`（默认）或 `group` |
-| `ZOTERO_LOCAL_API_URL` | 否 | 本地全文检索 API 地址 |
+| `ZOTERO_LOCAL_BASE_URL` | 否 | 本地全文检索 API 地址(host 根，如 `http://127.0.0.1:23119`)。旧名 `ZOTERO_LOCAL_API_URL` 仍兼容 |
 | `GDRIVE_PAPERS_PATH` | 论文入库是 | GDrive 论文文件夹（= Linked Attachment Base Directory） |
 
 ### 3. 配置 Zotero 附件路径（用于论文入库）
