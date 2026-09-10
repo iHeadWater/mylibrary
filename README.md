@@ -6,6 +6,7 @@
 
 ## 先看哪里
 
+- **第一次使用或需要完整交接**：[平台完整操作说明](documentation/platform-operations-guide.md)，覆盖目录、实现链路、配置、换机、日常运行和排错。
 - **看研究方向和进展**：[统一主题池](themes/index.md)，进入主题后主要看 revised.md。
 - **看单篇论文**：[证据包](evidence-packs/README.md)，card.md 是通用粗卡，readings/ 是定向精读。
 - **改路径、共享库、模型、思考强度或制卡子进程代理**：[总配置](config/config.json)及[字段说明](config/README.md)。代理配置不修改 Codex 客户端或系统设置。

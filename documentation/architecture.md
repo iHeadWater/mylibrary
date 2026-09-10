@@ -92,6 +92,9 @@ Python 调度与本地任务处理
 
 ## 相关文档
 
+- [technical-walkthrough-explained.md](technical-walkthrough-explained.md)：技术流程逐步解释版，用单篇论文的输入、状态、制卡、保存、异常和主题复用实例解释实现，附20分钟必讲内容。
+- [mentor-blackboard-talk.md](mentor-blackboard-talk.md)：约 20 分钟技术实现黑板讲稿，按一键入口讲解接入、防重、模型调用、保存恢复与主题编排。
+- [platform-operations-guide.md](platform-operations-guide.md)：整个平台的目录用途、实现链路、日常操作、换机权限、命令副作用、排错和备份说明。
 - [unified-theme-pool.md](unified-theme-pool.md)：稳定主题身份、跨批次关联、自动合并/拆分、精读复用和迁移验收。
 
 - [workstation-setup.md](workstation-setup.md)：统一安装/恢复入口、失败续跑和真实新路径演练。

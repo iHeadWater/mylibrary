@@ -20,6 +20,9 @@ evidence-packs/.tmp-package-*
 # 本机配置
 config/config.local.json
 
+# Obsidian 本机界面与工作区状态
+.obsidian/
+
 # Python 缓存和虚拟环境
 __pycache__/
 *.py[cod]

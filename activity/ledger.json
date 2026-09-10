@@ -19,6 +19,56 @@
     },
     "created_at": "2026-09-08T18:50:46.039895Z",
     "events": {
+      "ACT-03ced5d39c9550d8465ba44d4bf7e9fa5ad09e3e75af59a99ca2c0a5907b0fb4": {
+        "actor": {
+          "kind": "UNKNOWN",
+          "reason": "ZOTERO_CREATOR_UNAVAILABLE"
+        },
+        "details": {
+          "attachment_key": "U9YR9673"
+        },
+        "event_id": "ACT-03ced5d39c9550d8465ba44d4bf7e9fa5ad09e3e75af59a99ca2c0a5907b0fb4",
+        "fingerprint": null,
+        "group_id": 6618088,
+        "observed_at": "2026-09-09T16:51:31.464586Z",
+        "parent_key": "KLLMBVCA",
+        "source_occurred_at": "2026-09-09T14:08:05Z",
+        "subject_key": "U9YR9673",
+        "title": "Identifying, understanding, and analyzing critical infrastructure interdependencies",
+        "type": "PDF_ADDED"
+      },
+      "ACT-187a885f089f3762a417054405129bbc9a1b4261e2526c6d2a6779d2f7dd5a84": {
+        "actor": {
+          "kind": "UNKNOWN",
+          "reason": "ZOTERO_CREATOR_UNAVAILABLE"
+        },
+        "details": {},
+        "event_id": "ACT-187a885f089f3762a417054405129bbc9a1b4261e2526c6d2a6779d2f7dd5a84",
+        "fingerprint": null,
+        "group_id": 6618088,
+        "observed_at": "2026-09-09T16:51:31.464586Z",
+        "parent_key": "KLLMBVCA",
+        "source_occurred_at": "2026-09-09T14:06:24Z",
+        "subject_key": "KLLMBVCA",
+        "title": "Identifying, understanding, and analyzing critical infrastructure interdependencies",
+        "type": "PAPER_ADDED"
+      },
+      "ACT-2bba3a71ff51cbdc97716bee4465706fcb152511b03ccc3acf91e4d39fc48ab3": {
+        "actor": {
+          "kind": "UNKNOWN",
+          "reason": "ZOTERO_CREATOR_UNAVAILABLE"
+        },
+        "details": {},
+        "event_id": "ACT-2bba3a71ff51cbdc97716bee4465706fcb152511b03ccc3acf91e4d39fc48ab3",
+        "fingerprint": null,
+        "group_id": 6618088,
+        "observed_at": "2026-09-09T16:51:31.464586Z",
+        "parent_key": "933JZBID",
+        "source_occurred_at": "2026-09-09T14:45:30Z",
+        "subject_key": "933JZBID",
+        "title": "Coupled simulation of urban water networks and interconnected critical urban infrastructure systems: A systematic review and multi-sector research agenda",
+        "type": "PAPER_ADDED"
+      },
       "ACT-2ec544734cf39b219f118057e30a35128356f63729930812a356c56f1f94ad37": {
         "actor": {
           "kind": "SYSTEM",
@@ -41,6 +91,25 @@
         "title": "A generalized natural hazard risk modelling framework for infrastructure failure cascades",
         "type": "CARD_COMPLETED"
       },
+      "ACT-32946e6d688b1c164a341255a6644cddb1534e7bd412b62d7c3b36e2f9cf2aa6": {
+        "actor": {
+          "kind": "SYSTEM",
+          "member_id": "SYS-CARD-01"
+        },
+        "details": {
+          "reason_code": "CODEX_GENERATION_TIMEOUT",
+          "state": "FAILED"
+        },
+        "event_id": "ACT-32946e6d688b1c164a341255a6644cddb1534e7bd412b62d7c3b36e2f9cf2aa6",
+        "fingerprint": "01dd1ea89f4a137a7ef3c8d0b84a022053f5d4d599851df3ec380d1219fbdf04",
+        "group_id": 6618088,
+        "observed_at": "2026-09-10T01:44:26.098989Z",
+        "parent_key": "HFL5S32J",
+        "source_occurred_at": null,
+        "subject_key": "HFL5S32J",
+        "title": "Why We Can No Longer Ignore Consecutive Disasters",
+        "type": "TASK_BLOCKED"
+      },
       "ACT-3b13c0918b680c753ea8e4bd0a501cc9a9cf03feb94b7c4b4cdbe5e84838240a": {
         "actor": {
           "kind": "UNKNOWN",
@@ -56,6 +125,25 @@
         "subject_key": "2RLUKVHH",
         "title": "A generalized natural hazard risk modelling framework for infrastructure failure cascades",
         "type": "PAPER_ADDED"
+      },
+      "ACT-3f19b9ba1646c5e8b2e768f743ac7e83875ff4f75f0de9678d5e5917d6981282": {
+        "actor": {
+          "kind": "SYSTEM",
+          "member_id": "SYS-CARD-01"
+        },
+        "details": {
+          "reason_code": "FULLTEXT_NOT_INDEXED",
+          "state": "WAITING"
+        },
+        "event_id": "ACT-3f19b9ba1646c5e8b2e768f743ac7e83875ff4f75f0de9678d5e5917d6981282",
+        "fingerprint": "a7bed96a84b87b8f40b9decbd5d309a80ab9b83e903ff1e471fc59154dca326f",
+        "group_id": 6618088,
+        "observed_at": "2026-09-09T16:51:32.090092Z",
+        "parent_key": "933JZBID",
+        "source_occurred_at": null,
+        "subject_key": "933JZBID",
+        "title": "Coupled simulation of urban water networks and interconnected critical urban infrastructure systems: A systematic review and multi-sector research agenda",
+        "type": "TASK_BLOCKED"
       },
       "ACT-5468e8be51f91a0ef743e218d5a26b2e9972eb4c4dc60364ba449bd4ff10e148": {
         "actor": {
@@ -92,6 +180,40 @@
         "title": "A review of quantification methodologies for multi-hazard interrelationships",
         "type": "TASK_BLOCKED"
       },
+      "ACT-5ec6ca96630e967a75e524a52dca67a9cbd1d45c5f016b01099a699a56188e76": {
+        "actor": {
+          "kind": "UNKNOWN",
+          "reason": "ZOTERO_CREATOR_UNAVAILABLE"
+        },
+        "details": {},
+        "event_id": "ACT-5ec6ca96630e967a75e524a52dca67a9cbd1d45c5f016b01099a699a56188e76",
+        "fingerprint": null,
+        "group_id": 6618088,
+        "observed_at": "2026-09-10T01:19:19.611335Z",
+        "parent_key": "HFL5S32J",
+        "source_occurred_at": "2026-09-10T01:19:07Z",
+        "subject_key": "HFL5S32J",
+        "title": "Why We Can No Longer Ignore Consecutive Disasters",
+        "type": "PAPER_ADDED"
+      },
+      "ACT-64145aad7f32df7e029e68c32f5630a56b768cf085a5cf0cfdad2704a68aacf9": {
+        "actor": {
+          "kind": "UNKNOWN",
+          "reason": "ZOTERO_CREATOR_UNAVAILABLE"
+        },
+        "details": {
+          "attachment_key": "X8C7ZC3Y"
+        },
+        "event_id": "ACT-64145aad7f32df7e029e68c32f5630a56b768cf085a5cf0cfdad2704a68aacf9",
+        "fingerprint": null,
+        "group_id": 6618088,
+        "observed_at": "2026-09-10T01:19:19.611335Z",
+        "parent_key": "HFL5S32J",
+        "source_occurred_at": "2026-09-10T01:19:07Z",
+        "subject_key": "X8C7ZC3Y",
+        "title": "Why We Can No Longer Ignore Consecutive Disasters",
+        "type": "PDF_ADDED"
+      },
       "ACT-6f40dcce4e8c62323ae52070f0c0a3f9683efb4dd22cc7ed584c83d3d2f1e4bd": {
         "actor": {
           "kind": "SYSTEM",
@@ -109,6 +231,47 @@
         "source_occurred_at": null,
         "subject_key": "FD24WF92",
         "title": "A framework for using event evolutionary graphs to rapidly assess the vulnerability of urban flood cascade compound disaster event networks",
+        "type": "TASK_BLOCKED"
+      },
+      "ACT-6f9cf8446d8422857be2796f36faf3fe4337965641e02fc912b206c32955fbbb": {
+        "actor": {
+          "kind": "SYSTEM",
+          "member_id": "SYS-CARD-01"
+        },
+        "details": {
+          "attachment_key": "XDER4Y33",
+          "evidence_id": "EV-933JZBID",
+          "generation_mode": "GENERATED",
+          "package_directory": "EV-933JZBID-coupled-simulation-of-urban-water-networks-and-interconnecte",
+          "pdf_sha256": "1a51fdcd7a5afec5cebd78d1eaa850fb7f42b6c0d00028293fd612814e86497e"
+        },
+        "event_id": "ACT-6f9cf8446d8422857be2796f36faf3fe4337965641e02fc912b206c32955fbbb",
+        "fingerprint": "3f9a7cdd8dd1ed2aca425311f40db3ef5971760be6c47fc590f9fa8a1f63ebf4",
+        "group_id": 6618088,
+        "observed_at": "2026-09-09T17:41:11.328836Z",
+        "parent_key": "933JZBID",
+        "source_occurred_at": "2026-09-09T17:01:16.427505Z",
+        "subject_key": "933JZBID",
+        "title": "Coupled simulation of urban water networks and interconnected critical urban infrastructure systems: A systematic review and multi-sector research agenda",
+        "type": "CARD_COMPLETED"
+      },
+      "ACT-7aa78678c67e10c11ad1c21d8ec5e3600acbb5d6e6ccabe24aa3e16110187e4a": {
+        "actor": {
+          "kind": "SYSTEM",
+          "member_id": "SYS-CARD-01"
+        },
+        "details": {
+          "reason_code": "FULLTEXT_NOT_INDEXED",
+          "state": "WAITING"
+        },
+        "event_id": "ACT-7aa78678c67e10c11ad1c21d8ec5e3600acbb5d6e6ccabe24aa3e16110187e4a",
+        "fingerprint": "a7bed96a84b87b8f40b9decbd5d309a80ab9b83e903ff1e471fc59154dca326f",
+        "group_id": 6618088,
+        "observed_at": "2026-09-09T16:51:32.090092Z",
+        "parent_key": "KLLMBVCA",
+        "source_occurred_at": null,
+        "subject_key": "KLLMBVCA",
+        "title": "Identifying, understanding, and analyzing critical infrastructure interdependencies",
         "type": "TASK_BLOCKED"
       },
       "ACT-89f430fcf0ea01452aa3babf63968f629759077f3a8b03e40cda9a89d38881aa": {
@@ -284,6 +447,24 @@
         "title": "A Co-simulation approach for time-varying damage propagation in interdependent power and wastewater systems during flood events",
         "type": "PDF_ADDED"
       },
+      "ACT-eb4f4b702f262ad9770296d94686f233fb991898761d5a17fe711f48961d2cd5": {
+        "actor": {
+          "kind": "UNKNOWN",
+          "reason": "ZOTERO_CREATOR_UNAVAILABLE"
+        },
+        "details": {
+          "attachment_key": "XDER4Y33"
+        },
+        "event_id": "ACT-eb4f4b702f262ad9770296d94686f233fb991898761d5a17fe711f48961d2cd5",
+        "fingerprint": null,
+        "group_id": 6618088,
+        "observed_at": "2026-09-09T16:51:31.464586Z",
+        "parent_key": "933JZBID",
+        "source_occurred_at": "2026-09-09T14:45:30Z",
+        "subject_key": "XDER4Y33",
+        "title": "Coupled simulation of urban water networks and interconnected critical urban infrastructure systems: A systematic review and multi-sector research agenda",
+        "type": "PDF_ADDED"
+      },
       "ACT-ec11843bd0c225e53d03cc20a1a54c70d4b985d693df50c275dacfa9a4f89aaa": {
         "actor": {
           "kind": "UNKNOWN",
@@ -299,11 +480,33 @@
         "subject_key": "WHZED3YE",
         "title": "A Co-simulation approach for time-varying damage propagation in interdependent power and wastewater systems during flood events",
         "type": "PAPER_ADDED"
+      },
+      "ACT-fdd991d51351c7bf83ffdc224ef3e3010ab4f9dedb9bcfde240b5fb45b08aee8": {
+        "actor": {
+          "kind": "SYSTEM",
+          "member_id": "SYS-CARD-01"
+        },
+        "details": {
+          "attachment_key": "U9YR9673",
+          "evidence_id": "EV-KLLMBVCA",
+          "generation_mode": "GENERATED",
+          "package_directory": "EV-KLLMBVCA-identifying-understanding-and-analyzing-critical-infrastruct",
+          "pdf_sha256": "4a1e04b083c60b5e3e885cde341b57e4479f733f77b236c9be62334fab820773"
+        },
+        "event_id": "ACT-fdd991d51351c7bf83ffdc224ef3e3010ab4f9dedb9bcfde240b5fb45b08aee8",
+        "fingerprint": "ffdb222fe261dcdc8e43699c22f00dc7d3de0c4a08129eb1a3d0fe0c31e1d414",
+        "group_id": 6618088,
+        "observed_at": "2026-09-09T17:41:11.328836Z",
+        "parent_key": "KLLMBVCA",
+        "source_occurred_at": "2026-09-09T17:10:15.732754Z",
+        "subject_key": "KLLMBVCA",
+        "title": "Identifying, understanding, and analyzing critical infrastructure interdependencies",
+        "type": "CARD_COMPLETED"
       }
     },
     "group_id": 6618088,
     "schema_version": 1
   },
   "schema_version": 1,
-  "sha256": "1424e483351b5a26eb50596d46dee98cfe89ddd1a868bb9464e66f8ccb77acfb"
+  "sha256": "6e5c6ebec76d4155e5277348cd32acfc8cca61eb69c08aa225d8af3ed3030938"
 }
