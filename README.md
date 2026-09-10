@@ -18,7 +18,7 @@ The result accumulates into a **literature knowledge base**: `papers/` organized
 
 | Capability | Command | Docs |
 |---|---|---|
-| **Zotero library query** — 12-tool MCP server (FastMCP SSE, port 8002): search, browse, read full text, attachments, annotations | `uv run python -m hydrolitagent.zotero.server` | [MCP tools](docs/user-guide/mcp-tools.md) |
+| **Zotero library query** — 12-tool MCP server (streamable HTTP, port 8002, endpoint `/mcp`): search, browse, read full text, attachments, annotations | `uv run python -m hydrolitagent.zotero.server` | [MCP tools](docs/user-guide/mcp-tools.md) |
 | **Paper ingestion** — DOI / arXiv ID / title → PDF → Zotero entry + `linked_file` attachment | `bash scripts/run_paper_pipeline.sh "<DOI|arXiv|title>"` | [paper pipeline](docs/user-guide/paper-pipeline.md) |
 | **Paper PDF download** — institutional-access download (DUT SSO) via Claude Code + Playwright | `uv run python -m hydrolitagent.literature.download_pdf doi <doi>` | [download PDF](docs/user-guide/download-pdf.md) |
 | **Zotero linked_file sync** — sync a downloaded PDF into Zotero as a `linked_file` (zero cloud quota) | `uv run python -m hydrolitagent.literature.zotero_sync <pdf> <doi>` | [Zotero sync](docs/user-guide/zotero-sync.md) |

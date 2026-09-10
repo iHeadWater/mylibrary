@@ -110,9 +110,17 @@ def main() -> None:
         print(f"ERROR: cannot parse JSON from {input_path}: {exc}", file=sys.stderr)
         sys.exit(2)
 
-    text = data.get("result", "")
+    # Two producers feed this script and they name the text differently:
+    # fetch_collection_fulltext.py emits "result", while the Zotero MCP tool
+    # zotero_get_fulltext re-serialises the Local API payload under "content".
+    # Accept either; an empty "result" must not shadow a populated "content".
+    raw_text = data.get("result") or data.get("content") or ""
+    text = raw_text if isinstance(raw_text, str) else ""
     if not text:
-        print("ERROR: JSON has no 'result' field or text is empty", file=sys.stderr)
+        print(
+            "ERROR: JSON has no non-empty 'result' or 'content' field",
+            file=sys.stderr,
+        )
         sys.exit(3)
 
     out_dir = Path(args.output_dir)

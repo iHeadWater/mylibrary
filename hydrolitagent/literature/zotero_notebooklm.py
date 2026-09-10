@@ -29,7 +29,13 @@ import requests
 from hydrolitagent.literature._paths import OUTPUT_ROOT
 
 
-ZOTERO_BASE_URL = os.environ.get("ZOTERO_LOCAL_BASE_URL", "http://127.0.0.1:23119")
+# ZOTERO_LOCAL_API_URL is the same setting under its older name; container
+# compose files set that one, so keep honouring it.
+ZOTERO_BASE_URL = (
+    os.environ.get("ZOTERO_LOCAL_BASE_URL")
+    or os.environ.get("ZOTERO_LOCAL_API_URL")
+    or "http://127.0.0.1:23119"
+)
 ZOTERO_LOCAL_USER = "/api/users/0"
 ZOTERO_HEADERS = {"Zotero-API-Version": "3"}
 PAPER_ITEM_TYPES = {"journalArticle", "conferencePaper", "preprint", "report", "thesis"}

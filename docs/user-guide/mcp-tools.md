@@ -1,6 +1,6 @@
 # MCP Server 工具
 
-Zotero MCP Server 通过 FastMCP SSE 传输在端口 8002 上暴露 12 个工具。消费者通过 `http://zotero-mcp:8002/mcp` 连接。
+Zotero MCP Server 通过 streamable HTTP 传输在端口 8002 上暴露 12 个工具(不是 SSE)。消费者通过 `http://zotero-mcp:8002/mcp` 连接。
 
 ## 工具概览
 
@@ -286,7 +286,17 @@ zotero_search_by_tag(tag="hydrology && LSTM")          # 有 hydrology OR LSTM
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `item_key` | `str` | (必需) | Zotero 条目 key |
+| `item_key` | `str` | (必需) | Zotero **附件 key** 或**条目 key**（1-32 位字母数字） |
+
+`item_key` 可以是 PDF 附件 key，也可以是条目 key。传条目 key 时会经
+`/children` 解析到附件；**一个条目常挂多个 PDF**（论文本体 + 关于它的新闻报道），
+此时取**全文最长**的那个，并把所有候选列在 `attachmentCandidates` 里。
+只有 1 个 PDF 子附件时不做比较、直接采用 —— 不会为了确认「它是唯一的」而
+白读一整篇论文。
+
+`attachmentCandidates` 的每一项**键集恒定**为 `{key, chars, indexed}`；
+未做过比较的候选，`chars` 与 `indexed` 为 **`null`**（表示「未测量」，
+不是 0）。所以按 `chars` 排序前请先滤掉 `null`。
 
 **返回格式**：
 
@@ -295,11 +305,16 @@ zotero_search_by_tag(tag="hydrology && LSTM")          # 有 hydrology OR LSTM
   "content": "Abstract\n\nThis paper presents...\n\nIntroduction\n\nHydrological modeling...",
   "indexedPages": 12,
   "totalPages": 15,
-  "itemKey": "ABC12345"
+  "itemKey": "ABC12345",
+  "attachmentKey": "ABC12345",
+  "attachmentCandidates": [
+    {"key": "ABC12345", "chars": 276543, "indexed": true}
+  ]
 }
 ```
 
-**错误**：如果条目未索引全文（404），返回错误 JSON。
+**错误**：404 时返回错误 JSON，消息里带上实际请求的路径（不含主机名），
+并区分「列表失败」「该条目没有 PDF 子附件」「附件未建索引」三种情况。
 
 ---
 
@@ -311,20 +326,35 @@ zotero_search_by_tag(tag="hydrology && LSTM")          # 有 hydrology OR LSTM
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `item_key` | `str` | (必需) | Zotero 条目 key |
+| `item_key` | `str` | (必需) | Zotero **附件 key** 或**条目 key**（1-32 位字母数字） |
+
+传条目 key 时用与 `zotero_get_fulltext` **相同**的选取规则（全文最长者），
+保证两个工具描述的是同一个文件。
 
 **返回格式**：
 
 ```json
 {
-  "filename": "paper.pdf",
+  "filename": "Lu 等 - 2024 - The AI Scientist.pdf",
   "contentType": "application/pdf",
-  "size": 2048000,
-  "itemKey": "ABC12345"
+  "linkMode": "linked_file",
+  "path": "G:\\我的云端硬盘\\Documents\\Papers\\Zotero_Papers\\Lu 等 - 2024 - The AI Scientist.pdf",
+  "size": 0,
+  "itemKey": "ABC12345",
+  "attachmentKey": "ABC12345",
+  "attachmentCandidates": [
+    {"key": "ABC12345", "chars": 276543, "indexed": true}
+  ]
 }
 ```
 
-对于 `linked_file` 附件，额外包含 `path` 字段（本地路径），`size` 为 `0`。
+两点与直觉不同，但都是实测结果：
+
+- **`size` 恒为 0**。Zotero Local API 对**存储型与链接型附件一律返回 302** 跳向
+  `file://` URL，没有任何路由会给出文件大小；自己去 stat 会读用户磁盘、并可能触发
+  Google Drive 水合，因此不猜。
+- **`filename` 是推导出来的**。链接型附件的 `filename` 字段为 `null`，名字藏在
+  `path` 的 `attachments:` 前缀之后。`path` 则是从 `/file/view/url` 解析出的本地路径。
 
 ---
 

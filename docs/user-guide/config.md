@@ -11,7 +11,9 @@ ZOTERO_LIBRARY_ID=1234567                 # Zotero User ID（数字）
 ZOTERO_LIBRARY_TYPE=user                  # user 或 group
 
 # ── Zotero Local API（可选）──
-ZOTERO_LOCAL_API_URL=http://host.docker.internal:23119
+# host 根；/api/users/0 由 server 补。容器内用 host.docker.internal，
+# 裸 host 用 127.0.0.1（host.docker.internal 在裸 host 上不解析）。
+ZOTERO_LOCAL_BASE_URL=http://host.docker.internal:23119
 ```
 
 | 变量 | 使用方 | 说明 |
@@ -19,7 +21,7 @@ ZOTERO_LOCAL_API_URL=http://host.docker.internal:23119
 | `ZOTERO_API_KEY` | MCP Server | Zotero Web API 密钥 |
 | `ZOTERO_LIBRARY_ID` | MCP Server | Zotero User ID（数字） |
 | `ZOTERO_LIBRARY_TYPE` | MCP Server | `user`（默认）或 `group`（群组库） |
-| `ZOTERO_LOCAL_API_URL` | MCP Server (Local API 工具) | 本地全文检索 API 地址 |
+| `ZOTERO_LOCAL_BASE_URL` | MCP Server + zotero_notebooklm.py | 本地全文检索 API 地址（host 根）。旧名 `ZOTERO_LOCAL_API_URL` 仍兼容；默认值按使用方不同：MCP Server 为 `http://host.docker.internal:23119`，zotero_notebooklm.py 为 `http://127.0.0.1:23119` |
 
 ### 文献深度处理（literature CLI）环境变量
 
@@ -33,7 +35,7 @@ ZOTERO_LOCAL_API_URL=http://host.docker.internal:23119
 | `WECHAT_APPSECRET` | wechat/push.py | 公众号 AppSecret |
 | `WECHAT_THUMB_MEDIA_ID` | wechat/push.py | 公众号默认封面 media_id |
 | `NOTEBOOKLM_HOME` | zotero_notebooklm.py | NotebookLM CLI 配置目录(默认 `.tmp/notebooklm`) |
-| `ZOTERO_LOCAL_BASE_URL` | zotero_notebooklm.py | Zotero 本地 API(默认 `http://127.0.0.1:23119`) |
+| `ZOTERO_LOCAL_BASE_URL` | zotero_notebooklm.py | Zotero 本地 API(默认 `http://127.0.0.1:23119`)；旧名 `ZOTERO_LOCAL_API_URL` 仍兼容 |
 
 > ⚠️ 凭据一律从环境变量读取,不要硬编码进源码。参见 [文献深度处理](literature.md)。
 

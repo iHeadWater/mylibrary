@@ -18,7 +18,7 @@ mylibrary 承担**情报汇集之后的深度处理**:
 
 | 能力 | 命令 | 文档 |
 |---|---|---|
-| **Zotero 文献查询** — 12 个工具的 MCP Server(FastMCP SSE,端口 8002):搜索、浏览、读取全文/附件/批注 | `uv run python -m hydrolitagent.zotero.server` | [MCP 工具](docs/user-guide/mcp-tools.md) |
+| **Zotero 文献查询** — 12 个工具的 MCP Server(streamable HTTP,端口 8002,端点 `/mcp`):搜索、浏览、读取全文/附件/批注 | `uv run python -m hydrolitagent.zotero.server` | [MCP 工具](docs/user-guide/mcp-tools.md) |
 | **论文入库** — DOI / arXiv ID / 标题 → PDF → Zotero 条目 + `linked_file` 附件 | `bash scripts/run_paper_pipeline.sh "<DOI|arXiv|title>"` | [入库流水线](docs/user-guide/paper-pipeline.md) |
 | **论文 PDF 下载** — 机构访问(大连理工 SSO)通过 Claude Code + Playwright 下载 | `uv run python -m hydrolitagent.literature.download_pdf doi <doi>` | [PDF 下载](docs/user-guide/download-pdf.md) |
 | **Zotero 入库 linked_file** — 已下载 PDF 同步进 Zotero 作为 `linked_file`(零云端配额) | `uv run python -m hydrolitagent.literature.zotero_sync <pdf> <doi>` | [Zotero 入库](docs/user-guide/zotero-sync.md) |

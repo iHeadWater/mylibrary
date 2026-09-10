@@ -55,7 +55,7 @@ uv run python -m hydrolitagent.literature.wechat.figure <article.md>
 | `ZHIPUAI_API_KEY` | 智谱 AI(CogView)配图/封面 | wechat/figure.py |
 | `WECHAT_APPID` / `WECHAT_APPSECRET` / `WECHAT_THUMB_MEDIA_ID` | 公众号发布 | wechat/push.py |
 | `NOTEBOOKLM_HOME` | NotebookLM CLI 配置目录(默认 `.tmp/notebooklm`) | zotero_notebooklm.py |
-| `ZOTERO_LOCAL_BASE_URL` | Zotero 本地 API(默认 `http://127.0.0.1:23119`) | zotero_notebooklm.py |
+| `ZOTERO_LOCAL_BASE_URL` | Zotero 本地 API(默认 `http://127.0.0.1:23119`)；旧名 `ZOTERO_LOCAL_API_URL` 仍兼容 | zotero_notebooklm.py |
 
 > ⚠️ 凭据一律从环境变量读取,**不要把 API 密钥硬编码进源码**。`push.py` 曾硬编码微信凭据,迁移时已修复为 env 读取。
 

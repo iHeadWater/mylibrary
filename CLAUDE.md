@@ -10,7 +10,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 ## Zotero 接入方式 (IMPORTANT)
 
-本仓库的 Zotero MCP server(`hydrolitagent/zotero/server.py`,FastMCP SSE 端口 8002)是唯一的 Zotero 访问入口。**不要改动它的技术架构**——已有其他服务依赖。
+本仓库的 Zotero MCP server(`hydrolitagent/zotero/server.py`,streamable HTTP 端口 8002,端点路径 `/mcp`)是唯一的 Zotero 访问入口。**不要改动它的技术架构**——已有其他服务依赖。
 
 工具分两类(见 `server.py` 头部注释):
 - **元数据类**(pyzotero Web API,api.zotero.org):`zotero_search`、`zotero_get_item`、`zotero_get_recent`、`zotero_get_collection_items`、`zotero_get_collections`、`zotero_get_tags`、`zotero_search_by_tag`、`zotero_fulltext_search`、`zotero_get_attachments`、`zotero_get_annotations`

@@ -85,7 +85,7 @@ tests/                       # pytest（含迁入的 test_literature_*）
 ## `server.py` — MCP Server
 
 - **框架**：FastMCP (mcp.server)
-- **传输**：SSE，端口 8002
+- **传输**：streamable HTTP，端口 8002(端点路径 `/mcp`)
 - **Web API 客户端**：pyzotero.Zotero（从环境变量初始化）
 - **Local API 客户端**：httpx.AsyncClient
 - **帮助器**：`_format_item()` 提取关键字段为统一格式，`_make_error()` 构建错误 JSON
