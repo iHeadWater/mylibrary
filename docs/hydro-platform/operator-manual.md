@@ -550,10 +550,10 @@ uv run hydro-platform run-once --json
 
 ## 14. 查看本地快照
 
-快照默认保存在：
+快照默认保存在（路径相对仓库根）：
 
 ```text
-E:\phd\hydro-platform\.runtime\zotero-snapshot.json
+hydro-platform/.runtime/zotero-snapshot.json
 ```
 
 在 PowerShell 中查看内容：

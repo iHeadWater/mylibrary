@@ -430,15 +430,16 @@ uv run hydro-platform themes-run --config hydro-platform/config/config.local.jso
 
 ### 6.2 获取仓库
 
-先用获得私有仓库访问权限的 GitHub 账号克隆。本例假设新电脑也有 `E:\phd`，且目标目录尚不存在；否则选择自己的位置，不覆盖已有目录。
+**平台不是独立仓库** —— 它在 `mylibrary` 的 `hydro-platform/` 目录下，是 uv workspace 的成员。所以要取回的是**整个 `mylibrary` 仓库**，再在仓库根同步一次依赖：
 
 ```powershell
 Set-Location 'E:\phd'
-git clone https://github.com/hanfandada/hydro-platform.git
-Set-Location 'hydro-platform'
+git clone <mylibrary 仓库地址> mylibrary
+Set-Location 'mylibrary'
+uv sync --all-packages
 ```
 
-仓库路径不必与旧电脑相同。原始 PDF 不在 Git 中，需要在 Zotero 同步。
+仓库地址见仓库根 `README.md` 的「快速开始」。仓库路径不必与旧电脑相同；目标目录若已存在，不要覆盖。只克隆旧版本不会出现新命令。原始 PDF 不在 Git 中，需要在 Zotero 同步。
 
 ### 6.3 复制完整私人配置
 

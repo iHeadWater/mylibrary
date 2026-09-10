@@ -29,7 +29,7 @@ uv run hydro-platform setup --apply --json
 
 ### 另一台 Windows 电脑的手动复现
 
-先用有私有仓库访问权的 GitHub 账号取回 `hanfandada/hydro-platform`。准备好上述基础软件、本人登录及 `qinjiajun` 共享库的本地 PDF 同步后，在新副本的根目录操作：
+**平台不是独立仓库** —— 要取回的是整个 `mylibrary`（平台在其 `hydro-platform/` 目录下，是 uv workspace 成员）。准备好上述基础软件、本人登录及 `qinjiajun` 共享库的本地 PDF 同步后，在 **mylibrary 仓库根**操作（下列路径均相对于仓库根）：
 
 1. 首次复制 `hydro-platform/config/config.json` 为 `hydro-platform/config/config.local.json`；已有私人配置时不要覆盖。它是完整配置，不是增量覆盖文件，且已被 Git 忽略。
 2. 在私人配置中将 `scheduler.enabled` 改为 `false`，先手动演练，不创建第二台机器的自动制卡计划。若要真正移交制卡职责，应先暂停原制卡机；当前跨机器没有共同任务锁。

@@ -112,7 +112,7 @@ zotero_search_by_tag(tag="hydrology && LSTM")          # 有 hydrology OR LSTM
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `item_key` | `str` | (必需) | Zotero 条目 key（如 `ABC12345`） |
+| `item_key` | `str` | (必需) | Zotero 条目 key（1-32 位字母数字，如 `ABC12345`） |
 
 **返回格式**：完整的 Zotero item JSON，包含 `data`（元数据）、`meta`（创建/修改者）、`version` 等。
 
@@ -126,7 +126,7 @@ zotero_search_by_tag(tag="hydrology && LSTM")          # 有 hydrology OR LSTM
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `item_key` | `str` | (必需) | Zotero 条目 key |
+| `item_key` | `str` | (必需) | Zotero 条目 key（1-32 位字母数字） |
 
 **返回格式**：
 
@@ -168,7 +168,7 @@ zotero_search_by_tag(tag="hydrology && LSTM")          # 有 hydrology OR LSTM
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `item_key` | `str` | (必需) | Zotero 条目 key |
+| `item_key` | `str` | (必需) | Zotero 条目 key（1-32 位字母数字） |
 
 **返回格式**：
 
@@ -246,7 +246,7 @@ zotero_search_by_tag(tag="hydrology && LSTM")          # 有 hydrology OR LSTM
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `collection_key` | `str` | (必需) | 合集 key |
+| `collection_key` | `str` | (必需) | 合集 key（1-32 位字母数字） |
 | `limit` | `int` | `20` | 返回条目上限 |
 
 **返回格式**：`total` + `collectionKey` + `items`。
@@ -261,7 +261,7 @@ zotero_search_by_tag(tag="hydrology && LSTM")          # 有 hydrology OR LSTM
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `collection_key` | `str \| None` | `None` | 可选，限定到某个合集 |
+| `collection_key` | `str \| None` | `None` | 可选，限定到某个合集（1-32 位字母数字；省略或传空串不校验） |
 
 **返回格式**：
 
@@ -371,3 +371,28 @@ zotero_search_by_tag(tag="hydrology && LSTM")          # 有 hydrology OR LSTM
 ```
 
 未配置 API Key 时，Web API 工具返回 `"Web API client not initialized"` 错误。
+
+### key 格式校验
+
+有 **7 个工具**在做任何事之前先校验 key 的形状，格式不合法就直接返回错误 JSON，**不会去请求 Zotero**：
+
+| 参数 | 工具 |
+|------|------|
+| `item_key` | `zotero_get_item`、`zotero_get_attachments`、`zotero_get_annotations`、`zotero_get_fulltext`、`zotero_get_file_info` |
+| `collection_key` | `zotero_get_collection_items`、`zotero_get_tags`（该参数可选：省略或传空串时不校验） |
+
+**规则**：必须是 **1–32 位 ASCII 字母数字**（`^[A-Za-z0-9]{1,32}$`）。
+
+真实的 Zotero key 通常是 8 位大写字母数字。这里放宽到 1–32 位是留余量，**真正的目的是挡住能改变请求路径的字符**（`/`、`.`、`%` 等）—— 这些 key 会被拼进请求路径，而 HTTP 客户端会规范化点段，所以必须在边界上拦。
+
+**非字符串也会被拦**：传入 `int` 之类的值同样返回错误 JSON，**不会抛 `TypeError`**。这对手写调用尤其重要。
+
+被拒绝时的返回（`context` 是工具名，`message` 指明是哪个参数、哪个值）：
+
+```json
+{
+  "error": true,
+  "context": "zotero_get_item",
+  "message": "item_key 'ABC/123' is not a well-formed Zotero key (expected 1-32 alphanumerics)"
+}
+```
