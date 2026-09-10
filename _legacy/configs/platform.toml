@@ -1,0 +1,125 @@
+[input]
+files = [
+  "C:/Users/owen/OneDrive/事务/教研室/2026学科交叉平台研究进展/1.1.项目-基本信息汇总表-纵向.xlsx",
+  "C:/Users/owen/OneDrive/事务/教研室/2026学科交叉平台研究进展/2.论文统计及标注情况总表.xlsx",
+  "C:/Users/owen/OneDrive/事务/教研室/2026学科交叉平台研究进展/3.专利汇总表.xlsx",
+]
+
+[output]
+dir = "outputs"
+
+[manual]
+records_file = "configs/manual_records.toml"
+
+[platform]
+name = "水网系统智能监测与调控"
+story_axis = ["监测", "预警/预测", "调控"]
+keywords = [
+  "水网", "水文", "水资源", "水库", "流域", "洪水", "防洪", "降雨",
+  "径流", "水质", "遥感", "测雨", "测流", "水位", "流量", "智慧水务",
+  "智能", "人工智能", "深度学习", "大模型", "物理机制", "物理约束",
+  "数据驱动", "调度", "调控", "决策", "数字孪生", "城市内涝",
+  "hydrological", "hydrology", "flood", "rainfall", "runoff", "streamflow",
+  "river network", "water level", "water quality", "groundwater", "reservoir",
+  "urban flood", "floodwater", "rainfall-runoff", "physics-based"
+]
+
+[people.allowlist]
+"张弛" = ["张弛", "张驰", "Chi Zhang", "Zhang Chi"]
+"赵铜铁钢" = ["赵铜铁钢", "Tongtiegang Zhao", "Zhao Tongtiegang", "T. Zhao"]
+"吕恒" = ["吕恒", "Heng Lyu", "Heng Lv", "Lv Heng", "Lyu Heng", "Heng Lü", "Lü Heng"]
+"欧阳文宇" = ["欧阳文宇", "Wenyu Ouyang", "Ouyang Wenyu"]
+"李子林" = ["李子林", "Zilin Li", "Li Zilin"]
+"王泽" = ["王泽", "Ze Wang", "Wang Ze"]
+"夏尉" = ["夏尉", "Wei Xia", "Xia Wei"]
+"韩鹏飞" = ["韩鹏飞", "Pengfei Han", "Han Pengfei"]
+
+[record_types.paper]
+enabled = true
+sheet_keywords = ["论文", "英文", "中文"]
+exclude_sheet_keywords = ["项目总表", "JCR", "标注形式"]
+title_columns = [2]
+summary_columns = [3]
+people_columns = [4, 5, 6, 7, 8, 9, 10, 11]
+venue_columns = [12, 13, 14]
+identifier_columns = [23]
+
+[record_types.paper.time]
+start_date = "2025-06-01"
+date_policy = "record_or_status"
+status_terms = ["已发表", "录用", "待刊", "在审", "一审", "二审", "返修", "发表", "刊出"]
+status_can_bypass_date_terms = ["录用", "待刊", "在审", "一审", "二审", "返修"]
+status_from_sheet = true
+keep_year_only_if_year_at_least = 2025
+
+[record_types.patent]
+enabled = true
+sheet_keywords = ["专利", "授权", "受理"]
+exclude_sheet_keywords = ["驳回"]
+title_columns = [1]
+summary_columns = []
+people_columns = [2]
+venue_columns = [5, 6]
+identifier_columns = [7, 8, 14]
+
+[record_types.patent.time]
+start_date = "2025-06-01"
+date_policy = "record_or_status"
+status_terms = ["申请", "受理", "公开", "授权", "年费", "申请费"]
+status_can_bypass_date_terms = []
+status_from_sheet = true
+keep_year_only_if_year_at_least = 2025
+
+[record_types.project]
+enabled = true
+sheet_keywords = ["项目"]
+exclude_sheet_keywords = ["已结题"]
+title_columns = [7, 2]
+summary_columns = []
+people_columns = [8, 6]
+venue_columns = [5, 6]
+identifier_columns = [9, 7]
+
+[record_types.project.time]
+start_date = "2025-06-01"
+date_policy = "coverage_overlap"
+status_terms = ["在研", "新立项", "执行", "重点研发", "国家自然科学基金", "青年科学基金", "面上项目"]
+status_can_bypass_date_terms = []
+status_from_sheet = false
+keep_year_only_if_year_at_least = 2025
+
+[tracks."监测"]
+keywords = [
+  "监测", "观测", "感知", "遥感", "水质", "视频", "图像", "无人机",
+  "传感", "多源", "数据融合", "雨量", "测雨", "测流", "水位", "流量",
+  "内涝水深", "水深", "反演", "影像", "地面视角", "估算", "摄像头", "多模态",
+  "monitoring", "estimation", "camera", "image", "remote sensing", "water level",
+  "floodwater", "multimodal", "hydrological stations"
+]
+prompt = "围绕多源观测、智能感知、遥感/视频/传感数据融合，说明平台如何补齐水网运行的数据底座。"
+
+[tracks."预警/预测"]
+keywords = [
+  "预测", "预报", "预警", "径流", "洪水", "水文模型", "时序", "大模型",
+  "神经网络", "深度学习", "模拟", "无资料", "降雨", "水文水动力",
+  "耦合物理机制", "物理约束", "物理启发", "数据驱动", "机理融合",
+  "人工智能融合建模", "PINN", "forecast", "prediction", "streamflow",
+  "rainfall-runoff", "hydrological model", "data-limited", "physics-based",
+  "differentiable", "machine learning"
+]
+prompt = "围绕耦合物理机制与深度学习、物理约束/物理启发的数据驱动模型、水文机理与人工智能融合建模，说明平台如何提升水文预报与风险预警能力。"
+
+[tracks."调控"]
+keywords = [
+  "调控", "调度", "决策", "优化", "水库", "水网", "强化学习", "智能体",
+  "数字孪生", "预案", "供水", "防洪", "多目标", "协同", "生态调度",
+  "人机协同", "operation", "optimization", "reservoir", "water resource management",
+  "groundwater management", "ecological flow"
+]
+prompt = "围绕水库/水网调度、智能优化、数字孪生和决策支持，说明平台如何服务水网安全高效运行。"
+
+[enrichment]
+enabled = false
+cache_dir = "cache/enrichment"
+timeout_seconds = 10
+providers = ["semantic_scholar", "openalex", "crossref"]

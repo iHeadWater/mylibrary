@@ -1,0 +1,47 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["problem_clusters_markdown", "actions"],
+  "properties": {
+    "problem_clusters_markdown": {"type": "string"},
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "theme_ids", "reason", "themes"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["CREATE", "UPDATE", "MERGE", "SPLIT"]},
+          "theme_ids": {"type": "array", "items": {"type": "string"}},
+          "reason": {"type": "string"},
+          "themes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["title", "candidate_markdown", "paper_tasks"],
+              "properties": {
+                "title": {"type": "string"},
+                "candidate_markdown": {"type": "string"},
+                "paper_tasks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["evidence_id", "focus", "reuse_reading_id", "reuse_reason"],
+                    "properties": {
+                      "evidence_id": {"type": "string"},
+                      "focus": {"type": "string"},
+                      "reuse_reading_id": {"type": ["string", "null"]},
+                      "reuse_reason": {"type": ["string", "null"]}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

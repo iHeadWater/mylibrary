@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "python": {
+    "minimum": [3, 12],
+    "maximum_exclusive": [3, 15],
+    "recommended": "3.12.14"
+  },
+  "packages": [
+    {
+      "name": "pypdf",
+      "version": "6.18.0",
+      "filename": "pypdf-6.18.0-py3-none-any.whl",
+      "sha256": "05b762b77bcb9dcb4a7c91fcf5dded585b25bee7269ab3d3001d7c55fa1b324b",
+      "size_bytes": 393848,
+      "url": "https://files.pythonhosted.org/packages/c7/a5/d5922a078c9a612327681d4793404f82998f4d66213add6fdc0659245856/pypdf-6.18.0-py3-none-any.whl",
+      "metadata_source": "https://pypi.org/pypi/pypdf/6.18.0/json"
+    }
+  ]
+}

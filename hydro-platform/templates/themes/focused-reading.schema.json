@@ -1,0 +1,11 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["source_read_status", "source_page_count", "visual_content_status", "source_read_evidence", "reading_markdown"],
+  "properties": {
+    "source_read_status": {"type": "string", "enum": ["FULL_PDF_REVIEWED", "UNREADABLE"]},
+    "source_page_count": {"type": "integer"},
+    "visual_content_status": {"type": "string", "enum": ["REVIEWED", "NOT_PRESENT", "UNREADABLE"]},
+    "source_read_evidence": {"type": "string"},
+    "reading_markdown": {"type": "string"}
+  }
+}

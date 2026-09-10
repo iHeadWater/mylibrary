@@ -1,0 +1,5 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["revised_markdown"],
+  "properties": {"revised_markdown": {"type": "string"}}
+}

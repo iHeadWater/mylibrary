@@ -1,13 +1,253 @@
-.obsidian/
-.zotero-cache/
-zotero-packet/
-fulltext_*.txt
-*.pdf
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# UV
+#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#uv.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#pdm.lock
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
+.pdm.toml
+.pdm-python
+.pdm-build/
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
+
+# PyPI configuration file
+.pypirc
+
+.vscode/*
+definitions_private.py
+results/*
+
+# ── HydrolitAgent additions ──
+.DS_Store
+.uv-cache/
+.pytest-tmp/
+.playwright-mcp/
+~$*
 *.doc
 *.docx
+outputs/
+.graph_state.toml
+cache/
+graphify-out/
+hydrolitagent.egg-info/
+papers/
+.claude/settings.local.json
+tasks/
+.claude/
+.specify/
+.codegraph/
+
+# Trellis（可用 `trellis init --claude --dsh -u owen` 重新生成，会话数据保持本地）
+.trellis/
+.agents/
+.dsh/
+AGENTS.md
+.gitattributes
+_docx_extract.md
+.tmp/
+
+# 根目录录音 + 转写稿（MM-DD 标题.mp3 / .txt，仅匹配仓库根，不影响子目录）
+/[0-9][0-9]-[0-9][0-9] *.mp3
+/[0-9][0-9]-[0-9][0-9] *.txt
+
+# ── hydro-platform：运行产物一律不入库 ──
+# 证据包 / 主题池 / 日报 / 贡献账本 / 成员映射：纯运行产物，平台运行时自建。
+# 这些目录的说明文档在 docs/hydro-platform/，不在目录内。
+hydro-platform/evidence-packs/
+hydro-platform/themes/
+hydro-platform/reports/
+hydro-platform/activity/
+hydro-platform/members/
+# 本机运行状态与本地工具（.venv/ 、__pycache__/ 等深度无关规则见上方，此处不重复）
+hydro-platform/.runtime/
+hydro-platform/.tools/
+hydro-platform/*.bootstrap.lock
+# 本机配置与凭据
+hydro-platform/config/config.local.json
+.env.*
+!.env.example
+*.key
+*.pem
+# 编辑器状态与临时文件（*.log 见上方 Django 段）
+hydro-platform/.obsidian/
+# 限定在平台内：平台原 .gitignore 位于平台根，其 *.tmp/*.temp 的作用域
+# 本就是"平台内任意深度"；写成全局会静默吞掉其他目录下未来的同名文件
+hydro-platform/**/*.tmp
+hydro-platform/**/*.temp
+
+# ── 水利科研平台(王新宇线):文献二进制、Zotero 本地缓存与工作包 ──
+# PDF/Office/压缩包一律不入库(只用链接与元数据索引)
+*.pdf
 *.xls
 *.xlsx
 *.zip
-__pycache__/
-*.pyc
+.zotero-cache/
+zotero-packet/
+fulltext_*.txt
+.obsidian/
 
+# ── 产物根(paths.artifact_root)的默认位置 ──
+# 默认在仓库根;若把 artifact_root 配置到仓库外,这些规则无副作用。
+# 证据卡与主题必须同根(见 docs/hydro-platform/config.md)。
+主题/
+证据卡/
+运行记录/
+文献链接/
