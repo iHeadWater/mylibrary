@@ -14,6 +14,17 @@ Two sub-commands::
     uv run python scripts/fetch_collection_fulltext.py fetch --collection MLYBU9RM \\
         --keys 9ZWHES3Q,XWWX7JD4 --out-dir outputs/survey-ai-scientist/2026-09-10/fulltext
 
+Files written per paper::
+
+    fulltext/{slug}.json            # index: metadata + the selected text
+    fulltext/{slug}.txt             # the selected paper's text, for chunking
+    fulltext/{slug}/{key}.txt       # EVERY PDF's text, one file per attachment
+
+An item routinely carries several PDFs -- the paper plus press coverage of it,
+and often the published version beside the preprint.  All of their text is kept
+under ``{slug}/``; ``{slug}.txt`` and the JSON's ``result`` are the single
+longest one, which is what the MCP tool would return.
+
 Output JSON shape (per paper)::
 
     {
@@ -23,6 +34,14 @@ Output JSON shape (per paper)::
       "doi": "...", "slug": "...", "dateAdded": "...",
       "totalPages": 42, "source": "zotero-local-api",
       "attachmentCandidates": [{"key": "...", "chars": 12345}],
+      "attachments": [               # this script's own index of the PDFs --
+        {                            # NOT Zotero's child envelopes, which is
+          "key": "ABC12345",         # what zotero_get_attachments returns
+          "chars": 276543, "pages": 186,
+          "textFile": "{slug}/ABC12345.txt",   # null when nothing was written
+          "selected": true
+        }
+      ],
       "gdriveFallback": "G:/.../x.pdf"       # only when fulltext failed
     }
 
@@ -46,6 +65,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sys
 import unicodedata
 from pathlib import Path
@@ -301,31 +321,78 @@ def cmd_fetch(args, report) -> int:
         if not attachments:
             report(f"[warn] {item_key} has no PDF attachment")
 
+        # Every PDF's text is kept, not just the longest: an item routinely
+        # carries the paper plus press coverage of it, and the losers include
+        # things worth having (the published version beside the preprint).
+        # Only the MCP tool has to pick one -- inlining several would blow up
+        # its caller's context.  On disk there is no such constraint.
         candidates: list[dict] = []
-        best_text, best_att, best_pages = "", None, 0
+        fetched: dict[str, tuple[str, int]] = {}
+        best_key, best_chars, best_pages = "", -1, 0
         for attachment in attachments:
-            # Default to the first attachment so gdriveFallback still resolves
-            # when every fulltext fetch fails -- which is exactly the case it
-            # exists for.  Without this, best_att stays None and the fallback
-            # is unreachable for the GDrive-only PDFs it was written for.
-            if best_att is None:
-                best_att = attachment
+            key = attachment["key"]
             try:
-                text, pages = _fetch_fulltext(attachment["key"])
+                text, pages = _fetch_fulltext(key)
             except Exception as exc:  # noqa: BLE001 - report and try the next one
-                report(f"[warn] {item_key}/{attachment['key']} fulltext failed: {exc}")
+                report(f"[warn] {item_key}/{key} fulltext failed: {exc}")
                 text, pages = "", 0
-            candidates.append({"key": attachment["key"], "chars": len(text)})
-            if len(text) > len(best_text):
-                best_text, best_att, best_pages = text, attachment, pages
+            fetched[key] = (text, pages)
+            candidates.append({"key": key, "chars": len(text)})
+            if len(text) > best_chars:
+                best_key, best_chars = key, len(text)
+                # Adopt the page count only with non-empty text, so an item
+                # whose PDFs all yield nothing reports totalPages 0 -- which
+                # is what this script reported before the rewrite.
+                best_pages = pages if text else 0
+
+        # Default to the first attachment so gdriveFallback still resolves when
+        # every fetch fails -- exactly the case it exists for.
+        best_att = next(
+            (a for a in attachments if a["key"] == best_key),
+            attachments[0] if attachments else None,
+        )
+        best_text = fetched.get(best_key, ("", 0))[0]
 
         # A paper can carry news coverage as extra PDFs; show what was picked
         # and what lost, so a polluted attachment is visible immediately.
         for candidate in candidates:
-            marker = " <-- used" if best_att and candidate["key"] == best_att["key"] else ""
+            marker = " <-- selected" if candidate["key"] == best_key else ""
             report(f"  pdf {candidate['key']}: {candidate['chars']:>7} chars{marker}")
         if best_text:
             report(f"  head: {' '.join(best_text[:110].split())}")
+
+        # Keep each attachment's text under {slug}/, and record where it went.
+        text_dir = out_dir / slug
+        writable_texts: list[tuple[str, str]] = []
+        attachments_index: list[dict] = []
+        for attachment in attachments:
+            key = attachment["key"]
+            text, pages = fetched.get(key, ("", 0))
+            # The key becomes a filename here, so it gets the same guard as the
+            # slug: a value carrying a separator must not reach the filesystem.
+            writable = bool(text) and _is_bare_filename(key)
+            if writable:
+                writable_texts.append((key, text))
+            attachments_index.append(
+                {
+                    "key": key,
+                    "chars": len(text),
+                    "pages": pages,
+                    "textFile": f"{slug}/{key}.txt" if writable else None,
+                    "selected": key == best_key,
+                }
+            )
+
+        # Replace the directory rather than adding to it, so a re-run leaves no
+        # .txt behind for a PDF that is no longer attached.  Only once this run
+        # has something to put there, though: pruning and then writing nothing
+        # would leave {slug}.txt holding a paper the JSON calls unavailable.
+        if writable_texts:
+            if text_dir.exists():
+                shutil.rmtree(text_dir)
+            text_dir.mkdir(parents=True, exist_ok=True)
+            for key, text in writable_texts:
+                (text_dir / f"{key}.txt").write_text(text, encoding="utf-8")
 
         payload = {
             "result": best_text,
@@ -341,6 +408,7 @@ def cmd_fetch(args, report) -> int:
             "totalPages": best_pages,
             "source": "zotero-local-api" if best_text else "unavailable",
             "attachmentCandidates": candidates,
+            "attachments": attachments_index,
         }
         if not best_text and best_att:
             fallback = _gdrive_fallback(best_att)

@@ -193,8 +193,28 @@ def _valid_key(key: str) -> bool:
     ``/items/../../collections/fulltext`` collapses to
     ``/api/users/collections/fulltext`` — which is precisely why a key that
     could contain them must be rejected before it reaches a URL.
+
+    A non-string is rejected rather than raised on, so a direct Python caller
+    passing an int still gets the tool's error JSON instead of a TypeError.
     """
-    return bool(_KEY_PATTERN.match(key or ""))
+    return isinstance(key, str) and bool(_KEY_PATTERN.match(key))
+
+
+def _key_error(tool: str, key: str, *, label: str = "item_key") -> str | None:
+    """A ready-made error for a malformed key, or None when the key is fine.
+
+    Every key-taking tool calls this before doing anything else.  Both the
+    Local API tools and the pyzotero ones interpolate the key into a request
+    path — pyzotero does it into an *authenticated* api.zotero.org URL — so a
+    key that could reshape that path must never reach either client.
+    """
+    if _valid_key(key):
+        return None
+    return _make_error(
+        tool,
+        f"{label} {key!r} is not a well-formed Zotero key "
+        "(expected 1-32 alphanumerics)",
+    )
 
 
 def _path_only(url: str) -> str:
@@ -424,6 +444,9 @@ async def zotero_get_item(item_key: str) -> str:
     """
     if not item_key:
         return _make_error("zotero_get_item", "item_key is required")
+    error = _key_error("zotero_get_item", item_key)
+    if error:
+        return error
     if not _zot:
         return _make_error("zotero_get_item", "Web API client not initialized")
     try:
@@ -472,6 +495,11 @@ async def zotero_get_collection_items(
         return _make_error(
             "zotero_get_collection_items", "collection_key is required"
         )
+    error = _key_error(
+        "zotero_get_collection_items", collection_key, label="collection_key"
+    )
+    if error:
+        return error
     if not _zot:
         return _make_error(
             "zotero_get_collection_items", "Web API client not initialized"
@@ -531,6 +559,14 @@ async def zotero_get_tags(collection_key: str | None = None) -> str:
 
     Pass collection_key to get tags scoped to one collection.
     """
+    # None and "" both mean "the whole library" here (the else-branch below),
+    # so they are not keys and must not be validated as such.  Anything else --
+    # including a non-string like 0 -- is a key and gets checked, rather than
+    # being silently treated as "omitted" by a bare truthiness test.
+    if collection_key not in (None, ""):
+        error = _key_error("zotero_get_tags", collection_key, label="collection_key")
+        if error:
+            return error
     if not _zot:
         return _make_error("zotero_get_tags", "Web API client not initialized")
     try:
@@ -639,6 +675,9 @@ async def zotero_get_attachments(item_key: str) -> str:
     """
     if not item_key:
         return _make_error("zotero_get_attachments", "item_key is required")
+    error = _key_error("zotero_get_attachments", item_key)
+    if error:
+        return error
     if not _zot:
         return _make_error(
             "zotero_get_attachments", "Web API client not initialized"
@@ -672,6 +711,9 @@ async def zotero_get_annotations(item_key: str) -> str:
     """
     if not item_key:
         return _make_error("zotero_get_annotations", "item_key is required")
+    error = _key_error("zotero_get_annotations", item_key)
+    if error:
+        return error
     if not _zot:
         return _make_error(
             "zotero_get_annotations", "Web API client not initialized"
@@ -792,12 +834,9 @@ async def zotero_get_fulltext(item_key: str) -> str:
     """
     if not item_key:
         return _make_error("zotero_get_fulltext", "item_key is required")
-    if not _valid_key(item_key):
-        return _make_error(
-            "zotero_get_fulltext",
-            f"item_key {item_key!r} is not a well-formed Zotero key "
-            "(expected 1-32 alphanumerics)",
-        )
+    error = _key_error("zotero_get_fulltext", item_key)
+    if error:
+        return error
     try:
         async with httpx.AsyncClient(timeout=LOCAL_API_TIMEOUT) as client:
             payload, error = await _fetch_fulltext_payload(client, item_key)
@@ -907,12 +946,9 @@ async def zotero_get_file_info(item_key: str) -> str:
     """
     if not item_key:
         return _make_error("zotero_get_file_info", "item_key is required")
-    if not _valid_key(item_key):
-        return _make_error(
-            "zotero_get_file_info",
-            f"item_key {item_key!r} is not a well-formed Zotero key "
-            "(expected 1-32 alphanumerics)",
-        )
+    error = _key_error("zotero_get_file_info", item_key)
+    if error:
+        return error
     try:
         async with httpx.AsyncClient(timeout=LOCAL_API_TIMEOUT) as client:
             payload, error = await _build_file_info(client, item_key)

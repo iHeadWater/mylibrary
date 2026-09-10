@@ -1272,7 +1272,7 @@ class TestZoteroGetAttachments:
 
         with patch.object(server, "_zot", mock_zot_client):
             result_json = asyncio.run(
-                server.zotero_get_attachments(item_key="NO_ATTACH")
+                server.zotero_get_attachments(item_key="NOATTACH1")
             )
 
         result = json.loads(result_json)
@@ -1375,13 +1375,13 @@ class TestZoteroGetAnnotations:
 
         with patch.object(server, "_zot", mock_zot_client):
             result_json = asyncio.run(
-                server.zotero_get_annotations(item_key="NO_PDF")
+                server.zotero_get_annotations(item_key="NOPDF0001")
             )
 
         result = json.loads(result_json)
         assert result["total"] == 0
         assert result["annotations"] == []
-        assert result["itemKey"] == "NO_PDF"
+        assert result["itemKey"] == "NOPDF0001"
         assert "error" not in result
 
     def test_handles_attachment_with_no_annotations(self, mock_zot_client):
@@ -1406,7 +1406,7 @@ class TestZoteroGetAnnotations:
 
         with patch.object(server, "_zot", mock_zot_client):
             result_json = asyncio.run(
-                server.zotero_get_annotations(item_key="NO_ANNOT")
+                server.zotero_get_annotations(item_key="NOANNOT1")
             )
 
         result = json.loads(result_json)
@@ -1649,6 +1649,128 @@ class TestItemKeyValidation:
         assert server._valid_key("6HF7ADML") is True
         assert server._valid_key("FXERFCH2") is True
         assert server._valid_key("") is False
+
+    def test_a_non_string_key_is_rejected_not_raised_on(self):
+        """A direct caller passing a non-string must get an error, not a
+        TypeError out of a tool that promises to report rather than raise."""
+        assert server._valid_key(123) is False
+        assert server._valid_key(None) is False
+
+        mock_zot = MagicMock()
+        with patch.object(server, "_zot", mock_zot):
+            result = json.loads(asyncio.run(server.zotero_get_item(item_key=123)))
+
+        # Assert the *guard's* message, not merely "some error": a downstream
+        # API failure would also set error=True and say nothing about the key.
+        assert result["error"] is True
+        assert "well-formed" in result["message"]
+        assert mock_zot.mock_calls == []
+
+    def test_tags_with_a_non_string_key_is_rejected_by_the_guard(self):
+        """A falsy non-key such as 0 must not be read as "collection omitted"."""
+        mock_zot = MagicMock()
+        # Give the library-wide branch something serialisable, so reverting the
+        # guard fails on the assertion rather than on a MagicMock not being
+        # JSON-serialisable (which would obscure what broke).
+        mock_zot.tags.return_value = []
+
+        with patch.object(server, "_zot", mock_zot):
+            result = json.loads(
+                asyncio.run(server.zotero_get_tags(collection_key=0))
+            )
+
+        assert result["error"] is True
+        assert "well-formed" in result["message"]
+        assert mock_zot.mock_calls == []
+
+
+# =========================================================================
+# Tests: the 5 Web API tools that take a key validate it too
+# =========================================================================
+
+
+class TestWebApiKeyValidation:
+    """These tools pass the client-supplied key straight to pyzotero, which
+    interpolates it into an *authenticated* api.zotero.org path
+    (``items/{key.upper()}``).  A key such as ``../../collections`` survives
+    httpx's dot-segment normalisation and reaches a different endpoint on the
+    user's own library, so it is rejected before pyzotero sees it."""
+
+    MALFORMED = "../../collections"
+
+    @pytest.mark.parametrize(
+        "tool_name, kwargs",
+        [
+            ("zotero_get_item", {"item_key": "../../collections"}),
+            ("zotero_get_attachments", {"item_key": "../../collections"}),
+            ("zotero_get_annotations", {"item_key": "../../collections"}),
+            ("zotero_get_collection_items", {"collection_key": "../../collections"}),
+            ("zotero_get_tags", {"collection_key": "../../collections"}),
+        ],
+    )
+    def test_rejects_a_malformed_key_before_calling_pyzotero(self, tool_name, kwargs):
+        mock_zot = MagicMock()
+
+        with patch.object(server, "_zot", mock_zot):
+            result = json.loads(asyncio.run(getattr(server, tool_name)(**kwargs)))
+
+        assert result["error"] is True
+        assert "well-formed" in result["message"]
+        # Nothing may reach the authenticated API.
+        assert mock_zot.mock_calls == []
+
+    def test_a_well_formed_key_still_reaches_pyzotero(self, sample_zotero_item):
+        mock_zot = MagicMock()
+        mock_zot.item.return_value = sample_zotero_item
+
+        with patch.object(server, "_zot", mock_zot):
+            result = json.loads(
+                asyncio.run(server.zotero_get_item(item_key="ABC12345"))
+            )
+
+        assert "error" not in result
+        mock_zot.item.assert_called_once_with("ABC12345")
+
+    def test_tags_without_a_collection_key_is_still_allowed(self):
+        """collection_key is optional; the guard must not reject None."""
+        mock_zot = MagicMock()
+        mock_zot.tags.return_value = []
+
+        with patch.object(server, "_zot", mock_zot):
+            result = json.loads(asyncio.run(server.zotero_get_tags()))
+
+        assert "error" not in result
+        assert mock_zot.collection_tags.call_count == 0
+        # The library-wide listing must actually have been asked for.
+        mock_zot.tags.assert_called_once()
+
+    def test_tags_with_an_empty_collection_key_means_the_whole_library(self):
+        """An empty string has always meant "no collection" here.
+
+        The pre-existing branch is `if collection_key:` (truthy), so "" falls
+        through to the library-wide listing.  Guarding on `is not None` would
+        reject it as a malformed key and turn a working call into an error —
+        a behaviour regression even though it fails closed.
+        """
+        mock_zot = MagicMock()
+        mock_zot.tags.return_value = []
+
+        with patch.object(server, "_zot", mock_zot):
+            result = json.loads(asyncio.run(server.zotero_get_tags(collection_key="")))
+
+        assert "error" not in result
+        assert mock_zot.collection_tags.call_count == 0
+        mock_zot.tags.assert_called_once()
+
+    def test_key_error_helper_returns_none_for_a_good_key(self):
+        assert server._key_error("zotero_get_item", "ABC12345") is None
+
+    def test_key_error_helper_labels_the_parameter(self):
+        message = json.loads(
+            server._key_error("zotero_get_tags", "../x", label="collection_key")
+        )["message"]
+
+        assert "collection_key" in message
 
 
 # =========================================================================
