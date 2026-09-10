@@ -1,0 +1,18 @@
+# Domain-specific entity and relation types for hydrology paper knowledge graphs.
+# Used by: hydrolitagent graph
+
+[entities]
+methods = "计算方法、模型架构、算法名称（如 PINN、LSTM、SWAT、物理约束神经网络）"
+basins = "研究流域、区域名称（如 长江流域、黄河流域、太湖流域）"
+data_sources = "数据来源、观测站点、遥感产品（如 GRACE、MODIS、GPM）"
+indicators = "评价指标、水文变量（如 NSE、RMSE、径流、水位、水质）"
+models = "模型名称与版本（如 VIC、SWAT、MIKE SHE）"
+platforms = "平台、系统、软件工具"
+
+[relations]
+improves = "方法 A 改进了方法 B"
+applies_to = "方法/模型应用于某流域或场景"
+compares_with = "与某方法/模型进行了对比"
+uses_data = "使用了某数据源"
+evaluates = "评估了某指标"
+part_of = "属于某平台/系统"

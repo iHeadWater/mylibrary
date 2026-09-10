@@ -1,0 +1,153 @@
+# 模块架构
+
+## 整体结构
+
+```text
+hydrolitagent/
+├── zotero/                  # Zotero 集成（MCP Server + 入库）
+│   ├── __init__.py
+│   ├── server.py            # MCP Server（12 个工具,端口 8002）
+│   ├── paper_to_zotero.py   # DOI → Zotero 条目
+│   └── zot_link_gdrive.py   # Google Drive → linked_file 附件
+├── literature/              # 文献深度处理（从 dailyinfo 迁入）
+│   ├── _paths.py            # 路径助手
+│   ├── bilibili_upload.py   # B 站发布
+│   ├── zotero_notebooklm.py # Zotero → NotebookLM
+│   └── wechat/              # 公众号（figure/polish/push）
+├── graph/                   # graphify 知识图谱
+└── query/                   # 图查询
+
+scripts/
+├── run_paper_pipeline.sh    # 论文一键入库 Shell 脚本
+└── chunk_fulltext.py        # 大文档切块（weekly-review 辅助）
+
+skills/
+├── zotero-query/            # 文献查询 Skill
+├── paper-to-zotero/         # 论文入库 Skill（详细版）
+├── run-paper-to-zotero/     # 论文入库 Skill（简化版）
+├── weekly-review/           # 每周文献综述（从 dailyinfo 迁入）
+├── zotero-notebooklm/       # Zotero → NotebookLM（迁入）
+├── weekly-report-skill/     # 公众号周报（迁入）
+├── figure-skill-v2/         # 配图/封面（迁入）
+└── bilibili-upload/         # B 站发布（迁入）
+
+outputs/
+└── weekly-review/{date}/    # 精读产物（cards/article/podcast）
+
+papers/                      # 按主题组织的文献库（知识库核心资产）
+tests/                       # pytest（含迁入的 test_literature_*）
+```
+
+## 数据流
+
+```text
+┌─────────────────────────────────────────────────────────┐
+│                     Consumer Layer                        │
+│  ┌──────────┐  ┌──────────────┐  ┌───────────────────┐ │
+│  │ Hermes   │  │ Claude Code  │  │ OpenClaw (虾酱)    │ │
+│  │ (cron)   │  │ (MCP tools)  │  │ (Discord bot)     │ │
+│  └────┬─────┘  └──────┬───────┘  └─────────┬─────────┘ │
+│       │               │                    │           │
+│       └───────────────┼────────────────────┘           │
+│                       │                                 │
+│            Skills / MCP / CLI                           │
+└───────────────────────┼─────────────────────────────────┘
+                        │
+┌───────────────────────┼─────────────────────────────────┐
+│                 mylibrary (Zotero Layer)                 │
+│                       │                                 │
+│  ┌────────────────────┼────────────────────────────┐    │
+│  │              MCP Server (port 8002)              │    │
+│  │  ┌──────────────┐  ┌────────────────────────┐   │    │
+│  │  │ Web API (10) │  │ Local API (2)           │   │    │
+│  │  │ pyzotero     │  │ httpx → localhost:23119 │   │    │
+│  │  └──────┬───────┘  └───────────┬────────────┘   │    │
+│  └─────────┼──────────────────────┼────────────────┘    │
+│            │                      │                     │
+│  ┌─────────▼──────────────────────▼────────────────┐    │
+│  │              Zotero Library                      │    │
+│  │  ┌─────────────────┐  ┌──────────────────────┐  │    │
+│  │  │ Web API          │  │ Local SQLite         │  │    │
+│  │  │ api.zotero.org   │  │ (full-text index)    │  │    │
+│  │  └─────────────────┘  └──────────────────────┘  │    │
+│  └─────────────────────────────────────────────────┘    │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │           Paper Pipeline (CLI)                    │    │
+│  │  run_paper_pipeline.sh                            │    │
+│  │    ├─ paper-fetch (PDF download)                  │    │
+│  │    ├─ paper_to_zotero.py (metadata + Zotero API)  │    │
+│  │    └─ cleanup                                     │    │
+│  └─────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
+```
+
+## `server.py` — MCP Server
+
+- **框架**：FastMCP (mcp.server)
+- **传输**：SSE，端口 8002
+- **Web API 客户端**：pyzotero.Zotero（从环境变量初始化）
+- **Local API 客户端**：httpx.AsyncClient
+- **帮助器**：`_format_item()` 提取关键字段为统一格式，`_make_error()` 构建错误 JSON
+
+### 工具装饰器模式
+
+```python
+@mcp.tool()
+async def zotero_search(query: str, limit: int = 10) -> str:
+    """Search the Zotero library by keyword."""
+    # 实现
+```
+
+每个工具：
+- 是 async 函数
+- 返回 JSON 字符串
+- 包含完整的 docstring（参数说明 + 返回值描述）
+- 在客户端未初始化时返回错误 JSON（不抛异常）
+
+## `paper_to_zotero.py` — 论文入库
+
+- **输入**：paper-fetch JSON 文件或 DOI（metadata-only 模式）
+- **元数据源**：Crossref API → arXiv API → Semantic Scholar → paper-fetch（优先级递减）
+- **输出**：stdout JSON（`zotero_key`, `attachment_key`, `title`, `doi`）
+- **关键函数**：`build_item(doi, pf_meta)` — 构建 Zotero 条目字典
+
+### 元数据增强流程
+
+```text
+DOI → Crossref? ──Yes──→ 构建 item_data
+         │
+         No (或 arXiv preprint)
+         │
+         ▼
+    arXiv ID? ──Yes──→ arXiv API → published DOI?
+         │                │
+         │                ├─ Yes → 重新查 Crossref → 升级元数据
+         │                └─ No  → 使用 arXiv 预印本元数据
+         │
+         No
+         │
+         ▼
+    paper-fetch 元数据（最终备选）
+```
+
+## `zot_link_gdrive.py` — Google Drive 链接
+
+- 创建 `linked_file` 附件，指向 Google Drive 中的 PDF
+- 使用 `attachments:` scheme（跨平台路径）
+- 读取 `ZOTERO_CONFIG_PATH` 获取 API 凭据
+
+## Skill 层
+
+Skills 是面向 Agent 的封装层，每个 Skill 包含：
+
+- `SKILL.md` — Agent 的指令文件（工具列表、使用场景、示例）
+- Skill 告诉 Agent **调用哪个命令或 MCP 工具**，不包含实现逻辑
+
+三个 Skill 的分工：
+
+| Skill | 接口方式 | 场景 |
+|-------|----------|------|
+| `zotero-query` | MCP 工具 | 查询文献库 |
+| `run-paper-to-zotero` | Docker 命令 | 一键入库（最简） |
+| `paper-to-zotero` | Shell 脚本 | 论文入库 + 手动回退 |

@@ -1,22 +1,41 @@
 [project]
-name = "hydro-platform-automation"
+name = "hydrolitagent"
 version = "0.1.0"
-description = "Unattended Zotero-to-evidence-pack automation for hydro-platform"
-requires-python = ">=3.12,<3.15"
-dependencies = []
+description = "Literature knowledge base toolkit for hydrology research."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "graphifyy",
+  "openai",
+  "mcp>=2.0.0",
+  "httpx>=0.27.0",
+  "pyzotero>=1.13.0",
+  "python-dotenv>=1.0",
+  "markdown>=3.5",
+  "requests>=2.31",
+  "pillow>=10.0",
+]
 
 [project.optional-dependencies]
-pdf-direct = ["pypdf==6.18.0"]
+notebooklm = [
+  "notebooklm-py[browser]>=0.5.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "mkdocs>=1.6",
+  "mkdocs-material>=9.5",
+  "mkdocstrings[python]>=0.25",
+]
 
 [project.scripts]
-hydro-platform = "hydro_platform.cli:main"
-
-[build-system]
-requires = ["setuptools>=75"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-package-dir = {"" = "automation/src"}
+hydrolitagent = "hydrolitagent.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["automation/src"]
+include = ["hydrolitagent*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

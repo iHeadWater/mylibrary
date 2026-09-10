@@ -1,0 +1,22 @@
+[project]
+name = "hydro-platform-automation"
+version = "0.1.0"
+description = "Unattended Zotero-to-evidence-pack automation for hydro-platform"
+requires-python = ">=3.12,<3.15"
+dependencies = []
+
+[project.optional-dependencies]
+pdf-direct = ["pypdf==6.18.0"]
+
+[project.scripts]
+hydro-platform = "hydro_platform.cli:main"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "automation/src"}
+
+[tool.setuptools.packages.find]
+where = ["automation/src"]
