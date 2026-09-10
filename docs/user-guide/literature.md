@@ -1,6 +1,6 @@
 # 文献深度处理（Literature CLI）
 
-从 dailyinfo 迁入的文献深度处理能力。以 **Zotero 库为分界线**:文献进入 Zotero 之前(采集/下载/入库)由 dailyinfo 负责;进入之后(精读/分析卡/主题/公众号/播客/B 站发布)由本仓库负责。
+从 dailyinfo 迁入的文献深度处理能力,属于本仓库的**入库侧**(`hydrolitagent`)。以 **Zotero 库为分界线**:文献进入 Zotero 之前(采集/下载/入库)由 dailyinfo 负责;进入之后由本仓库负责——其中精读/分析卡/主题/公众号/播客/B 站发布是本页的 Literature CLI,而把共享库里已有的论文沉淀成**证据包与主题池**是另一条反向的能力线([`hydro-platform`](../hydro-platform/index.md),Windows-only)。
 
 ## 模块结构
 

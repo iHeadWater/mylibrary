@@ -60,9 +60,7 @@ PowerShell：
 ```powershell
 git clone <repo-url> D:\Code\mylibrary
 cd D:\Code\mylibrary
-uv sync --python python3
-uv pip install -e .
-uv pip install -e ".[notebooklm]"
+uv sync --all-packages --extra notebooklm
 ```
 
 快速检查：

@@ -1,5 +1,5 @@
 site_name: Hydro AI Papers
-site_description: Zotero literature tools for AI-driven hydrology research
+site_description: 水利科研的两条能力线 —— 入库侧（Zotero 工具、精读、知识图谱）与消费侧（证据包、主题池）
 repo_url: https://github.com/OuyangWenyu/mylibrary
 theme:
   name: material
@@ -50,6 +50,7 @@ nav:
       - 安装配置: getting-started/installation.md
       - 5 分钟上手: getting-started/quickstart.md
   - 用户指南:
+      - 总览: user-guide/index.md
       - MCP Server 工具: user-guide/mcp-tools.md
       - 论文入库流水线: user-guide/paper-pipeline.md
       - 论文 PDF 下载: user-guide/download-pdf.md

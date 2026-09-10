@@ -1,5 +1,9 @@
 # 5 分钟上手
 
+> 本页覆盖的是**入库侧**（`hydrolitagent`）：查文献、加论文、下载 PDF、深度处理。
+>
+> 本仓库还有**另一条反向的能力线** —— `hydro-platform`，把共享 Zotero 库里**已经附好 PDF** 的论文沉淀成证据包与持续演化的主题池（**Windows-only** 运行时，无人值守）。如果你的目标是这条，见[科研知识平台](../hydro-platform/index.md) 或[用户指南总览](../user-guide/index.md)。
+
 ## 场景 1：查文献
 
 通过 MCP Server 搜索你的 Zotero 文献库。
@@ -98,3 +102,4 @@ uv run python -m hydrolitagent.literature.zotero_notebooklm --collection water -
 - [论文入库流水线详解](../user-guide/paper-pipeline.md) — 完整流程和故障排查
 - [文献深度处理详解](../user-guide/literature.md) — literature CLI 和知识库
 - [Zotero 配置参考](../user-guide/config.md) — 环境变量和配置文件
+- [科研知识平台](../hydro-platform/index.md) — **另一条能力线**：Zotero → 证据包 → 主题池（Windows-only，无人值守）
