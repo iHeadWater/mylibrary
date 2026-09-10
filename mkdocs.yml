@@ -96,6 +96,55 @@ nav:
           - 事前验尸（2026-09-08）: hydro-platform/PreMortem-hydro-platform-2026-09-08.md
           - 技术走查讲解: hydro-platform/technical-walkthrough-explained.md
           - 导师黑板报: hydro-platform/mentor-blackboard-talk.md
+  - 科研工作流:
+      - 平台总览: hydro-platform/research-platform-overview.md
+      - 迁移说明（2026-09-04）: hydro-platform/migration-20260904.md
+      - 主题模板:
+          - 00_主题模板使用说明_V1.3: hydro-platform/主题模板/00_主题模板使用说明_V1.3.md
+          - 01_初步主题与人工筛选模板_V1.3: hydro-platform/主题模板/01_初步主题与人工筛选模板_V1.3.md
+          - 01_水利科研主题模板_V1.0: hydro-platform/主题模板/01_水利科研主题模板_V1.0.md
+          - 02_既定主题深度综合模板_V1.3: hydro-platform/主题模板/02_既定主题深度综合模板_V1.3.md
+          - 03_主题工作流运行账模板_V1.3: hydro-platform/主题模板/03_主题工作流运行账模板_V1.3.md
+      - 主题规范:
+          - 01_主题生成科学架构外部实践对照_V1.0: hydro-platform/主题规范/01_主题生成科学架构外部实践对照_V1.0.md
+          - 02_证据卡到主题闭环工作流_V1.0: hydro-platform/主题规范/02_证据卡到主题闭环工作流_V1.0.md
+          - 03_AI辅助水利文献发现到深度主题形成工作流_讨论稿: hydro-platform/主题规范/03_AI辅助水利文献发现到深度主题形成工作流_讨论稿.md
+      - 证据卡规范:
+          - 01_八类证据卡分类与填写说明_V0.4: hydro-platform/证据卡规范/01_八类证据卡分类与填写说明_V0.4.md
+          - 02_原创研究论文证据卡模板_V0.3: hydro-platform/证据卡规范/02_原创研究论文证据卡模板_V0.3.md
+          - 03_证据卡原文忠实性规范_V0.3: hydro-platform/证据卡规范/03_证据卡原文忠实性规范_V0.3.md
+          - 04_证据卡验收与错误分级_V0.3: hydro-platform/证据卡规范/04_证据卡验收与错误分级_V0.3.md
+          - 05_单篇论文阅读执行手册_V0.3: hydro-platform/证据卡规范/05_单篇论文阅读执行手册_V0.3.md
+          - 06_证据卡架构外部实践对照_V1.2: hydro-platform/证据卡规范/06_证据卡架构外部实践对照_V1.2.md
+          - 07_证据卡科学架构与Zotero_Skill使用_V1.2: hydro-platform/证据卡规范/07_证据卡科学架构与Zotero_Skill使用_V1.2.md
+      - 证据卡模板:
+          - 00_公共来源证据卡骨架_V1.2: hydro-platform/证据卡模板/00_公共来源证据卡骨架_V1.2.md
+          - 00_公共来源证据卡骨架_V1.7: hydro-platform/证据卡模板/00_公共来源证据卡骨架_V1.7.md
+          - 01_原创研究证据卡模板: hydro-platform/证据卡模板/01_原创研究证据卡模板.md
+          - 02_综述与证据综合证据卡模板: hydro-platform/证据卡模板/02_综述与证据综合证据卡模板.md
+          - 03_调查监测与统计报告证据卡模板: hydro-platform/证据卡模板/03_调查监测与统计报告证据卡模板.md
+          - 04_工程项目报告证据卡模板: hydro-platform/证据卡模板/04_工程项目报告证据卡模板.md
+          - 05_图书与章节证据卡模板: hydro-platform/证据卡模板/05_图书与章节证据卡模板.md
+          - 06_标准指南与政策证据卡模板: hydro-platform/证据卡模板/06_标准指南与政策证据卡模板.md
+          - 07_数据集及数据产品证据卡模板: hydro-platform/证据卡模板/07_数据集及数据产品证据卡模板.md
+          - 08_软件模型与代码证据卡模板: hydro-platform/证据卡模板/08_软件模型与代码证据卡模板.md
+          - 09_平台证据综合与决策卡模板: hydro-platform/证据卡模板/09_平台证据综合与决策卡模板.md
+          - README: hydro-platform/证据卡模板/README.md
+      - 证据卡模块:
+          - 01_公共水利情境模块: hydro-platform/证据卡模块/01_公共水利情境模块.md
+          - 02_水文预测与机器学习模块: hydro-platform/证据卡模块/02_水文预测与机器学习模块.md
+          - 03_水文水动力数值模拟模块: hydro-platform/证据卡模块/03_水文水动力数值模拟模块.md
+          - 04_洪水频率干旱与气候变化模块: hydro-platform/证据卡模块/04_洪水频率干旱与气候变化模块.md
+          - 05_监测水质与遥感模块: hydro-platform/证据卡模块/05_监测水质与遥感模块.md
+          - 06_工程运行与安全模块: hydro-platform/证据卡模块/06_工程运行与安全模块.md
+      - 产品与流程:
+          - 01_产品说明_V0.5: hydro-platform/产品与流程/01_产品说明_V0.5.md
+          - 02_科研工作操作手册_V0.5: hydro-platform/产品与流程/02_科研工作操作手册_V0.5.md
+          - 03_工作入口与开始记录_V0.5: hydro-platform/产品与流程/03_工作入口与开始记录_V0.5.md
+          - 04_工作页面填写模板_V0.4: hydro-platform/产品与流程/04_工作页面填写模板_V0.4.md
+          - 04_工作页面填写模板_V0.5: hydro-platform/产品与流程/04_工作页面填写模板_V0.5.md
+          - 05_里程碑与任务顺序_V0.5: hydro-platform/产品与流程/05_里程碑与任务顺序_V0.5.md
+          - 06_工作流程验收_V0.5: hydro-platform/产品与流程/06_工作流程验收_V0.5.md
   - 开发:
       - 模块架构: development/architecture.md
       - 贡献指南: development/contributing.md
