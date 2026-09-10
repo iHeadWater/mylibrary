@@ -58,7 +58,7 @@ run-once --dry-run 只预览已有本地任务，不扫描 Zotero，也不调用
 |---|---|
 | `hydro-platform/evidence-packs/` | 团队唯一证据包存储区：论文粗卡、来源清单、定向精读；[说明](evidence-packs.md) |
 | `hydro-platform/themes/` | 主题总入口、注册表、候选版本、演变历史和正式主题预留区；[说明](unified-theme-pool.md) |
-| `hydro-platform/templates/` | 八类证据卡模板、主题规划/精读/回填模板及来源版本；[说明](templates.md) |
+| `hydro-platform/templates/` | 九类证据卡模板、主题规划/精读/回填模板及来源版本；[说明](templates.md) |
 | `hydro-platform/automation/` | 检测、制卡、主题、保存、恢复、安装、调度和测试；[说明](automation.md) |
 | `hydro-platform/config/` | 团队非敏感配置与完整示例；不保存密码或令牌；[说明](config.md) |
 | `hydro-platform/members/` | 可选成员身份映射，不是学生独立知识工作区；[说明](permissions.md) |
@@ -68,6 +68,8 @@ run-once --dry-run 只预览已有本地任务，不扫描 Zotero，也不调用
 | `hydro-platform/.runtime/` | 本机快照、任务、锁、日志、未保存草稿和试运行目录；不进入 Git |
 | `hydro-platform/.tools/`、`.venv/` | PDF 原生工具（`hydro-platform/.tools/`）与 uv 工作区共享 Python 环境（仓库根 `.venv/`）；按锁/清单重建，不进入 Git |
 | `hydro-platform/pyproject.toml`、仓库根 `.python-version` | Python 项目元数据与版本要求 |
+| `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/` | 王新宇线的制卡与主题综合 Skill（纯标准库脚本、JSON schema、模板与校验器）；[说明](research-platform-overview.md) |
+| `证据卡/`、`主题/`、`运行记录/`、`文献链接/` | 科研产物，**落点由 `paths.artifact_root` 决定**（默认仓库根，可指向共享盘）。默认位置已在 `.gitignore` 中声明，不进入 Git；[说明](config.md) |
 
 ## 证据卡与主题的存储逻辑
 

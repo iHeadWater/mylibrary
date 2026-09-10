@@ -2,14 +2,14 @@
 
 团队维护一套公共模板，不按学生或证据包复制多套。模板指导“分析哪些内容”；`hydro-platform/automation/prompts/` 指导“如何阅读和执行”；Python 管理身份、流程及安全保存。模板中的详细写作要求不是正文标题/措辞的硬性验收门槛。
 
-- `hydro-platform/templates/evidence-cards/`：八类 Markdown 粗卡模板；`_catalog.json` 保存来源提交、本地版本及内容指纹。
+- `hydro-platform/templates/evidence-cards/`：九类 Markdown 粗卡模板；`_catalog.json` 保存来源提交、本地版本及内容指纹。
 - `hydro-platform/templates/themes/`：已启用的统一主题规划、定向精读、回填模板和传输 schema，不再只是预留目录。
 
 修改证据模板需同步版本和清单指纹。修改主题模板会产生新的输入版本，但不会另建独立主题池或自动重做全部旧精读；旧粗卡也不因模板升级自动覆盖。[证据包](evidence-packs.md) · [主题池](unified-theme-pool.md) · [总配置字段](config.md)。
 
 ## 证据卡模板库
 
-`hydro-platform/templates/evidence-cards/` 保存平台当前可识别的八类 Markdown 证据卡模板。它们只提供科研内容结构，不接入来源仓库的脚本、目录、编号、状态或工作流。
+`hydro-platform/templates/evidence-cards/` 保存平台当前可识别的九类 Markdown 证据卡模板。它们只提供科研内容结构，正文骨架已采用本仓库 `skills/hydrology-evidence-cards/` 的 V1.7 版本；模板不接入该 Skill 的脚本、目录、编号、状态或工作流。
 
 ### 当前模板
 
@@ -23,17 +23,18 @@
 | `standard-guideline-policy` | `06_standard-guideline-policy.md` | 标准、指南与政策 |
 | `dataset-data-product` | `07_dataset-data-product.md` | 数据集及数据产品 |
 | `software-model-code` | `08_software-model-code.md` | 软件、模型与代码 |
+| `platform-decision-synthesis` | `09_platform-decision-synthesis.md` | 平台证据综合与决策 |
 
-八类模板当前都在 `_catalog.json` 中启用。启用只表示后续分类器可以选择该模板，不表示模板已经通过真实论文的科研质量验收。
+九类模板当前都在 `_catalog.json` 中启用。启用只表示后续分类器可以选择该模板，不表示模板已经通过真实论文的科研质量验收。
 
 ### 来源与适配
 
-- 来源仓库：`https://github.com/wangxinyu20429-dotcom/Water-Conservancy-Intelligent-Platform`
-- 固定来源提交：`457d5a420959f543773fc0a5c955cc64b1ca0ecb`
-- 来源仓库在读取时没有声明许可证；当前复用依据记录为用户确认的团队协作授权。
+- 来源仓库：`https://github.com/iHeadWater/mylibrary`（模板层与 `skills/hydrology-evidence-cards/` 同仓同源）
+- 固定来源提交：`7b0f2b7e209aa566f3c68db817d5c4a71d9f8b19`
+- 合并前模板曾从外部仓库 `wangxinyu20429-dotcom/Water-Conservancy-Intelligent-Platform` 按团队协作授权复用；两分支合并后该内容已进入本仓库，复用授权问题随之消失。
 - `_catalog.json` 逐项记录来源路径、Git blob SHA、本地版本和适配后内容 SHA-256。
-- 本地版本已升为 1.1.0：增加 AI 推理/信息边界分区，声明表区分原文陈述与转述，删除人工复查/独立检查及摘录要求；保留八类主体结构及来源版本。
-- front matter 已改为本平台的证据 ID、Zotero 群组与父条目、PDF 指纹、自动分类和模板版本字段。
+- 本地版本已升为 2.0.0：正文骨架采用 `skills/hydrology-evidence-cards/` 的 V1.7 版本（六段式/形成机制 + 可见深度规则），并新增第 9 类 `platform-decision-synthesis`；1.1.0 时期的「区分原文陈述、转述、AI 推理与信息边界」要求保留。
+- front matter 保留本平台的证据 ID、Zotero 群组与父条目、PDF 指纹、自动分类和模板版本字段——这些是管线契约，校验器 `evidence_templates.py` 强制要求，不得删改。
 
 ### 自动分类边界
 

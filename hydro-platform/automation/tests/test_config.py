@@ -21,6 +21,12 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
         "schema_version": 1,
         "paths": {
             "project_root": "..",
+            "artifact_root": "../",
+            "artifact_root_external": True,
+            "evidence_cards_dir": "证据卡",
+            "themes_vault_dir": "主题",
+            "run_records_dir": "运行记录",
+            "literature_index_dir": "文献链接",
             "runtime_dir": ".runtime",
             "snapshot_file": ".runtime/zotero-snapshot.json",
             "tasks_file": ".runtime/tasks.json",
@@ -172,6 +178,99 @@ class ConfigTests(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(ConfigError, "evidence_packs_dir"):
+                load_config(config_path)
+
+    def test_artifact_root_defaults_to_workspace_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(root)
+
+            config = load_config(config_path)
+
+            workspace = root.parent
+            self.assertEqual(config.paths.artifact_root, workspace)
+            self.assertTrue(config.paths.artifact_root_external)
+            self.assertEqual(config.paths.evidence_cards_dir, workspace / "证据卡")
+            self.assertEqual(config.paths.themes_vault_dir, workspace / "主题")
+            self.assertEqual(config.paths.run_records_dir, workspace / "运行记录")
+            self.assertEqual(config.paths.literature_index_dir, workspace / "文献链接")
+
+    def test_artifact_root_accepts_external_path_with_opt_in(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            shared = (root.parent / "shared-artifacts").resolve()
+            config_path = write_config(
+                root,
+                {
+                    "paths": {
+                        "artifact_root": str(shared),
+                        "artifact_root_external": True,
+                    }
+                },
+            )
+
+            config = load_config(config_path)
+
+            self.assertEqual(config.paths.artifact_root, shared)
+            self.assertTrue(config.paths.artifact_root_external)
+            self.assertEqual(config.paths.evidence_cards_dir, shared / "证据卡")
+            self.assertEqual(config.paths.themes_vault_dir, shared / "主题")
+
+    def test_rejects_external_artifact_root_without_opt_in(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root,
+                {
+                    "paths": {
+                        "artifact_root": "../shared-artifacts",
+                        "artifact_root_external": False,
+                    }
+                },
+            )
+
+            with self.assertRaisesRegex(ConfigError, "artifact_root_external"):
+                load_config(config_path)
+
+    def test_rejects_non_boolean_artifact_root_external(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root, {"paths": {"artifact_root_external": "yes"}}
+            )
+
+            with self.assertRaisesRegex(ConfigError, "artifact_root_external"):
+                load_config(config_path)
+
+    def test_rejects_artifact_subdir_outside_artifact_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root, {"paths": {"evidence_cards_dir": "../../outside-cards"}}
+            )
+
+            with self.assertRaisesRegex(ConfigError, "evidence_cards_dir"):
+                load_config(config_path)
+
+    def test_rejects_missing_artifact_subdir(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(root)
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            del data["paths"]["run_records_dir"]
+            config_path.write_text(json.dumps(data), encoding="utf-8")
+
+            with self.assertRaisesRegex(ConfigError, "run_records_dir"):
+                load_config(config_path)
+
+    def test_rejects_theme_assets_dir_outside_project_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config_path = write_config(
+                root, {"theme_pipeline": {"assets_dir": "../outside-assets"}}
+            )
+
+            with self.assertRaisesRegex(ConfigError, "theme_pipeline.assets_dir"):
                 load_config(config_path)
 
     def test_rejects_snapshot_outside_runtime_directory(self) -> None:

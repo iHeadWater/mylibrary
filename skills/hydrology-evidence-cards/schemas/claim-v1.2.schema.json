@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/hydrology-evidence/claim-v1.2.schema.json",
+  "title": "Hydrology evidence claim v1.2",
+  "type": "object",
+  "required": [
+    "claim_id", "source_id", "claim_type", "statement_role", "inference_type",
+    "support_status", "statement", "evidence_origin", "scope", "locator",
+    "directly_supports", "does_not_support", "relations", "verification_status"
+  ],
+  "properties": {
+    "claim_id": {"type": "string", "minLength": 1},
+    "source_id": {"type": "string", "minLength": 1},
+    "claim_type": {"enum": ["numeric", "textual", "normative", "implementation"]},
+    "statement_role": {"enum": ["source_fact", "author_interpretation", "analyst_judgment"]},
+    "inference_type": {"enum": ["descriptive", "comparative", "association", "causal", "prediction", "mechanism", "transferability", "normative", "implementation"]},
+    "support_status": {"enum": ["supported", "partially_supported", "not_supported", "contradicted", "unresolved", "not_reported", "not_checked"]},
+    "statement": {"type": "string"},
+    "evidence_origin": {"type": "string"},
+    "scope": {
+      "type": "object",
+      "required": ["object_or_denominator", "spatial", "temporal", "comparator"],
+      "properties": {
+        "object_or_denominator": {"type": "string"},
+        "spatial": {"type": "string"},
+        "temporal": {"type": "string"},
+        "comparator": {"type": "string"}
+      }
+    },
+    "numeric": {
+      "type": ["object", "null"],
+      "properties": {
+        "value": {},
+        "reported_unit": {"type": "string"},
+        "uncertainty": {"type": "string"}
+      }
+    },
+    "locator": {
+      "type": "object",
+      "required": ["material", "page_or_section", "table_figure_clause_or_row", "context"]
+    },
+    "method_requirements": {"type": "object"},
+    "relations": {
+      "type": "object",
+      "required": ["supports", "contradicts", "qualifies", "depends_on", "reproduces", "supersedes"]
+    },
+    "independence_group_ids": {"type": "array", "items": {"type": "string"}},
+    "verification_status": {"enum": ["not_checked", "metadata_checked", "partially_source_checked", "source_checked", "independently_reproduced"]}
+  }
+}
+

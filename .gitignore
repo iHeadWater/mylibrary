@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
 
@@ -231,3 +232,22 @@ hydro-platform/.obsidian/
 # 本就是"平台内任意深度"；写成全局会静默吞掉其他目录下未来的同名文件
 hydro-platform/**/*.tmp
 hydro-platform/**/*.temp
+
+# ── 水利科研平台(王新宇线):文献二进制、Zotero 本地缓存与工作包 ──
+# PDF/Office/压缩包一律不入库(只用链接与元数据索引)
+*.pdf
+*.xls
+*.xlsx
+*.zip
+.zotero-cache/
+zotero-packet/
+fulltext_*.txt
+.obsidian/
+
+# ── 产物根(paths.artifact_root)的默认位置 ──
+# 默认在仓库根;若把 artifact_root 配置到仓库外,这些规则无副作用。
+# 证据卡与主题必须同根(见 docs/hydro-platform/config.md)。
+主题/
+证据卡/
+运行记录/
+文献链接/

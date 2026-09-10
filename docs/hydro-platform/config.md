@@ -26,6 +26,10 @@
 
 其中 `paths.project_root` 相对于 `config.json` 所在目录解析；其余路径相对于 `project_root` 解析。因此，从仓库外部工作目录调用程序时，产物仍会写入正确项目。为避免误写，所有项目路径必须位于 `project_root` 内，运行快照、任务、锁和原始日志还必须位于 `runtime_dir` 内。当前 `paths.project_root` 为 `..`，即 `hydro-platform/` 目录本身。
 
+**唯一例外是科研产物根 `paths.artifact_root`**（证据卡 / 主题 / 运行记录 / 文献链接的落点）。它默认解析到工作区根（仓库根），即王新宇分支原有的磁盘布局；若要指向仓库外的共享位置（共享盘、OneDrive 等），必须同时显式写出 `paths.artifact_root_external = true`。这样外部位置是写明的意图，而不是被 `../outside` 这类相对路径悄悄带出去的。该做法与 `deployment.environment_dir` 允许借用工作区根共享 `.venv` 是同一思路。归属也随之划分：**产物根在项目内 = 平台所有**（正常写入、可清理）；**产物根在项目外 = 操作者所有**（平台只写不清理，不管理其生命周期）。
+
+`paths.artifact_root_external` 未开启时，`artifact_root` 仍受原有 `project_root` 约束——既有的 `paths.evidence_packs_dir` 等键**不受影响**，其规则保持不变。
+
 当前可配置项：
 
 - `paths`：项目根目录、运行区、快照、任务、锁、日志、试运行结果，以及证据包、模板、证据卡模板目录、模板清单、主题、成员、事件、报告、提示词和数据结构目录；
@@ -40,13 +44,28 @@
 | 字段 | 当前含义 | 规则 |
 |---|---|---|
 | `paths.templates_dir` | 所有公共模板的根目录 | 必须位于项目根目录内 |
-| `paths.evidence_card_templates_dir` | 八类证据卡 Markdown 模板目录 | 必须位于 `templates_dir` 内 |
+| `paths.evidence_card_templates_dir` | 九类证据卡 Markdown 模板目录 | 必须位于 `templates_dir` 内 |
 | `paths.evidence_card_template_catalog_file` | 模板来源、版本和内容哈希清单 | 必须位于证据卡模板目录内 |
 | `paths.evidence_card_generation_prompt_file` | 正式制卡提示词 | 必须位于 `paths.prompts_dir` 内，并声明 `prompt_version` |
 | `paths.card_generation_output_schema_file` | Codex 结构化输出约束 | 必须位于 `paths.schemas_dir` 内 |
 | `paths.card_trials_dir` | 既有卡制卡试运行结果 | 必须位于 `paths.runtime_dir` 内，不提交 Git |
 
 修改路径后可运行 `uv run hydro-platform evidence-templates-validate --json` 验证。目录位置可以调整，但不得将证据卡模板或清单配置到项目之外。
+
+科研产物根字段：
+
+| 字段 | 当前含义 | 默认值 | 规则 |
+|---|---|---|---|
+| `paths.artifact_root` | 科研产物总落点（证据卡、主题、运行记录、文献链接的共同父目录） | `../`，即工作区根（仓库根） | 位于 `project_root` 之外时必须显式开启下一行的开关 |
+| `paths.artifact_root_external` | 是否允许产物根位于项目之外（共享盘场景） | `false`（本仓库配置为 `true`） | 布尔值；未开启时产物根超出 `project_root` 直接报错 |
+| `paths.evidence_cards_dir` | 证据卡目录 | `证据卡` | 必须位于 `artifact_root` 内 |
+| `paths.themes_vault_dir` | 主题档案目录 | `主题` | 必须位于 `artifact_root` 内 |
+| `paths.run_records_dir` | 主题工作流运行账目录 | `运行记录` | 必须位于 `artifact_root` 内 |
+| `paths.literature_index_dir` | 来源链接索引目录 | `文献链接` | 必须位于 `artifact_root` 内 |
+
+四个子目录必须同属一个 `artifact_root`：证据卡与主题之间存在交叉引用，只把其中一个挪到别处会让相对定位失效。目录默认位置已在仓库根的 `.gitignore` 中声明；产物根一旦指向仓库外，Git 自然不再跟踪，ignore 规则无副作用。
+
+王新宇那条线的制卡与主题脚本（`skills/hydrology-*/scripts/`）本就以 `--output`、`--index-root`、`--cards-dir` 接收路径，脚本内没有任何写死的输出目录，因此指到外部产物根无需改代码，只需把 `--output` 指到 `<artifact_root>/证据卡/...`。
 
 其他已启用配置类别：
 
@@ -110,7 +129,7 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 2026-09-09 最新要求：本机配置、示例和缺省心跳统一改为 60 秒。只减少周期性的“等待中”提示；工具开始/结束、单篇保存、错误等实际事件仍立即显示。下次启动命令生效，不热更新现有队列。显式填写其他合法间隔的自定义配置仍按其原值执行。`run-once` 结尾独立显示“整轮汇总”，按本轮新完成、恢复、跳过、失败、阻塞、等待和延后分别统计，并列出未完成项与主题状态，不沿用最后一篇的保存阶段。
 
-`card_generator.workflow_mode=single_agent` 是当前模式，主提示词 evidence-card-generation-v8.md、八类模板 1.1.0。模型、强度和超时直接用上表。v8 保留详细写作要求，但保存只检验流程，不校验正文标题、表格、标签、编号或措辞；没有另一个需要用户开启的“宽松模式”。当前配置与示例已更新，仍使用 run-once。草稿预览目录由 `paths.card_trials_dir` 控制。
+`card_generator.workflow_mode=single_agent` 是当前模式，主提示词 evidence-card-generation-v8.md、九类模板 2.0.0。模型、强度和超时直接用上表。v8 保留详细写作要求，但保存只检验流程，不校验正文标题、表格、标签、编号或措辞；没有另一个需要用户开启的“宽松模式”。当前配置与示例已更新，仍使用 run-once。草稿预览目录由 `paths.card_trials_dir` 控制。
 
 旧配置未填 workflow_mode 时按 multi_agent 解释，必须提供完整 multi_agent_workflow，且 local_path/v2 或 project_mcp/v1 配套。当前 single_agent 要求 local_path，若仍提供 multi_agent_workflow 则配置报错，避免看似生效的角色设置误导；不会自动回退。未知提供者仍报错，不凭空支持任意 API。
 

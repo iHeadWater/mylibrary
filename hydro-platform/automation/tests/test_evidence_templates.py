@@ -95,7 +95,7 @@ def write_fixture(
 
 
 class EvidenceTemplateValidationTests(unittest.TestCase):
-    def test_real_catalog_validates_all_eight_templates(self) -> None:
+    def test_real_catalog_validates_all_nine_templates(self) -> None:
         templates_dir = PROJECT_ROOT / "templates" / "evidence-cards"
 
         result = validate_evidence_templates(
@@ -104,12 +104,14 @@ class EvidenceTemplateValidationTests(unittest.TestCase):
         )
 
         self.assertTrue(result["ok"])
-        self.assertEqual(result["template_count"], 8)
-        self.assertEqual(result["enabled_count"], 8)
-        self.assertEqual(result["catalog_version"], "1.1.0")
+        # 2.0.0:与王新宇分支合并后,模板正文改用其 V1.7 版本,
+        # 并新增第 9 类 platform-decision-synthesis(原 1.1.0 为八类)。
+        self.assertEqual(result["template_count"], 9)
+        self.assertEqual(result["enabled_count"], 9)
+        self.assertEqual(result["catalog_version"], "2.0.0")
         self.assertEqual(
             result["source_commit"],
-            "457d5a420959f543773fc0a5c955cc64b1ca0ecb",
+            "7b0f2b7e209aa566f3c68db817d5c4a71d9f8b19",
         )
 
     def test_accepts_valid_single_template_catalog(self) -> None:

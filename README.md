@@ -1,211 +1,92 @@
-# Hydro AI Papers (mylibrary)
+# mylibrary — 水文水资源研究知识平台
 
-[中文](README-zh.md)
+以 **Zotero 文献库**为入口，把「读到的论文」沉淀成可追溯的长期科研资产：证据卡、主题池、知识图谱、精读分析卡。
 
-AI-driven hydrology and water resources research — the **deep-processing layer** of a literature pipeline: close reading, topic organization, WeChat articles, podcasts, and a knowledge graph, rooted in your **Zotero library**.
+本仓库由三条并行的线合并而成，共享同一个 **uv workspace**、同一个 `.venv` 与同一份 `uv.lock`。
 
-## What this repo is
+> 详细能力表见 [`README-zh.md`](README-zh.md)；完整文档站在 [`docs/`](docs/index.md)。
 
-mylibrary owns everything **after intelligence collection**:
+## 三条线
 
-- **Zotero is the starting point** of the literature pipeline — deep processing typically begins by reading from your Zotero library through the MCP server.
-- **Ingestion into Zotero is also part of this repo** — the DOI / arXiv / title → PDF → Zotero-entry pipeline (`run_paper_pipeline.sh`) lives here.
-- Upstream, a sibling collector repo (dailyinfo) handles **pre-Zotero intelligence gathering** (news feeds, raw downloads); mylibrary does not read its outputs.
+| 线 | 做什么 | 代码 / 数据 | 入口 |
+|---|---|---|---|
+| **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/播客/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（9 个技能） | [文档](docs/user-guide/mcp-tools.md) |
+| **自动化平台** | 无人值守的长期知识资产：检测共享 Zotero 库新增 → 全文门禁 → 逐篇证据包 → 主题池 → 日报。确定性、不需手工编辑。**运行时 Windows-only** | `hydro-platform/`、`skills/hydro-platform/` | [`hydro-platform` 文档](docs/hydro-platform/index.md) |
+| **科研工作流** | 人读证据卡与主题综合：来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合。纯标准库脚本，人工决策不可绕过 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、`docs/hydro-platform/`（中文规范） | [平台总览](docs/hydro-platform/research-platform-overview.md) |
 
-The result accumulates into a **literature knowledge base**: `papers/` organized by hydrology topic (10 topics, 6,000+ papers), plus deep-reading analysis cards, WeChat articles, and podcasts under `outputs/`.
+**两条线解决的问题不同**，不要混用：`hydro-platform` 追求「无人值守地产出粗卡与候选主题」，科研工作流追求「每一条科学表述都回链可核对的原文，且正式主题必须由人签字」。前者自动化强、不做法学裁决；后者有完整人工决策门，但没有调度器。
 
-## Capabilities
+## Zotero 有四种读法，用途不同
 
-| Capability | Command | Docs |
-|---|---|---|
-| **Zotero library query** — 12-tool MCP server (streamable HTTP, port 8002, endpoint `/mcp`): search, browse, read full text, attachments, annotations | `uv run python -m hydrolitagent.zotero.server` | [MCP tools](docs/user-guide/mcp-tools.md) |
-| **Paper ingestion** — DOI / arXiv ID / title → PDF → Zotero entry + `linked_file` attachment | `bash scripts/run_paper_pipeline.sh "<DOI|arXiv|title>"` | [paper pipeline](docs/user-guide/paper-pipeline.md) |
-| **Paper PDF download** — institutional-access download (DUT SSO) via Claude Code + Playwright | `uv run python -m hydrolitagent.literature.download_pdf doi <doi>` | [download PDF](docs/user-guide/download-pdf.md) |
-| **Zotero linked_file sync** — sync a downloaded PDF into Zotero as a `linked_file` (zero cloud quota) | `uv run python -m hydrolitagent.literature.zotero_sync <pdf> <doi>` | [Zotero sync](docs/user-guide/zotero-sync.md) |
-| **Zotero → NotebookLM** — turn newly added papers into a Chinese briefing / audio / video overview | `uv run python -m hydrolitagent.literature.zotero_notebooklm --collection <name> --artifact audio` | [NotebookLM](docs/user-guide/zotero-notebooklm.md) |
-| **Deep literature processing** — Literature CLI: weekly review, WeChat publish / polish / figures, Bilibili upload | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [literature](docs/user-guide/literature.md) |
-| **Knowledge graph** — build a structured, queryable knowledge base via [graphify](https://github.com/graphify) (entity extraction, community detection, Obsidian export) | `uv run hydrolitagent graph papers/your-topic/` | [architecture](docs/development/architecture.md) |
-| **Paper reproduction** — reproduce key papers in AI-driven hydrology | — | `equation_from_data/`, `google_floodhub/` |
-| **Research knowledge platform** — the *long-term knowledge asset* branch of consumption: detect new papers in a shared Zotero group → full-text gate → per-paper evidence packs → evolving theme pool → daily report. Unattended, deterministic, no hand-editing. **Windows-only runtime.** | `uv run hydro-platform run-once --json` | [platform docs](docs/hydro-platform/index.md) |
+这是最容易搞混的地方。它们读的是**同一台 Zotero Desktop 的本地 HTTP 服务**（`127.0.0.1:23119`），但库、前缀与用途不同：
 
-## Quick Start
+| 读法 | 位置 | 目标 | 用途 |
+|---|---|---|---|
+| MCP Server（12 工具，端口 8002） | `hydrolitagent/zotero/server.py` | 元数据走 Web API，全文/附件走本地 API | 容器内或跨机调用 |
+| 裸机脚本直连 | `hydrolitagent/literature/` | 本地 API `…/api/users/0/` | 裸 host 上的入库与简报 |
+| 共享群组客户端 | `hydro-platform/…/zotero.py` | 共享群组（`/api/groups/<id>/`） | 自动化平台扫描与 PDF 门禁 |
+| 只读阅读器 | `skills/hydrology-evidence-cards/scripts/zotero_reader.py` | 个人库 `…/api/users/0/` | 证据卡取材，只读、不改库、不读 SQLite |
+
+**分工而非二选一**：容器里走 8002 的 MCP，裸 host 直连 `23119`。本地 API 基址的环境变量首选名是 `ZOTERO_LOCAL_BASE_URL`（`ZOTERO_API_URL` 是旧名）。
+
+## 科研产物路径可配置
+
+证据卡、主题、运行记录、文献链接这四类科研产物**不写死在仓库里**，落点由总配置的 `paths.artifact_root` 决定：
+
+- **默认**是仓库根，即四目录 `证据卡/`、`主题/`、`运行记录/`、`文献链接/` 就在仓库根下——与合并前的磁盘布局一致，文件不用挪。
+- **可以指向任意位置**（共享盘、OneDrive 等），配合 `paths.artifact_root_external = true` 即可；不显式开启时指向项目外会直接报错，避免路径被 `../` 悄悄带出去。
+- 归属随位置划分：**根在项目内 = 平台所有**（可清理）；**根在项目外 = 操作者所有**（平台只写不清理）。
+- 四个子目录名同样可配（`paths.evidence_cards_dir` 等），默认即上面四个中文名。
+
+默认位置的四个目录已在 `.gitignore` 中声明（**不入库**：它们是运行产物，原始 PDF、Zotero 数据库与本机路径同样不入库）。指向仓库外时 Git 自然不跟踪，ignore 规则无副作用。
+
+字段与规则见[总配置字段说明](docs/hydro-platform/config.md)与[路径解析规则](docs/hydro-platform/variables.md)。
+
+## 快速开始
 
 ```bash
-# Clone and install
 git clone git@github.com:iHeadWater/mylibrary.git
 cd mylibrary
-uv sync --all-packages   # installs BOTH packages in this uv workspace into the shared root .venv
-
-# Configure
-cp .env.example .env   # add DEEPSEEK_API_KEY; set HYDROLITAGENT_OUTPUT, ZOTERO_API_KEY, ZOTERO_LIBRARY_ID
+uv sync --all-packages   # 装 workspace 的两个包：hydrolitagent（根）与 hydro-platform
+cp .env.example .env     # 填入 DEEPSEEK_API_KEY、ZOTERO_API_KEY、ZOTERO_LIBRARY_ID 等
 ```
 
-> This repo is a **uv workspace** with two members: `hydrolitagent` (root) and `hydro-platform`. They share one `.venv` and one `uv.lock`. Use `uv sync --all-packages` — a plain `uv sync` installs only the root package's dependencies, so `uv run hydro-platform …` would not be available.
-
-For the full reference (Zotero Desktop / Linked Attachment Base Directory setup, env vars, TOML config), see the [installation guide](docs/getting-started/installation.md).
-
-## Common Commands
-
-### Zotero tools
+> 裸 `uv sync` 只装根包依赖，`uv run hydro-platform …` 会不可用。请用 `uv sync --all-packages`。
 
 ```bash
-# Start the 12-tool MCP server (port 8002)
+# 工具链：启动 12 个工具的 MCP Server（端口 8002）
 uv run python -m hydrolitagent.zotero.server
 
-# Add a paper to Zotero by DOI (metadata only)
-uv run python -m hydrolitagent.zotero.paper_to_zotero --metadata-only "10.1038/s41586-024-07145-1"
+# 工具链：DOI / arXiv / 标题 → PDF → Zotero
+bash scripts/run_paper_pipeline.sh "10.1016/j.jhydrol.2023.130249"
 
-# One-shot pipeline: download PDF + create Zotero entry + linked_file
-bash scripts/run_paper_pipeline.sh "10.1038/s41586-024-07145-1"
-
-# Link an existing GDrive PDF as a Zotero linked_file
-uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>
-```
-
-### Literature CLI (post-ingestion deep processing)
-
-```bash
-# One-command download + Zotero sync (stealth Chrome; auto publisher routing)
-uv run python scripts/download_paper.py --doi <doi> --sync
-uv run python scripts/download_paper.py --arxiv <id> --sync
-
-# Institutional-access PDF download
-uv run python -m hydrolitagent.literature.download_pdf doi <doi>
-
-# Sync a downloaded PDF into Zotero as linked_file
-uv run python -m hydrolitagent.literature.zotero_sync <pdf_path> <doi> --json
-
-# Zotero → NotebookLM briefing / audio / video (requires the [notebooklm] extra)
-uv run --extra notebooklm python -m hydrolitagent.literature.zotero_notebooklm --collection <name> --artifact audio
-
-# WeChat public-account workflow
-uv run python -m hydrolitagent.literature.wechat.polish <draft.md>
-uv run python -m hydrolitagent.literature.wechat.figure <article.md>
-uv run python -m hydrolitagent.literature.wechat.push <polished.md> [--thumb <media_id>]
-
-# Upload podcast audio to Bilibili
-uv run python -m hydrolitagent.literature.bilibili_upload <audio.mp3> --title "标题" --tags "AI,水文,科研" [--dry-run]
-```
-
-### Knowledge graph
-
-```bash
-# 3-step pipeline on a directory of markdown papers
-uv run hydrolitagent prepare papers/your-topic/    # step 1: detect + split
-uv run hydrolitagent extract papers/your-topic/     # step 2: LLM extraction
-uv run hydrolitagent graph papers/your-topic/       # step 3: build + cluster + export
-
-# Merge multiple topic graphs into a unified graph
-uv run hydrolitagent merge --graphs-dir outputs/graph/ --output outputs/graph/unified/
-
-# Query the graph (deterministic, no LLM)
-uv run hydrolitagent query outputs/graph/graph.json --search "LSTM"
-```
-
-Each graph build writes `graph.json`, `graph.html` (D3.js), `GRAPH_REPORT.md`, and `obsidian/` (Obsidian vault with `[[wikilinks]]`) to `HYDROLITAGENT_OUTPUT` or `--output`.
-
-### Research knowledge platform (`hydro-platform`)
-
-**Ingestion is only two things — download a PDF, and create the Zotero entry.** Everything else in this repo is *consumption*: reading the library, close analysis, topics, knowledge graph, articles, podcasts. This platform is a distinct branch of that consumption side — where the rest produces per-issue content, it produces **long-lived, traceable knowledge assets**: it turns papers already in a **shared Zotero group** into **evidence packs** and an evolving **theme pool**. Run it from the repo root.
-
-> Note the two sides are not the same as the two packages: `hydrolitagent` spans **both** (its download/ingest commands, plus most of the consumption side), while `hydro-platform` is purely consumption.
-
-```bash
-# One full unattended pass: detect → gate → card → themes → ledger → daily report
+# 自动化平台：一轮串行处理（Windows）
 uv run hydro-platform run-once --json
 
-# Preview local tasks only — does NOT scan Zotero and does NOT call a model
-uv run hydro-platform run-once --dry-run --json
-
-# Theme pool only; --dry-run previews without calling a model
-uv run hydro-platform themes-run --json
-uv run hydro-platform themes-run --dry-run --json
-
-# Health check (config, dependencies, login, Zotero) — no model calls
-uv run hydro-platform doctor --json
+# 科研工作流：先自测，再制卡
+python skills/hydrology-evidence-cards/tests/self_test.py
+python skills/hydrology-theme-synthesis/tests/self_test.py
 ```
 
-- It **never downloads PDFs** — it only reads files already attached in the Zotero group. Downloading and ingestion belong to `paper-to-zotero` / `download-pdf`.
-- **Windows-only runtime** for scheduling, Poppler setup, and the PDF sandbox probe. The orchestration logic itself is OS-neutral but is only validated on Windows.
-- Generated output (evidence packs, theme pool, reports, ledger) is **not committed** — it is written at runtime and shared out of band. Only code, templates, prompts and schemas live in git.
-- Full command list: `uv run hydro-platform --help` (29 subcommands).
+## 目录地图
 
-## Agent Skills
-
-| Skill | Purpose |
+| 位置 | 存什么 |
 |---|---|
-| `zotero-query` | Query the Zotero library via MCP tools |
-| `paper-to-zotero` | Download a paper and add it to Zotero (DOI / arXiv / title) |
-| `run-paper-to-zotero` | One-command paper-fetch → GDrive → Zotero linked_file pipeline |
-| `download-pdf` | Institutional-access PDF download via Playwright (+ `scripts/download_paper.py` stealth one-command mode) |
-| `zotero-notebooklm` | Zotero papers → NotebookLM Chinese briefing / audio / video |
-| `weekly-review` | Weekly literature review: deep-read → analysis cards → WeChat article → NotebookLM podcast |
-| `weekly-report-skill` | NotebookLM output → WeChat weekly-report MD |
-| `figure-skill-v2` | Per-paper figures + issue cover (extract from PDF, else ZhipuAI CogView) |
-| `bilibili-upload` | Podcast audio → MP4 → Bilibili upload |
-| `hydro-platform` | Entry point to the research knowledge platform CLI (shared Zotero group → evidence packs → theme pool). Windows-only runtime. |
+| `hydrolitagent/` | Python 包：Zotero MCP Server、下载/入库、文献处理、知识图谱 |
+| `hydro-platform/` | 自动化平台：`automation/`（代码与测试）、`config/`、`templates/`（9 类证据卡模板 + 主题模板）、`pyproject.toml` |
+| `skills/` | 12 个技能：9 个工具链技能 + `hydro-platform` + 两个水利科研技能 |
+| `docs/` | 文档站源码（mkdocs）：英文技术文档 + `docs/hydro-platform/`（平台与科研规范，含中文子目录） |
+| `scripts/`、`configs/`、`docker/` | 入库脚本、图谱提示词、MCP Server 镜像 |
+| `tests/`、`hydro-platform/automation/tests/` | 两套 pytest 测试 |
+| `证据卡/`、`主题/`、`运行记录/`、`文献链接/` | 科研产物（**路径可配**，默认在此，不入 Git） |
+| `_legacy/`、`equation_from_data/`、`google_floodhub/` | 历史代码与论文复现 |
+| `docs/hydro-platform/research-platform-overview.md` | 科研工作流层的完整说明（原王新宇线 README） |
 
-## Project Structure
-
-```
-hydrolitagent/
-├── cli.py               # CLI entry: prepare, extract, graph, merge, query
-├── zotero/              # Zotero integration
-│   ├── server.py         # 12-tool MCP Server (FastMCP, port 8002)
-│   ├── paper_to_zotero.py # DOI/arXiv/title → Zotero entry (Crossref/arXiv metadata)
-│   └── zot_link_gdrive.py # Google Drive → linked_file attachment
-├── literature/          # Literature CLI (post-ingestion deep processing)
-│   ├── download_pdf.py      # Institutional-access PDF download
-│   ├── zotero_sync.py       # PDF → Zotero linked_file
-│   ├── zotero_notebooklm.py # Zotero → NotebookLM briefing/audio/video
-│   ├── bilibili_upload.py   # Podcast → MP4 → Bilibili
-│   └── wechat/              # figure.py, polish.py, push.py
-├── graph/               # Knowledge graph build + merge (graphify)
-│   ├── build.py          # prepare / extract / graph
-│   └── merge.py          # multi-topic merge + D3.js HTML viz
-└── query/               # Deterministic graph queries (no LLM)
-    └── search.py
-
-configs/                 # Prompt / extraction configuration
-scripts/                 # run_paper_pipeline.sh, download_paper.py (stealth one-command PDF downloader), chunk_fulltext.py
-skills/                  # 10 agent skills
-docs/                    # Documentation site (mkdocs-material)
-outputs/                 # Deep-reading artifacts: outputs/weekly-review/{date}/{cards,article,podcast}
-papers/                  # Topic-organized literature knowledge base (10 topics)
-
-hydro-platform/          # Research knowledge platform (uv workspace member)
-├── automation/          #   Python: detection → PDF gate → task state machine → carding → themes
-├── templates/           #   Reusable assets: 8 evidence-card templates, theme prompts, JSON schemas
-├── config/              #   Non-secret config + full example
-└── pyproject.toml       #   Entry point: `uv run hydro-platform`
-                         #   Generated output (evidence-packs/, themes/, reports/, activity/,
-                         #   members/) is NOT tracked — it is created at runtime.
-
-equation_from_data/      # Paper reproduction: equation discovery from data
-google_floodhub/         # Paper reproduction: Google flood forecasting
-definitions.py           # Shared definitions/constants
-```
-
-## Documentation
-
-The documentation site is built with [mkdocs-material](https://squidfunk.github.io/mkdocs-material/). Sources live in [`docs/`](docs/):
+## 文档与测试
 
 ```bash
-uv run mkdocs serve    # http://127.0.0.1:8000
-uv run mkdocs build --strict
+uv run mkdocs serve     # 本地预览文档站
+uv run pytest           # 两套测试：tests/ 与 hydro-platform/automation/tests/
 ```
 
-Platform documentation lives under [`docs/hydro-platform/`](docs/hydro-platform/index.md) — start there, and see its [operations guide](docs/hydro-platform/platform-operations-guide.md) for the complete handover. The decision to keep two separate Zotero clients is recorded in [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md).
-
-## Contributing
-
-We welcome contributions:
-
-1. Fork and create a new branch
-2. Add papers, code, or docs to the appropriate section
-3. Ensure rights to share and compatibility with the [MIT License](LICENSE)
-4. Submit a PR with a clear description
-
-## License
-
-MIT License. See [LICENSE](LICENSE).
+已知环境问题：`tests/test_zotero_local_api_integration.py` 依赖 `mcp.server.MCPServer`，与当前安装的 `mcp` 包（只暴露 `Server`）不兼容，会**收集失败**。这是合并前 main 线就存在的问题，与本次合并无关；收集时用 `--ignore=tests/test_zotero_local_api_integration.py` 跳过。

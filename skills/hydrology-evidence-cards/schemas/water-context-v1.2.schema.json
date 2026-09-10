@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/hydrology-evidence/water-context-v1.2.schema.json",
+  "title": "Hydrology water context v1.2",
+  "type": "object",
+  "required": [
+    "water_object_type", "basin_ids", "station_ids", "spatial_extent", "spatial_support",
+    "crs", "vertical_datum", "start_date", "end_date", "temporal_resolution",
+    "water_year_definition", "time_zone", "regulated_status", "variables"
+  ],
+  "properties": {
+    "water_object_type": {"type": "string"},
+    "basin_ids": {"type": "array", "items": {"type": "string"}},
+    "station_ids": {"type": "array", "items": {"type": "string"}},
+    "spatial_support": {"enum": ["", "point", "reach", "subbasin", "basin", "grid", "facility", "network"]},
+    "regulated_status": {"enum": ["natural", "regulated", "mixed", "unknown"]},
+    "variables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "reported_unit", "normalized_unit", "conversion_rule"]
+      }
+    }
+  }
+}
+
