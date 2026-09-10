@@ -227,5 +227,7 @@ hydro-platform/config/config.local.json
 *.pem
 # 编辑器状态与临时文件（*.log 见上方 Django 段）
 hydro-platform/.obsidian/
-*.tmp
-*.temp
+# 限定在平台内：平台原 .gitignore 位于平台根，其 *.tmp/*.temp 的作用域
+# 本就是"平台内任意深度"；写成全局会静默吞掉其他目录下未来的同名文件
+hydro-platform/**/*.tmp
+hydro-platform/**/*.temp
