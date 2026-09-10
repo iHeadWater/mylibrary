@@ -34,12 +34,9 @@ Accepted
 
 `hydro-platform` 运行在**裸 host** 上，所以走直连——这与 `CLAUDE.md` 那句"8002 是唯一访问入口"**并不冲突**：后者描述的是容器侧的服务契约（同一句也写着"不要改动它的技术架构——已有其他服务依赖"），只是原文缺少"在容器部署中"这个作用域限定。
 
-> 一个必须记住的操作事实：**在裸 host 上启动 8002 服务必须设 `ZOTERO_LOCAL_API_URL=http://127.0.0.1:23119`**（`hydrolitagent/zotero/server.py:42`），否则默认的 `host.docker.internal` 在裸 host 上不解析（`getaddrinfo failed`）。那个默认值是容器契约，不要改它。
+> 一个必须记住的操作事实：**在裸 host 上使用 Local API 必须设 `ZOTERO_LOCAL_BASE_URL=http://127.0.0.1:23119`**，否则默认的 `host.docker.internal` 在裸 host 上不解析（`getaddrinfo failed`）。**那个默认值是容器契约，不要改它**——要换地址就设环境变量。
 >
-> ⚠️ 别把这个变量名搞混：仓库里有**两个名字相近但不同**的变量——
-> `ZOTERO_LOCAL_API_URL` 只被 8002 的 MCP server 读取；
-> `ZOTERO_LOCAL_BASE_URL` 只被 `hydrolitagent/literature/zotero_notebooklm.py` 读取（默认已是 `127.0.0.1:23119`）。
-> 设错一个不会报错，只会让另一个组件继续用它的默认值。
+> 变量名现在已统一：`ZOTERO_LOCAL_BASE_URL` 是**首选名**，被两个消费者共同读取（`hydrolitagent/zotero/server.py` 与 `hydrolitagent/literature/zotero_notebooklm.py`）；`ZOTERO_LOCAL_API_URL` 是**旧名**，仍然兼容（容器 compose 文件已在用它）。两者指向同一设置，不是两个不同的东西。
 
 ## Decision
 
@@ -80,6 +77,6 @@ Accepted
 ## Consequences
 
 - 仓库中长期存在两套 Zotero 客户端，**新增 Zotero 相关代码前必须先确认属于哪一侧**（个人库入库 / 共享库检测），不要凭直觉选。
-- 二者都依赖 Zotero Desktop 的 **Local API**，因此本机 Zotero 的行为变化会同时影响两边；但**默认端点并不相同**——平台侧写死 `127.0.0.1:23119` 且只允许回环地址，MCP 侧默认 `host.docker.internal:23119`（为容器内访问宿主 Zotero 而设，可用 `ZOTERO_LOCAL_API_URL` 覆盖）。**两者的连通条件因此不同**：容器外的直连与容器内的 MCP 各按各的前提生效，排查问题时不要把一侧的结论套到另一侧。
+- 二者都依赖 Zotero Desktop 的 **Local API**，因此本机 Zotero 的行为变化会同时影响两边；但**默认端点并不相同**——平台侧写死 `127.0.0.1:23119` 且只允许回环地址，MCP 侧默认 `host.docker.internal:23119`（为容器内访问宿主 Zotero 而设，可用 `ZOTERO_LOCAL_BASE_URL` 覆盖，`ZOTERO_LOCAL_API_URL` 为兼容旧名）。**两者的连通条件因此不同**：容器外的直连与容器内的 MCP 各按各的前提生效，排查问题时不要把一侧的结论套到另一侧。
 - 统一客户端仍是**独立议题**，不在本次合并范围内。若将来统一，应先明确：读取路径以直连为准、MCP 仅保留工具面。
 - `hydro-platform` 的 Zotero 访问层本次**未做任何改动**，其行为与合并前一致。
