@@ -20,7 +20,7 @@ Source 来源版本 1 ── N Claim 原子声明 N ── N Decision 平台决�
 - [八类证据卡模板目录](../证据卡模板)：01—08 分别保存八类来源的证据生成机制，一个类型一个 Markdown。
 - [平台证据综合与决策卡](../证据卡模板/09_平台证据综合与决策卡模板.md)：平台自己的跨来源综合，不等同于发表综述。
 - [证据卡模块](../证据卡模块)：公共水利情境和五类方法模块。
-- [可安装 Skill](../../skills/hydrology-evidence-cards/SKILL.md)：读取本机 Zotero、装配卡片、校验和导出关系图。
+- [可安装 Skill](https://github.com/iHeadWater/mylibrary/blob/main/skills/hydrology-evidence-cards/SKILL.md)：读取本机 Zotero、装配卡片、校验和导出关系图。
 - [外部实践对照](06_证据卡架构外部实践对照_V1.2.md)：说明外部事实、可借鉴原则、Codex 推断和项目选择。
 
 01—08 是独立的来源类型入口，不再各自复制一遍公共长表。生成器会把公共骨架、选中的类型入口、water_context 和方法模块装成一个可独立保存的 Markdown 来源卡。
