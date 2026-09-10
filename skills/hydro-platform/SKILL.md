@@ -68,7 +68,10 @@ uv sync --all-packages      # 从仓库根执行；一次装好两个包
 | 生成单篇证据卡 | `evidence-generate` |
 | 导出未保存草稿 | `evidence-draft-export` |
 | 贡献账本同步 / 日报 | `activity-sync` / `daily-report` |
-| 安装与调度（**Windows**） | `setup` / `bootstrap-native` / `schedule-plan` / `schedule-status` / `schedule-install` / `schedule-remove` / `schedule-tick` |
+| 安装与调度（**Windows**） | `setup` / `bootstrap` / `bootstrap-native` / `schedule-plan` / `schedule-status` / `schedule-install` / `schedule-remove` / `schedule-tick` |
+| 实验性路径读取（非正式入口） | `pdf-direct-read-trial` / `evidence-generate-trial` |
+
+> 上表只列子命令名。执行时一律加前缀，例如 `uv run hydro-platform tasks-list --json`。**完整清单以 `uv run hydro-platform --help` 为准**（当前 29 个子命令），不要凭本表推断不存在某个子命令。
 
 ## 结果怎么读
 

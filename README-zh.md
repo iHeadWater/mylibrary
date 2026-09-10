@@ -65,6 +65,10 @@ uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>
 ### Literature CLI(入库后深度处理)
 
 ```bash
+# 一条命令完成下载 + Zotero 同步(隐身 Chrome;自动按出版商路由)
+uv run python scripts/download_paper.py --doi <doi> --sync
+uv run python scripts/download_paper.py --arxiv <id> --sync
+
 # 机构访问下载 PDF
 uv run python -m hydrolitagent.literature.download_pdf doi <doi>
 
@@ -122,7 +126,7 @@ uv run hydro-platform doctor --json
 - **平台不下载 PDF** —— 只读取共享库中已经附好的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`。
 - **运行时为 Windows-only**:定时调度、Poppler 原生工具安装、PDF 沙箱探针都依赖 Windows。编排逻辑本身与操作系统无关,但只在 Windows 上验证过。
 - 生成的产物(证据包、主题池、日报、贡献账本)**不入库** —— 运行时写入,另行共享。仓库里只有代码、模板、提示词与 schema。
-- 完整命令清单:`uv run hydro-platform --help`(28 个子命令)。
+- 完整命令清单:`uv run hydro-platform --help`(29 个子命令)。
 
 ## Agent Skills
 
@@ -131,7 +135,7 @@ uv run hydro-platform doctor --json
 | `zotero-query` | 通过 MCP 工具查询 Zotero 文献库 |
 | `paper-to-zotero` | 下载论文并入库 Zotero(DOI / arXiv / 标题) |
 | `run-paper-to-zotero` | 一键 paper-fetch → GDrive → Zotero linked_file 流水线 |
-| `download-pdf` | Playwright 机构访问下载 PDF |
+| `download-pdf` | Playwright 机构访问下载 PDF(另含 `scripts/download_paper.py` 隐身一键模式) |
 | `zotero-notebooklm` | Zotero 论文 → NotebookLM 中文简报 / 音频 / 视频 |
 | `weekly-review` | 每周文献综述:精读 → 分析卡 → 公众号文章 → NotebookLM 播客 |
 | `weekly-report-skill` | NotebookLM 输出 → 公众号周报 MD |
@@ -161,7 +165,7 @@ hydrolitagent/
     └── search.py
 
 configs/                 # Prompt / 提取配置
-scripts/                 # run_paper_pipeline.sh, chunk_fulltext.py
+scripts/                 # run_paper_pipeline.sh, download_paper.py(隐身一键 PDF 下载), chunk_fulltext.py
 skills/                  # 10 个 Agent skill
 docs/                    # 文档站点(mkdocs-material)
 outputs/                 # 精读产物:outputs/weekly-review/{date}/{cards,article,podcast}

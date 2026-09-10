@@ -126,7 +126,7 @@ uv run hydro-platform doctor --json
 - It **never downloads PDFs** — it only reads files already attached in the Zotero group. Downloading and ingestion belong to `paper-to-zotero` / `download-pdf`.
 - **Windows-only runtime** for scheduling, Poppler setup, and the PDF sandbox probe. The orchestration logic itself is OS-neutral but is only validated on Windows.
 - Generated output (evidence packs, theme pool, reports, ledger) is **not committed** — it is written at runtime and shared out of band. Only code, templates, prompts and schemas live in git.
-- Full command list: `uv run hydro-platform --help` (28 subcommands).
+- Full command list: `uv run hydro-platform --help` (29 subcommands).
 
 ## Agent Skills
 

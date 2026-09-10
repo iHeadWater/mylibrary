@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Accepted —— **决策范围仅限「本次不统一两套 Zotero 客户端」。**
+
+本 ADR **未**裁定「读取路径以哪条为准」，该问题见 §Open Question。在它裁决之前，本 ADR **不构成读取路径的指导**：不要把它当作「读写都该走直连」或「都该走 MCP」的依据。
 
 ## Date
 
@@ -15,7 +17,7 @@ Accepted
 | | `hydrolitagent/zotero/server.py` | `hydro-platform/automation/src/hydro_platform/zotero.py` |
 |---|---|---|
 | 形态 | FastMCP 服务（端口 8002），12 个工具 | 裸 HTTP 客户端，无服务、无状态 |
-| 底层 | pyzotero（Web API）+ httpx（Local API `:23119`，仅全文与附件信息 2 个工具） | `urllib` 直连 `http://127.0.0.1:23119` |
+| 底层 | pyzotero（Web API）+ httpx（Local API，仅全文与附件信息 2 个工具，默认 `host.docker.internal:23119`） | `urllib` 直连 Zotero Desktop Local API，默认 `127.0.0.1:23119`，且**强制**主机名只能是 `127.0.0.1`／`localhost`／`::1` |
 | 目标库 | 个人库 | 共享 group 库 |
 | 方向 | **把文献弄进来**：下载 PDF → 建条目 → `linked_file` 附件 | **从已有文献里沉淀认识**：检测新增条目与后补 PDF → 门禁 → 制卡 |
 | 节奏 | 一次一个 DOI，人驱动 | 批量、事件驱动、无人值守 |
@@ -69,6 +71,6 @@ Accepted
 ## Consequences
 
 - 仓库中长期存在两套 Zotero 客户端，**新增 Zotero 相关代码前必须先确认属于哪一侧**（个人库入库 / 共享库检测），不要凭直觉选。
-- 二者的**读取端点相同**（Local API `127.0.0.1:23119`），因此本机 Zotero 的行为变化会同时影响两边。
+- 二者都依赖 Zotero Desktop 的 **Local API**，因此本机 Zotero 的行为变化会同时影响两边；但**默认端点并不相同**——平台侧写死 `127.0.0.1:23119` 且只允许回环地址，MCP 侧默认 `host.docker.internal:23119`（为容器内访问宿主 Zotero 而设，可用 `ZOTERO_LOCAL_API_URL` 覆盖）。**两者的连通条件因此不同**：容器外的直连与容器内的 MCP 各按各的前提生效，排查问题时不要把一侧的结论套到另一侧。
 - 统一客户端仍是**独立议题**，不在本次合并范围内。若将来统一，应先明确：读取路径以直连为准、MCP 仅保留工具面。
 - `hydro-platform` 的 Zotero 访问层本次**未做任何改动**，其行为与合并前一致。
