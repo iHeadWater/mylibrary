@@ -26,6 +26,7 @@ The result accumulates into a **literature knowledge base**: `papers/` organized
 | **Deep literature processing** — Literature CLI: weekly review, WeChat publish / polish / figures, Bilibili upload | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [literature](docs/user-guide/literature.md) |
 | **Knowledge graph** — build a structured, queryable knowledge base via [graphify](https://github.com/graphify) (entity extraction, community detection, Obsidian export) | `uv run hydrolitagent graph papers/your-topic/` | [architecture](docs/development/architecture.md) |
 | **Paper reproduction** — reproduce key papers in AI-driven hydrology | — | `equation_from_data/`, `google_floodhub/` |
+| **Research knowledge platform** — the *consumption* layer: detect new papers in a shared Zotero group → full-text gate → per-paper evidence packs → evolving theme pool → daily report. Unattended, deterministic, no hand-editing. **Windows-only runtime.** | `uv run hydro-platform run-once --json` | [platform docs](docs/hydro-platform/index.md) |
 
 ## Quick Start
 
@@ -33,11 +34,13 @@ The result accumulates into a **literature knowledge base**: `papers/` organized
 # Clone and install
 git clone git@github.com:OuyangWenyu/mylibrary.git
 cd mylibrary
-uv pip install -e .
+uv sync --all-packages   # installs BOTH packages in this uv workspace into the shared root .venv
 
 # Configure
 cp .env.example .env   # add DEEPSEEK_API_KEY; set HYDROLITAGENT_OUTPUT, ZOTERO_API_KEY, ZOTERO_LIBRARY_ID
 ```
+
+> This repo is a **uv workspace** with two members: `hydrolitagent` (root) and `hydro-platform`. They share one `.venv` and one `uv.lock`. Use `uv sync --all-packages` — a plain `uv sync` installs only the root package's dependencies, so `uv run hydro-platform …` would not be available.
 
 For the full reference (Zotero Desktop / Linked Attachment Base Directory setup, env vars, TOML config), see the [installation guide](docs/getting-started/installation.md).
 
@@ -101,6 +104,30 @@ uv run hydrolitagent query outputs/graph/graph.json --search "LSTM"
 
 Each graph build writes `graph.json`, `graph.html` (D3.js), `GRAPH_REPORT.md`, and `obsidian/` (Obsidian vault with `[[wikilinks]]`) to `HYDROLITAGENT_OUTPUT` or `--output`.
 
+### Research knowledge platform (`hydro-platform`)
+
+The mirror image of everything above: instead of pulling papers in, it turns papers already in a **shared Zotero group** into traceable **evidence packs** and an evolving **theme pool**. Run it from the repo root.
+
+```bash
+# One full unattended pass: detect → gate → card → themes → ledger → daily report
+uv run hydro-platform run-once --json
+
+# Preview local tasks only — does NOT scan Zotero and does NOT call a model
+uv run hydro-platform run-once --dry-run --json
+
+# Theme pool only; --dry-run previews without calling a model
+uv run hydro-platform themes-run --json
+uv run hydro-platform themes-run --dry-run --json
+
+# Health check (config, dependencies, login, Zotero) — no model calls
+uv run hydro-platform doctor --json
+```
+
+- It **never downloads PDFs** — it only reads files already attached in the Zotero group. Downloading and ingestion belong to `paper-to-zotero` / `download-pdf`.
+- **Windows-only runtime** for scheduling, Poppler setup, and the PDF sandbox probe. The orchestration logic itself is OS-neutral but is only validated on Windows.
+- Generated output (evidence packs, theme pool, reports, ledger) is **not committed** — it is written at runtime and shared out of band. Only code, templates, prompts and schemas live in git.
+- Full command list: `uv run hydro-platform --help` (28 subcommands).
+
 ## Agent Skills
 
 | Skill | Purpose |
@@ -114,6 +141,7 @@ Each graph build writes `graph.json`, `graph.html` (D3.js), `GRAPH_REPORT.md`, a
 | `weekly-report-skill` | NotebookLM output → WeChat weekly-report MD |
 | `figure-skill-v2` | Per-paper figures + issue cover (extract from PDF, else ZhipuAI CogView) |
 | `bilibili-upload` | Podcast audio → MP4 → Bilibili upload |
+| `hydro-platform` | Entry point to the research knowledge platform CLI (shared Zotero group → evidence packs → theme pool). Windows-only runtime. |
 
 ## Project Structure
 
@@ -138,10 +166,18 @@ hydrolitagent/
 
 configs/                 # Prompt / extraction configuration
 scripts/                 # run_paper_pipeline.sh, download_paper.py (stealth one-command PDF downloader), chunk_fulltext.py
-skills/                  # 9 agent skills
+skills/                  # 10 agent skills
 docs/                    # Documentation site (mkdocs-material)
 outputs/                 # Deep-reading artifacts: outputs/weekly-review/{date}/{cards,article,podcast}
 papers/                  # Topic-organized literature knowledge base (10 topics)
+
+hydro-platform/          # Research knowledge platform (uv workspace member)
+├── automation/          #   Python: detection → PDF gate → task state machine → carding → themes
+├── templates/           #   Reusable assets: 8 evidence-card templates, theme prompts, JSON schemas
+├── config/              #   Non-secret config + full example
+└── pyproject.toml       #   Entry point: `uv run hydro-platform`
+                         #   Generated output (evidence-packs/, themes/, reports/, activity/,
+                         #   members/) is NOT tracked — it is created at runtime.
 
 equation_from_data/      # Paper reproduction: equation discovery from data
 google_floodhub/         # Paper reproduction: Google flood forecasting
@@ -156,6 +192,8 @@ The documentation site is built with [mkdocs-material](https://squidfunk.github.
 uv run mkdocs serve    # http://127.0.0.1:8000
 uv run mkdocs build --strict
 ```
+
+Platform documentation lives under [`docs/hydro-platform/`](docs/hydro-platform/index.md) — start there, and see its [operations guide](docs/hydro-platform/platform-operations-guide.md) for the complete handover. The decision to keep two separate Zotero clients is recorded in [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md).
 
 ## Contributing
 

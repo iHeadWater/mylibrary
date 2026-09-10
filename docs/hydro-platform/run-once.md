@@ -13,8 +13,8 @@
 ## 操作
 
 ```powershell
-Set-Location 'E:\phd\hydro-platform'
-python automation/run.py run-once --dry-run --json
+# 在仓库根目录运行
+uv run hydro-platform run-once --dry-run --json
 ```
 
 这是只读本地预览：显示 tasks.json 中的任务和限额，不扫描 Zotero、不写摘要、不检查账号、不调用模型。没有本地清单时显示空任务，不意味着共享库为空。
@@ -22,7 +22,7 @@ python automation/run.py run-once --dry-run --json
 正式运行前保持 Zotero 可访问、共享库及 PDF 已同步、Codex CLI 已登录，并使用已经验证的本机 PDF 工具环境：
 
 ```powershell
-python automation/run.py run-once --json
+uv run hydro-platform run-once --json
 ```
 
 不需要 item-key，也不需要按篇数改配置。默认自动逐篇处理本轮扫描到的全部可制卡论文，每篇完成立即正式保存到 `evidence-packs/EV-<Key>-<标题短名>/card.md`，不是试运行预览，不要求手动转正。已有卡不自动覆盖。`--no-progress` 关闭 stderr 进度，stdout 保留最终 JSON。
@@ -42,7 +42,7 @@ python automation/run.py run-once --json
 
 ## 配置
 
-日常使用无需修改配置。只有主动限制规模、时间或调整故障策略时才修改 config/config.json 的 pipeline。现有本地配置与示例已迁移为处理全部；其他旧配置的明确限额仍遵守，省略字段则采用新默认值，未知字段拒绝。
+日常使用无需修改配置。只有主动限制规模、时间或调整故障策略时才修改 `hydro-platform/config/config.json` 的 pipeline。现有本地配置与示例已迁移为处理全部；其他旧配置的明确限额仍遵守，省略字段则采用新默认值，未知字段拒绝。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |

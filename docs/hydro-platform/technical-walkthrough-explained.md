@@ -27,15 +27,16 @@
 ## 2. 敲下这一条命令，电脑到底做了什么？
 
 ```powershell
-python automation/run.py run-once --json
+# 在仓库根目录运行
+uv run hydro-platform run-once --json
 ```
 
 把它拆开看，不需要把它当成一串咒语：
 
 | 这一段 | 意思 |
 |---|---|
-| `python` | 用 Python 解释器执行后面的程序文件 |
-| `automation/run.py` | 项目的启动文件；它把工作交给命令行处理模块 |
+| `uv run` | 用 uv workspace 共享的仓库根 `.venv` 运行后面的命令，不用手工激活环境 |
+| `hydro-platform` | 平台的命令行入口；它把工作交给命令行处理模块 |
 | `run-once` | 本次选择“执行一轮完整流程”，而不是只检查环境或只查看任务 |
 | `--json` | 最后的运行总结使用 JSON 格式，便于程序读取；它不是“开启自动化”的开关 |
 
@@ -688,15 +689,15 @@ Windows计划 → 检查是否到期 ─────┘
 
 | 本文解释 | 对应实现 |
 |---|---|
-| 一键入口和任务分支 | [pipeline.py](../automation/src/hydro_platform/pipeline.py) |
-| 读取清单、区分父条目与 PDF | [snapshot.py](../automation/src/hydro_platform/snapshot.py)、[pdf_gate.py](../automation/src/hydro_platform/pdf_gate.py) |
-| 任务编号、状态、锁和租约 | [tasks.py](../automation/src/hydro_platform/tasks.py) |
-| 模板组装、模型调用后的正式保存 | [card_generation.py](../automation/src/hydro_platform/card_generation.py) |
-| 本机 PDF 读取适配器 | [codex_local_pdf.py](../automation/src/hydro_platform/card_generators/codex_local_pdf.py) |
-| 成果核对和待发布恢复 | [publication.py](../automation/src/hydro_platform/publication.py) |
-| 全池计划、精读、回填及复用 | [theme_pool_runner.py](../automation/src/hydro_platform/theme_pool_runner.py)、[themes.py](../automation/src/hydro_platform/themes.py) |
-| 主题身份和当前版本 | [theme_pool.py](../automation/src/hydro_platform/theme_pool.py) |
-| 每日时段和补跑判断 | [scheduled.py](../automation/src/hydro_platform/scheduled.py) |
-| 配置与环境安装恢复 | [config.py](../automation/src/hydro_platform/config.py)、[workstation_setup.py](../automation/src/hydro_platform/workstation_setup.py) |
+| 一键入口和任务分支 | `hydro-platform/automation/src/hydro_platform/pipeline.py` |
+| 读取清单、区分父条目与 PDF | `hydro-platform/automation/src/hydro_platform/snapshot.py`、`hydro-platform/automation/src/hydro_platform/pdf_gate.py` |
+| 任务编号、状态、锁和租约 | `hydro-platform/automation/src/hydro_platform/tasks.py` |
+| 模板组装、模型调用后的正式保存 | `hydro-platform/automation/src/hydro_platform/card_generation.py` |
+| 本机 PDF 读取适配器 | `hydro-platform/automation/src/hydro_platform/card_generators/codex_local_pdf.py` |
+| 成果核对和待发布恢复 | `hydro-platform/automation/src/hydro_platform/publication.py` |
+| 全池计划、精读、回填及复用 | `hydro-platform/automation/src/hydro_platform/theme_pool_runner.py`、`hydro-platform/automation/src/hydro_platform/themes.py` |
+| 主题身份和当前版本 | `hydro-platform/automation/src/hydro_platform/theme_pool.py` |
+| 每日时段和补跑判断 | `hydro-platform/automation/src/hydro_platform/scheduled.py` |
+| 配置与环境安装恢复 | `hydro-platform/automation/src/hydro_platform/config.py`、`hydro-platform/automation/src/hydro_platform/workstation_setup.py` |
 
 进一步操作见[平台操作说明](platform-operations-guide.md)，测试依据及尚待验证事项见[验证地图](tests.md)。历史卡片可能保留旧模型、旧强度、旧 PDF MCP 等生成记录，这是如实保留历史，不代表当前默认仍走旧流程。

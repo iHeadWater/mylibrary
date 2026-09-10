@@ -39,11 +39,11 @@ Python 核对任务、原 PDF 和模板索引 → 一个 Codex 独立会话读�
 无需重新跑已经通过的独立 PDF 读取实验。当前 CEXH4PQA 已有正式卡，使用：
 
 ```powershell
-Set-Location 'E:\phd\hydro-platform'
-python automation/run.py evidence-generate-trial --item-key CEXH4PQA --json
+# 在仓库根目录运行
+uv run hydro-platform evidence-generate-trial --item-key CEXH4PQA --json
 ```
 
-结果保存到返回的 trial_path（默认 .runtime/card-trials/ 下）。正式卡、manifest 和任务不变。不自动把试运行结果替换为正式卡。
+结果保存到返回的 trial_path（默认 `hydro-platform/.runtime/card-trials/` 下）。正式卡、manifest 和任务不变。不自动把试运行结果替换为正式卡。
 
 只有尚为占位卡的论文使用 evidence-generate；成功后任务变为 COMPLETED，重复运行跳过已有卡。当前不再因正文格式或归因标记进入 QUALITY_FAILED；run-once 可按新的流程检查恢复历史被这些规则拦截的完整草稿，不自动重读 PDF。
 
@@ -66,7 +66,7 @@ python automation/run.py evidence-generate-trial --item-key CEXH4PQA --json
 
 ## 当前配置与兼容
 
-总入口仍为 config/config.json。workflow_mode=single_agent，pdf_reader.adapter=local_path；单 Agent 模式不能同时提供 multi_agent_workflow，避免无效角色覆盖值误导。
+总入口仍为 `hydro-platform/config/config.json`。workflow_mode=single_agent，pdf_reader.adapter=local_path；单 Agent 模式不能同时提供 multi_agent_workflow，避免无效角色覆盖值误导。Python 环境是 uv 工作区共享的仓库根 `.venv`（`uv sync --all-packages` 准备）；`bootstrap` 只校验它并提示 uv，不再创建该环境。
 
 旧配置未写 workflow_mode 时按 legacy multi_agent 解析，仅用于历史兼容，不自动回退。当前主提示词为 evidence-card-generation-v8.md，旧版保留历史不改写；共用读取指引仍为 pdf-local-reading-v1.md。v8 将详细写作要求与保存条件分开，不降低全文阅读范围，不增加模型复核或格式修复调用。总配置和示例已经更新，无需用户修改。
 

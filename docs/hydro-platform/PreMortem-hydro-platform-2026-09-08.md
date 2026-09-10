@@ -27,7 +27,7 @@
 
 ### P0 / 无人值守上线前：多文件写入中断可能被误判为已有卡
 
-代码先替换 card.md，再替换 manifest.json：[card_generation.py](../automation/src/hydro_platform/card_generation.py) 第 759、762 行。正常 OSError 有回滚，但中断并不等于普通异常。第 283 行又把“正文不等于占位卡”直接当作跳过依据。
+代码先替换 card.md，再替换 manifest.json：`hydro-platform/automation/src/hydro_platform/card_generation.py` 第 759、762 行。正常 OSError 有回滚，但中断并不等于普通异常。第 283 行又把“正文不等于占位卡”直接当作跳过依据。
 
 在完全独立的临时测试目录中，模拟卡片已写入、manifest 发布前 KeyboardInterrupt，结果：
 
@@ -45,7 +45,7 @@
 
 ### P1 / 无人值守上线前：缺少统一运行与恢复入口
 
-[cli.py](../automation/src/hydro_platform/cli.py) 第 54–70 行只有分步命令；[setup/README.md](../automation/setup/README.md) 明确安装和调度脚本仍待建设；[recovery.md](recovery.md) 描述的是目标恢复流程。
+`hydro-platform/automation/src/hydro_platform/cli.py` 第 54–70 行只有分步命令；`hydro-platform/automation/setup/README.md` 明确安装和调度脚本仍待建设；[recovery.md](recovery.md) 描述的是目标恢复流程。
 
 建议先做一次完整 run-once：读库→对账任务→准备证据包→处理一个/有限个就绪任务→汇总新增/完成/阻塞。缺 PDF 继续等待；完成项跳过；单篇失败不抹掉其他成功项。先验证可补跑、幂等及崩溃恢复，再用计划任务定时调用它。不要直接把各个现有命令按时间串成无状态脚本。
 
@@ -53,19 +53,19 @@
 
 ### P1 / Fast-follow：前置门禁仍依赖 Zotero 索引
 
-[pdf_gate.py](../automation/src/hydro_platform/pdf_gate.py) 第 213–222 行调用附件 fulltext，索引未就绪就进入 WAITING。实际制卡已使用原文件和本机 pypdf。因而即使原 PDF 可读取，也可能仅因 Zotero 索引滞后被卡住；该判断不能证明整篇 PDF 文字完整。
+`hydro-platform/automation/src/hydro_platform/pdf_gate.py` 第 213–222 行调用附件 fulltext，索引未就绪就进入 WAITING。实际制卡已使用原文件和本机 pypdf。因而即使原 PDF 可读取，也可能仅因 Zotero 索引滞后被卡住；该判断不能证明整篇 PDF 文字完整。
 
 建议门禁用实际原 PDF 的本机可读性作为依据，保留文件身份、大小、页数、可提取性检查；Zotero 索引只作辅助，不再是唯一通行条件。继续不做 OCR，不放行只有摘要或损坏文件。本项没有修改，当前仍按原门禁运行。
 
 ### P1 / Fast-follow：主文与补充材料未区分
 
-[pdf_gate.py](../automation/src/hydro_platform/pdf_gate.py) 第 144–150 行对任意多个 PDF 返回 MULTIPLE_PDFS。主文加 Supplement PDF 也会触发，之后卡片可能只能说补充材料未取得。
+`hydro-platform/automation/src/hydro_platform/pdf_gate.py` 第 144–150 行对任意多个 PDF 返回 MULTIPLE_PDFS。主文加 Supplement PDF 也会触发，之后卡片可能只能说补充材料未取得。
 
 建议建立可追溯的主附件绑定及补充附件列表；可先利用明确附件标记/名称/元数据做候选选择，歧义保持技术阻塞，不悄悄选第一个。是否将补充材料纳入本轮阅读需要确认，因为会改变读取量与范围。无需为每篇设置人工科研核验。
 
 ### P2 / Track：全量重复检查、上下文与本地草稿开销
 
-[tasks.py](../automation/src/hydro_platform/tasks.py) 第 448–458 行在锁内获取全库并对所有父条目运行门禁；[card_generation.py](../automation/src/hydro_platform/card_generation.py) 第 335 行将全部启用模板拼入同次请求。库变大后，已完成论文的重复哈希/索引读取和模板上下文会增加成本，但本次没有性能实测，不能报具体降幅。
+`hydro-platform/automation/src/hydro_platform/tasks.py` 第 448–458 行在锁内获取全库并对所有父条目运行门禁；`hydro-platform/automation/src/hydro_platform/card_generation.py` 第 335 行将全部启用模板拼入同次请求。库变大后，已完成论文的重复哈希/索引读取和模板上下文会增加成本，但本次没有性能实测，不能报具体降幅。
 
 建议先记录各阶段耗时，再按输入版本复用无变化项，保留定期全量对账；等待 PDF 的旧条目必须继续检查，不能只消费 ITEM_ADDED。当前单会话可复用已提取文字和图像，暂不另造共享全文数据库。
 

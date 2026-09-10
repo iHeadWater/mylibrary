@@ -4,7 +4,7 @@
 
 ## 当前结论
 
-本版交付文档已统一更新根目录及17份README，明确单Agent v8、统一主题池、精读/版本存储和本机运行区边界；同时修正架构中残留的独立batch规则。发布前全量540项测试通过（63.961秒），README内部链接检查通过。当前版本包含此前未发布的自动化、安装恢复、主题及共享成果；GitHub备份以实际推送后的提交为准，不等于干净新机验收。
+本版交付文档已统一更新根目录及17份README，明确单Agent v8、统一主题池、精读/版本存储和本机运行区边界；同时修正架构中残留的独立batch规则。发布前全量540项测试通过（63.961秒），README内部链接检查通过。（其后平台自身的 README 已全部并入 `docs/hydro-platform/`，平台不再保留任何 README 文件；内容未丢弃，见[文档入口](index.md)。）当前版本包含此前未发布的自动化、安装恢复、主题及共享成果；GitHub备份以实际推送后的提交为准，不等于干净新机验收。
 
 统一主题池改造：已取消按BATCH独立生长的主流程，新增长期主题身份、版本链、自动合并/拆分与精读复用。真实2个旧主题接入，35个旧文件未变，模型0；再次运行复用3精读/6步骤。全量540项通过。合并/拆分的过程保护已通过受控测试，真实模型的关联质量尚未验收。[现行规则与证据](unified-theme-pool.md)。此前将主要剩余工作归为换机验收不够全面，不能用工程恢复测试替代这个产品逻辑。
 
@@ -30,16 +30,16 @@
 
 | 已确认要求 | 当前实现及证据 | 状态与下一步 |
 |---|---|---|
-| PDF 到位才制卡；后补 PDF 可继续 | `pdf_gate.evaluate_pdf_gate`、`tasks.sync_tasks`；[门禁与任务代码](../automation/src/hydro_platform/tasks.py) | 3 篇正向真实样本；缺失/未同步/未索引的负面场景由测试覆盖，尚非全套真实故障演练 |
-| 只校验流程，不因正文格式重跑 | [single_agent.py](../automation/src/hydro_platform/card_generators/single_agent.py)、[card_generation.py](../automation/src/hydro_platform/card_generation.py)；当前 v2 / PROCESS_VALIDATED | 已实现；提示词要求区分原文与推理，但不声称机器认证科学正确性。旧六 Agent/严格格式要求已失效 |
-| 一篇一个包、旧卡不覆盖、失败可恢复 | [pipeline.py](../automation/src/hydro_platform/pipeline.py) 的 `_package_status/run_once`、[publication.py](../automation/src/hydro_platform/publication.py) | 已实现和回归；真实重复运行无模型调用；无法解释的文件修改保留并报冲突 |
-| 候选→每篇定向精读→回填候选 | [themes.py](../automation/src/hydro_platform/themes.py) 的 `_run/run_themes`；[真实记录](themes-workflow.md#已完成的真实联调) | 已真实跑通；人确认后才能转正式，未开发自动转正，未生成 idea |
-| 换机不要为了恢复状态重花模型额度 | [runtime_recovery.py](../automation/src/hydro_platform/runtime_recovery.py) 的 `recover_runtime`，只对账本地状态，无模型调用路径 | 本轮补齐；新目录实测恢复3篇，第二轮任务零变化，38个原文件未变；不等同于异机安装验收 |
-| 可检查缺哪个依赖 | [doctor.py](../automation/src/hydro_platform/doctor.py) 的 `doctor/_python_probe`，CLI `doctor` | 已有8类基础检查，按配置另查账本/成员映射、Windows计划、Zotero启动路径和项目原生工具，当前12项通过。不启动应用，不是模型/沙箱/科学质量验收 |
-| Zotero未运行或PDF未同步时能继续 | [zotero_readiness.py](../automation/src/hydro_platform/zotero_readiness.py)单次启动/有限探测，pipeline与scheduled区分待处理并补查 | 已有受控测试、实际就绪库隔离验证，以及本机未运行时自动启动后继续的完整入口实测；不改偏好/账号、不声明云端同步完成。真实下载延迟仍待验证 |
-| 每日无人值守、错过计划补跑 | [windows_schedule.py](../automation/src/hydro_platform/windows_schedule.py)注册/核对自有任务，[scheduled.py](../automation/src/hydro_platform/scheduled.py)控制每日/补跑，固定pythonw入口调用原run_once | 本机按需及09:00到期原流水线成功，随后轻量检查未重跑；三卡跳过/六步复用/模型0。日界线/有限重试/重复另有测试；真实关机、登录、同步等待及定时新增制卡仍待验证 |
-| 砸电脑后只靠仓库、Zotero与重新登录恢复 | [deployment.py](../automation/src/hydro_platform/deployment.py) 与 [native_deployment.py](../automation/src/hydro_platform/native_deployment.py) 创建项目环境/工具、哈希锁定且不覆盖未知目录；[Python验证](deployment.md)、[PDF工具验证](native-deployment.md) | 部分完成：Python/原生依赖及状态恢复有证据；基础软件准备、异机调度恢复、干净机器完整测试仍缺 |
-| 老师看到谁新增、谁补PDF、系统完成什么及每日进度 | [activity.py](../automation/src/hydro_platform/activity.py)、[daily_report.py](../automation/src/hydro_platform/daily_report.py)、[验收](activities-and-daily-report.md)；run-once前后使用同一快照记录并生成摘要 | 已实现基线、去重、未知身份、系统完成/阻塞、跨日未解决事项与最近运行。真实初始3篇/0新事件，日报自动落盘；实际API没有贡献者字段，因此真实多人身份覆盖尚未证明。每日计划已启用，真实调度验收边界见上行 |
+| PDF 到位才制卡；后补 PDF 可继续 | `pdf_gate.evaluate_pdf_gate`、`tasks.sync_tasks`；`hydro-platform/automation/src/hydro_platform/tasks.py` | 3 篇正向真实样本；缺失/未同步/未索引的负面场景由测试覆盖，尚非全套真实故障演练 |
+| 只校验流程，不因正文格式重跑 | `hydro-platform/automation/src/hydro_platform/card_generators/single_agent.py`、`hydro-platform/automation/src/hydro_platform/card_generation.py`；当前 v2 / PROCESS_VALIDATED | 已实现；提示词要求区分原文与推理，但不声称机器认证科学正确性。旧六 Agent/严格格式要求已失效 |
+| 一篇一个包、旧卡不覆盖、失败可恢复 | `hydro-platform/automation/src/hydro_platform/pipeline.py` 的 `_package_status/run_once`、`hydro-platform/automation/src/hydro_platform/publication.py` | 已实现和回归；真实重复运行无模型调用；无法解释的文件修改保留并报冲突 |
+| 候选→每篇定向精读→回填候选 | `hydro-platform/automation/src/hydro_platform/themes.py` 的 `_run/run_themes`；[真实记录](themes-workflow.md#已完成的真实联调) | 已真实跑通；人确认后才能转正式，未开发自动转正，未生成 idea |
+| 换机不要为了恢复状态重花模型额度 | `hydro-platform/automation/src/hydro_platform/runtime_recovery.py` 的 `recover_runtime`，只对账本地状态，无模型调用路径 | 本轮补齐；新目录实测恢复3篇，第二轮任务零变化，38个原文件未变；不等同于异机安装验收 |
+| 可检查缺哪个依赖 | `hydro-platform/automation/src/hydro_platform/doctor.py` 的 `doctor/_python_probe`，CLI `doctor` | 已有8类基础检查，按配置另查账本/成员映射、Windows计划、Zotero启动路径和项目原生工具，当前12项通过。不启动应用，不是模型/沙箱/科学质量验收 |
+| Zotero未运行或PDF未同步时能继续 | `hydro-platform/automation/src/hydro_platform/zotero_readiness.py`单次启动/有限探测，pipeline与scheduled区分待处理并补查 | 已有受控测试、实际就绪库隔离验证，以及本机未运行时自动启动后继续的完整入口实测；不改偏好/账号、不声明云端同步完成。真实下载延迟仍待验证 |
+| 每日无人值守、错过计划补跑 | `hydro-platform/automation/src/hydro_platform/windows_schedule.py`注册/核对自有任务，`hydro-platform/automation/src/hydro_platform/scheduled.py`控制每日/补跑，固定pythonw入口调用原run_once | 本机按需及09:00到期原流水线成功，随后轻量检查未重跑；三卡跳过/六步复用/模型0。日界线/有限重试/重复另有测试；真实关机、登录、同步等待及定时新增制卡仍待验证 |
+| 砸电脑后只靠仓库、Zotero与重新登录恢复 | `hydro-platform/automation/src/hydro_platform/deployment.py` 与 `hydro-platform/automation/src/hydro_platform/native_deployment.py` 创建项目环境/工具、哈希锁定且不覆盖未知目录；[Python验证](deployment.md)、[PDF工具验证](native-deployment.md) | 部分完成：Python/原生依赖及状态恢复有证据；基础软件准备、异机调度恢复、干净机器完整测试仍缺 |
+| 老师看到谁新增、谁补PDF、系统完成什么及每日进度 | `hydro-platform/automation/src/hydro_platform/activity.py`、`hydro-platform/automation/src/hydro_platform/daily_report.py`、[验收](activities-and-daily-report.md)；run-once前后使用同一快照记录并生成摘要 | 已实现基线、去重、未知身份、系统完成/阻塞、跨日未解决事项与最近运行。真实初始3篇/0新事件，日报自动落盘；实际API没有贡献者字段，因此真实多人身份覆盖尚未证明。每日计划已启用，真实调度验收边界见上行 |
 | 只有明确要求才推 GitHub | 当前运行/主题/恢复路径均不执行 Git 写入；工作区改动尚未提交/推送 | 边界保留。换机能取回成果以实际备份/推送为前提，不能把本地保存冒充远端备份 |
 
 ## 本轮修复的文档偏差

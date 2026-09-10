@@ -2,13 +2,13 @@
 
 统一主题池恢复必须同时取回 themes/_registry.json、changes/、所有主题历史版本及证据包内的精读记录。路径以配置根目录为准；缺失注册表时只允许从完整无分叉的提交链恢复，不能当作空池重新编号。旧BATCH接入与恢复规则见[统一主题池](unified-theme-pool.md)。
 
-当前统一入口：基础Python、Zotero/Codex和本人账号准备好后，运行 `python automation/run.py setup --json`检查，再运行 `setup --apply --json`安装项目依赖、对账并恢复配置中启用的每日计划。不再需要逐条执行所有分步命令。同机新路径已重新安装依赖、恢复3篇并复用主题结果；[证据和未验证范围](workstation-setup.md)。
+当前统一入口：基础Python、Zotero/Codex和本人账号准备好后，在仓库根目录运行 `uv run hydro-platform setup --json`检查，再运行 `uv run hydro-platform setup --apply --json`安装项目依赖、对账并恢复配置中启用的每日计划。不再需要逐条执行所有分步命令。同机新路径已重新安装依赖、恢复3篇并复用主题结果；[证据和未验证范围](workstation-setup.md)。
 
 当前不能仅凭GitHub恢复最新版：本地HEAD仍为6ae9e79，主题、统一流水线、调度和setup等新增模块及依赖锁尚未进入Git跟踪。取回版本必须包含这些源码、锁文件、总配置、模板及共享成果；只克隆旧版本不会出现新命令。提交/推送必须等用户明确要求，不能以自动化或灾备为由自行上传。干净新电脑验收还需要独立环境和本人重新登录，已有同机迁移试验不替代它。
 
 调度增量：已实现 Windows 计划注册、读回核对、停用/卸载与日任务补跑门控。新机安装项目依赖、登录Zotero/Codex、完成recover后，可用 `schedule-install --json` 重建，再查 `schedule-status --json`。本机实际任务按需启动已通过；仍未真实模拟关机/重新登录或干净机器全链路。[验收与前提](cron.md)。
 
-`bootstrap --install --json`创建锁定Python依赖的项目环境，`bootstrap-native --install --json`重建项目PDF工具；三篇真实PDF在项目工具下的读取/沙箱渲染已过。[Python部署](deployment.md) · [PDF工具](native-deployment.md)。不从旧机复制 `.venv` / `.tools`；按锁文件重装，Windows计划另见前述调度入口。基础软件/账号准备和干净新电脑完整验收仍未全部交付。
+共享环境由仓库根 `uv sync --all-packages` 重建；只有需要平台内独立环境时才用 `bootstrap --install --json` 创建锁定Python依赖的项目环境，`bootstrap-native --install --json`重建项目PDF工具；三篇真实PDF在项目工具下的读取/沙箱渲染已过。[Python部署](deployment.md) · [PDF工具](native-deployment.md)。不从旧机复制 `.venv` / `.tools`；共享 `.venv` 用 `uv sync` 重建、平台内环境按锁文件重装，Windows计划另见前述调度入口。基础软件/账号准备和干净新电脑完整验收仍未全部交付。
 
 `doctor --json` 集中只读检查，`recover --json` 不调用模型全量对账。真实新运行目录已恢复3篇完成状态，二次零任务变化；最近一次保护范围扩展到45个文件。[命令与实测范围](runtime-maintenance.md)。
 

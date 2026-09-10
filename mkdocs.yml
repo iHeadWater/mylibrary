@@ -57,7 +57,47 @@ nav:
       - Zotero → NotebookLM 简报: user-guide/zotero-notebooklm.md
       - 文献深度处理: user-guide/literature.md
       - Zotero 配置参考: user-guide/config.md
+  - 科研知识平台:
+      - 概述: hydro-platform/index.md
+      - 上手与运行:
+          - 平台完整操作说明: hydro-platform/platform-operations-guide.md
+          - 操作手册: hydro-platform/operator-manual.md
+          - 一轮运行: hydro-platform/run-once.md
+          - 换机与工作站: hydro-platform/workstation-setup.md
+          - 每日调度（Windows）: hydro-platform/cron.md
+          - 部署与环境: hydro-platform/deployment.md
+          - 原生 PDF 工具: hydro-platform/native-deployment.md
+          - Zotero 就绪: hydro-platform/zotero-readiness.md
+      - 架构与实现:
+          - 架构: hydro-platform/architecture.md
+          - 流程: hydro-platform/flows.md
+          - 自动化代码地图: hydro-platform/automation.md
+          - 任务状态机: hydro-platform/task-state-machine.md
+          - 单 Agent 粗卡: hydro-platform/single-agent-rough-card.md
+          - 运行维护: hydro-platform/runtime-maintenance.md
+          - 恢复: hydro-platform/recovery.md
+          - 权限与成员: hydro-platform/permissions.md
+      - 知识与产出:
+          - 证据包: hydro-platform/evidence-packs.md
+          - 模板资产: hydro-platform/templates.md
+          - 统一主题池: hydro-platform/unified-theme-pool.md
+          - 主题工作流: hydro-platform/themes-workflow.md
+          - 贡献账本与日报: hydro-platform/activities-and-daily-report.md
+      - 配置:
+          - 字段参考: hydro-platform/config.md
+          - 边界与路径规则: hydro-platform/variables.md
+      - 验证与状态:
+          - 验证地图: hydro-platform/tests.md
+          - 工程状态与缺口: hydro-platform/engineering-status.md
+      - 产品与记录:
+          - 产品说明（PRD）: hydro-platform/PRD-zotero-to-evidence-pack.md
+          - 用户故事: hydro-platform/user-stories-zotero-to-evidence-pack.md
+          - 事前验尸（2026-09-08）: hydro-platform/PreMortem-hydro-platform-2026-09-08.md
+          - 技术走查讲解: hydro-platform/technical-walkthrough-explained.md
+          - 导师黑板报: hydro-platform/mentor-blackboard-talk.md
   - 开发:
       - 模块架构: development/architecture.md
       - 贡献指南: development/contributing.md
-      - 决策记录: adr/0001-zotero-linked-file-sync.md
+      - 决策记录:
+          - Zotero 入库使用 linked_file: adr/0001-zotero-linked-file-sync.md
+          - 不统一两套 Zotero 客户端: adr/0002-zotero-two-clients-boundary.md

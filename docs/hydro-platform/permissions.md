@@ -13,10 +13,34 @@
 | 统一主题池合并/拆分 | 用户已允许候选自动演化，无逐次审批 | 全部替代结果保存后提交注册表；历史不删除 | 仅提出CREATE/UPDATE/MERGE/SPLIT及来源/复用选择，不直接写池 | `theme_pool.plan_actions/commit`；正式或历史父主题、重复操作、无效来源/复用拒绝，保留原文件 |
 | 正式主题 | 必须由人确认；专用命令尚未开发 | 无自动转正入口 | 不能自行晋级 | `themes.py` 只发布 candidates |
 | 贡献事件/日报 | 查阅，不作绩效排名 | 建基线、去重、生成摘要 | 不参与 | `activity.py`、`daily_report.py`；无来源身份记 UNKNOWN，损坏/改动冲突保留 |
+| 成员身份映射 | 录入已核实的 Zotero 用户ID；不存密码 | 只读映射，用于事件归属 | 不参与 | `config.py`、`activity.py`；重复ID或成员编号报错，无来源身份不猜 |
 | 依赖环境 | 明确运行 `bootstrap --install` | 仅自有项目环境内安装 | 不参与安装 | `config.py`、`deployment.py`；越界/未知目录/哈希不符拒绝 |
 | PDF原生工具 | 明确运行 `bootstrap-native --install` | 固定HTTPS发布包/哈希→项目工具目录；无全局PATH/权限修改 | 不参与安装 | `native_deployment.py`；越界ZIP/未知目录/文件漂移拒绝执行，doctor只验证 |
 | Windows每日计划 | 操作者可按总配置安装、检查、停用 | 固定入口、当前用户交互令牌，无管理员提升/密码保存 | 不管理计划，只由原流水线按需调用 | `windows_schedule.py` 核对归属与真实定义，`scheduled.py` 日任务/冷却/锁；不修改其他任务 |
 | Git 提交/推送 | 须用户明确授权 | 日常入口不写 Git | 无发布权限 | 无自动提交/推送路径；仓库 ACL 不由平台管理 |
+
+## 成员身份映射
+
+`hydro-platform/members/` 维护稳定的平台成员编号，例如 `STU-001`、`TCH-001` 和 `SYS-CARD-01`。
+
+成员编号用于把 Zotero 私人账号、GitHub 账号和关键贡献事件关联起来。这里只保存必要的身份映射，不保存密码、API Key、邮箱凭据或其他秘密。
+
+当前已确认：每位老师和学生都使用自己的 Zotero 账号；具体成员清单和文件格式待录入真实成员时确定。
+
+现已支持可选的 `members.json`。只填写已核实的实际用户ID，不从用户名或论文作者猜ID。示例格式（不要把示例数据当真实成员）：
+
+```json
+{
+  "schema_version": 1,
+  "members": [
+    {"member_id": "STU-001", "display_name": "实际姓名", "zotero_user_id": 123456}
+  ]
+}
+```
+
+可留空数组或不创建文件。重复ID或成员编号会报错；映射仅用于明确返回的 Zotero 用户ID，不能补造接口没有提供的贡献者。系统身份来自 config 中的 `activity_reporting.system_actor_id`。[操作说明](activities-and-daily-report.md)。
+
+本目录不是学生工作区：不存论文、证据卡或主题，也不构成写入权限控制。当前尚未创建真实 `members.json`；缺失时允许继续运行，不能据此推断已完成多人贡献归属验收。[文档入口](index.md)。
 
 ## 实际保护与限制
 

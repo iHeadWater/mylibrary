@@ -4,18 +4,18 @@
 
 ## 安装和日常使用
 
-在项目根目录的 PowerShell：
+在仓库根目录的 PowerShell：
 
 ```powershell
-python automation/run.py bootstrap --install --json
-.\.venv\Scripts\python.exe automation/run.py bootstrap-native --json
-.\.venv\Scripts\python.exe automation/run.py bootstrap-native --install --json
-.\.venv\Scripts\python.exe automation/run.py doctor --json
+uv run hydro-platform bootstrap --install --json
+uv run hydro-platform bootstrap-native --json
+uv run hydro-platform bootstrap-native --install --json
+uv run hydro-platform doctor --json
 ```
 
 Python 安装见 [deployment.md](deployment.md)。原生工具命令默认只读计划，只有 `--install` 才下载/解压；已有同版本完整安装返回 `REUSED`，不重装。doctor 在选择项目工具时检查全部安装文件指纹和三工具版本，不安装、不调用模型。
 
-安装完成后的日常入口仍是 `python automation/run.py run-once --json`，无需每次安装或验证工具。本文的验证脚本不会进入日常制卡、主题或调度链路。
+安装完成后的日常入口仍是 `uv run hydro-platform run-once --json`，无需每次安装或验证工具。本文的验证脚本不会进入日常制卡、主题或调度链路。
 
 ## 总配置
 
@@ -62,7 +62,7 @@ Python 安装见 [deployment.md](deployment.md)。原生工具命令默认只读
 重复本机无模型验证：
 
 ```powershell
-.\.venv\Scripts\python.exe automation/verify_native_deployment.py --reuse-installed --item-key CEXH4PQA --item-key 7F8QLSNY --item-key JUKFEIFC
+.\.venv\Scripts\python.exe hydro-platform\automation\verify_native_deployment.py --reuse-installed --item-key CEXH4PQA --item-key 7F8QLSNY --item-key JUKFEIFC
 ```
 
 去掉 `--reuse-installed` 会新建独立下载缓存及工具目录，重新下载约42MB。它是显式部署演练，不是日常步骤；报告保留在 `.runtime/native-trials/`，不覆盖旧失败记录。

@@ -1,13 +1,13 @@
 # 环境检查与本地状态恢复
 
-适用版本：2026-09-09。所有路径、共享库和运行参数读取同一个 `config/config.json`。这两个命令不调用模型、不修改 Zotero、不写共享卡片或主题、不提交/推送 Git，也不安装定时任务。
+适用版本：2026-09-09。所有路径、共享库和运行参数读取同一个 `hydro-platform/config/config.json`。这两个命令不调用模型、不修改 Zotero、不写共享卡片或主题、不提交/推送 Git，也不安装定时任务。
 
 ## 日常检查
 
-在项目根目录运行：
+在仓库根目录运行：
 
 ```powershell
-python automation/run.py doctor --json
+uv run hydro-platform doctor --json
 ```
 
 检查主程序 Python、当前单 Agent/本地 PDF 工作流、八类模板来源清单、提示词与输出结构文件、本地任务/快照、Zotero 群组、Codex CLI 登录及 PDF 工具路径、实际读取 PDF 的 Python/pypdf。
@@ -21,8 +21,8 @@ python automation/run.py doctor --json
 先确保仓库成果已从备份取回、Zotero 登录正确账号、共享库和 PDF 已同步。不要为测试删除正在使用的 `.runtime`。
 
 ```powershell
-python automation/run.py recover --dry-run --json
-python automation/run.py recover --json
+uv run hydro-platform recover --dry-run --json
+uv run hydro-platform recover --json
 ```
 
 注意：`recover --dry-run` 会只读访问 Zotero，预览全量对账，但不写文件、不占用运行锁；因此只是瞬时预览。`run-once --dry-run` 则只看本地任务，这两者不同。
@@ -41,7 +41,7 @@ python automation/run.py recover --json
 `ok=true` 是“恢复操作成功”，不表示所有论文都可以制卡；请看 `counts` 中的等待和阻塞状态。恢复后，正常推进仍使用：
 
 ```powershell
-python automation/run.py run-once --json
+uv run hydro-platform run-once --json
 ```
 
 已保存的主题步骤由主题目录及各论文 `readings/` 中的结果记录复用，不依赖恢复日志；`recover` 本身不验证或改写主题。未备份的本地草稿/未完成会话不能靠恢复命令找回。
@@ -49,7 +49,7 @@ python automation/run.py run-once --json
 ## 不破坏当前状态的真实验收
 
 ```powershell
-python automation/verify_runtime_recovery.py
+uv run python hydro-platform/automation/verify_runtime_recovery.py
 ```
 
 脚本在配置运行区下创建一个全新的 `recovery-trials/recovery-check-*` 目录，针对真实 Zotero 连续恢复两次，比较任务是否幂等，以及原任务/快照、证据包和主题文件的哈希是否未变。验收目录和 `verification.json` 保留，便于查看；不清理原运行区，不调用模型。
@@ -62,4 +62,4 @@ python automation/verify_runtime_recovery.py
 
 ## 其他配置文件
 
-所有命令都可显式指定完整配置，例如 `python automation/run.py doctor --config config/config.local.json --json`。`config.local.json` 不会自动加载，也不会与 `config.json` 合并。它是另一份完整总配置，不是只填几个覆盖字段的补丁文件。
+所有命令都可显式指定完整配置，例如 `uv run hydro-platform doctor --config hydro-platform/config/config.local.json --json`。`config.local.json` 不会自动加载，也不会与 `config.json` 合并。它是另一份完整总配置，不是只填几个覆盖字段的补丁文件。

@@ -56,7 +56,7 @@
 
 本次只读检查确认：**7 个完整证据包、8 份已保存的定向精读、4 个精读回填候选主题**。同一份精读可能被多个主题引用，不能把引用次数当成精读文件数。
 
-结果从 [统一主题入口](../themes/index.md) 查看。已有主题为：
+结果从 `hydro-platform/themes/index.md` 查看。已有主题为：
 
 1. 洪水—电力—排水互依系统的时变双向反馈与静态级联近似边界。
 2. 城市洪涝级联关系的语义—证据—量化方法匹配：从文本事件网络到可检验机制。
@@ -81,9 +81,10 @@
 
 以下是逻辑目录树；自动生成的编号目录按同一种规则管理，不逐个重复说明。
 
+平台自身不再保留 README 文件；全部文档集中在仓库根的 `docs/hydro-platform/`，本说明是其中的综合入口。Python 环境是 uv 工作区的共享 `.venv`，位于仓库根而不是平台目录内。
+
 ```text
 hydro-platform/
-├─ README.md                      简要入口
 ├─ config/                        总配置与字段解释
 ├─ evidence-packs/                统一论文证据包
 ├─ themes/                        统一主题池
@@ -103,34 +104,33 @@ hydro-platform/
 ├─ members/                       可选的成员身份映射
 ├─ activity/                      共享关键贡献账本
 ├─ reports/daily/                 每日摘要
-├─ documentation/                 操作、架构、设计及验收文档
+├─ pyproject.toml                 平台包与命令入口声明（uv workspace 成员）
 ├─ .runtime/                      本机任务、运行记录、草稿和临时文件
-├─ .venv/                         本项目 Python 环境
 ├─ .tools/                        本项目 PDF 工具
 └─ .git/                          Git 本地历史与远端信息
 ```
 
 | 文件夹 | 谁、什么时候使用 | 是否进入 Git / 是否手工维护 |
 |---|---|---|
-| [config/](../config/README.md) | 操作者换机、改模型、路径、代理、调度时 | 团队配置提交；`config.local.json` 不提交。允许编辑配置，不存密码 |
-| [evidence-packs/](../evidence-packs/README.md) | AI 做主题输入，老师/学生必要时查看论文分析 | 共享成果提交；由程序维护，不随便改名或移动 |
-| [themes/](../themes/README.md) | 老师/学生查看研究问题、进展、边界和证据 | 共享成果提交；主要读 `index.md` 链接到的当前版本 |
-| [templates/](../templates/README.md) | 模板维护者调整科研分析要求 | 提交；模板有版本与来源，不能仅改正文而忽略清单 |
-| [automation/](../automation/README.md) | 日常通过入口运行，开发者维护实现 | 源码、测试、依赖锁提交；日常不用改源码 |
-| [members/](../members/README.md) | 需要把实际 Zotero 用户 ID 映射到成员编号时 | 可提交必要映射；不是学生工作区，不赋予权限 |
-| [activity/](../activity/README.md) | 程序记录论文新增、补 PDF、卡片完成和阻塞事件 | 共享账本提交；不手改哈希或把它当临时缓存 |
-| [reports/](../reports/README.md) / [daily/](../reports/daily/README.md) | 老师查看当天新增、完成、等待和阻塞 | 摘要提交；由程序刷新，不在生成文件里直接写个人笔记 |
-| [documentation/](architecture.md) | 初次使用、交接、排错及维护时 | 提交；本说明是综合入口，专项文档提供细节 |
+| `hydro-platform/config/` | 操作者换机、改模型、路径、代理、调度时；[字段说明](config.md) | 团队配置提交；`config.local.json` 不提交。允许编辑配置，不存密码 |
+| `hydro-platform/evidence-packs/` | AI 做主题输入，老师/学生必要时查看论文分析；[说明](evidence-packs.md) | 共享成果提交；由程序维护，不随便改名或移动 |
+| `hydro-platform/themes/` | 老师/学生查看研究问题、进展、边界和证据；[说明](unified-theme-pool.md) | 共享成果提交；主要读 `index.md` 链接到的当前版本 |
+| `hydro-platform/templates/` | 模板维护者调整科研分析要求；[说明](templates.md) | 提交；模板有版本与来源，不能仅改正文而忽略清单 |
+| `hydro-platform/automation/` | 日常通过入口运行，开发者维护实现；[说明](automation.md) | 源码、测试、依赖锁提交；日常不用改源码 |
+| `hydro-platform/members/` | 需要把实际 Zotero 用户 ID 映射到成员编号时；[说明](permissions.md) | 可提交必要映射；不是学生工作区，不赋予权限 |
+| `hydro-platform/activity/` | 程序记录论文新增、补 PDF、卡片完成和阻塞事件；[说明](activities-and-daily-report.md) | 共享账本提交；不手改哈希或把它当临时缓存 |
+| `hydro-platform/reports/daily/` | 老师查看当天新增、完成、等待和阻塞；[说明](activities-and-daily-report.md) | 摘要提交；由程序刷新，不在生成文件里直接写个人笔记 |
+| `docs/hydro-platform/` | 初次使用、交接、排错及维护时；[架构](architecture.md) | 提交；本说明是综合入口，专项文档提供细节 |
 | `.runtime/` | 程序记录状态，排错时按终端返回的路径查看 | 不提交。部分内容可重建，但未发布草稿不能凭空找回，不能整目录随意清空 |
-| `.venv/` | 程序使用项目专用 Python 和依赖 | 不提交、不从旧电脑搬运，用 `setup --apply` 重建 |
+| `.venv/`（仓库根，不在平台目录内） | 程序使用 uv 工作区共享的 Python 和依赖 | 不提交、不从旧电脑搬运，用仓库根的 `uv sync --all-packages` 重建 |
 | `.tools/` | 程序使用 Poppler 的 PDF 信息和页面渲染工具 | 不提交，用锁文件重建，不需要改系统 PATH |
 | `.git/` | Git 管理版本和远端 | Git 自己管理；不是普通知识文件夹，不手工修改 |
 
 根目录另外几个文件：
 
-- [pyproject.toml](../pyproject.toml)：Python 项目元数据、入口和版本范围。
-- [.python-version](../.python-version)：Python 版本提示；安装器还会检查依赖锁的要求。
-- [.gitignore](../.gitignore)：排除运行区、环境、私人配置和证据包中的 PDF 等。
+- `hydro-platform/pyproject.toml`：Python 项目元数据、入口和版本范围。
+- `hydro-platform/.python-version`：Python 版本提示；安装器还会检查依赖锁的要求。
+- `hydro-platform/.gitignore`：排除运行区、环境、私人配置和证据包中的 PDF 等。
 - `.venv.bootstrap.lock`：依赖安装锁；有锁文件不必然表示进程仍在运行，不要据此直接删除。
 
 **没有 `students/` 目录。** 老师和学生共同使用证据包与主题池，不按姓名复制知识。
@@ -139,13 +139,13 @@ hydro-platform/
 
 | 位置 | 作用 | 普通操作者要做什么 |
 |---|---|---|
-| [run.py](../automation/run.py) | 用户命令入口，加载 `src` 下代码并进入 `cli.py` | 日常运行 `python automation/run.py ...` |
-| [scheduled_run.py](../automation/scheduled_run.py) | Windows 计划固定入口，进入相同调度逻辑 | 由计划调用，不手写第二套流水线 |
+| `hydro-platform/automation/run.py` | 用户命令入口，加载 `src` 下代码并进入 `cli.py` | 日常在仓库根运行 `uv run hydro-platform ...`（旧式直接调用脚本的写法已废弃） |
+| `hydro-platform/automation/scheduled_run.py` | Windows 计划固定入口，进入相同调度逻辑 | 由计划调用，不手写第二套流水线 |
 | `src/hydro_platform/` | 扫描、任务、制卡、主题、恢复等实现 | 排错/开发才查看，详见第 12 节 |
 | `src/hydro_platform/card_generators/` | 单 Agent 包装、Codex PDF/文本调用、代理和进度控制 | 模型配置在 `config`，不用为换路径改这些代码 |
-| [prompts/](../automation/prompts/README.md) | 当前 `evidence-card-generation-v8.md` 和 `pdf-local-reading-v1.md` 等 | 当前文件由配置选定，旧 v3–v7、六角色提示词不是每日运行步骤 |
-| [schemas/](../automation/schemas/README.md) | JSON 传输和证据清单协议 | 是程序接口，不是强制每张 Markdown 的标题、表格或固定措辞 |
-| [setup/](../automation/setup/README.md) | `dependencies.lock.json`、`native-tools.lock.json` | 安装按来源、版本和 SHA-256 校验，不直接运行锁文件 |
+| `hydro-platform/automation/prompts/` | 当前 `evidence-card-generation-v8.md` 和 `pdf-local-reading-v1.md` 等；[提示词](automation.md#提示词) | 当前文件由配置选定，旧 v3–v7、六角色提示词不是每日运行步骤 |
+| `hydro-platform/automation/schemas/` | JSON 传输和证据清单协议；[数据结构与流程检查](automation.md#数据结构与流程检查) | 是程序接口，不是强制每张 Markdown 的标题、表格或固定措辞 |
+| `hydro-platform/automation/setup/` | `dependencies.lock.json`、`native-tools.lock.json`；[安装配置](deployment.md) | 安装按来源、版本和 SHA-256 校验，不直接运行锁文件 |
 | `tests/` | 单元与受控集成测试 | 开发改动后回归；测试通过不等于真实网络或科学质量通过 |
 | `verify_*.py` | 安装、恢复、调度等专项演练工具 | 非日常入口；有的下载依赖，有的创建/触发调度探针，不能当只读体检随意运行 |
 
@@ -164,7 +164,7 @@ hydro-platform/
 | `dataset-data-product` | `07_dataset-data-product.md` | 数据集/数据产品 |
 | `software-model-code` | `08_software-model-code.md` | 软件、模型、代码 |
 
-`_catalog.json` 保存来源仓库/提交/文件、来源 blob、本地版本和模板内容哈希。当前本地模板版本是 `1.1.0`。这里只复用并适配同门的模板，没有接入对方的程序工作流；来源记录详见 [模板说明](../templates/evidence-cards/README.md)。
+`_catalog.json` 保存来源仓库/提交/文件、来源 blob、本地版本和模板内容哈希。当前本地模板版本是 `1.1.0`。这里只复用并适配同门的模板，没有接入对方的程序工作流；来源记录详见 `hydro-platform/templates/evidence-cards/_catalog.json`，[模板说明](templates.md)。
 
 `templates/themes/` 的四组内容：
 
@@ -282,7 +282,7 @@ themes/
 
 ### 4.1 启动与配置
 
-`automation/run.py → cli.py → config.py`：解析子命令与总配置。默认读取仓库的 `config/config.json`；显式 `--config` 可选择另一份完整配置。
+`hydro-platform/automation/run.py → cli.py → config.py`：解析子命令与总配置。默认读取平台的 `hydro-platform/config/config.json`；显式 `--config` 可选择另一份完整配置。
 
 配置包含路径、模型、代理、时间限制、共享库和调度。来源指纹、任务状态、科研内容不是配置项，不应人工塞进总配置。`config.local.json` 不自动发现、不与默认配置合并。
 
@@ -374,20 +374,19 @@ themes/
 
 不需要运行 Python、安装依赖或消耗模型额度：
 
-- 看方向和研究进展：打开 [themes/index.md](../themes/index.md)，进入当前 `revised.md`。
+- 看方向和研究进展：打开 `hydro-platform/themes/index.md`，进入当前 `revised.md`。
 - 看论断来自哪里：沿修订主题末尾的“粗卡 / 定向精读”链接查看。
 - 看单篇通用分析：打开对应证据包的 `card.md`。
-- 看运行进度和阻塞：打开 [reports/daily](../reports/daily/README.md) 对应日期的 Markdown。
+- 看运行进度和阻塞：打开 `hydro-platform/reports/daily/` 下对应日期的 Markdown；[事件与日报](activities-and-daily-report.md)。
 
 GitHub 展示的是已推送版本，不会实时显示另一台电脑刚写出的本地成果。
 
 ### 5.2 已安装好的原制卡机
 
-先将经人工筛选的论文和原 PDF 放入目标 Zotero 群组，在本机完成同步。进入仓库根目录，例如原电脑为：
+先将经人工筛选的论文和原 PDF 放入目标 Zotero 群组，在本机完成同步。在仓库根目录运行：
 
 ```powershell
-Set-Location 'E:\phd\hydro-platform'
-python automation/run.py run-once --json
+uv run hydro-platform run-once --json
 ```
 
 这是一轮“扫描 → 制卡 → 主题 → 报告”。不用先跑 `scan`、`tasks-sync`、`packages-sync`，也不用每加入一篇就修改配置中的数量。
@@ -396,10 +395,10 @@ python automation/run.py run-once --json
 
 ### 5.3 使用另一台电脑的私人配置
 
-第 6 节创建完整 `config/config.local.json` 后，所有命令都明确选择它：
+第 6 节创建完整 `hydro-platform/config/config.local.json` 后，所有命令都明确选择它：
 
 ```powershell
-python automation/run.py run-once --config config/config.local.json --json
+uv run hydro-platform run-once --config hydro-platform/config/config.local.json --json
 ```
 
 本文未带 `--config` 的命令默认指原团队配置；不要在测试机上忽略这一点。
@@ -407,7 +406,7 @@ python automation/run.py run-once --config config/config.local.json --json
 ### 5.4 只继续主题
 
 ```powershell
-python automation/run.py themes-run --config config/config.local.json --json
+uv run hydro-platform themes-run --config hydro-platform/config/config.local.json --json
 ```
 
 只处理当前已有的有效粗卡，不替缺卡论文生成粗卡。它可能复用或新建主题步骤，并非只读操作。
@@ -446,10 +445,10 @@ Set-Location 'hydro-platform'
 在新仓库根目录执行；已有私人配置不会被本示例覆盖：
 
 ```powershell
-if (-not (Test-Path -LiteralPath 'config/config.local.json')) {
-    Copy-Item -LiteralPath 'config/config.json' -Destination 'config/config.local.json'
+if (-not (Test-Path -LiteralPath 'hydro-platform/config/config.local.json')) {
+    Copy-Item -LiteralPath 'hydro-platform/config/config.json' -Destination 'hydro-platform/config/config.local.json'
 }
-notepad config/config.local.json
+notepad hydro-platform/config/config.local.json
 ```
 
 只修改对应字段，保留 JSON 其余内容。JSON 不支持注释，布尔值用 `true/false`，空值用 `null`；Windows 绝对路径建议写为 `D:/实际目录/程序.exe`，避免单个反斜杠转义错误。
@@ -469,7 +468,7 @@ notepad config/config.local.json
 | `theme_pipeline.research_goal` | `null` 表示无预设目标；也可填写研究目标文本，但会改变主题输入 |
 | `generation_timeout_seconds` 与 `connection_guard.idle_timeout_seconds` | 当前均 `1500` 秒；是每次模型步骤的保护，不是整轮预计时长 |
 | `progress.heartbeat_interval_seconds` | `60`，每分钟等待提示 |
-| `deployment` 和 PDF 工具路径 | 先保留 `.venv`、`.tools/poppler` 的配套相对路径，由 setup 重建 |
+| `deployment` 和 PDF 工具路径 | 先保留 `../.venv`、`.tools/poppler` 的配套相对路径，由 `uv sync --all-packages` / setup 重建 |
 
 代理对象位于 `card_generator` 内。例如新电脑 HTTP/Mixed 监听端口实际为 7890 时：
 
@@ -485,7 +484,7 @@ notepad config/config.local.json
 
 代理配置只影响本平台启动的 Codex 子进程，不修改系统、VPN 或桌面客户端设置；也不自动替 Python 下载依赖、Git 和 Zotero 配置网络。不要填写节点订阅链接、密码或令牌。
 
-完整字段解释见 [config/README.md](../config/README.md)。
+完整字段解释见[总配置字段说明](config.md)。
 
 ### 6.4 权限分别准备
 
@@ -509,8 +508,8 @@ notepad config/config.local.json
 以下命令均在新仓库根目录执行：
 
 ```powershell
-python automation/run.py setup --config config/config.local.json --json
-python automation/run.py setup --apply --config config/config.local.json --json
+uv run hydro-platform setup --config hydro-platform/config/config.local.json --json
+uv run hydro-platform setup --apply --config hydro-platform/config/config.local.json --json
 ```
 
 第一条只读预检；第二条依次进行配置绑定、基础程序/登录/群组检查、项目依赖安装、环境检查、任务恢复和按配置处理调度。关闭调度时预期得到 `READY_MANUAL`。
@@ -522,25 +521,25 @@ setup 本身不调用科研模型，但启用调度后将来可能触发模型�
 安装后先检查环境：
 
 ```powershell
-python automation/run.py doctor --config config/config.local.json --json
+uv run hydro-platform doctor --config hydro-platform/config/config.local.json --json
 ```
 
 用共享库中已存在的 `CEXH4PQA` 检查本机 PDF 沙箱读取和渲染，不调用模型：
 
 ```powershell
-python automation/run.py pdf-direct-read-trial --item-key CEXH4PQA --preflight-only --config config/config.local.json --json
+uv run hydro-platform pdf-direct-read-trial --item-key CEXH4PQA --preflight-only --config hydro-platform/config/config.local.json --json
 ```
 
 需要单独核对账号、模型和网络能否完成一次最小调用时，可执行下列命令；它会使用模型额度，但不制卡：
 
 ```powershell
-python automation/run.py generator-smoke-test --config config/config.local.json --json
+uv run hydro-platform generator-smoke-test --config hydro-platform/config/config.local.json --json
 ```
 
 最后运行：
 
 ```powershell
-python automation/run.py run-once --config config/config.local.json --json
+uv run hydro-platform run-once --config hydro-platform/config/config.local.json --json
 ```
 
 原来的 7 张粗卡应复用；主题输入不变也应复用。**复用了旧成果，只证明恢复路径，不证明这台电脑已经生成新卡。** 要测试真正制卡，由用户往群组加入一篇带原始 PDF 的新论文，再运行；测试期间避免原制卡机同时处理同一篇。
@@ -554,7 +553,7 @@ Zotero 个人“我的文库”不是另一种可直接填写的群组 ID，当�
 <a id="commands"></a>
 ## 7. 命令速查与副作用
 
-所有下表命令使用前缀 `python automation/run.py`。使用私人配置时在子命令后追加 `--config config/config.local.json --json`；默认配置则用 `--json`。带 `--item-key` 的位置填写 Zotero **父条目 Key**，不是附件 Key、DOI 或标题。
+所有下表命令使用前缀 `uv run hydro-platform`，在仓库根目录运行。使用私人配置时在子命令后追加 `--config hydro-platform/config/config.local.json --json`；默认配置则用 `--json`。带 `--item-key` 的位置填写 Zotero **父条目 Key**，不是附件 Key、DOI 或标题。
 
 ### 7.1 日常、安装与诊断
 
@@ -595,7 +594,7 @@ Zotero 个人“我的文库”不是另一种可直接填写的群组 ID，当�
 | `evidence-generate-trial --item-key CEXH4PQA` | 对指定论文进行制卡试运行 | 调用模型，写本机试运行结果，不替换正式卡 |
 | `pdf-direct-read-trial --item-key CEXH4PQA` | 独立阅读实验，不带 preflight-only | 调用模型，写报告，不是正式制卡 |
 | `evidence-draft-export --draft PATH` | 查看/导出失败后保留的草稿 | 无模型，写预览，不把任意草稿强行认定正式成果；PATH 用实际失败返回值 |
-| `bootstrap` / `bootstrap --install` | Python 依赖预览 / 安装 | 无模型；只有 install 安装到受管项目环境 |
+| `bootstrap` / `bootstrap --install` | Python 依赖预览 / 校验或安装 | 无模型；环境是仓库根共享 `.venv` 时只校验并提示 `uv sync`，指向平台内环境时才按锁安装 |
 | `bootstrap-native` / `bootstrap-native --install` | PDF 工具预览 / 安装 | 无模型；只有 install 下载并校验项目工具 |
 
 `evidence-generate --retry-quality-failed` 是历史质量失败任务的显式重试选项，不是普通网络失败的一键万能修复，也不会取消来源/完整旧卡保护。
@@ -688,7 +687,7 @@ Zotero 个人“我的文库”不是另一种可直接填写的群组 ID，当�
 如果只是要看保留的草稿，使用实际错误返回的路径替换 `PATH`：
 
 ```powershell
-python automation/run.py evidence-draft-export --draft PATH --config config/config.local.json --json
+uv run hydro-platform evidence-draft-export --draft PATH --config hydro-platform/config/config.local.json --json
 ```
 
 不要直接运行一个 JSON 文件路径。要阅读报告可用编辑器或 PowerShell `Get-Content -LiteralPath '实际报告路径' -Raw -Encoding UTF8`。
@@ -707,7 +706,7 @@ python automation/run.py evidence-draft-export --draft PATH --config config/conf
 原制卡机默认配置示例：
 
 ```powershell
-python automation/run.py schedule-status --config config/config.json --json
+uv run hydro-platform schedule-status --config hydro-platform/config/config.json --json
 ```
 
 ### 暂停原制卡机
@@ -715,7 +714,7 @@ python automation/run.py schedule-status --config config/config.json --json
 先在**这个计划实际绑定的配置**中将 `scheduler.enabled` 改为 `false`，再按原绑定执行：
 
 ```powershell
-python automation/run.py schedule-install --config config/config.json --json
+uv run hydro-platform schedule-install --config hydro-platform/config/config.json --json
 ```
 
 暂停影响之后的新轮次，不会中断已在处理的论文。新电脑自己的 `config.local.json` 设为 false，不能暂停旧电脑的任务。
@@ -733,7 +732,7 @@ python automation/run.py schedule-install --config config/config.json --json
 
 代码、模板、依赖锁、非敏感团队配置、证据包、主题及历史、成员必要映射、关键贡献账本、日报和文档。
 
-**不上传：**原 PDF、账号凭据/令牌、`.runtime`、`.venv`、`.tools`、`config/config.local.json`。现有忽略规则不等于任何位置的新敏感文件都自动安全，提交前仍须检查。
+**不上传：**原 PDF、账号凭据/令牌、`.runtime`、仓库根 `.venv`、`.tools`、`hydro-platform/config/config.local.json`。现有忽略规则不等于任何位置的新敏感文件都自动安全，提交前仍须检查。
 
 ### 本地保存与 GitHub 的区别
 
@@ -826,7 +825,7 @@ git pull --ff-only
 项目现有回归测试可在环境已安装时运行：
 
 ```powershell
-.venv/Scripts/python.exe -m unittest discover -s automation/tests -q
+.venv/Scripts/python.exe -m unittest discover -s hydro-platform/automation/tests -q
 ```
 
 ### 12.3 已验证、未验证和已知限制

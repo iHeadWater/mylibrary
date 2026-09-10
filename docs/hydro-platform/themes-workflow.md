@@ -7,8 +7,8 @@
 ## 操作
 
 ```powershell
-Set-Location 'E:\phd\hydro-platform'
-python automation/run.py run-once --json
+# 在仓库根目录运行
+uv run hydro-platform run-once --json
 ```
 
 完整入口：扫描 Zotero → 已有卡跳过/缺卡生成 → 候选发现 → 各主题各论文定向精读 → 修订候选。制卡有失败、阻塞或限额延后时，不用临时不完整集合反复造新主题批次。
@@ -16,7 +16,7 @@ python automation/run.py run-once --json
 只对现有粗卡继续主题流程（不扫描 Zotero、不重制粗卡）：
 
 ```powershell
-python automation/run.py themes-run --json
+uv run hydro-platform themes-run --json
 ```
 
 `themes-run --dry-run --json` 只读预览，不写文件、不访问 Zotero、不调用模型。真实精读需要 Zotero 已同步原始 PDF、已有任务清单、Codex 订阅账号可用。换机缺少任务时先按恢复手册执行 tasks-sync。
@@ -55,7 +55,7 @@ evidence-packs/EV-<父Key>-<题名>/
 
 ## 总配置
 
-config/config.json 的 theme_pipeline：
+`hydro-platform/config/config.json` 的 theme_pipeline：
 
 | 字段 | 作用 |
 |---|---|
@@ -128,6 +128,6 @@ paths.themes_dir / evidence_packs_dir / logs_dir / lock_file 控制保存位置�
 - 完成记录：.runtime/logs/theme-runs/cd81b063d8a146dcbbb56c00c17a109e.json；恢复轮保存5个新步骤、复用1个发现步骤。共享 completion.json 标记本批完成，但 formal_confirmation=null。
 - 再次 themes-run：0.05秒，model_call_count=0、reused_step_count=6、saved_step_count=0。
 - 完整 run-once 真实复跑：1.14秒，3张旧卡全跳过，主题复用6步，模型调用0，status=COMPLETED、阻塞/失败均为0。记录：.runtime/logs/pipeline-runs/20260908T181151-35d8ee42af5f4dce806d9ccc2d0c9956.json。
-- 原粗卡、原证据包清单/审计未覆盖；confirmed 仍仅有 README。未生成 idea，未提交或推送 Git。
+- 原粗卡、原证据包清单/审计未覆盖；`hydro-platform/themes/confirmed/` 仍为空，没有正式主题。未生成 idea，未提交或推送 Git。
 
-[本批结果入口](../themes/candidates/BATCH-ae9692ecedb0a052a607/index.md)。两份 revised.md 才是本轮最终应看的修订候选，initial.md 留作对照。
+`hydro-platform/themes/candidates/BATCH-ae9692ecedb0a052a607/index.md`。两份 revised.md 才是本轮最终应看的修订候选，initial.md 留作对照。

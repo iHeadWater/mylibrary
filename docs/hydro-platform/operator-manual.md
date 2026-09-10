@@ -2,7 +2,7 @@
 
 ## 1. 手册用途
 
-最新完整运行 `f3463b8326604f08b843c8185f6e4954` 已完成：本轮补齐 3 张粗卡、跳过已有 4 张；实际 7 个证据包均有有效正文与生成记录，失败/阻塞/等待/延后为 0。统一池以 7 篇文献形成当前 4 个精读回填候选主题，成果入口为 [themes/index.md](../themes/index.md)。整轮约 81 分 35 秒，其中主题约 53 分 19 秒；没有自动转正式主题。下方“四个完成、三个占位”是此次成功运行前的历史检查，不是当前缺卡状态。[另一台电脑的手动复现步骤](workstation-setup.md#另一台-windows-电脑的手动复现)。
+最新完整运行 `f3463b8326604f08b843c8185f6e4954` 已完成：本轮补齐 3 张粗卡、跳过已有 4 张；实际 7 个证据包均有有效正文与生成记录，失败/阻塞/等待/延后为 0。统一池以 7 篇文献形成当前 4 个精读回填候选主题，成果入口为 `hydro-platform/themes/index.md`。整轮约 81 分 35 秒，其中主题约 53 分 19 秒；没有自动转正式主题。下方“四个完成、三个占位”是此次成功运行前的历史检查，不是当前缺卡状态。[另一台电脑的手动复现步骤](workstation-setup.md#另一台-windows-电脑的手动复现)。
 
 2026-09-09 最新设置：等待心跳每 60 秒一次；单篇正式制卡总时限与无进展时限同时改为 1500 秒（25 分钟）。真实工具事件、保存结果和错误仍立即报告；下一次启动原命令生效，不热更新现有进程。代理、客户端、模型、冷却与重试次数均不改，独立 PDF 直读实验时限仍单独配置。
 
@@ -12,27 +12,27 @@
 
 整轮提示已修正：`run-once` 结束时显示独立的“整轮汇总”，分列新完成、恢复、跳过、失败、阻塞、等待、延后及未完成条目和主题状态。历史运行 `cc8160aca25e4d55b44f5647941d2b8e` 曾误显示“[保存] 失败”；实际是 WHZED3YE 新卡成功、FD24WF92 超时、两篇冷却延后。当时四张正式粗卡、三张占位卡；后续成功运行已补齐三篇，原历史记录未追改。
 
-2026-09-09 子进程代理：总配置新增 `card_generator.proxy`，本机已填 `http://127.0.0.1:7897` 并启用。只传给本平台启动的 Codex CLI，不改系统/Clash/客户端设置，不重启客户端。制卡、主题与最小调用检查共用；原 `run-once --json` 命令不变。关掉 `proxy.enabled` 可恢复原来的环境继承方式；换机检查监听端口。`generator-preflight --json` 的 `proxy` 是配置说明，不代表已经验证模型连接。验收：553 项自动化测试通过，本机预检通过；Codex 个人配置文件哈希未变。没有重新制卡、调用真实模型或验证长期网络稳定性。[字段与隔离边界](../config/README.md#codex-子进程独立代理)。
+2026-09-09 子进程代理：总配置新增 `card_generator.proxy`，本机已填 `http://127.0.0.1:7897` 并启用。只传给本平台启动的 Codex CLI，不改系统/Clash/客户端设置，不重启客户端。制卡、主题与最小调用检查共用；原 `run-once --json` 命令不变。关掉 `proxy.enabled` 可恢复原来的环境继承方式；换机检查监听端口。`generator-preflight --json` 的 `proxy` 是配置说明，不代表已经验证模型连接。验收：553 项自动化测试通过，本机预检通过；Codex 个人配置文件哈希未变。没有重新制卡、调用真实模型或验证长期网络稳定性。[字段与规则](config.md#codex-子进程独立代理)。
 
-主题现已改为统一文献池与主题池：日常仍用 `python automation/run.py run-once --json`，结果统一看 [themes/index.md](../themes/index.md)。候选支持自动更新、合并、拆分与精读复用；正式主题不自动覆盖。旧batch只保留历史。旧成果已实际迁移，无需重读；需要在其他副本仅迁移时用 `themes-run --migrate-only --json`，只读预览仍用 `themes-run --dry-run --json`。[详细规则与验收](unified-theme-pool.md)。下方旧batch入口记录为历史，不再是主要阅读入口。
+主题现已改为统一文献池与主题池：日常仍用 `uv run hydro-platform run-once --json`，结果统一看 `hydro-platform/themes/index.md`。候选支持自动更新、合并、拆分与精读复用；正式主题不自动覆盖。旧batch只保留历史。旧成果已实际迁移，无需重读；需要在其他副本仅迁移时用 `themes-run --migrate-only --json`，只读预览仍用 `themes-run --dry-run --json`。[详细规则与验收](unified-theme-pool.md)。下方旧batch入口记录为历史，不再是主要阅读入口。
 
 Zotero就绪等待已接入原run-once与每日任务：缺失时按配置单次启动，已有进程不重启，默认最多等120秒。待PDF/延后项不再误记为全部完成，而是由调度有限补查；字段和真实验收边界见[启动与等待手册](zotero-readiness.md)。doctor仍只读，不代启动应用。
 
-每日计划已在本机启用：09:00日常处理，30分钟轻量唤醒检查、登录后补最近到期一轮；成功后日内跳过，失败60分钟冷却、每个日任务最多3次。Windows用户必须登录，Zotero需可用。`python automation/run.py schedule-status --json` 看实际定义/状态，`schedule-plan`预览，`schedule-install`按配置注册/更新，`schedule-remove`明确卸载。配置改为enabled=false可停用新轮次。完整步骤和实测范围见 [调度手册](cron.md)。本机按需启动真实任务已成功，不冒充完成关机/登录恢复验收。
+每日计划已在本机启用：09:00日常处理，30分钟轻量唤醒检查、登录后补最近到期一轮；成功后日内跳过，失败60分钟冷却、每个日任务最多3次。Windows用户必须登录，Zotero需可用。`uv run hydro-platform schedule-status --json` 看实际定义/状态，`schedule-plan`预览，`schedule-install`按配置注册/更新，`schedule-remove`明确卸载。配置改为enabled=false可停用新轮次。完整步骤和实测范围见 [调度手册](cron.md)。本机按需启动真实任务已成功，不冒充完成关机/登录恢复验收。
 
-项目依赖安装已可运行：`python automation/run.py bootstrap --json` 只读计划，`bootstrap --install --json` 创建项目独立环境，`bootstrap-native --install --json` 安装项目PDF工具。当前读取器使用 `.venv/Scripts/python.exe` 与 `.tools/poppler/Library/bin/`，原日常命令不变；旧解释器/工具保留。无模型的独立验证不是日常附加步骤。[Python安装](deployment.md) · [PDF工具、字段与失败处理](native-deployment.md)。每日计划另行注册。
+项目依赖安装已可运行：`uv run hydro-platform bootstrap --json` 只读计划，`bootstrap --install --json` 在共享环境下只校验、只有配置指向平台内环境时才创建项目独立环境，`bootstrap-native --install --json` 安装项目PDF工具。当前读取器使用 `../.venv/Scripts/python.exe`（uv 工作区共享的仓库根 `.venv`，由 `uv sync --all-packages` 管理）与 `.tools/poppler/Library/bin/`，原日常命令不变；旧解释器/工具保留。无模型的独立验证不是日常附加步骤。[Python安装](deployment.md) · [PDF工具、字段与失败处理](native-deployment.md)。每日计划另行注册。
 
-现在可统一执行：`python automation/run.py setup --json`只读预检，`setup --apply --json`自动按顺序完成上述项目安装、环境检查、运行状态恢复及配置中启用的每日计划。只改总配置、不必记分步顺序；失败看failed_step，同命令可继续。基础软件和私人账号仍需本人准备。[完整说明及新路径验收](workstation-setup.md)。日常命令仍是run-once。
+现在可统一执行：`uv run hydro-platform setup --json`只读预检，`setup --apply --json`自动按顺序完成上述项目安装、环境检查、运行状态恢复及配置中启用的每日计划。只改总配置、不必记分步顺序；失败看failed_step，同命令可继续。基础软件和私人账号仍需本人准备。[完整说明及新路径验收](workstation-setup.md)。日常命令仍是run-once。
 
 2026-09-09 关键事件/日报更新：run-once 已自动记录新增论文、PDF、卡片完成与阻塞；日报保存到 reports/daily/YYYY-MM-DD.md。不调用额外AI，不把首次启用前的历史文献计入当天贡献。可用 activity-sync / daily-report 分别维护；当前本地接口不提供贡献者字段时标记未知。[操作与边界](activities-and-daily-report.md)。
 
-2026-09-09 运行维护补充：`python automation/run.py doctor --json` 集中检查环境；`python automation/run.py recover --json` 只对账恢复任务与扫描基线，不调用 AI。安全验收使用全新运行目录，不删除原状态。完整说明见 [环境检查与恢复](runtime-maintenance.md)，整体剩余工作见 [工程化状态](engineering-status.md)。
+2026-09-09 运行维护补充：`uv run hydro-platform doctor --json` 集中检查环境；`uv run hydro-platform recover --json` 只对账恢复任务与扫描基线，不调用 AI。安全验收使用全新运行目录，不删除原状态。完整说明见 [环境检查与恢复](runtime-maintenance.md)，整体剩余工作见 [工程化状态](engineering-status.md)。
 
 2026-09-09 更新：已接入「粗卡 → 候选主题 → 原始 PDF 定向精读 → 回填修订」；操作和保存位置详见 [主题工作流](themes-workflow.md)。`run-once --json` 在现配置下自动继续主题流程，`themes-run --json` 单独处理已有粗卡。模板只指导写作，不用正文格式或标签卡住保存。
 
 本手册后面的旧验收记录保留历史错误码和旧状态；其中关于“归因格式/标题层级/模板结构不符而拦截”的旧说明已被 [当前保存规则](single-agent-rough-card.md) 取代，不能作为现流程操作要求。
 
-主题真实联调已通过：现有3篇→2个候选→3份原始PDF定向精读→2个修订候选；完整 run-once 再跑1.14秒、3张旧卡跳过、主题复用6步、模型调用0。[查看修订结果入口](../themes/candidates/BATCH-ae9692ecedb0a052a607/index.md)。这是流程验收，不代表科学质量被独立验证，未自动转正式主题、未推送 Git。
+主题真实联调已通过：现有3篇→2个候选→3份原始PDF定向精读→2个修订候选；完整 run-once 再跑1.14秒、3张旧卡跳过、主题复用6步、模型调用0。`hydro-platform/themes/candidates/BATCH-ae9692ecedb0a052a607/index.md`。这是流程验收，不代表科学质量被独立验证，未自动转正式主题、未推送 Git。
 
 本手册记录 `hydro-platform` 当前真正可以执行的命令、预期结果、异常处理和已完成的真实验收。它是持续维护的操作入口：以后每新增或修改一项自动化能力，都必须同步更新这里，不能只保留在聊天记录中。
 
@@ -61,24 +61,24 @@ US-07B1 和模板接入已有真实验收。历史单调用卡质量未达目标
 - Zotero Desktop 正在运行；
 - 当前 Zotero 私人账号能够访问共享库 `qinjiajun`；
 - Zotero 已完成条目和附件同步；
-- 仓库位于本机可读取的位置；本手册示例位置为 `E:\phd\hydro-platform`；
-- [config.json](../config/config.json) 中的目标群组与路径配置正确。
+- 仓库位于本机可读取的位置；命令统一在仓库根目录运行，平台位于仓库根下的 `hydro-platform/`；
+- `hydro-platform/config/config.json` 中的目标群组与路径配置正确。
 - 执行 US-07A 时，本机还需要安装 Codex CLI，并使用计划用于制卡的 ChatGPT 账号完成登录。
 
 ## 3. 打开项目
 
-打开 Windows PowerShell，进入仓库：
+打开 Windows PowerShell，进入仓库根目录（即包含 `hydro-platform/` 的那一层）：
 
 ```powershell
-Set-Location 'E:\phd\hydro-platform'
+Set-Location '<仓库根>'
 ```
 
-如果仓库以后移动到了其他位置，只需进入新的仓库目录。总配置中的 `paths.project_root` 当前使用相对路径，正常情况下不需要随盘符修改。
+如果仓库以后移动到了其他位置，只需进入新的仓库根目录。总配置中的 `paths.project_root` 当前使用相对路径，正常情况下不需要随盘符修改。
 
 ## 4. 执行 Zotero 预检
 
 ```powershell
-python automation/run.py preflight --json
+uv run hydro-platform preflight --json
 ```
 
 成功结果应满足：
@@ -95,7 +95,7 @@ python automation/run.py preflight --json
 ## 5. 执行变化扫描
 
 ```powershell
-python automation/run.py scan --json
+uv run hydro-platform scan --json
 ```
 
 ### 5.1 结果字段
@@ -148,7 +148,7 @@ python automation/run.py scan --json
 首次检测到变化后，立即再次执行：
 
 ```powershell
-python automation/run.py scan --json
+uv run hydro-platform scan --json
 ```
 
 如果 Zotero 没有再次变化，应得到：
@@ -169,7 +169,7 @@ python automation/run.py scan --json
 门禁按父条目 Key 检查单篇论文：
 
 ```powershell
-python automation/run.py pdf-gate --item-key CEXH4PQA --json
+uv run hydro-platform pdf-gate --item-key CEXH4PQA --json
 ```
 
 将 `CEXH4PQA` 替换为扫描结果中的 `ITEM_ADDED.item_key`。该命令只读 Zotero 和本地 PDF，不修改 Zotero、不生成证据包，也不更新扫描快照。
@@ -208,7 +208,7 @@ python automation/run.py pdf-gate --item-key CEXH4PQA --json
 让系统扫描目标共享库、执行每篇论文的 PDF 门禁，并生成或更新任务清单：
 
 ```powershell
-python automation/run.py tasks-sync --json
+uv run hydro-platform tasks-sync --json
 ```
 
 第一次对当前样本执行时，预期重点结果为：
@@ -236,7 +236,7 @@ python automation/run.py tasks-sync --json
 立即再次运行相同命令：
 
 ```powershell
-python automation/run.py tasks-sync --json
+uv run hydro-platform tasks-sync --json
 ```
 
 预期 `changed_count` 为 `0`，任务数和历史记录不会增加。这是任务清单的幂等验证。
@@ -244,7 +244,7 @@ python automation/run.py tasks-sync --json
 只查看已有任务、不访问 Zotero：
 
 ```powershell
-python automation/run.py tasks-list --json
+uv run hydro-platform tasks-list --json
 ```
 
 任务文件默认位于 `.runtime/tasks.json`，进程锁默认位于 `.runtime/worker.lock`。两者都属于本机可重建状态，不进入 Git。
@@ -254,7 +254,7 @@ python automation/run.py tasks-list --json
 先确认 `tasks-sync` 已产生至少一个 `READY_FOR_EXTRACTION` 任务，然后运行：
 
 ```powershell
-python automation/run.py packages-sync --json
+uv run hydro-platform packages-sync --json
 ```
 
 首次成功创建时，重点结果应为：
@@ -269,7 +269,7 @@ python automation/run.py packages-sync --json
 }
 ```
 
-证据包写入 [evidence-packs](../evidence-packs/README.md) 配置对应的目录。单篇论文目录格式为 `EV-父条目Key-简短标题`，当前只包含：
+证据包写入 `hydro-platform/evidence-packs/`（[说明](evidence-packs.md)）配置对应的目录。单篇论文目录格式为 `EV-父条目Key-简短标题`，当前只包含：
 
 ```text
 manifest.json
@@ -293,7 +293,7 @@ card.md
 先确认 `tasks-sync` 已产生 `READY_FOR_EXTRACTION` 任务，而且 `packages-sync` 已创建对应证据包骨架。然后针对父条目运行：
 
 ```powershell
-python automation/run.py pdf-delivery --item-key CEXH4PQA --json
+uv run hydro-platform pdf-delivery --item-key CEXH4PQA --json
 ```
 
 将 `CEXH4PQA` 替换为需要检查的 Zotero 父条目 Key。成功结果应至少包含：
@@ -331,7 +331,7 @@ Get-ChildItem -Path 'evidence-packs','.runtime' -Recurse -Filter '*.pdf'
 这一检查不读取 Zotero 或 PDF，但会同时核对 Codex 和当前配置的本机 PDF 读取依赖，可以单独运行：
 
 ```powershell
-python automation/run.py generator-preflight --json
+uv run hydro-platform generator-preflight --json
 ```
 
 成功结果应至少满足：
@@ -376,7 +376,7 @@ US-07A 的真实验收由用户运行本节命令并保存输出；不要用一�
 该命令会真实调用一次 Codex 模型并消耗少量账号用量，但不会提供论文、模板或任务数据：
 
 ```powershell
-python automation/run.py generator-smoke-test --json
+uv run hydro-platform generator-smoke-test --json
 ```
 
 成功结果应至少满足：
@@ -450,7 +450,7 @@ python automation/run.py generator-smoke-test --json
 模板接入或修改后运行：
 
 ```powershell
-python automation/run.py evidence-templates-validate --json
+uv run hydro-platform evidence-templates-validate --json
 ```
 
 成功时至少应看到：
@@ -488,8 +488,8 @@ python automation/run.py evidence-templates-validate --json
 CEXH4PQA 已有正式卡，因此只试运行，不覆盖：
 
 ```powershell
-Set-Location 'E:\phd\hydro-platform'
-python automation/run.py evidence-generate-trial --item-key CEXH4PQA --json
+# 在仓库根目录运行
+uv run hydro-platform evidence-generate-trial --item-key CEXH4PQA --json
 ```
 
 成功返回 action=VALIDATED_TRIAL_SAVED、quality_status=STRUCTURE_VALIDATED；quality_report 中 protocol_version=rough-card-single-agent-v1、completed_role_count=1。trial_path/card_path 指向新结果，正式卡、manifest 和任务均不改变。
@@ -502,7 +502,7 @@ python automation/run.py evidence-generate-trial --item-key CEXH4PQA --json
 
 stderr 显示 [1/1 全文阅读与详细制卡]、实际事件和等待心跳；stdout 保留最终 JSON。--no-progress 可关闭进度。心跳不是进度百分比或远端模型存活证明。
 
-config/config.json 中 workflow_mode=single_agent；模型仍为 gpt-5.6-sol / high。generation_timeout_seconds 直接控制单会话，当前为 1500 秒（25 分钟），不是预计用时。reconnect_stop_enabled=false 保持不变，idle_timeout_seconds=1500。路径方式不统计旧 MCP 调用预算，失败不会自动重开一次模型会话。
+`hydro-platform/config/config.json` 中 workflow_mode=single_agent；模型仍为 gpt-5.6-sol / high。generation_timeout_seconds 直接控制单会话，当前为 1500 秒（25 分钟），不是预计用时。reconnect_stop_enabled=false 保持不变，idle_timeout_seconds=1500。路径方式不统计旧 MCP 调用预算，失败不会自动重开一次模型会话。
 
 ### 输出保全和结果边界
 
@@ -513,8 +513,8 @@ config/config.json 中 workflow_mode=single_agent；模型仍为 gpt-5.6-sol / h
 若模型已完成却在保存校验处失败，先使用返回的 draft_path 导出已有草稿，不必重跑模型。本次草稿示例：
 
 ```powershell
-Set-Location 'E:\phd\hydro-platform'
-python automation/run.py evidence-draft-export --draft '.runtime\generation-drafts\f8c465a19fed4b6fa696526163567a30.json' --json
+# 在仓库根目录运行
+uv run hydro-platform evidence-draft-export --draft '.runtime\generation-drafts\f8c465a19fed4b6fa696526163567a30.json' --json
 ```
 
 该命令不调用 Zotero、Codex 或 PDF 工具。成功返回 RECOVERED_DRAFT_EXPORTED；card_path 是原样 Markdown，export_report_path 记录当前结构检查及来源。位置为 paths.card_trials_dir/recovered/ 下的新目录，默认 .runtime/card-trials/recovered/。原草稿、正式卡、manifest 和任务不变。草稿缺少完整执行审计，因此只导出预览，不补造已完成的生产验收，也不会自动发布。网络失败没有产出完整内容时无法用此命令恢复。
@@ -528,19 +528,19 @@ quality-audit.json 沿用文件名，但实际是单会话生成记录；indepen
 现已新增 run-once，不需要逐篇输入 item-key。只读查看本地任务和限额：
 
 ```powershell
-Set-Location 'E:\phd\hydro-platform'
-python automation/run.py run-once --dry-run --json
+# 在仓库根目录运行
+uv run hydro-platform run-once --dry-run --json
 ```
 
 该预览不扫描 Zotero、不检查模型、不写文件，不代表真实链路验收通过。准备好 Zotero 和 Codex 登录后运行：
 
 ```powershell
-python automation/run.py run-once --json
+uv run hydro-platform run-once --json
 ```
 
 它扫描目标共享库、处理后补 PDF、跳过完整已有卡，为待处理论文建骨架并调用现有单 Agent 制卡器。默认自动逐篇处理本轮全部可制卡论文，每篇完成立即写入正式证据包，不需要逐批改配置或手工转正；不改已完成卡，不执行 Git。进度和最终 items[].card_path 显示正式卡位置；report_path 指向本地摘要，counts 含完成、恢复、跳过、等待、阻塞、失败和延后。
 
-config/config.json 中 pipeline 默认 max_items_per_run=null、max_run_seconds=null、max_attempts_per_item=3、retry_cooldown_seconds=3600。前两项不用因论文数量而修改；单篇模型仍保留自己的超时。需要主动限制单轮规模时才填写正整数。正常使用只运行上面一条命令，程序负责排队和保存，详见 [统一入口说明](run-once.md)。
+`hydro-platform/config/config.json` 中 pipeline 默认 max_items_per_run=null、max_run_seconds=null、max_attempts_per_item=3、retry_cooldown_seconds=3600。前两项不用因论文数量而修改；单篇模型仍保留自己的超时。需要主动限制单轮规模时才填写正整数。正常使用只运行上面一条命令，程序负责排队和保存，详见 [统一入口说明](run-once.md)。
 
 2026-09-09 已修复【AI推理】与【AI 推理】空格差异的误拦截，无需修改模板或重读论文。JUKFEIFC 已从原草稿直接恢复正式保存；此前失败报告保留为历史记录，当前任务清单三篇均已完成。
 
@@ -577,7 +577,7 @@ notepad '.runtime\zotero-snapshot.json'
 尝试：
 
 ```powershell
-py automation/run.py preflight --json
+uv run hydro-platform preflight --json
 ```
 
 如果 `python` 和 `py` 都不存在，需要先安装项目指定版本的 Python；自动安装脚本尚未实现。
@@ -588,7 +588,7 @@ py automation/run.py preflight --json
 
 ### `LOCAL_API_UNAVAILABLE`
 
-确认 Zotero 正在运行，并检查 [config.json](../config/config.json) 中的 `zotero.base_url`。当前默认接口为 `http://127.0.0.1:23119`。
+确认 Zotero 正在运行，并检查 `hydro-platform/config/config.json` 中的 `zotero.base_url`。当前默认接口为 `http://127.0.0.1:23119`。
 
 ### `GROUP_NOT_AVAILABLE`
 
@@ -645,7 +645,7 @@ Zotero 当前附件或 PDF 内容已经与任务和 manifest 中记录的输入�
 
 ### `CODEX_CLI_NOT_FOUND` 或 `CODEX_CLI_UNAVAILABLE`
 
-先在同一个 PowerShell 中运行 `codex --version`。如果命令不存在，安装或修复 Codex CLI；如果 Codex 位于非标准位置，把 [config.json](../config/config.json) 中的 `card_generator.executable` 改为实际命令或路径，然后重试预检。
+先在同一个 PowerShell 中运行 `codex --version`。如果命令不存在，安装或修复 Codex CLI；如果 Codex 位于非标准位置，把 `hydro-platform/config/config.json` 中的 `card_generator.executable` 改为实际命令或路径，然后重试预检。
 
 ### `CODEX_NOT_LOGGED_IN`
 
@@ -681,7 +681,7 @@ CLI 没有返回有效 JSONL 完成事件，或者模型没有严格返回固定
 
 ### `CODEX_OUTPUT_SCHEMA_INVALID`
 
-Codex 或模型拒绝了制卡结构化输出 schema。先确认当前项目中的 `automation/schemas/card-generation-output.schema.json` 使用最小兼容结构，再核对 Codex CLI 与模型是否支持 `--output-schema`；不要通过取消 Python 的结果校验来绕过。
+Codex 或模型拒绝了制卡结构化输出 schema。先确认 `card_generation_output_schema_file` 指向的 schema 使用最小兼容结构（配置值相对于平台根，即仓库根下 `hydro-platform/automation/schemas/card-generation-output.schema.json`），再核对 Codex CLI 与模型是否支持 `--output-schema`；不要通过取消 Python 的结果校验来绕过。
 
 ### `CODEX_CONTEXT_LIMIT`
 
@@ -745,7 +745,7 @@ Codex 未能确认已经遍历完整 PDF、返回有效页数，或未能检查�
 - 不要为了让探针通过而改成 `workspace-write` 或 `danger-full-access`，也不要连续运行消耗额度；
 - 不要手工修改 manifest.json；card.md 可以在后续流程填写，但 `packages-sync` 不会覆盖非占位内容；
 - 切换 Zotero 群组时不能只改 `group_id` 后删除旧快照，必须执行后续定义的群组迁移或重新建基线流程；
-- 所有可调整路径和固定运行参数统一在 [config.json](../config/config.json) 修改。
+- 所有可调整路径和固定运行参数统一在 `hydro-platform/config/config.json` 修改。
 
 ## 17. 真实验收记录
 
@@ -771,7 +771,7 @@ Codex 未能确认已经遍历完整 PDF、返回有效页数，或未能检查�
 
 ### US-04 真实任务清单验收
 
-在同一篇样本文献上连续执行两次 `python automation/run.py tasks-sync --json`：
+在同一篇样本文献上连续执行两次 `uv run hydro-platform tasks-sync --json`：
 
 | 检查项 | 实际结果 |
 |---|---|
@@ -791,7 +791,7 @@ Codex 未能确认已经遍历完整 PDF、返回有效页数，或未能检查�
 
 ### US-05 真实证据包骨架验收
 
-对 US-04 已产生的真实 `READY_FOR_EXTRACTION` 任务连续执行两次 `python automation/run.py packages-sync --json`：
+对 US-04 已产生的真实 `READY_FOR_EXTRACTION` 任务连续执行两次 `uv run hydro-platform packages-sync --json`：
 
 | 检查项 | 实际结果 |
 |---|---|
@@ -811,7 +811,7 @@ Codex 未能确认已经遍历完整 PDF、返回有效页数，或未能检查�
 
 ### US-06 真实原始 PDF 交付验收
 
-用户对真实父条目 `CEXH4PQA` 执行了 `python automation/run.py pdf-delivery --item-key CEXH4PQA --json`，结果如下：
+用户对真实父条目 `CEXH4PQA` 执行了 `uv run hydro-platform pdf-delivery --item-key CEXH4PQA --json`，结果如下：
 
 | 检查项 | 实际结果 |
 |---|---|
@@ -833,7 +833,7 @@ Codex 未能确认已经遍历完整 PDF、返回有效页数，或未能检查�
 
 ### US-07A 真实运行环境预检
 
-用户在真实制卡机上执行了 `python automation/run.py generator-preflight --json`，结果如下：
+用户在真实制卡机上执行了 `uv run hydro-platform generator-preflight --json`，结果如下：
 
 | 检查项 | 实际结果 |
 |---|---|
@@ -878,7 +878,7 @@ Codex 未能确认已经遍历完整 PDF、返回有效页数，或未能检查�
 运行：
 
 ```powershell
-python automation/run.py evidence-templates-validate --json
+uv run hydro-platform evidence-templates-validate --json
 ```
 
 真实结果为 `ok = true`、`template_count = 8`、`enabled_count = 8`、`catalog_version = 1.0.0`，来源提交为 `457d5a420959f543773fc0a5c955cc64b1ca0ecb`。结论：八个模板的来源、版本、路径、front matter 和内容哈希已在真实项目配置上通过；这不等于模板科研质量或自动分类已经通过。
@@ -892,7 +892,7 @@ python automation/run.py evidence-templates-validate --json
 使用同一篇样本文献运行：
 
 ```powershell
-python automation/run.py evidence-generate-trial --item-key CEXH4PQA --json
+uv run hydro-platform evidence-generate-trial --item-key CEXH4PQA --json
 ```
 
 历史记录：2026-09-08 用户运行至 49:43，在第六阶段 adversarial_reviewer 报 PDF_DIRECT_EXEC_IO_ERROR；未形成成功的新产物。默认方案现已改为单 Agent，后续不再按六角色验收要求执行。新的质量和时间验证以第 13 节为准，不覆盖历史卡。
@@ -923,8 +923,8 @@ python automation/run.py evidence-generate-trial --item-key CEXH4PQA --json
 保持 Zotero 开启且目标 PDF 已同步，使用已完成 PDF 交付的样本文献：
 
 ```powershell
-Set-Location 'E:\phd\hydro-platform'
-python automation/run.py pdf-direct-read-trial --item-key CEXH4PQA --json
+# 在仓库根目录运行
+uv run hydro-platform pdf-direct-read-trial --item-key CEXH4PQA --json
 ```
 
 程序复用现有的任务、证据包和 PDF 指纹检查，允许试读已完成或质量失败的任务。不要为了试读删除已有卡片或任务。
@@ -934,7 +934,7 @@ python automation/run.py pdf-direct-read-trial --item-key CEXH4PQA --json
 只检查本机、不调用模型：
 
 ```powershell
-python automation/run.py pdf-direct-read-trial --item-key CEXH4PQA --preflight-only --json
+uv run hydro-platform pdf-direct-read-trial --item-key CEXH4PQA --preflight-only --json
 ```
 
 此命令通过时是 `validation_status=SANDBOX_PREFLIGHT_PASSED`、`model_invoked=false`。正常直读命令会自动先做相同检查，无需每次手动运行两条命令。
@@ -959,7 +959,7 @@ python automation/run.py pdf-direct-read-trial --item-key CEXH4PQA --preflight-o
 
 ### 配置和进度
 
-在 `config/config.json` 修改：
+在 `hydro-platform/config/config.json` 修改：
 
 | 配置项 | 用途 |
 |---|---|
@@ -970,7 +970,7 @@ python automation/run.py pdf-direct-read-trial --item-key CEXH4PQA --preflight-o
 | `card_generator.pdf_direct_trial.windows_sandbox` | Windows 原生沙箱；当前 elevated，显式传参，不依赖个人配置 |
 | `card_generator.pdf_direct_trial.shell_executable` | 本机预检 PowerShell；命令名或完整路径 |
 | `card_generator.pdf_direct_trial.preflight_timeout_seconds` | 本机沙箱预检时限，默认 120 秒 |
-| `card_generator.pdf_direct_trial.python_executable` | 路径读取共用 Python；当前为 `.venv/Scripts/python.exe`，null 表示复用入口 Python |
+| `card_generator.pdf_direct_trial.python_executable` | 路径读取共用 Python；当前为 `../.venv/Scripts/python.exe`（仓库根共享 `.venv`，相对平台根），null 表示复用入口 Python |
 | `card_generator.pdf_direct_trial.text_extractor` | 当前 pypdf；该解释器需装有 pypdf，兼容选项 pdftotext 不自动切换 |
 | `card_generator.pdf_reader` 中的工具路径 | 复用 pdfinfo、pdftoppm；仅选择 pdftotext 引擎时用它的路径，不启动 MCP |
 | `paths.runtime_dir` / `paths.card_trials_dir` | 临时目录 / 保留报告的目录 |

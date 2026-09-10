@@ -61,7 +61,7 @@ Python 调度与本地任务处理
 - 证据包以 Zotero 父条目 Key 定位；附件 Key 和 PDF 哈希用于确认输入版本，不作为自动覆盖已有卡片的授权。
 - 恢复扫描必须幂等：重复执行不会新建第二个证据包或重复写入相同事件。
 - 调度和环境安装必须由仓库中的脚本重建，不依赖只存在于旧电脑上的手工配置。
-- 所有团队级可调整路径和固定参数由 `config/config.json` 集中提供；运行状态、证据事实和密钥按各自边界保存。
+- 所有团队级可调整路径和固定参数由 `hydro-platform/config/config.json` 集中提供；运行状态、证据事实和密钥按各自边界保存。
 
 ## 当前非目标
 
@@ -112,6 +112,10 @@ Python 调度与本地任务处理
 - [recovery.md](recovery.md)：换机恢复步骤与验收标准。
 - [tests.md](tests.md)：现有验证、拟建测试和当前缺口。
 - [`automation.md`](automation.md)：自动化边界、身份和安全约束。
+- [index.md](index.md)：平台文档入口，先看哪里、日常命令、目录地图、安装换机与验证范围。
 - [variables.md](variables.md)：总配置、运行变量、证据事实、协议常量与密钥的边界。
+- [config.md](config.md)：总配置逐字段含义、允许值、代理、制卡与 deployment 字段。
+- [evidence-packs.md](evidence-packs.md)：证据包编号、文件结构、自动保存与精读复用。
+- [templates.md](templates.md)：八类证据卡模板、主题模板、来源与版本规则。
 - [operator-manual.md](operator-manual.md)：当前可执行命令、结果解释、故障处理和真实验收记录。
 - [task-state-machine.md](task-state-machine.md)：任务身份、状态转换、幂等、锁和崩溃恢复规则。

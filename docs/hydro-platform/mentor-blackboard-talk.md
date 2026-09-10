@@ -13,7 +13,7 @@
 先写入口，再沿一篇论文的实际执行顺序展开。分三块区域，不一次写满。
 
 ```text
-上方：python automation/run.py run-once --json
+上方：uv run hydro-platform run-once --json   （在仓库根目录运行）
                   ↓
          CLI 解析参数 + config.json → pipeline.run_once()
 
@@ -328,8 +328,8 @@ hydro-platform/
 ├─ activity/                       关键贡献事件
 ├─ reports/                        日报等共享摘要
 ├─ members/                        成员映射说明与可选配置，不是学生证据卡目录
-├─ documentation/                  操作与实现文档
-├─ .venv/                          当前机器的项目 Python 环境
+├─ docs/hydro-platform/            操作与实现文档（实际位于仓库根，与平台目录同级）
+├─ ../.venv/                       仓库根共享 Python 环境；由 uv sync --all-packages 管理，在平台目录之外
 ├─ .tools/                         当前机器的 PDF 工具
 └─ .runtime/                       当前机器运行状态，不进 Git
    ├─ tasks.json                   任务状态、尝试和租约
@@ -429,28 +429,28 @@ hydro-platform/
 | scheduler.daily_time / poll_interval_minutes | 09:00 / 30 | 每日时段及轻量检查 |
 | scheduler.retry_interval_minutes / max_attempts_per_slot | 60 / 3 | 调度补跑冷却与每时段上限 |
 
-私人配置要复制完整配置并通过 --config config/config.local.json 显式选择，不是自动合并。更换服务商需要对应适配器；配置一个名字不等于实现了该服务。
+私人配置要复制完整配置并通过 --config hydro-platform/config/config.local.json 显式选择，不是自动合并。更换服务商需要对应适配器；配置一个名字不等于实现了该服务。
 
 ### 黑板只展示一条，其他留作备查
 
-在项目根目录执行：
+在仓库根目录执行：
 
 ```powershell
-python automation/run.py run-once --json
+uv run hydro-platform run-once --json
 ```
 
 | 命令 | 用途与副作用 |
 |---|---|
-| python automation/run.py run-once --dry-run --json | 只预览本地任务，不扫描最新 Zotero、不调用模型 |
-| python automation/run.py tasks-list --json | 查看现有任务状态 |
-| python automation/run.py generator-preflight --json | 检查 Codex、登录及读取工具，不制卡 |
-| python automation/run.py generator-smoke-test --json | 最小真实模型调用，使用额度，不制科研卡 |
-| python automation/run.py themes-run --json | 单独推进主题，可调用模型并保存 |
-| python automation/run.py setup --json | 安装/恢复预检，不实际安装 |
-| python automation/run.py setup --apply --json | 执行安装恢复；启用调度配置时会处理计划 |
-| python automation/run.py schedule-plan --json | 预览计划，不注册 |
-| python automation/run.py schedule-install --json | 按配置安装或更新本项目 Windows 计划 |
-| python automation/run.py schedule-status --json | 检查实际计划与配置是否匹配 |
+| uv run hydro-platform run-once --dry-run --json | 只预览本地任务，不扫描最新 Zotero、不调用模型 |
+| uv run hydro-platform tasks-list --json | 查看现有任务状态 |
+| uv run hydro-platform generator-preflight --json | 检查 Codex、登录及读取工具，不制卡 |
+| uv run hydro-platform generator-smoke-test --json | 最小真实模型调用，使用额度，不制科研卡 |
+| uv run hydro-platform themes-run --json | 单独推进主题，可调用模型并保存 |
+| uv run hydro-platform setup --json | 安装/恢复预检，不实际安装 |
+| uv run hydro-platform setup --apply --json | 执行安装恢复；启用调度配置时会处理计划 |
+| uv run hydro-platform schedule-plan --json | 预览计划，不注册 |
+| uv run hydro-platform schedule-install --json | 按配置安装或更新本项目 Windows 计划 |
+| uv run hydro-platform schedule-status --json | 检查实际计划与配置是否匹配 |
 
 --json 让最终结果可供程序读取。进度写 stderr，最终 JSON 写 stdout；两者都在终端显示，不表示进度混入最终 JSON 数据。
 
@@ -460,17 +460,17 @@ python automation/run.py run-once --json
 
 | 技术机制 | 代码定位 | 现有测试入口 |
 |---|---|---|
-| 统一入口与队列 | [run.py](../automation/run.py)、[cli.py](../automation/src/hydro_platform/cli.py)、[pipeline.py](../automation/src/hydro_platform/pipeline.py) 的 run_once | [test_pipeline.py](../automation/tests/test_pipeline.py) |
-| API 与分页清单 | [zotero.py](../automation/src/hydro_platform/zotero.py)、[snapshot.py](../automation/src/hydro_platform/snapshot.py) 的 fetch_snapshot | [test_snapshot.py](../automation/tests/test_snapshot.py) |
-| PDF 就绪及交付 | [pdf_gate.py](../automation/src/hydro_platform/pdf_gate.py)、[pdf_delivery.py](../automation/src/hydro_platform/pdf_delivery.py) | [test_pdf_gate.py](../automation/tests/test_pdf_gate.py) |
-| 任务身份、锁和租约 | [tasks.py](../automation/src/hydro_platform/tasks.py) 的 build_task_id、sync_tasks、claim_task | [test_tasks.py](../automation/tests/test_tasks.py) |
-| 证据包定位 | [evidence_packages.py](../automation/src/hydro_platform/evidence_packages.py) 的 find_evidence_package | [test_evidence_packages.py](../automation/tests/test_evidence_packages.py) |
-| 提示词与模板组装 | [card_generation.py](../automation/src/hydro_platform/card_generation.py) 的 _build_prompt、generate_evidence_card | [test_card_generator.py](../automation/tests/test_card_generator.py) |
-| 单 Agent 与本机 PDF | [single_agent.py](../automation/src/hydro_platform/card_generators/single_agent.py)、[codex_local_pdf.py](../automation/src/hydro_platform/card_generators/codex_local_pdf.py) | [test_single_agent.py](../automation/tests/test_single_agent.py) |
-| 完成判定与保存恢复 | [publication.py](../automation/src/hydro_platform/publication.py) 的 validate_saved_package、recover_publication；card_generation.py 的 _write_generated_package | test_pipeline.py 中保存中断、状态对账和人工修改保护用例 |
-| 统一池与步骤复用 | [theme_pool_runner.py](../automation/src/hydro_platform/theme_pool_runner.py)、[theme_pool.py](../automation/src/hydro_platform/theme_pool.py)、[themes.py](../automation/src/hydro_platform/themes.py) 的 _result_record | [test_theme_pool.py](../automation/tests/test_theme_pool.py) |
-| 每日时段与补跑 | [scheduled.py](../automation/src/hydro_platform/scheduled.py)、[windows_schedule.py](../automation/src/hydro_platform/windows_schedule.py) | [test_scheduled.py](../automation/tests/test_scheduled.py)、[test_windows_schedule.py](../automation/tests/test_windows_schedule.py) |
-| 配置、安装和恢复 | [config.py](../automation/src/hydro_platform/config.py)、[workstation_setup.py](../automation/src/hydro_platform/workstation_setup.py)、[runtime_recovery.py](../automation/src/hydro_platform/runtime_recovery.py) | [验证地图](tests.md)中部署与恢复部分 |
+| 统一入口与队列 | `hydro-platform/automation/run.py`、`hydro-platform/automation/src/hydro_platform/cli.py`、`hydro-platform/automation/src/hydro_platform/pipeline.py` 的 run_once | `hydro-platform/automation/tests/test_pipeline.py` |
+| API 与分页清单 | `hydro-platform/automation/src/hydro_platform/zotero.py`、`hydro-platform/automation/src/hydro_platform/snapshot.py` 的 fetch_snapshot | `hydro-platform/automation/tests/test_snapshot.py` |
+| PDF 就绪及交付 | `hydro-platform/automation/src/hydro_platform/pdf_gate.py`、`hydro-platform/automation/src/hydro_platform/pdf_delivery.py` | `hydro-platform/automation/tests/test_pdf_gate.py` |
+| 任务身份、锁和租约 | `hydro-platform/automation/src/hydro_platform/tasks.py` 的 build_task_id、sync_tasks、claim_task | `hydro-platform/automation/tests/test_tasks.py` |
+| 证据包定位 | `hydro-platform/automation/src/hydro_platform/evidence_packages.py` 的 find_evidence_package | `hydro-platform/automation/tests/test_evidence_packages.py` |
+| 提示词与模板组装 | `hydro-platform/automation/src/hydro_platform/card_generation.py` 的 _build_prompt、generate_evidence_card | `hydro-platform/automation/tests/test_card_generator.py` |
+| 单 Agent 与本机 PDF | `hydro-platform/automation/src/hydro_platform/card_generators/single_agent.py`、`hydro-platform/automation/src/hydro_platform/card_generators/codex_local_pdf.py` | `hydro-platform/automation/tests/test_single_agent.py` |
+| 完成判定与保存恢复 | `hydro-platform/automation/src/hydro_platform/publication.py` 的 validate_saved_package、recover_publication；card_generation.py 的 _write_generated_package | test_pipeline.py 中保存中断、状态对账和人工修改保护用例 |
+| 统一池与步骤复用 | `hydro-platform/automation/src/hydro_platform/theme_pool_runner.py`、`hydro-platform/automation/src/hydro_platform/theme_pool.py`、`hydro-platform/automation/src/hydro_platform/themes.py` 的 _result_record | `hydro-platform/automation/tests/test_theme_pool.py` |
+| 每日时段与补跑 | `hydro-platform/automation/src/hydro_platform/scheduled.py`、`hydro-platform/automation/src/hydro_platform/windows_schedule.py` | `hydro-platform/automation/tests/test_scheduled.py`、`hydro-platform/automation/tests/test_windows_schedule.py` |
+| 配置、安装和恢复 | `hydro-platform/automation/src/hydro_platform/config.py`、`hydro-platform/automation/src/hydro_platform/workstation_setup.py`、`hydro-platform/automation/src/hydro_platform/runtime_recovery.py` | [验证地图](tests.md)中部署与恢复部分 |
 
 可具体举这三条现有测试：
 

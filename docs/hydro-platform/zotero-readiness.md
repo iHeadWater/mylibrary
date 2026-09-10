@@ -13,7 +13,7 @@
 
 ## 总配置
 
-所有字段在 `config/config.json` 的 `zotero.startup` 中，由 `config.py` 读取。修改后下一轮生效；不需要重新注册Windows任务。
+所有字段在 `hydro-platform/config/config.json` 的 `zotero.startup` 中，由 `config.py` 读取。修改后下一轮生效；不需要重新注册Windows任务。
 
 | 字段 | 当前值 / 含义 | 边界 |
 |---|---|---|
@@ -54,6 +54,6 @@
 - `test_pipeline.py`、`test_scheduled.py`：待PDF→补齐→继续，以及旧卡不重制、待处理不误记完成、冷却/次数、同步时暂缓主题、长期缺PDF不阻塞已有卡主题。
 - `test_doctor.py`：新增检查只定位路径，不启动应用。
 - 本机隔离验收：`.runtime/readiness-trials/readiness-check-kvf8_q5b/verification.json`。实际读取qinjiajun，3张卡跳过、6个主题步骤复用、第二次调度跳过，模型及启动调用0；45个原运行/知识文件哈希、Zotero进程集合不变。副本保留在本地运行区。
-- 可重复运行：`.venv/Scripts/python.exe automation/verify_zotero_readiness.py`。该验收只针对已有成果复用，明确禁止模型和应用启动调用；缺少成果会失败，不代生成。
+- 可重复运行：`.venv/Scripts/python.exe hydro-platform/automation/verify_zotero_readiness.py`（在仓库根目录执行；`.venv` 为 uv workspace 共享环境）。该验收只针对已有成果复用，明确禁止模型和应用启动调用；缺少成果会失败，不代生成。
 
 现在已有本机Zotero未运行时实际自动启动并继续流水线的证据；这还不是“真实附件从云端下载中恢复”“关机/重新登录”或干净新机验收。没有关闭用户应用制造证明；不保证首次账号登录、云端网络或科学质量。相关：[调度](cron.md)、[工程状态](engineering-status.md)、[验证地图](tests.md)。

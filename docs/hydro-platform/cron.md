@@ -2,7 +2,7 @@
 
 ## 当前已启用
 
-本机 Windows 任务 `HydroPlatform-qinjiajun` 已注册并启用，使用当前 Windows 用户的普通交互令牌。执行 `.venv/Scripts/pythonw.exe automation/scheduled_run.py --config ...`，不需要 Codex 对话窗口，也不保存 Windows 密码。Windows必须已登录；已加入Zotero缺失时单次启动与有限就绪等待，仍需有效Zotero/Codex账号和可用附件。不自动登录、不唤醒关机电脑；[启动/等待规则](zotero-readiness.md)。
+本机 Windows 任务 `HydroPlatform-qinjiajun` 已注册并启用，使用当前 Windows 用户的普通交互令牌。任务动作不使用 `uv run`：它直接以仓库根解释器 `<repo root>/.venv/Scripts/pythonw.exe` 执行平台脚本 `hydro-platform/automation/scheduled_run.py --config ...`（`pythonw.exe` 无控制台窗口），不需要 Codex 对话窗口，也不保存 Windows 密码。Windows必须已登录；已加入Zotero缺失时单次启动与有限就绪等待，仍需有效Zotero/Codex账号和可用附件。不自动登录、不唤醒关机电脑；[启动/等待规则](zotero-readiness.md)。
 
 | 工作 | 时间 / 入口 | 身份与秘密 | 限制与重试 | 观察位置 |
 |---|---|---|---|---|
@@ -18,12 +18,12 @@ Windows 的 StartWhenAvailable 和登录触发用于补机会，具体启动可�
 
 ## 操作入口
 
-在项目根目录使用原有 Python 前缀：
+在仓库根目录运行：
 
 ```powershell
-python automation/run.py schedule-plan --json
-python automation/run.py schedule-status --json
-python automation/run.py schedule-install --json
+uv run hydro-platform schedule-plan --json
+uv run hydro-platform schedule-status --json
+uv run hydro-platform schedule-install --json
 ```
 
 - plan：查询并预览，不注册、不运行模型。
@@ -92,7 +92,7 @@ python automation/run.py schedule-install --json
 
 随后观察到Windows在2026-09-09 04:00:01自行触发检查：04:01的doctor回读LastTaskResult=0、Ready、下次检查04:30；调度状态仍是03:45完成的同一日任务，尝试次数仍为1，没有启动新一轮模型处理。这验证了实际定时轻量检查与已完成日任务跳过；不等于09:00到期生成或关机/登录补跑也已实测。
 
-2026-09-09的09:00到期运行现已核实：scheduler-state记录09:00:02开始、09:00:03结束，slot_date为2026-09-09、attempt_count为1、COMPLETED；流水线报告 [2f68b7c99d1b49b6adff3710d724a82b](../.runtime/logs/pipeline-runs/20260909T010002-2f68b7c99d1b49b6adff3710d724a82b.json) 记录耗时1.48秒、扫描3篇、旧卡跳过3、主题步骤复用6、候选与回填各2、失败/等待/延后均0、模型调用0。日报也在09:00:03更新，日期和最近运行一致。这是实际日界线到期进入原流水线的证据，不是仅启动探针。
+2026-09-09的09:00到期运行现已核实：scheduler-state记录09:00:02开始、09:00:03结束，slot_date为2026-09-09、attempt_count为1、COMPLETED；流水线报告 `hydro-platform/.runtime/logs/pipeline-runs/20260909T010002-2f68b7c99d1b49b6adff3710d724a82b.json` 记录耗时1.48秒、扫描3篇、旧卡跳过3、主题步骤复用6、候选与回填各2、失败/等待/延后均0、模型调用0。日报也在09:00:03更新，日期和最近运行一致。这是实际日界线到期进入原流水线的证据，不是仅启动探针。
 
 随后只读schedule-status回读真实Windows任务为ENABLED、定义一致、Ready、LastTaskResult=0、最近检查10:30:02、下次11:00；日任务仍是09:00完成的同一轮，尝试次数1，due_status=ALREADY_COMPLETED。读取前未手动执行tick、按需启动或更改调度。该结果证明了本次到期执行和其后跳过；本日无新增论文，因此不声称验证了定时上下文中新论文的模型生成，也不证明关机/登录、云端同步或异机恢复。
 

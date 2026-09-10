@@ -1,20 +1,20 @@
-# 总配置
+# 总配置字段说明
 
-日常只编辑完整总配置，不改源码。默认使用 [config.json](config.json)；[config.example.json](config.example.json) 是可复制的完整示例。私人配置必须显式用 --config 或 HYDRO_PLATFORM_CONFIG 选择，不自动合并。查看目录与存储概览请回到[仓库首页](../README.md)。
+日常只编辑完整总配置，不改源码。默认使用 `hydro-platform/config/config.json`；`hydro-platform/config/config.example.json` 是可复制的完整示例。私人配置必须显式用 --config 或 HYDRO_PLATFORM_CONFIG 选择，不自动合并。字段与数据的边界划分（哪些属于配置、哪些属于运行状态、证据事实或密钥）见 [配置与密钥边界](variables.md)；目录与存储概览回到[文档入口](index.md)。
 
 ## 关键事件与日报
 
-`activity_reporting.enabled=true` 让 run-once 在制卡前后记录关键事件并在结束后生成日报，不额外调用AI；`utc_offset_minutes=480` 按UTC+08:00划分日期，`system_actor_id=SYS-CARD-01` 标记系统行为。根目录分别使用 paths.activity_dir、paths.members_dir、paths.reports_dir。显式的 activity-sync / daily-report 命令可独立执行。[完整说明](../documentation/activities-and-daily-report.md)。本项不是每日触发器；本机已注册的定时计划由scheduler配置。
+`activity_reporting.enabled=true` 让 run-once 在制卡前后记录关键事件并在结束后生成日报，不额外调用AI；`utc_offset_minutes=480` 按UTC+08:00划分日期，`system_actor_id=SYS-CARD-01` 标记系统行为。根目录分别使用 paths.activity_dir、paths.members_dir、paths.reports_dir。显式的 activity-sync / daily-report 命令可独立执行。[完整说明](activities-and-daily-report.md)。本项不是每日触发器；本机已注册的定时计划由scheduler配置。
 
-`zotero.startup`控制统一入口的应用启动和有限等待：当前enabled=true、launch_if_missing=true、executable=null、wait_timeout_seconds=120、poll_interval_seconds=5。null按PATH/常用目录查找，也可填zotero.exe路径；不附加参数，不改账号/同步设置。doctor只核对路径、不启动。旧配置缺本节默认关闭。[字段、关闭方法与待PDF补查](../documentation/zotero-readiness.md)。
+`zotero.startup`控制统一入口的应用启动和有限等待：当前enabled=true、launch_if_missing=true、executable=null、wait_timeout_seconds=120、poll_interval_seconds=5。null按PATH/常用目录查找，也可填zotero.exe路径；不附加参数，不改账号/同步设置。doctor只核对路径、不启动。旧配置缺本节默认关闭。[字段、关闭方法与待PDF补查](zotero-readiness.md)。
 
 ## 统一主题池
 
-`theme_pipeline.enabled=true` 已开启完整入口后半段。`research_goal=null` 表示无预设目标；`model`、`reasoning_effort`、`timeout_seconds` 为 null 时继承 card_generator 对应设置。`assets_dir` 指定主题模板与 schema 的目录，默认 templates/themes，当前包含 discovery、pool-discovery、focused-reading、refinement。结果目录沿用 paths.themes_dir，定向精读保存在各论文证据包 readings/ 下。模型/目标/模板内容变化产生新的 CHANGE 记录，仍使用统一主题池；候选更新沿用编号，合并/拆分另建编号，适用旧精读可复用。[现行规则](../documentation/unified-theme-pool.md)。
+`theme_pipeline.enabled=true` 已开启完整入口后半段。`research_goal=null` 表示无预设目标；`model`、`reasoning_effort`、`timeout_seconds` 为 null 时继承 card_generator 对应设置。`assets_dir` 指定主题模板与 schema 的目录，默认 `hydro-platform/templates/themes`，当前包含 discovery、pool-discovery、focused-reading、refinement。结果目录沿用 paths.themes_dir，定向精读保存在各论文证据包 readings/ 下。模型/目标/模板内容变化产生新的 CHANGE 记录，仍使用统一主题池；候选更新沿用编号，合并/拆分另建编号，适用旧精读可复用。[现行规则](unified-theme-pool.md)。
 
 ## 统一入口限额（US-11A）
 
-`pipeline` 默认 `max_items_per_run=null`、`max_run_seconds=null`：一次命令处理本轮扫描到的全部可制卡论文，无需按篇数修改配置。只有主动限制一次运行的规模/时长时才填正整数，旧配置中的明确限额仍会遵守。`max_attempts_per_item=3`（当前输入累计次数含首次）、`retry_cooldown_seconds=3600`（暂时性失败后冷却）仍必须是正整数。省略字段采用默认值，未知字段拒绝；单篇模型超时仍由 `card_generator.generation_timeout_seconds` 控制。详见 [统一入口](../documentation/run-once.md)。
+`pipeline` 默认 `max_items_per_run=null`、`max_run_seconds=null`：一次命令处理本轮扫描到的全部可制卡论文，无需按篇数修改配置。只有主动限制一次运行的规模/时长时才填正整数，旧配置中的明确限额仍会遵守。`max_attempts_per_item=3`（当前输入累计次数含首次）、`retry_cooldown_seconds=3600`（暂时性失败后冷却）仍必须是正整数。省略字段采用默认值，未知字段拒绝；单篇模型超时仍由 `card_generator.generation_timeout_seconds` 控制。详见 [统一入口](run-once.md)。
 
 整轮锁和待保存记录的目录由 `paths.lock_file` 派生，摘要由 `paths.logs_dir` 派生，均位于配置的 `runtime_dir`；没有写死某台电脑的盘符。每日时间、补查与启停已经由 scheduler 配置；修改 Windows 触发定义后需 schedule-install，不能把配置已填等同于计划已注册。
 
@@ -24,7 +24,7 @@
 
 配置只能在程序已经实现的能力之间切换。例如将制卡后端从 `codex_cli` 改为另一种适配器，前提是仓库中已经存在并测试过该适配器；任意填写一个 API 名称不能凭空获得相应能力，程序必须对不支持的值立即报错。
 
-其中 `paths.project_root` 相对于 `config.json` 所在目录解析；其余路径相对于 `project_root` 解析。因此，从仓库外部工作目录调用程序时，产物仍会写入正确项目。为避免误写，所有项目路径必须位于 `project_root` 内，运行快照、任务、锁和原始日志还必须位于 `runtime_dir` 内。
+其中 `paths.project_root` 相对于 `config.json` 所在目录解析；其余路径相对于 `project_root` 解析。因此，从仓库外部工作目录调用程序时，产物仍会写入正确项目。为避免误写，所有项目路径必须位于 `project_root` 内，运行快照、任务、锁和原始日志还必须位于 `runtime_dir` 内。当前 `paths.project_root` 为 `..`，即 `hydro-platform/` 目录本身。
 
 当前可配置项：
 
@@ -46,7 +46,7 @@
 | `paths.card_generation_output_schema_file` | Codex 结构化输出约束 | 必须位于 `paths.schemas_dir` 内 |
 | `paths.card_trials_dir` | 既有卡制卡试运行结果 | 必须位于 `paths.runtime_dir` 内，不提交 Git |
 
-修改路径后可运行 `python automation/run.py evidence-templates-validate --json` 验证。目录位置可以调整，但不得将证据卡模板或清单配置到项目之外。
+修改路径后可运行 `uv run hydro-platform evidence-templates-validate --json` 验证。目录位置可以调整，但不得将证据卡模板或清单配置到项目之外。
 
 其他已启用配置类别：
 
@@ -130,7 +130,7 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 本节描述本项目对子进程的停止保护，不修改个人 Codex 配置、登录、代理或服务端地址，也不等于控制服务端重试或修复网络。
 
-失败诊断由 CLI 保存到 `paths.logs_dir`（默认 `.runtime/logs`），最终 JSON 的 `diagnostic_log_path` 给出位置。只保存已脱敏的公开错误和上下文，不保存原始事件、提示词或论文全文；首个工具错误和最后一个连接错误分开保留，避免被整体摘要截断。日志不提交 Git。日志目录不可写时保留原失败结果并给出 `diagnostic_log_warning`。
+失败诊断由 CLI 保存到 `paths.logs_dir`（默认 `hydro-platform/.runtime/logs`），最终 JSON 的 `diagnostic_log_path` 给出位置。只保存已脱敏的公开错误和上下文，不保存原始事件、提示词或论文全文；首个工具错误和最后一个连接错误分开保留，避免被整体摘要截断。日志不提交 Git。日志目录不可写时保留原失败结果并给出 `diagnostic_log_warning`。
 
 `card_generator.pdf_reader` 字段说明：
 
@@ -138,7 +138,7 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 |---|---|---|
 | `adapter` | 原始 PDF 的读取方式 | 当前 `local_path`；兼容历史 `project_mcp`，与工作流协议版本配套，不自动回退 |
 | `server_name` | 本次 Codex 调用中注册的 MCP 服务名 | 只能含字母、数字、下划线和连字符 |
-| `python_executable` | 启动项目内置 MCP 的 Python | `null` 表示复用运行 `automation/run.py` 的解释器；也可填命令名或绝对路径 |
+| `python_executable` | 启动项目内置 MCP 的 Python | `null` 表示复用运行统一入口的解释器；也可填命令名或绝对路径 |
 | `server_file` | 项目内置 PDF MCP 服务脚本 | 相对 `paths.project_root` 解析，且必须位于项目内 |
 | `pdfinfo_executable` | 获取 PDF 页数的程序 | 命令名、项目相对路径或绝对路径 |
 | `pdftotext_executable` | 逐页提取文字的程序 | 命令名、项目相对路径或绝对路径 |
@@ -149,7 +149,7 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 | `startup_timeout_seconds` | MCP 启动超时 | 大于 0 |
 | `tool_timeout_seconds` | 单次 MCP 工具调用及底层 PDF 工具的超时上限 | 大于 0 |
 
-当前配置与示例均使用项目相对工具路径 `.tools/poppler/Library/bin/`，PDF Python 使用 `.venv/Scripts/python.exe`，由锁定安装入口恢复。也支持明确配置已有工具路径，但统一 setup 对工具/环境归属有检查；改目录时须同步对应字段，不需要改 Python 源码。
+当前配置与示例均使用项目相对工具路径 `hydro-platform/.tools/poppler/Library/bin/`，PDF Python 使用 uv 工作区共享的仓库根 `.venv`（`../.venv/Scripts/python.exe`，相对项目根），由 `uv sync --all-packages` 恢复。也支持明确配置已有工具路径，但统一 setup 对工具/环境归属有检查；改目录时须同步对应字段，不需要改 Python 源码。
 
 例如，使用 GPT-5.6 Sol 和高推理强度：
 
@@ -167,11 +167,11 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 程序会把显式推理强度转换为 Codex CLI 的 `--config model_reasoning_effort="..."` 参数。配置校验只能防止未知档位和拼写错误；账号是否能使用指定模型、该模型是否支持指定档位，必须由 `generator-smoke-test` 真实验收。
 
-修改后可运行 `python automation/run.py generator-preflight --json`。当前 `local_path` 检查共用指引和本机工具位置，不检查 MCP 脚本；旧 `project_mcp` 才检查 MCP 及其依赖。未知适配器或认证方式会报错，不静默回退。
+修改后可运行 `uv run hydro-platform generator-preflight --json`。当前 `local_path` 检查共用指引和本机工具位置，不检查 MCP 脚本；旧 `project_mcp` 才检查 MCP 及其依赖。未知适配器或认证方式会报错，不静默回退。
 
 注意：`chatgpt_account` 只表示 CLI 明确报告为 ChatGPT 登录。US-07B1 的 `generator-smoke-test` 可以验证一次真实模型调用是否成功，但仍不能证明订阅档位或未来一直有剩余额度。
 
-父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `.runtime/` 或证据包 `manifest.json`。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](../documentation/variables.md)。
+父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `hydro-platform/.runtime/` 或证据包 `manifest.json`。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](variables.md)。
 
 ## PDF 路径读取与实验配置
 
@@ -179,7 +179,7 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 #### 正式单 Agent 与实验共用的读取环境
 
-当前 `card_generator.pdf_reader.adapter` 为 `local_path`，单 Agent 使用与已通过实验相同的读取环境。为避免两套工具路径漂移，沿用下方 `pdf_direct_trial` 对象中的 `windows_sandbox`、`shell_executable`、`python_executable`、`text_extractor`、`preflight_timeout_seconds`。新增 `reading_prompt_file` 指向 `automation/prompts/pdf-local-reading-v1.md`，用于正式制卡共用读取指引。
+当前 `card_generator.pdf_reader.adapter` 为 `local_path`，单 Agent 使用与已通过实验相同的读取环境。为避免两套工具路径漂移，沿用下方 `pdf_direct_trial` 对象中的 `windows_sandbox`、`shell_executable`、`python_executable`、`text_extractor`、`preflight_timeout_seconds`。新增 `reading_prompt_file` 指向 `hydro-platform/automation/prompts/pdf-local-reading-v1.md`，用于正式制卡共用读取指引。
 
 `prompt_file`、`schema_file`、`timeout_seconds` 仍只属于独立读取实验。当前单 Agent 使用 generation_timeout_seconds（1500 秒）及总配置 paths 中的制卡提示词/schema；不会套用实验报告字段。独立 `pdf-direct-read-trial` 实验的时限仍单独配置为 1200 秒，本次不改。运行目录统一来自 `paths.runtime_dir`。迁移电脑只需改总配置中的工具位置并重新登录 Codex，不把账号凭据写入 Git。
 
@@ -205,34 +205,34 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 `windows_sandbox` 显式传给 CLI，不依赖被 `--ignore-user-config` 忽略的个人设置；只接受 `elevated` / `unelevated`，不自动降级，默认使用现有的 `elevated`。`shell_executable` 是 PowerShell 的命令名或绝对路径。`preflight_timeout_seconds` 是不调用模型的本机沙箱检查时限。
 
-`python_executable` 是正式路径制卡与直读实验共用的 Python 命令名或路径，`null` 表示复用运行入口的 Python。当前总配置与示例为 `.venv/Scripts/python.exe`，通过 `python automation/run.py bootstrap --install --json` 安装锁定的 pypdf 6.18.0；旧 Codex 环境保留不动，不需初始化 MiKTeX。相对工具路径基于项目根目录，不受当前 PowerShell 目录影响；不能指向缺依赖的 Python。
+`python_executable` 是正式路径制卡与直读实验共用的 Python 命令名或路径，`null` 表示复用运行入口的 Python。当前总配置与示例为 `../.venv/Scripts/python.exe`，即 uv 工作区共享的仓库根 `.venv`；该环境由 `uv sync --all-packages` 管理，所需 pypdf 6.18.0 已在 `hydro-platform/pyproject.toml` 中声明为正式依赖，因此不需要再为它单独自举安装。旧 Codex 环境保留不动，不需初始化 MiKTeX。相对工具路径基于项目根目录，不受当前 PowerShell 目录影响；不能指向缺依赖的 Python。
 
 ## 项目安装配置 deployment
 
-每日计划另由 `scheduler` 控制：enabled（本机true、示例false）、task_name、daily_time、poll_interval_minutes、retry_interval_minutes、max_attempts_per_slot、logon_delay_seconds、execution_time_limit_seconds、powershell_executable、command_timeout_seconds。字段含义、修改后是否需重新install和暂停方式见 [调度配置表](../documentation/cron.md#总配置字段)。仅填配置不代表新机器已经注册任务，需读回schedule-status。
+每日计划另由 `scheduler` 控制：enabled（本机true、示例false）、task_name、daily_time、poll_interval_minutes、retry_interval_minutes、max_attempts_per_slot、logon_delay_seconds、execution_time_limit_seconds、powershell_executable、command_timeout_seconds。字段含义、修改后是否需重新install和暂停方式见 [调度配置表](cron.md#总配置字段)。仅填配置不代表新机器已经注册任务，需读回schedule-status。
 
-`environment_dir` 选择项目独立环境；`dependency_lock_file` 选择版本/来源/哈希锁；`wheel_cache_dir` 选择下载缓存；`base_python` 是已有基础 Python（null 为当前解释器）；`install_timeout_seconds` 与 `download_timeout_seconds` 分别限制子进程等待和下载套接字。均在总配置修改，无需编辑代码。[字段与换机边界](../documentation/deployment.md)。更改环境目录后同步改 `pdf_direct_trial.python_executable`，安装器不改生产配置。
+`environment_dir` 选择项目 Python 环境：可以是平台内目录，也可以是 uv 工作区根的共享 `.venv`（当前为 `../.venv`，指向平台目录之外），其他取值会被拒绝。`dependency_lock_file` 选择版本/来源/哈希锁；`wheel_cache_dir` 选择下载缓存；`base_python` 是已有基础 Python（null 为当前解释器）；`install_timeout_seconds` 与 `download_timeout_seconds` 分别限制子进程等待和下载套接字。均在总配置修改，无需编辑代码。[字段与换机边界](deployment.md)。环境位于工作区根 `.venv` 时由 uv 管理（`uv sync --all-packages`），平台的 bootstrap 只做核对；为与仓库依赖树隔离而使用平台内环境时，才由平台按锁文件自举安装。更改环境目录后同步改 `pdf_direct_trial.python_executable`，安装器不改生产配置。
 
-`native_tools_dir` 选择项目 PDF 工具目录（默认 `.tools/poppler`）；`native_lock_file` 为 `automation/setup/native-tools.lock.json`；`native_cache_dir` 为 `.runtime/native-cache`。运行 `bootstrap-native --install --json` 安装。当前三项读取工具均为 `.tools/poppler/Library/bin/` 下的同名 exe，不依赖旧用户 Codex/MiKTeX 缓存。改工具目录时在本配置同步改三项 exe 路径；未知目录不会被安装器接管。[原生工具安装、校验与限制](../documentation/native-deployment.md)。
+`native_tools_dir` 选择项目 PDF 工具目录（默认 `hydro-platform/.tools/poppler`）；`native_lock_file` 为 `hydro-platform/automation/setup/native-tools.lock.json`；`native_cache_dir` 为 `hydro-platform/.runtime/native-cache`。运行 `uv run hydro-platform bootstrap-native --install --json` 安装。当前三项读取工具均为 `.tools/poppler/Library/bin/` 下的同名 exe，不依赖旧用户 Codex/MiKTeX 缓存。改工具目录时在本配置同步改三项 exe 路径；未知目录不会被安装器接管。[原生工具安装、校验与限制](native-deployment.md)。
 
 旧配置未填写文字引擎时仍为 `pdftotext`；当前总配置显式为 `pypdf`，不自动换引擎。`pdfinfo_executable`、`pdftoppm_executable`、`render_dpi` 和单工具超时复用 `card_generator.pdf_reader`；仅 pdftotext 引擎使用它的路径。路径模式不启动或检查 MCP 服务脚本。模型收到原 PDF 路径和工具位置，不预塞全文，也不要求固定页摘录。自定义配置仍引用旧直读实验提示词时，应改为 v2；当前单 Agent 使用主提示词 v8 与 workflow_mode=single_agent。
 
 临时目录位于 `paths.runtime_dir`；报告位于 `paths.card_trials_dir/pdf-direct-read/`。继承现有进度和连接保护配置；不使用旧 MCP 的整篇读取次数限制，不自动重新启动一次失败实验。`--timeout` 仍只是 Zotero HTTP 请求超时，模型调用时限应改上述 `timeout_seconds`。
 
-仅检查本机，不花模型额度：`python automation/run.py pdf-direct-read-trial --item-key CEXH4PQA --preflight-only --json`。正常直读命令也会自动先做同一检查，失败就停止。
+仅检查本机，不花模型额度：`uv run hydro-platform pdf-direct-read-trial --item-key CEXH4PQA --preflight-only --json`。正常直读命令也会自动先做同一检查，失败就停止。
 
-团队目标库已经确定为 qinjiajun，群组 ID 为 6618088，保存在可复现的 `config.json` 中。群组 ID 不是密钥，可以进入 Git。
+团队目标库已经确定为 qinjiajun，群组 ID 为 6618088，保存在可复现的 `hydro-platform/config/config.json` 中。群组 ID 不是密钥，可以进入 Git。
 
-`config.example.json` 用于解释配置结构。只有本机需要覆盖团队配置时，才复制为被 Git 忽略的 `config.local.json`。
+`hydro-platform/config/config.example.json` 用于解释配置结构。只有本机需要覆盖团队配置时，才复制为被 Git 忽略的 `hydro-platform/config/config.local.json`。
 
-`config.local.json` 是完整的另一份配置，不会被自动发现，也不会与 `config.json` 合并。使用时显式传入 `--config config/config.local.json`，或令 `HYDRO_PLATFORM_CONFIG` 指向该文件；无需改代码。环境检查与恢复也使用同一选择规则。[操作说明](../documentation/runtime-maintenance.md)。
+`config.local.json` 是完整的另一份配置，不会被自动发现，也不会与 `config.json` 合并。使用时显式传入 `--config hydro-platform/config/config.local.json`，或令 `HYDRO_PLATFORM_CONFIG` 指向该文件；无需改代码。环境检查与恢复也使用同一选择规则。[操作说明](runtime-maintenance.md)。
 
 如果还不知道群组 ID，可以先运行发现命令：
 
-    python automation/run.py discover-groups --json
+    uv run hydro-platform discover-groups --json
 
 然后执行目标群组预检：
 
-    python automation/run.py preflight --json
+    uv run hydro-platform preflight --json
 
-程序默认定位同一项目中的 `config/config.json`。如果以安装包方式运行或临时使用另一份总配置，可设置 `HYDRO_PLATFORM_CONFIG`，也可显式传入 `--config`；这些只是总配置入口，不保存第二套业务参数。
+程序默认定位同一项目中的 `hydro-platform/config/config.json`。如果以安装包方式运行或临时使用另一份总配置，可设置 `HYDRO_PLATFORM_CONFIG`，也可显式传入 `--config`；这些只是总配置入口，不保存第二套业务参数。

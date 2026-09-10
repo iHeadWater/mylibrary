@@ -4,24 +4,24 @@
 
 ## 怎么运行
 
-在项目根目录的 PowerShell：
+在仓库根目录的 PowerShell：
 
 ```powershell
-python automation/run.py setup --json
-python automation/run.py setup --apply --json
+uv run hydro-platform setup --json
+uv run hydro-platform setup --apply --json
 ```
 
 第一条是只读预览：不下载、不创建运行区、不启动Zotero、不注册任务。它仍会检查当前本机程序、登录及共享库，所以不是离线清单。
 
 第二条执行安装与恢复。完成或中断后均可重复同一条命令：完整环境复用，已保存卡片按来源对账，不删除未知目录、不为了恢复重调用AI。进度在stderr显示“安装进度”，最终stdout保留一个JSON；加 `--no-progress` 可关闭。
 
-日常处理仍用 `python automation/run.py run-once --json`，或由已启用的每日计划运行。日常不需要反复执行setup。
+日常处理仍用 `uv run hydro-platform run-once --json`，或由已启用的每日计划运行。日常不需要反复执行setup。
 
 ## 开始前
 
 - 已取回仓库源码、模板和共享成果；本地没有推送/备份的结果不能凭空恢复。
 - 已安装支持的基础Python（依赖锁要求 >=3.12,<3.15）、Zotero和Codex；本人完成私人账号登录，共享库与PDF同步可用。程序不复制认证文件。
-- 选择完整总配置；默认 `config/config.json`，另一个配置用 `--config` 或 `HYDRO_PLATFORM_CONFIG`，没有自动覆盖合并。
+- 选择完整总配置；默认 `hydro-platform/config/config.json`，另一个配置用 `--config` 或 `HYDRO_PLATFORM_CONFIG`，没有自动覆盖合并。
 - 当前统一安装要求 `single_agent` / `local_path`，PDF Python指向 `deployment.environment_dir`，三项PDF工具指向 `deployment.native_tools_dir`。路径对不齐报 `SETUP_READER_BINDING_MISMATCH`，不偷偷改配置。自定义外部工具仍可用原来的分步入口。
 - 只在指定制卡机启用 `scheduler.enabled`。另一台只是查看资料或做演练时应关闭，避免两台机器同时制卡；当前不是分布式授权系统。
 
@@ -31,15 +31,16 @@ python automation/run.py setup --apply --json
 
 先用有私有仓库访问权的 GitHub 账号取回 `hanfandada/hydro-platform`。准备好上述基础软件、本人登录及 `qinjiajun` 共享库的本地 PDF 同步后，在新副本的根目录操作：
 
-1. 首次复制 `config/config.json` 为 `config/config.local.json`；已有私人配置时不要覆盖。它是完整配置，不是增量覆盖文件，且已被 Git 忽略。
+1. 首次复制 `hydro-platform/config/config.json` 为 `hydro-platform/config/config.local.json`；已有私人配置时不要覆盖。它是完整配置，不是增量覆盖文件，且已被 Git 忽略。
 2. 在私人配置中将 `scheduler.enabled` 改为 `false`，先手动演练，不创建第二台机器的自动制卡计划。若要真正移交制卡职责，应先暂停原制卡机；当前跨机器没有共同任务锁。
 3. 检查 `card_generator.proxy`：仓库配置的 `http://127.0.0.1:7897` 只适用于该端口确有代理的电脑。有代理则填写新电脑的实际地址；不需显式指定则将 `enabled` 设为 `false`，恢复继承该电脑环境。不会更改系统或 Codex 客户端设置。
-4. 使用同一份私人配置执行下列命令。依赖和 PDF 工具会在新副本内重建，不要复制旧 `.venv`、`.tools`、`.runtime` 或账号凭据。
+4. 在仓库根先执行 `uv sync --all-packages` 建立 uv workspace 共享的仓库根 `.venv`，再用同一份私人配置执行下列命令。依赖由 uv 装进共享 `.venv`，PDF 工具会在新副本内重建；不要复制旧 `.venv`、`.tools`、`.runtime` 或账号凭据。
 
 ```powershell
-python automation/run.py setup --config config/config.local.json --json
-python automation/run.py setup --apply --config config/config.local.json --json
-python automation/run.py run-once --config config/config.local.json --json
+uv sync --all-packages
+uv run hydro-platform setup --config hydro-platform/config/config.local.json --json
+uv run hydro-platform setup --apply --config hydro-platform/config/config.local.json --json
+uv run hydro-platform run-once --config hydro-platform/config/config.local.json --json
 ```
 
 关闭调度时安装预期返回 `READY_MANUAL`。已有 7 张完整粗卡和主题成果随 Git 保存；同一文献库/PDF、模型及主题输入未变时，已有成果应复用，而不是再次制卡。恢复成功只是换机恢复验收；验证新电脑确实能调用模型制卡，还需由用户加入一篇有完整 PDF 的新论文，再运行同一个 `run-once`。不要删除现有卡片来强迫重生成，也不要把“复用了旧卡”当作新电脑已经生成过新卡。
@@ -80,6 +81,6 @@ READY不是全部论文已制卡，也不是科学质量认证。`recovered_stat
 - 报告：`.runtime/setup-trials/relocated-903ecba2b46e40d8ac3e0e8b34d55ce0/verification.json`。演练器先后遇到中文输出编码和隔离模式辅助模块导入错误，修复后在原目录继续；旧失败报告保留，不把续跑说成首轮无故障。不是干净新电脑或新账号验证，原Zotero/Codex/基础Python仍在使用；没有创建第二个自动任务。
 - 正式项目随后执行setup --apply成功，20秒左右返回READY_SCHEDULED：两类安装REUSED、3篇COMPLETED、已有HydroPlatform-qinjiajun计划核对通过、最终环境检查12项通过。卡片/主题/事件/日报/成员文件前后哈希一致；本地快照按恢复流程更新。报告 `.runtime/logs/setup-runs/ba6d20791c6947899d347d0584af1af3.json`。不是新增模型制卡或实际登录触发验证。
 
-需要显式再次演练时运行 `python automation/verify_setup.py`。它会建立新项目副本并下载依赖，不是日常步骤。只有前一进程已确认退出，才用 `--resume <trial_root>`继续；不得因观察超时盲目重复启动。查看报告比重新跑科研模型更合适。
+需要显式再次演练时运行 `uv run python hydro-platform/automation/verify_setup.py`。它会建立新项目副本并下载依赖，不是日常步骤。只有前一进程已确认退出，才用 `--resume <trial_root>`继续；不得因观察超时盲目重复启动。查看报告比重新跑科研模型更合适。
 
 尚未证明：从零基础软件安装、干净异机的账号/沙箱/调度全链路，以及真实关机、重新登录和云端PDF同步延迟。剩余事项见 [工程化状态](engineering-status.md)，分步操作保留在 [Python部署](deployment.md)、[PDF工具](native-deployment.md)、[运行维护](runtime-maintenance.md)、[每日计划](cron.md)。
