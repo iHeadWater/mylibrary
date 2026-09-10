@@ -84,6 +84,36 @@ PLATFORM_NOT_IGNORED_PATHS = (
     ".gitignore",
 )
 
+# --------------------------------------------------------------------------------------
+# 科研工作流(王新宇线)的产物:默认落在仓库根,落点由 paths.artifact_root 决定
+# --------------------------------------------------------------------------------------
+
+# 四个默认产物目录。它们不放在 hydro-platform/ 下,而是仓库根,因此单独一组常量。
+ARTIFACT_ROOT_DIRS = ("证据卡", "主题", "运行记录", "文献链接")
+
+# 默认位置必须被 ignore 规则命中(git check-ignore 对不存在的路径也会判定,
+# 所以这里用示例文件名即可)。
+ARTIFACT_IGNORED_PATHS = tuple(f"{name}/示例.md" for name in ARTIFACT_ROOT_DIRS)
+
+# 非空性:合并必须真的发生过。合并前本仓库没有这两个 skill,
+# 缺少它们时下面的断言会在空集上通过。
+REQUIRED_RESEARCH_SKILLS = (
+    "skills/hydrology-evidence-cards/SKILL.md",
+    "skills/hydrology-theme-synthesis/SKILL.md",
+)
+
+# 随合并一起搬进 docs/hydro-platform/ 的中文规范目录。它们属于文档,必须保持
+# 被跟踪、不被 ignore 规则误吞。
+RESEARCH_DOCS_DIRS = (
+    "主题模板",
+    "主题规范",
+    "证据卡规范",
+    "证据卡模板",
+    "证据卡模块",
+    "产品与流程",
+    "图与形成依据",
+)
+
 # ``str.startswith`` accepts a tuple; keep the prefix tuples in a form pytest can print.
 _FORBIDDEN_PLATFORM_PREFIXES = tuple(FORBIDDEN_PLATFORM_PREFIXES)
 
@@ -724,3 +754,55 @@ def test_platform_output_dirs_are_ignored() -> None:
         "are too broad and would swallow real code or the repository's own "
         ".gitignore:\n  " + "\n  ".join(wrongly_ignored)
     )
+
+
+# --------------------------------------------------------------------------------------
+# 10. 科研工作流产物:默认位置不入库,且规则必须覆盖它
+# --------------------------------------------------------------------------------------
+
+
+def test_research_workflow_artifacts_are_ignored_and_untracked() -> None:
+    """要求:科研工作流(王新宇线)的产物默认不入库,且 ignore 规则必须覆盖默认位置。
+
+    落点本身由 ``paths.artifact_root`` 决定(默认仓库根,可指向共享盘),
+    所以这里只守卫**默认位置**:与平台产物同一原则,分两处:
+    - OUTCOME:四个默认产物目录下不得有任何被跟踪的文件;
+    - MECHANISM:默认位置必须被 ignore 规则命中——否则规则被删掉也要等到
+      产物已经被提交才会暴露。
+
+    非空性:合并必须真的发生过,否则下面的断言会在空集上通过。因此同时断言
+    两个科研 skill 与中文规范目录确实存在、确实被跟踪、且**没有**被 ignore。
+    最后一项也是负向控制:防止过宽的规则(例如整目录 ``docs/``)误吞随合并
+    一起搬进来的规范文档。
+    """
+
+    tracked_artifacts = _git_ls_files(*ARTIFACT_ROOT_DIRS)
+    assert not tracked_artifacts, (
+        "科研产物默认位置仍在被 git 跟踪——它们是运行产物,应只存在于本地或共享盘"
+        "(落点由 paths.artifact_root 决定):\n  " + "\n  ".join(sorted(tracked_artifacts))
+    )
+
+    not_ignored = [path for path in ARTIFACT_IGNORED_PATHS if not _is_ignored(path)]
+    assert not not_ignored, (
+        "这些科研产物默认路径没有任何 ignore 规则覆盖,可能被误提交;"
+        "若产物根指向仓库外,规则无副作用,但默认位置必须仍然受控:\n  "
+        + "\n  ".join(not_ignored)
+    )
+
+    tracked = set(_git_ls_files("skills", "docs"))
+
+    for path in REQUIRED_RESEARCH_SKILLS:
+        assert (REPO_ROOT / path).is_file(), (
+            f"缺少 {path}——说明两分支合并没有发生,本测试会在空集上通过"
+        )
+        assert path in tracked, f"{path} 存在但未被 git 跟踪"
+        assert not _is_ignored(path), (
+            f"{path} 被 ignore 规则命中——规则过宽,会吞掉 skill 源码"
+        )
+
+    for name in RESEARCH_DOCS_DIRS:
+        rel = f"docs/hydro-platform/{name}"
+        assert (REPO_ROOT / rel).is_dir(), f"缺少随合并搬入的规范目录 {rel}"
+        assert not _is_ignored(f"{rel}/示例.md"), (
+            f"ignore 规则命中 {rel}/ ——规则过宽,会吞掉随合并搬入的规范文档"
+        )
