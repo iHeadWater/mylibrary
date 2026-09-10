@@ -12,7 +12,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 本仓库的 Zotero MCP server(`hydrolitagent/zotero/server.py`,FastMCP SSE 端口 8002)是唯一的 Zotero 访问入口。**不要改动它的技术架构**——已有其他服务依赖。
 
-> ⚠️ **本节与一处未决分歧有关。** 上句称 MCP 是「唯一访问入口」;而另一条约定称**读取走本机直连**(pyzotero + Local API 23119)、不走 MCP,`hydro-platform` 的实现也站在直连一侧。两条表述互相冲突,**尚未裁决**,详见 [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md)。在裁决前,新增 Zotero 读取代码前先确认属于哪一侧。
+> ⚠️ **上句的作用域是容器部署,不是全部场景。** 读取 Zotero 按运行环境分工:**裸 host**(本机、制卡机)走直连——元数据用 pyzotero、全文用 Zotero Desktop Local API `127.0.0.1:23119`;**容器**里才走这个 8002 MCP 服务(它的 Local API 默认 `host.docker.internal:23119`,正是为访问宿主 Zotero 而设)。`hydro-platform` 跑在裸 host,所以走直连,与此处并不冲突。详见 [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md)。
 
 工具分两类(见 `server.py` 头部注释):
 - **元数据类**(pyzotero Web API,api.zotero.org):`zotero_search`、`zotero_get_item`、`zotero_get_recent`、`zotero_get_collection_items`、`zotero_get_collections`、`zotero_get_tags`、`zotero_search_by_tag`、`zotero_fulltext_search`、`zotero_get_attachments`、`zotero_get_annotations`
