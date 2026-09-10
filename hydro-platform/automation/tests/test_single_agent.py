@@ -299,13 +299,16 @@ class SingleAgentTests(unittest.TestCase):
             with self.assertRaises(ConfigError):
                 load_config(config)
 
-    def test_all_eight_adapted_templates_have_attribution_and_no_human_review_fields(self):
+    def test_all_nine_adapted_templates_have_attribution_and_no_human_review_fields(self):
         root = Path(__file__).resolve().parents[2] / "templates" / "evidence-cards"
         templates = list(root.glob("0*.md"))
-        self.assertEqual(len(templates), 8)
+        # 2.0.0:正文骨架改用王新宇 V1.7,并新增第 9 类 platform-decision-synthesis。
+        # 「## AI 推理」「## 信息边界」两节必须保留——它们承载原文陈述/原文转述/
+        # AI 推理三分与信息边界声明,对应王新宇侧的 statement_role 机器字段。
+        self.assertEqual(len(templates), 9)
         for path in templates:
             body = path.read_text(encoding="utf-8")
-            self.assertIn('template_version: "1.1.0"', body)
+            self.assertIn('template_version: "2.0.0"', body)
             self.assertIn("## AI 推理", body)
             self.assertIn("## 信息边界", body)
             self.assertNotIn("- 本人", body)
