@@ -2,17 +2,23 @@
 
 ## 环境要求
 
-- Python 3.10+
+- Python **3.12–3.14**（`requires-python = ">=3.12,<3.15"`；`docker/Dockerfile` 用 `python:3.12-slim`）
 - [uv](https://docs.astral.sh/uv/) 包管理器
 - Zotero 桌面版（至少运行过一次，生成本地数据库）
 
 ## 安装项目
 
 ```bash
-git clone git@github.com:OuyangWenyu/mylibrary.git
+git clone git@github.com:iHeadWater/mylibrary.git
 cd mylibrary
-uv pip install -e .
+uv sync --all-packages
 ```
+
+> **本仓库是 uv workspace，含两个成员**：`hydrolitagent`（根包）与 `hydro-platform`。二者共享同一个 `.venv` 和同一个 `uv.lock`。
+>
+> 必须用 `uv sync --all-packages` —— 裸 `uv sync` 只装根包的依赖，`uv run hydro-platform …` 会不可用。
+>
+> 装好之后两个包的入口分别是 `uv run hydrolitagent …` 与 `uv run hydro-platform …`。注意 `hydrolitagent` **横跨入库与消费两侧**（入库是下载 + 入 Zotero，其余基本都属于消费），而 `hydro-platform` 是消费侧的长期资产支线、**运行时为 Windows-only**。分侧导览见[用户指南总览](../user-guide/index.md)。
 
 ## 配置 Zotero
 

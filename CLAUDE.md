@@ -12,6 +12,8 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 本仓库的 Zotero MCP server(`hydrolitagent/zotero/server.py`,streamable HTTP 端口 8002,端点路径 `/mcp`)是唯一的 Zotero 访问入口。**不要改动它的技术架构**——已有其他服务依赖。
 
+> ⚠️ **上句的作用域是容器部署,不是全部场景。** 读取 Zotero 按运行环境分工:**裸 host**(本机、制卡机)走直连——元数据用 pyzotero、全文用 Zotero Desktop Local API `127.0.0.1:23119`;**容器**里才走这个 8002 MCP 服务(它的 Local API 默认 `host.docker.internal:23119`,正是为访问宿主 Zotero 而设)。`hydro-platform` 跑在裸 host,所以走直连,与此处并不冲突。详见 [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md)。
+
 工具分两类(见 `server.py` 头部注释):
 - **元数据类**(pyzotero Web API,api.zotero.org):`zotero_search`、`zotero_get_item`、`zotero_get_recent`、`zotero_get_collection_items`、`zotero_get_collections`、`zotero_get_tags`、`zotero_search_by_tag`、`zotero_fulltext_search`、`zotero_get_attachments`、`zotero_get_annotations`
 - **PDF 原文类**(Zotero Desktop **Local API**,`http://host.docker.internal:23119`):`zotero_get_fulltext`、`zotero_get_file_info`。**需要 Zotero Desktop 运行且勾选 "Allow other applications to communicate with Zotero"**。Zotero PDF 存在 Google Drive,只能本地访问——Local API 就是从 GDrive 同步存储取文件的方式。
@@ -31,6 +33,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 | `bilibili-upload` | podcast 音频 → MP4 → B 站上传 | 无 |
 | `download-pdf` | 论文 PDF 下载(机构访问) | 无 |
 | `zotero-query` | 文献库查询 | 读库 |
+| `hydro-platform` | 科研知识平台 CLI 入口:共享 Zotero 库 → 证据包 → 主题池。**运行时 Windows-only**,详见该 skill | 直连 Local API |
 
 > `ai-news-weekly-polish` 留在 dailyinfo(它是 dailyinfo pipeline 产物)。`paper-to-zotero`/`run-paper-to-zotero` 属入库端,保留在本仓库作采集入口。
 
@@ -83,6 +86,18 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 - 公众号润色:`uv run python -m hydrolitagent.literature.wechat.polish <md_file>`
 - 配图/封面:`uv run python -m hydrolitagent.literature.wechat.figure <md_file>` (需 ZHIPUAI_API_KEY)
 
+### 科研知识平台 (hydro-platform)
+
+**消费侧的长期资产支线**(入库只有两件事:下载 PDF + 建 Zotero 条目;其余都算消费):把共享 Zotero 库里已有的论文沉淀成证据包与主题池,产出的是长期可追溯的知识资产而非当期内容。不是交互式问答。运行时 **Windows-only**。命令一律从**仓库根**执行:
+
+- 跑完一整轮(检测 → 门禁 → 制卡 → 主题 → 账本 → 日报):`uv run hydro-platform run-once --json`
+- 只预览本地任务,不扫 Zotero、不调模型:`uv run hydro-platform run-once --dry-run --json`
+- 只跑主题:`uv run hydro-platform themes-run --json`(`--dry-run` 只读预览)
+- 健康检查:`uv run hydro-platform doctor --json`
+- 全部 29 个子命令:`uv run hydro-platform --help`
+
+不要直接读写平台的状态文件(`.runtime/tasks.json`、`themes/_registry.json`),也不要手工编辑证据包/主题文件——平台原子写入并校验哈希,手改会被判为漂移。完整说明在 `docs/hydro-platform/`。
+
 ### Docs
 - Serve docs: `uv run mkdocs serve`
 - Build docs: `uv run mkdocs build --strict`
@@ -112,6 +127,10 @@ skills/              # Agent skills (zotero-query, paper-to-zotero, 及迁入的
 outputs/             # 精读产物: outputs/weekly-review/{date}/{cards,article,podcast}
 papers/              # 按主题组织的文献库(10 主题, 6173 篇);知识库核心资产
 docs/                # Documentation site (mkdocs-material)
+hydro-platform/      # 科研知识平台(uv workspace 成员;消费侧:Zotero → 证据包 → 主题池)
+                     #   automation/ 代码 · templates/ 规范资产 · config/ 配置
+                     #   生成产物(evidence-packs/ themes/ reports/ activity/ members/)
+                     #   不入库,由运行时自建
 tests/               # pytest (test_zotero_server.py, test_paper_to_zotero.py)
 
 equation_from_data/  # Paper reproduction: equation discovery from data

@@ -1,0 +1,80 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_read_status",
+    "source_page_count",
+    "visual_content_status",
+    "source_read_evidence",
+    "analyses",
+    "overall_assessment"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "enum": [1] },
+    "source_read_status": { "enum": ["FULL_PDF_REVIEWED", "UNREADABLE"] },
+    "source_page_count": { "type": "integer" },
+    "visual_content_status": { "enum": ["REVIEWED", "NOT_PRESENT", "UNREADABLE"] },
+    "source_read_evidence": { "type": "string" },
+    "analyses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "analysis_id",
+          "analysis_type",
+          "statement",
+          "premise_fact_ids",
+          "reasoning",
+          "scope",
+          "severity",
+          "confidence",
+          "evidence"
+        ],
+        "properties": {
+          "analysis_id": { "type": "string" },
+          "analysis_type": {
+            "enum": [
+              "evidence_strength",
+              "causal_validity",
+              "methodological_limitation",
+              "external_validity",
+              "alternative_explanation",
+              "internal_conflict",
+              "uncertainty",
+              "research_gap"
+            ]
+          },
+          "statement": { "type": "string" },
+          "premise_fact_ids": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "reasoning": { "type": "string" },
+          "scope": { "type": "string" },
+          "severity": { "enum": ["LOW", "MEDIUM", "HIGH"] },
+          "confidence": { "type": "number" },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/evidence" }
+          }
+        }
+      }
+    },
+    "overall_assessment": { "type": "string" }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "locator", "evidence_text", "visual"],
+      "properties": {
+        "page": { "type": "integer" },
+        "locator": { "type": "string" },
+        "evidence_text": { "type": "string" },
+        "visual": { "type": "boolean" }
+      }
+    }
+  }
+}

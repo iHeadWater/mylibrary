@@ -1,0 +1,47 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_read_status",
+    "source_page_count",
+    "visual_content_status",
+    "source_read_evidence",
+    "template_id",
+    "classification_confidence",
+    "classification_reason",
+    "card_body_markdown"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [2]
+    },
+    "source_read_status": {
+      "type": "string",
+      "enum": ["FULL_PDF_REVIEWED", "UNREADABLE"]
+    },
+    "source_page_count": {
+      "type": "integer"
+    },
+    "visual_content_status": {
+      "type": "string",
+      "enum": ["REVIEWED", "NOT_PRESENT", "UNREADABLE"]
+    },
+    "source_read_evidence": {
+      "type": "string"
+    },
+    "template_id": {
+      "type": "string"
+    },
+    "classification_confidence": {
+      "type": "number"
+    },
+    "classification_reason": {
+      "type": "string"
+    },
+    "card_body_markdown": {
+      "type": "string"
+    }
+  }
+}

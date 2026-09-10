@@ -206,3 +206,28 @@ _docx_extract.md
 # 根目录录音 + 转写稿（MM-DD 标题.mp3 / .txt，仅匹配仓库根，不影响子目录）
 /[0-9][0-9]-[0-9][0-9] *.mp3
 /[0-9][0-9]-[0-9][0-9] *.txt
+
+# ── hydro-platform：运行产物一律不入库 ──
+# 证据包 / 主题池 / 日报 / 贡献账本 / 成员映射：纯运行产物，平台运行时自建。
+# 这些目录的说明文档在 docs/hydro-platform/，不在目录内。
+hydro-platform/evidence-packs/
+hydro-platform/themes/
+hydro-platform/reports/
+hydro-platform/activity/
+hydro-platform/members/
+# 本机运行状态与本地工具（.venv/ 、__pycache__/ 等深度无关规则见上方，此处不重复）
+hydro-platform/.runtime/
+hydro-platform/.tools/
+hydro-platform/*.bootstrap.lock
+# 本机配置与凭据
+hydro-platform/config/config.local.json
+.env.*
+!.env.example
+*.key
+*.pem
+# 编辑器状态与临时文件（*.log 见上方 Django 段）
+hydro-platform/.obsidian/
+# 限定在平台内：平台原 .gitignore 位于平台根，其 *.tmp/*.temp 的作用域
+# 本就是"平台内任意深度"；写成全局会静默吞掉其他目录下未来的同名文件
+hydro-platform/**/*.tmp
+hydro-platform/**/*.temp

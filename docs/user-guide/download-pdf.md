@@ -39,8 +39,7 @@ npx playwright install chromium
 ### 3. 安装项目依赖
 
 ```bash
-uv sync --python python3
-uv pip install -e .
+uv sync --all-packages
 ```
 
 （pyzotero 已是基础依赖，无需单独安装）

@@ -1,0 +1,26 @@
+[project]
+name = "hydro-platform-automation"
+version = "0.1.0"
+description = "Unattended Zotero-to-evidence-pack automation for hydro-platform"
+requires-python = ">=3.12,<3.15"
+# pypdf 由 uv 安装到 workspace 根 .venv。列为正式依赖是刻意的：
+# uv sync 是精确同步，不在依赖图里的包会被移除，因此原先由
+# deployment.py 自举安装的 wheel 必须改由 uv 声明，否则会被同步掉。
+dependencies = ["pypdf==6.18.0"]
+
+[project.optional-dependencies]
+# 保留旧写法以兼容既有安装命令；语义与正式依赖相同。
+pdf-direct = ["pypdf==6.18.0"]
+
+[project.scripts]
+hydro-platform = "hydro_platform.cli:main"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "automation/src"}
+
+[tool.setuptools.packages.find]
+where = ["automation/src"]

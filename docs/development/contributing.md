@@ -3,8 +3,8 @@
 ## 开发环境
 
 ```bash
-# 安装项目 + 开发依赖
-uv pip install -e ".[dev]"
+# 安装两个 workspace 成员的依赖（含 dev 组）
+uv sync --all-packages
 
 # 确认测试通过
 uv run pytest tests/test_zotero_server.py tests/test_paper_to_zotero.py -v

@@ -1,0 +1,103 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_read_status",
+    "source_page_count",
+    "visual_content_status",
+    "source_read_evidence",
+    "paper_type",
+    "facts",
+    "coverage",
+    "key_visuals"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "enum": [1] },
+    "source_read_status": { "enum": ["FULL_PDF_REVIEWED", "UNREADABLE"] },
+    "source_page_count": { "type": "integer" },
+    "visual_content_status": { "enum": ["REVIEWED", "NOT_PRESENT", "UNREADABLE"] },
+    "source_read_evidence": { "type": "string" },
+    "paper_type": { "type": "string" },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fact_id",
+          "category",
+          "statement",
+          "interpretation_level",
+          "confidence",
+          "evidence"
+        ],
+        "properties": {
+          "fact_id": { "type": "string" },
+          "category": {
+            "enum": [
+              "research_question",
+              "context",
+              "data",
+              "method",
+              "result",
+              "negative_result",
+              "visual_result",
+              "limitation",
+              "recommendation",
+              "other"
+            ]
+          },
+          "statement": { "type": "string" },
+          "interpretation_level": { "enum": ["DIRECT", "SYNTHESIZED"] },
+          "confidence": { "type": "number" },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/evidence" }
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["section", "page_start", "page_end", "summary"],
+        "properties": {
+          "section": { "type": "string" },
+          "page_start": { "type": "integer" },
+          "page_end": { "type": "integer" },
+          "summary": { "type": "string" }
+        }
+      }
+    },
+    "key_visuals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "page", "role", "finding"],
+        "properties": {
+          "label": { "type": "string" },
+          "page": { "type": "integer" },
+          "role": { "enum": ["RESULT", "METHOD", "CONCEPT", "CONTEXT", "OTHER"] },
+          "finding": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "locator", "evidence_text", "visual"],
+      "properties": {
+        "page": { "type": "integer" },
+        "locator": { "type": "string" },
+        "evidence_text": { "type": "string" },
+        "visual": { "type": "boolean" }
+      }
+    }
+  }
+}

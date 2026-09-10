@@ -1,9 +1,17 @@
+[build-system]
+# 必须显式声明：缺省时 uv 视本工程为"未打包"（virtual），
+# project.scripts 的入口点不会被安装，`uv run hydrolitagent` 将不可用。
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "hydrolitagent"
 version = "0.1.0"
 description = "Literature knowledge base toolkit for hydrology research."
 readme = "README.md"
-requires-python = ">=3.10"
+# 下限由 workspace 成员 hydro-platform 决定（它要求 >=3.12,<3.15）。
+# docker/Dockerfile 使用 python:3.12-slim，满足此范围。
+requires-python = ">=3.12,<3.15"
 dependencies = [
   "graphifyy",
   "openai",
@@ -32,10 +40,19 @@ dev = [
 [project.scripts]
 hydrolitagent = "hydrolitagent.cli:main"
 
+[tool.uv.workspace]
+# hydro-platform 作为 workspace 成员：与 hydrolitagent 共享仓库根的 .venv 和 uv.lock。
+# 平台代码与资产在 hydro-platform/，其 pyproject 用 package-dir = automation/src。
+# 注意：uv sync 是精确同步，uv 是仓库根 .venv 的唯一管理者。
+members = ["hydro-platform"]
+
 [tool.setuptools.packages.find]
 include = ["hydrolitagent*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# 一次 pytest 同时收集两套测试：仓库根 tests/（hydrolitagent）与
+# hydro-platform/automation/tests/（平台，unittest 风格，由 pytest 原生收集）。
+# 两侧无同名测试模块，可直接并存，无需 __init__.py 或 conftest。
+testpaths = ["tests", "hydro-platform/automation/tests"]
 pythonpath = ["."]
 addopts = "-q"
