@@ -16,7 +16,7 @@
     "native_tools_dir": ".tools/poppler",
     "native_lock_file": "automation/setup/native-tools.lock.json",
     "native_cache_dir": ".runtime/native-cache",
-    "environment_dir": ".venv",
+    "environment_dir": "../.venv",
     "dependency_lock_file": "automation/setup/dependencies.lock.json",
     "wheel_cache_dir": ".runtime/wheel-cache",
     "base_python": null,
@@ -103,7 +103,7 @@
       "windows_sandbox": "elevated",
       "shell_executable": "powershell",
       "preflight_timeout_seconds": 120,
-      "python_executable": ".venv/Scripts/python.exe",
+      "python_executable": "../.venv/Scripts/python.exe",
       "text_extractor": "pypdf"
     },
     "connection_guard": {

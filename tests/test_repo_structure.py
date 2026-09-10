@@ -12,8 +12,11 @@ These tests encode the TARGET state of the restructure, not the current state:
   nothing generated is tracked) and the MECHANISM (the ignore rules that keep it
   from being committed in the first place) are guarded, because the outcome check
   alone only fires after the damage is done;
-* environment creation is owned by ``uv`` (``uv sync``), and the platform only
-  verifies the resulting environment.
+* deployment is DUAL-MODE: an ``environment_dir`` that resolves outside
+  ``hydro-platform/`` (the workspace's shared ``.venv``) is owned by ``uv``
+  (``uv sync``) and only verified by the platform, while an ``environment_dir``
+  inside the platform root is still provisioned by the platform itself (venv +
+  hash-locked wheels) for deployments isolated from the repo dependency tree.
 
 They therefore FAIL on a branch where the platform is still rooted at the repo
 root. That is expected and intended: the suite is RED until the restructure lands.
@@ -446,17 +449,53 @@ def test_environment_dir_in_workspace_venv() -> None:
 
 
 # --------------------------------------------------------------------------------------
-# 6. uv owns the environment
+# 6. dual-mode deployment: uv-managed OR self-contained
 # --------------------------------------------------------------------------------------
 
+# The two modes are told apart by where ``deployment.environment_dir`` resolves
+# relative to the platform root, so containment is the load-bearing primitive.
+DUAL_MODE_BRANCH = "is_relative_to"
 
-def test_bootstrap_defers_to_uv() -> None:
-    """Requirement: ``uv`` owns the environment; the platform only verifies it.
+# Evidence of the self-contained provisioning path: the hash-locked wheel install.
+HASH_LOCKED_INSTALL_FLAG = "--require-hashes"
 
-    ``hydro_platform/deployment.py`` must no longer contain a wheel-install code
-    path that writes into the environment directory (no ``"install"`` subprocess
-    invocation carrying wheel material, no ``_wheel(``/wheel-install helper), and
-    its bootstrap entrypoint must tell the operator to run ``uv sync``.
+
+def test_bootstrap_supports_dual_deployment_modes() -> None:
+    """Requirement: ``bootstrap`` keeps BOTH deployment modes, wired to the env location.
+
+    Why both must coexist:
+
+    * **uv-managed mode** — ``deployment.environment_dir`` resolves OUTSIDE
+      ``hydro-platform/``, i.e. to the uv workspace's shared ``<repo root>/.venv``.
+      There ``uv`` owns the environment: the platform must not create a venv, must
+      not download wheels and must not install anything. It only verifies the
+      environment it finds and tells the operator to run ``uv sync``. This is the
+      right mode for developing and testing the repository itself, where sharing
+      one environment derived from ``uv.lock`` avoids maintaining a second,
+      divergent dependency tree.
+    * **self-contained mode** — ``environment_dir`` resolves INSIDE
+      ``hydro-platform/``. The platform still provisions: it creates the venv and
+      installs the hash-locked wheels from ``dependencies.lock.json`` with
+      ``--require-hashes``, and records ownership in ``MARKER``. This is
+      deliberately retained for deployments that must be isolated from the
+      repository's dependency tree — an operator running the platform alongside
+      unrelated Python code, or an offline install from the verified wheel cache,
+      where ``uv sync`` against the repo's ``uv.lock`` is neither available nor
+      wanted.
+
+    REJECTED SPEC: an earlier version of this guard asserted the opposite — that
+    ``deployment.py`` contains NO wheel-install code path at all (no ``"install"``
+    invocation carrying wheel material, no ``_wheel(`` helper), on the theory that
+    ``uv`` would own every environment. That was rejected in favour of dual mode:
+    it would have deleted a working, security-reviewed provisioning path
+    (offline, hash-locked, ownership-marked) and made isolated deployment
+    impossible. This guard therefore locks in the DUAL property — both modes
+    present and reachable — instead of the ABSENCE of code.
+
+    This is a source-level structural guard. Behavioural coverage for both modes
+    lives in the platform's own suite (``automation/tests/test_deployment.py`` for
+    self-contained, ``automation/tests/test_deployment_uv_managed.py`` for
+    uv-managed).
     """
 
     deployment_py = PLATFORM_SRC / "hydro_platform" / "deployment.py"
@@ -469,28 +508,48 @@ def test_bootstrap_defers_to_uv() -> None:
     source = deployment_py.read_text(encoding="utf-8")
     lines = source.splitlines()
 
+    # (a) both modes are present: uv is advertised AND provisioning is still there.
+    assert UV_SYNC_HINT in source, (
+        "uv-managed mode is missing: the bootstrap entrypoint must tell the operator "
+        f"to run `{UV_SYNC_HINT}` - the literal {UV_SYNC_HINT!r} does not appear "
+        f"anywhere in {deployment_py}"
+    )
+
+    assert HASH_LOCKED_INSTALL_FLAG in source, (
+        "self-contained mode is missing: the platform must still be able to install "
+        f"hash-locked wheels, but the literal {HASH_LOCKED_INSTALL_FLAG!r} does not "
+        f"appear anywhere in {deployment_py}.\nDual mode requires BOTH the uv-managed "
+        "verify-only path and the in-platform provisioning path."
+    )
+
     install_lines = [
         f"{number}: {line.strip()}"
         for number, line in enumerate(lines, start=1)
         if QUOTED_INSTALL_ARG.search(line) and WHEEL_MATERIAL.search(line)
     ]
-    assert not install_lines, (
-        "deployment.py still installs wheels itself - uv owns the environment and the "
-        "platform must only verify it. Offending 'install' + wheel invocation(s):\n  "
-        + "\n  ".join(install_lines)
+    assert install_lines, (
+        "self-contained mode is missing its wheel install: expected an 'install' "
+        "invocation carrying wheel material (e.g. --no-index/--require-hashes/"
+        "--find-links). Dual mode requires the platform to keep provisioning "
+        "environments that live inside the platform root."
     )
 
     wheel_helper = WHEEL_INSTALL_CALL.search(source)
-    assert wheel_helper is None, (
-        "deployment.py still defines/calls a wheel-install helper "
-        f"({wheel_helper.group(0)!r} at offset {wheel_helper.start()}); environment "
-        "creation must be delegated to `uv sync`"
+    assert wheel_helper is not None, (
+        "self-contained mode is missing its verified-wheel helper: nothing in "
+        f"{deployment_py} matches {WHEEL_INSTALL_CALL.pattern!r} (e.g. a `_wheel(` "
+        "definition/call). Wheels must still be fetched and SHA256-verified for "
+        "in-platform environments."
     )
 
-    assert UV_SYNC_HINT in source, (
-        "the bootstrap entrypoint must tell the operator to run "
-        f"`{UV_SYNC_HINT}` - the literal {UV_SYNC_HINT!r} does not appear anywhere in "
-        f"{deployment_py}"
+    # (b) the two modes are actually distinguished by where the environment lives,
+    #     so neither path can silently hijack the other.
+    assert DUAL_MODE_BRANCH in source, (
+        "the mode decision is missing: deployment.py must choose between verify-only "
+        "and provisioning by whether deployment.environment_dir resolves inside the "
+        f"platform root (no {DUAL_MODE_BRANCH!r} containment check found in "
+        f"{deployment_py}). Without it, one mode would silently handle the other's "
+        "environment."
     )
 
 

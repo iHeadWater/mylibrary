@@ -1,4 +1,14 @@
-"""Install a hash-locked wheel into a new, project-owned venv; never mutate global Python."""
+"""Prepare the platform's Python environment; never mutate global Python.
+
+模式由 deployment.environment_dir 的位置决定：
+
+- **项目内**：自包含供给。创建项目私有环境，按哈希锁定从 PyPI 安装 wheel，
+  并写入所有权标记。适合需要与仓库依赖树隔离的部署。
+- **workspace 根 ``.venv``（项目外）**：由 uv 托管。本模块**只校验**——探针检查
+  解释器隔离与依赖版本，不创建、不安装、不联网下载，并在结果里提示 ``uv sync``。
+
+两种模式都不修改全局 Python，也不写入项目根目录。
+"""
 from __future__ import annotations
 
 import hashlib
@@ -133,6 +143,30 @@ def _wheel(package, cache, timeout):
     return path
 
 
+def _uv_managed(config, lock, digest, target, python, result):
+    """校验由 uv 托管的 workspace 共享环境；不创建、不安装、不下载。"""
+    result.update(
+        environment_dir=str(target), python_executable=str(python), lock_sha256=digest, manager="uv",
+        packages=[{"name": p["name"], "version": p["version"], "sha256": p["sha256"]} for p in lock["packages"]],
+        note="环境由 uv 托管（workspace 根 .venv）；本命令只校验，不创建也不安装。"
+             "请在仓库根执行 uv sync 准备或更新环境")
+    try:
+        probe = _probe(python, lock["packages"], config.deployment.install_timeout_seconds)
+    except DeploymentError:
+        result.update(status="UV_MANAGED_UNVERIFIED",
+                      error={"code": "UV_ENVIRONMENT_UNVERIFIED",
+                             "message": "未能验证 workspace 共享环境；请先在仓库根执行 uv sync"})
+        return result
+    if not _verified(probe, lock, target):
+        result.update(status="UV_MANAGED_DRIFT",
+                      error={"code": "ENVIRONMENT_DRIFT",
+                             "message": "workspace 共享环境的依赖或隔离状态与锁文件不一致；"
+                                        "不自动修改，请先执行 uv sync"})
+        return result
+    result.update(ok=True, status="UV_MANAGED", verification=probe)
+    return result
+
+
 def bootstrap(config, *, install=False):
     result = {"schema_version": 1, "operation": "bootstrap", "ok": False,
               "model_call_count": 0, "install_requested": install, "steps": [],
@@ -144,9 +178,12 @@ def bootstrap(config, *, install=False):
         root = config.paths.project_root.resolve()
         target = (settings.environment_dir or root / ".venv").resolve()
         cache = (settings.wheel_cache_dir or config.paths.runtime_dir / "wheel-cache").resolve()
-        if target == root or not target.is_relative_to(root) or not cache.is_relative_to(root):
-            raise DeploymentError("DEPLOYMENT_PATH_INVALID", "安装目录和缓存必须位于项目内，且环境不得是项目根目录")
+        if target == root or not cache.is_relative_to(root):
+            raise DeploymentError("DEPLOYMENT_PATH_INVALID", "项目缓存必须位于项目内，且环境不得是项目根目录")
         python = target / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        # 环境位于项目之外 = workspace 共享环境，由 uv 托管：只校验，不供给。
+        if not target.is_relative_to(root):
+            return _uv_managed(config, lock, digest, target, python, result)
         expected = {"schema_version": 1, "owner": "hydro-platform", "project_root": str(root),
                     "environment_dir": str(target), "lock_sha256": digest}
         result.update(environment_dir=str(target), python_executable=str(python), lock_sha256=digest,

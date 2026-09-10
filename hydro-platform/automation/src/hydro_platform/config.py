@@ -462,15 +462,20 @@ def _resolve_project_root(paths: dict[str, Any], config_file: Path | None) -> Pa
 
 
 def _resolve_project_path(
-    paths: dict[str, Any], name: str, project_root: Path
+    paths: dict[str, Any], name: str, project_root: Path, *, allow_workspace: bool = False
 ) -> Path:
     if name not in paths:
         raise ConfigError(f"缺少 paths.{name}")
     raw_path = _path_value(paths[name], name=name)
     resolved = (raw_path if raw_path.is_absolute() else project_root / raw_path).resolve()
-    if not resolved.is_relative_to(project_root):
-        raise ConfigError(f"paths.{name} 必须位于 paths.project_root 内")
-    return resolved
+    if resolved.is_relative_to(project_root):
+        return resolved
+    # 仅 deployment.environment_dir 允许借用平台所嵌入的 workspace 根的环境
+    # （uv 托管的共享 .venv）。只接受该根下约定位置的 .venv，避免配置把
+    # 环境指向任意外逃路径（如 ../outside 或 ../../../outside）。
+    if allow_workspace and resolved == project_root.parent / ".venv":
+        return resolved
+    raise ConfigError(f"paths.{name} 必须位于 paths.project_root 内")
 
 
 def _require_inside(path: Path, parent: Path, *, name: str, parent_name: str) -> None:
@@ -1133,7 +1138,9 @@ def load_config(
                        "native_tools_dir": ".tools/poppler", "native_lock_file": "automation/setup/native-tools.lock.json",
                        "native_cache_dir": str(path_config.runtime_dir / "native-cache")}
     for name, default in deploy_defaults.items():
-        deploy_values[name] = _resolve_project_path({name: deploy_values.get(name, default)}, name, path_config.project_root)
+        deploy_values[name] = _resolve_project_path(
+            {name: deploy_values.get(name, default)}, name, path_config.project_root,
+            allow_workspace=(name == "environment_dir"))
     protected = [path_config.evidence_packs_dir, path_config.themes_dir, path_config.templates_dir,
                  path_config.activity_dir, path_config.members_dir, path_config.reports_dir,
                  path_config.project_root / ".git", path_config.project_root / "automation", config_file.parent]
