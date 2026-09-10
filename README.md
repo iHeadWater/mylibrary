@@ -32,7 +32,7 @@ The result accumulates into a **literature knowledge base**: `papers/` organized
 
 ```bash
 # Clone and install
-git clone git@github.com:OuyangWenyu/mylibrary.git
+git clone git@github.com:iHeadWater/mylibrary.git
 cd mylibrary
 uv sync --all-packages   # installs BOTH packages in this uv workspace into the shared root .venv
 

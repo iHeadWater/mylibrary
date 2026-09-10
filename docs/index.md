@@ -36,7 +36,7 @@ AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:�
 
 ```bash
 # 安装
-git clone git@github.com:OuyangWenyu/mylibrary.git
+git clone git@github.com:iHeadWater/mylibrary.git
 cd mylibrary
 uv sync --all-packages   # 把 workspace 的两个包都装进共享的根 .venv
 

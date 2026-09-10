@@ -32,7 +32,7 @@ mylibrary 承担**情报汇集之后的深度处理**:
 
 ```bash
 # 克隆并安装
-git clone git@github.com:OuyangWenyu/mylibrary.git
+git clone git@github.com:iHeadWater/mylibrary.git
 cd mylibrary
 uv sync --all-packages   # 把 uv workspace 的**两个**包都装进共享的根 .venv
 

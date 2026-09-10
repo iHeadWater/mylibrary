@@ -9,7 +9,7 @@
 ## 安装项目
 
 ```bash
-git clone git@github.com:OuyangWenyu/mylibrary.git
+git clone git@github.com:iHeadWater/mylibrary.git
 cd mylibrary
 uv sync --all-packages
 ```

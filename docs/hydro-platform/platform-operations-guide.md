@@ -434,12 +434,12 @@ uv run hydro-platform themes-run --config hydro-platform/config/config.local.jso
 
 ```powershell
 Set-Location 'E:\phd'
-git clone <mylibrary 仓库地址> mylibrary
+git clone git@github.com:iHeadWater/mylibrary.git mylibrary
 Set-Location 'mylibrary'
 uv sync --all-packages
 ```
 
-仓库地址见仓库根 `README.md` 的「快速开始」。仓库路径不必与旧电脑相同；目标目录若已存在，不要覆盖。只克隆旧版本不会出现新命令。原始 PDF 不在 Git 中，需要在 Zotero 同步。
+仓库路径不必与旧电脑相同；目标目录若已存在，不要覆盖。只克隆旧版本不会出现新命令。原始 PDF 不在 Git 中，需要在 Zotero 同步。
 
 ### 6.3 复制完整私人配置
 

@@ -1,6 +1,6 @@
 site_name: Hydro AI Papers
 site_description: 水利科研的入库与消费两侧 —— 论文下载与 Zotero 入库；读库、精读、主题、知识图谱、公众号/播客；以及长期知识资产（证据包、主题池）
-repo_url: https://github.com/OuyangWenyu/mylibrary
+repo_url: https://github.com/iHeadWater/mylibrary
 theme:
   name: material
   language: zh
