@@ -50,6 +50,9 @@ members = ["hydro-platform"]
 include = ["hydrolitagent*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# 一次 pytest 同时收集两套测试：仓库根 tests/（hydrolitagent）与
+# hydro-platform/automation/tests/（平台，unittest 风格，由 pytest 原生收集）。
+# 两侧无同名测试模块，可直接并存，无需 __init__.py 或 conftest。
+testpaths = ["tests", "hydro-platform/automation/tests"]
 pythonpath = ["."]
 addopts = "-q"
