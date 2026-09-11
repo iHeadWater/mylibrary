@@ -14,7 +14,7 @@ Python 核对任务、原 PDF 和模板索引 → 一个 Codex 独立会话读�
 
 - 只有一次提供者 generate 调用；CLI 在本次会话内可能调用多次本机工具或自行重连，不是承诺一个网络请求。
 - 不要求摘句、逐字匹配、固定事实数、批判条数或人工审批；不派生子 Agent。
-- 保留八类模板的细节结构，版本升级为 1.1.0；原始来源 commit 和 blob 不变，适配内容重新计算哈希。
+- 使用九类证据卡模板；当前平台目录版本为 2.0.0，正文骨架基于 V1.7，详见[模板资产](templates.md)。
 - 当前模型仍为总配置中的 gpt-5.6-sol / high；一个会话使用 generation_timeout_seconds，不再使用六个角色各自的配置。
 
 ## 内容及验收边界
@@ -72,6 +72,6 @@ uv run hydro-platform evidence-generate-trial --item-key CEXH4PQA --json
 
 读取解释器、shell、沙箱、文字引擎暂仍放在 pdf_direct_trial 对象中，与正式路径读取共用；该对象的 prompt_file/schema_file/timeout_seconds 只管独立读取实验。旧 MCP 字段在 local_path 下不执行。重命名配置与迁移可后置，不能为了命名好看中断已验证环境。
 
-## 本次验证
+## 验证
 
-全量 267 项离线测试通过；覆盖单次调用、来源身份、归因检查、正式幂等、旧卡试运行保护、历史 manifest 兼容、清理失败保全、原始 I/O 错误诊断，以及宽松排版保存和离线草稿导出。八类模板静态校验和 git diff --check 通过；无模型 generator-preflight 为前一轮记录。本次实际将 CEXH4PQA 已完成的草稿原样导出为独立 Markdown 预览，未重新调用模型；原 PDF、草稿、正式卡、manifest 和任务指纹保持不变，未提交或推送 GitHub。
+单 Agent 的来源身份、模板路由、幂等、草稿恢复和安全写入由自动测试覆盖。不再在本页固定保留某一次测试数量和耗时；当前命令、最新结果与未验证边界统一见[验证地图](tests.md)。

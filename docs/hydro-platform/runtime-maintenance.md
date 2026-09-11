@@ -10,7 +10,7 @@
 uv run hydro-platform doctor --json
 ```
 
-检查主程序 Python、当前单 Agent/本地 PDF 工作流、八类模板来源清单、提示词与输出结构文件、本地任务/快照、Zotero 群组、Codex CLI 登录及 PDF 工具路径、实际读取 PDF 的 Python/pypdf。
+检查主程序 Python、当前单 Agent/本地 PDF 工作流、九类模板来源清单、提示词与输出结构文件、本地任务/快照、Zotero 群组、Codex CLI 登录及 PDF 工具路径、实际读取 PDF 的 Python/pypdf。
 
 开启 activity_reporting 后另查贡献账本和可选成员映射；当前总计9项。缺少贡献者元数据时不会为了“检查通过”猜测人名。[事件与日报](activities-and-daily-report.md)。
 

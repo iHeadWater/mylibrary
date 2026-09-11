@@ -1,121 +1,109 @@
-# 当前架构
+# 技术架构
 
-## 目标链路
+本文只描述 `literature-platform` 分支当前存在的实现、数据归属和模块边界。面向老师评审的目标架构与尚未实现设计见[项目级设计](project-design.md)。
 
-```text
-团队成员的私人 Zotero 账号
-        ↓
-指定的 Zotero 共享群组库
-        ↓
-指定制卡机检测父条目和 PDF
-        ↓
-Python 调度与本地任务处理
-        ↓
-单 Agent 模板制卡与 Python 来源/写入流程检查（当前由 Codex CLI 提供）
-        ↓
-共享证据包粗卡 → 候选主题 → 逐篇原始 PDF 定向精读 → 回填修订候选
-        ↓
-人确认后才可转正式主题；代码不自动晋级
+## 运行架构
+
+```mermaid
+flowchart TB
+    subgraph Sources[外部来源]
+        ZD[Zotero Desktop Local API]
+        ZW[Zotero Web API]
+        PDF[原始 PDF]
+    end
+
+    subgraph Toolkit[hydrolitagent]
+        INGEST[下载、元数据与入库]
+        QUERY[查询、附件与全文访问]
+    end
+
+    subgraph Platform[hydro-platform]
+        SCAN[增量扫描与对账]
+        GATE[PDF 门禁与哈希]
+        TASKS[任务、锁与恢复]
+        CARD[Codex 单 Agent 制卡]
+        THEME[统一候选主题池]
+        REPORT[活动与日报]
+    end
+
+    subgraph Storage[本机或指定共享位置]
+        ARTIFACTS[artifact_root]
+        RUNTIME[.runtime]
+    end
+
+    ZW --> INGEST
+    ZD --> QUERY
+    ZD --> SCAN
+    PDF --> GATE
+    SCAN --> GATE --> TASKS --> CARD --> THEME
+    TASKS --> REPORT
+    CARD --> ARTIFACTS
+    THEME --> ARTIFACTS
+    REPORT --> ARTIFACTS
+    SCAN --> RUNTIME
+    TASKS --> RUNTIME
 ```
 
-文件保存到本地共享仓库；只有用户明确要求才提交/推送GitHub。关键贡献账本和老师摘要已接入run-once，不额外调用AI；本机未提供身份时如实记未知。Windows每日计划已启用，调度门控后进入同一流水线；[调度](cron.md)。主题流程见 [主题工作流](themes-workflow.md)，进度记录见 [关键事件与日报](activities-and-daily-report.md)。
+仓库是一个 uv workspace：根包 `hydrolitagent` 与成员包 `hydro-platform` 共用仓库根的 `.venv` 和 `uv.lock`。自动化运行时为 Windows-only；文献工具链中的部分能力可以独立运行。
+
+## 组件职责
+
+| 组件 | 当前职责 | 边界 |
+| --- | --- | --- |
+| Zotero | 来源身份、条目、附件与原始 PDF | 不保存主题判断，不由平台修改数据库文件 |
+| `hydrolitagent` | 文献下载、入库、查询、附件和全文访问 | 不管理正式主题生命周期 |
+| 扫描与PDF门禁 | 发现新增、检查父条目/附件、文本量和文件指纹 | 元数据或摘要不能替代全文证据 |
+| 任务与发布 | 任务状态、租约、锁、幂等、恢复和多文件安全保存 | 文件夹存在或单一完成标记不能证明结果完整 |
+| 制卡适配器 | 调用已登录的Codex CLI，按九类模板之一生成详细自动粗卡 | 当前只支持`codex_cli`；流程通过不等于科学正确 |
+| 主题池 | 基于全池粗卡、既有候选和适用精读执行CREATE/UPDATE/MERGE/SPLIT | 只能处理候选主题，不能自动建立正式主题 |
+| 活动与日报 | 记录关键事件并生成非AI日报 | 不代表科研质量评审 |
+| Obsidian Adapter | 尚未实现 | 目标接口见[项目级设计](project-design.md) |
+
+## 自动粗卡与科研证据卡
+
+当前自动化产生的是详细自动粗卡：系统核对来源、流程、模板路由、非空结果和安全写入，但不独立证明模型对全文的科学理解正确。`PROCESS_VALIDATED`只能解释为“处理流程完成”。
+
+`skills/hydrology-evidence-cards/`定义的是更严格的科研证据卡工作流，包括来源版本、Claim、定位、L0—L3深度和人工科学复核。两者共享九类内容模板，但不是同一质量等级。自动粗卡只有经过来源复核并满足L2/L3准入要求后，才可以承担正式主题结论；具体升级流程尚未接入自动化。
+
+## 候选主题与正式主题
+
+当前主题代码维护统一候选池，支持稳定ID、版本、合并、拆分和定向精读复用。正式主题是另一类科研对象：它必须经过人工筛选，使用已核验Claim形成综合，并记录边界、层级、争议和证据缺口。`run-once`和`themes-run`都不能自动把候选主题晋级为正式主题。
 
 ## 数据归属
 
-| 内容 | 权威来源 | 是否进入 Git |
-|---|---|---|
-| 论文元数据和 PDF | Zotero 共享库 | PDF 不进入；必要元数据写入证据包清单 |
-| 证据卡模板及来源清单 | GitHub 仓库 | 是 |
-| 证据包 | GitHub 仓库 | 是 |
-| 候选与正式主题 | GitHub 仓库 | 是 |
-| 关键贡献事件 | GitHub 仓库 | 是 |
-| 运行游标、队列、锁、原始日志 | 指定制卡机 `.runtime/` | 否 |
-| Codex 登录凭据、密钥和令牌 | 制卡机本地凭据存储或密钥环境 | 否 |
+| 内容 | 权威来源 | Git策略 |
+| --- | --- | --- |
+| 代码、Skills、模板、Schema、测试 | Git工作树 | 跟踪 |
+| 非敏感团队配置与示例 | `hydro-platform/config/` | 跟踪；秘密不得写入 |
+| Zotero条目与原始PDF | Zotero及其合法附件位置 | 不跟踪 |
+| 证据包、自动主题池、活动和日报 | 配置解析出的运行产物目录 | 不跟踪 |
+| 证据卡、正式主题、运行记录、文献链接 | `paths.artifact_root` | 不跟踪，由操作者或团队共享位置管理 |
+| 快照、任务、锁、草稿和诊断日志 | `hydro-platform/.runtime/` | 不跟踪，可按持久化成果重建 |
+| Python环境和原生PDF工具 | `.venv/`、`hydro-platform/.tools/` | 不跟踪，按依赖锁重建 |
 
-## 已确认规则
+## 信任与写入边界
 
-- 取消 `students/` 目录，不按个人保存证据卡。
-- 一篇论文只有一个团队共享证据包。
-- 证据包骨架包含 manifest.json 和最小占位 card.md；占位卡不包含正式证据字段。
-- 自动制卡只处理尚无非占位证据卡的论文；已有卡片在日常检测、补跑和恢复对账中均保持不变。
-- 指定制卡机上的 Python 后台程序负责检测、门禁、调度和写入，并以非交互方式调用 Codex CLI 完成当前阶段的 AI 制卡。
-- Codex CLI 使用制卡机上已登录的 Codex 订阅账号；运行不依赖人工打开 Codex 对话窗口，但当前阶段依赖该账号的有效登录状态和可用额度。
-- 制卡分为两层：SingleAgentCardGeneratorAdapter 调用一次提供者并检查来源、非空输出，CodexLocalPdfAdapter 提供路径读取环境；保存层只执行流程与幂等保护，不检查正文格式。当前协议 rough-card-single-agent-v2，旧多 Agent 仅兼容，不自动回退。
-- 主题按研究问题组织；粗卡→初版候选→每个主题所涉论文分别定向精读→修订候选。模板提示区分原文与 AI 推理，不用固定标签或标题作门槛。
-- 新定向精读存于对应证据包 readings/RD-*/；历史 readings/TH-*/ 原样保留。主题只引用，不复制 PDF/粗卡，不修改原 card.md、原 manifest.json。
-- 已完成步骤结果进入共享目录；本地锁和日志不进入 Git。全池输入不变时零模型调用；变化时保存 CHANGE 记录，候选可自动更新、合并、拆分并保留版本/演变链，不另起独立主题池。
-- 八类证据卡模板来自固定外部提交，只复用内容模板；本平台保留来源、来源 blob、本地版本和适配后内容哈希，不复用来源脚本与工作流。
-- Codex 自动选择唯一模板，不设置“待人工确认类型”；分类置信度和理由只用于追溯，非法类型按生成失败处理。
-- 模板升级不自动批量重制历史卡；类型纠正或明确重制时生成新版本并保留旧版本。
-- Zotero 父条目 Key 是指定群组库内的内部唯一标识。
-- 论文新增者、PDF 补充者和系统制卡者分别记录。
-- 只从监控系统启用之日起记录贡献，不追溯历史操作。
-- 监控用于掌握进度和发现阻塞，不用于排名或绩效评价。
-- 新电脑可依靠 GitHub、Zotero，并重新完成 Codex CLI 登录及其他本机凭据配置后恢复自动化流程。
-- 可复现要求针对流程和已有结果的恢复，不要求 AI 重新生成的文字逐字相同。
+- Zotero数据、PDF、模型输出和文档正文都是需要校验的输入，不能凭声明越过程序门禁。
+- Codex负责建议和内容生成；Python负责来源身份、允许路径、任务状态、Schema传输、重复检查和原子保存。
+- 日常运行不会执行Git提交或推送，也不会把候选主题升级为正式主题。
+- 当前锁和写入保护面向一台指定制卡机，不是多台电脑的分布式锁。
+- 密钥来自本机环境变量或登录状态；配置文件最多记录环境变量名称和非敏感标识。
 
-## 恢复原则
+## 已知限制
 
-- Zotero 和 GitHub 是可恢复数据源，本地 .runtime/ 只是可丢弃的派生状态。
-- 恢复时先执行全量对账，再进入增量检测。
-- 证据包以 Zotero 父条目 Key 定位；附件 Key 和 PDF 哈希用于确认输入版本，不作为自动覆盖已有卡片的授权。
-- 恢复扫描必须幂等：重复执行不会新建第二个证据包或重复写入相同事件。
-- 调度和环境安装必须由仓库中的脚本重建，不依赖只存在于旧电脑上的手工配置。
-- 所有团队级可调整路径和固定参数由 `hydro-platform/config/config.json` 集中提供；运行状态、证据事实和密钥按各自边界保存。
-
-## 当前非目标
-
-- 大规模模板重构及科研质量定稿；当前仅按用户确认适配归因与人工边界；
-- 正式主题确认界面的开发（候选生成、定向精读和回填已在范围内）；
-- 科研 idea 生成；
-- 微信、邮件等外部通知；
-- 对 Zotero 中每次细微编辑进行完整审计。
-
-## 实现状态
-
-主题层已改为[统一文献池与主题池](unified-theme-pool.md)：themes/index.md为入口，注册表保存长期主题身份和版本关系，候选可自动更新、合并、拆分；有适用旧精读时复用。旧BATCH只保留历史资料，不再决定主题身份或关联范围。真实旧成果迁移/无变化复用已过，合并/拆分目前有受控测试而非科学判断验收。
-
-当前默认单 Agent、模板驱动、详细粗卡；Python只检查来源、非空输出、重复和安全写入，不检查归因标签或正文格式。PROCESS_VALIDATED是流程状态，不代表独立科学验证。主题、事件/日报、项目Python与Poppler安装、状态恢复与Windows计划已实现；Zotero未运行时单次启动后继续流水线已有本机实测。云端同步延迟、关机/登录恢复及干净异机验证仍未全面完成；Git自动同步不启用。
-
-技术栈为 Python CLI、JSON/Markdown、Zotero 本地 API、Codex CLI 与 Poppler；没有 Web 登录或数据库权限层。模型凭据来自本机账号，不来自仓库。单机制卡机是部署约定，不是跨机授权系统，见权限/流程文档。
-
-没有自动邮件，不建立 emails.md；没有公开网页，不建立 seo.md。Windows计划已启用，由 cron.md 记录；AI编排由 automation.md 记录。需要当前Windows用户登录，不等于关机/未登录时可运行。
-
-详见 [当前单 Agent 规则](single-agent-rough-card.md)。GitHub 同步仍需用户明确授权，不能依据目标架构自动推送。
-
-## 待确认
-
-- 已实现单机每日计划和有限补跑；真实关机/登录及云端同步延迟场景的验收仍待完成；
-- 真实论文验收后是否继续使用当前模型与推理强度、订阅额度保护阈值，以及论文 PDF 经 Codex 服务处理时的数据政策；
-- 模板科研质量和跨页取证的小样本验收方法；
-- 修订候选转正式主题的人工确认界面与版本操作；当前只保留人工确认边界，不自动晋级。
+- Obsidian受控接口、正式主题确认和idea生成尚未实现。
+- 自动粗卡到L2/L3科研证据卡的升级仍依赖人工工作流。
+- 候选主题的工程路由已测试，但模型关联、合并和拆分的科研质量没有机器认证。
+- 大规模语料的检索压缩、干净异机、关机/登录及云端同步延迟场景仍需验证。
+- 当前没有CI合并门禁，测试通过不能代替科学评审。
 
 ## 相关文档
 
-- [technical-walkthrough-explained.md](technical-walkthrough-explained.md)：技术流程逐步解释版，用单篇论文的输入、状态、制卡、保存、异常和主题复用实例解释实现，附20分钟必讲内容。
-- [mentor-blackboard-talk.md](mentor-blackboard-talk.md)：约 20 分钟技术实现黑板讲稿，按一键入口讲解接入、防重、模型调用、保存恢复与主题编排。
-- [platform-operations-guide.md](platform-operations-guide.md)：整个平台的目录用途、实现链路、日常操作、换机权限、命令副作用、排错和备份说明。
-- [unified-theme-pool.md](unified-theme-pool.md)：稳定主题身份、跨批次关联、自动合并/拆分、精读复用和迁移验收。
+- [项目级设计](project-design.md)
+- [数据流与用户流程](flows.md)
+- [自动化边界](automation.md)
+- [配置](config.md)与[变量、路径和密钥](variables.md)
+- [运行一轮](run-once.md)与[工作站设置](workstation-setup.md)
+- [模板资产](templates.md)与[统一主题池](unified-theme-pool.md)
+- [权限与数据归属](permissions.md)与[验证地图](tests.md)
 
-- [workstation-setup.md](workstation-setup.md)：统一安装/恢复入口、失败续跑和真实新路径演练。
-- [native-deployment.md](native-deployment.md)：锁定下载、项目内PDF工具、故障保护与实际沙箱验证。
-- [zotero-readiness.md](zotero-readiness.md)：应用启动、有限等待、待PDF补查与实际验收边界。
-- [cron.md](cron.md)：已启用的每日计划、补跑、暂停与真实/待做验收。
-- [flows.md](flows.md)：外部数据、模型与写入的实际检查顺序。
-- [permissions.md](permissions.md)：单机角色、文件权限和跨机限制。
-- [deployment.md](deployment.md)：项目依赖锁、独立安装与兼容性验证。
-- [engineering-status.md](engineering-status.md)：需求—实现—证据及剩余缺口。
-- [themes-workflow.md](themes-workflow.md)：候选、定向精读、回填与续跑。
-- [activities-and-daily-report.md](activities-and-daily-report.md)：关键贡献和老师摘要。
-- [PRD-zotero-to-evidence-pack.md](PRD-zotero-to-evidence-pack.md)：第一阶段无人值守自动化的正式需求。
-- [user-stories-zotero-to-evidence-pack.md](user-stories-zotero-to-evidence-pack.md)：按实施顺序拆分的自动化用户故事。
-- [recovery.md](recovery.md)：换机恢复步骤与验收标准。
-- [tests.md](tests.md)：现有验证、拟建测试和当前缺口。
-- [`automation.md`](automation.md)：自动化边界、身份和安全约束。
-- [index.md](index.md)：平台文档入口，先看哪里、日常命令、目录地图、安装换机与验证范围。
-- [variables.md](variables.md)：总配置、运行变量、证据事实、协议常量与密钥的边界。
-- [config.md](config.md)：总配置逐字段含义、允许值、代理、制卡与 deployment 字段。
-- [evidence-packs.md](evidence-packs.md)：证据包编号、文件结构、自动保存与精读复用。
-- [templates.md](templates.md)：八类证据卡模板、主题模板、来源与版本规则。
-- [operator-manual.md](operator-manual.md)：当前可执行命令、结果解释、故障处理和真实验收记录。
-- [task-state-machine.md](task-state-machine.md)：任务身份、状态转换、幂等、锁和崩溃恢复规则。

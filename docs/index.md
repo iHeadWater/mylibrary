@@ -79,7 +79,7 @@ papers/                  # 按主题组织的文献库(10 个主题)
 
 hydro-platform/          # 科研知识平台(uv workspace 成员;消费侧:Zotero → 证据包 → 主题池)
 ├── automation/          #   Python:检测 → PDF 门禁 → 任务状态机 → 制卡 → 主题池
-├── templates/           #   可复用资产:八类证据卡模板、主题提示词、JSON schema
+├── templates/           #   可复用资产:九类证据卡模板、主题提示词、JSON schema
 ├── config/              #   非敏感配置与完整示例
 └── pyproject.toml       #   入口:`uv run hydro-platform`
                          #   生成产物(evidence-packs/、themes/、reports/、

@@ -27,7 +27,7 @@ hydro-platform/              # 消费侧（uv workspace 成员；运行时 Windo
 │   ├── card_generation.py   # 单 Agent 制卡编排
 │   ├── theme_pool.py        # 主题池：哈希链注册表 + 合并/拆分血缘
 │   └── publication.py       # 原子写入与崩溃可恢复的多文件提交
-├── templates/               # 八类证据卡模板、主题提示词、JSON schema
+├── templates/               # 九类证据卡模板、主题提示词、JSON schema
 ├── config/                  # 非敏感配置 + 完整示例
 └── pyproject.toml           # 入口：uv run hydro-platform
 

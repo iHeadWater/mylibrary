@@ -4,7 +4,7 @@
 
 ## 已确认用户故事与验收
 
-本次使用 user-stories 的 Card / Conversation / Confirmation 方法，沿用 [US-09 和 US-13](user-stories-zotero-to-evidence-pack.md)，没有新增逐卡人工核验。
+本页保留 US-09 和 US-13 的验收语义，但不再依赖旧的用户故事文档。该功能没有增加逐卡人工核验。
 
 ### US-09A：关键贡献记录
 
@@ -67,22 +67,22 @@ enabled 控制 run-once 自动接入；显式运行两个维护命令不受此�
 
 ## 保存位置和保护
 
-- `hydro-platform/activity/ledger.json`：可共享的基线和去重事件账本。它不是丢了也无所谓的运行缓存；换机要随知识成果一起取回。不应手工改内容/哈希。
-- `hydro-platform/reports/daily/YYYY-MM-DD.md`：老师看的日报；同一天刷新该文件。
-- `hydro-platform/reports/daily/YYYY-MM-DD.json`：日报的结构化记录、生成Markdown和上一版指纹，用于无模型重建和中断恢复。
-- `hydro-platform/members/members.json`：可选、人工维护的身份映射；没有这个文件也可正常运行。格式见[权限与数据归属](permissions.md)，不虚构学生账号。
+- `paths.activity_dir/ledger.json`：可共享的基线和去重事件账本。它不是可丢弃缓存，备份时需与其他持久化成果一起处理。
+- `paths.reports_dir/daily/YYYY-MM-DD.md`：老师阅读的当日摘要。
+- `paths.reports_dir/daily/YYYY-MM-DD.json`：用于重建 Markdown 和中断恢复的结构化记录。
+- `paths.members_dir/members.json`：可选的人工身份映射；没有时不猜测人名。格式见[权限与数据归属](permissions.md)。
 
 ### 老师进度摘要
 
-`hydro-platform/reports/daily/` 按日期保存“新增、完成、等待与阻塞”的 Markdown 摘要及配套 JSON。同一天一对文件：`YYYY-MM-DD.md` 给老师阅读，`YYYY-MM-DD.json` 是结构化数据，方便程序检查、恢复和后续汇总。内容包括当日新增事件、完成卡片、等待/阻塞、最近运行及主题处理状态；日期划分来自 `activity_reporting.utc_offset_minutes`，当前为 UTC+08:00。
+`paths.reports_dir/daily/` 按日期保存“新增、完成、等待与阻塞”的 Markdown 摘要及配套 JSON。同一天一对文件：`YYYY-MM-DD.md` 给老师阅读，`YYYY-MM-DD.json` 是结构化数据，方便程序检查、恢复和后续汇总。内容包括当日新增事件、完成卡片、等待/阻塞、最近运行及主题处理状态；日期划分来自 `activity_reporting.utc_offset_minutes`，当前为 UTC+08:00。
 
 run-once 在监控路径中刷新摘要，`daily-report` 可单独刷新，两者的摘要生成都不额外调用 AI，也不会为缺卡自动制卡，更不注册计划。报告来自本机已观察的共享库、任务、成果和关键事件，不等于云端最新全量状态；报告文件存在本身不证明计划正在正常运行，每日触发是否生效需以 `schedule-status` 为准。
 
-不要在生成的 Markdown 里写个人笔记：检测到人工改动时程序会保留并停止覆盖。日报和事件账本可提交共享，原始日志留在 `hydro-platform/.runtime/`。贡献者字段缺失时如实记录未知，不根据论文作者或用户名猜学生身份，不用于排名。日报属于可共享成果，提交/推送仍须用户明确要求；不通过微信或邮件自动发送。
+不要在生成的 Markdown 里写个人笔记：检测到人工改动时程序会保留并停止覆盖。日报和事件账本是持久化科研产物，但当前被 `.gitignore` 排除，不应通过 Git 提交共享；团队需在 Git 之外配置备份或共享位置。原始日志留在 `hydro-platform/.runtime/`。贡献者字段缺失时如实记录未知，不根据论文作者或用户名猜学生身份，不用于排名；不通过微信或邮件自动发送。
 
 ### 关键贡献账本
 
-`hydro-platform/activity/` 保存适合团队共享的关键事件，用于帮助老师掌握流程进度和发现阻塞。2026-09-09 已实现 `ledger.json` 基线与去重账本，run-once 自动维护；也可运行 `uv run hydro-platform activity-sync --json`。首次启用不回放历史贡献。不要把此账本放进可丢弃的运行缓存或手工改哈希。
+`paths.activity_dir/` 保存适合团队共享的关键事件，用于帮助老师掌握流程进度和发现阻塞。`ledger.json` 基线与去重账本由 `run-once` 自动维护，也可运行 `uv run hydro-platform activity-sync --json`。首次启用不回放历史贡献。不要把此账本放进可丢弃的运行缓存或手工改哈希。
 
 第一版关注：成员新增 Zotero 论文父条目；成员给已有条目补充 PDF；系统成功创建或更新证据包；系统发现缺少 PDF、PDF 不可读或制卡失败。
 

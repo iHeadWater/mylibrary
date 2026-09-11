@@ -1,6 +1,6 @@
 # 统一运行入口（US-11A）
 
-2026-09-09 主题扩展：当前配置 theme_pipeline.enabled=true，制卡阶段正常完成后会继续「候选主题 → 逐篇原始 PDF 定向精读 → 回填修订」。有制卡失败/阻塞/限额延后时推迟主题阶段，避免临时卡片集合产生多批次。可用 `themes-run --json` 显式处理已有粗卡。[流程、目录与续跑](themes-workflow.md)。未开启该配置的旧部署保留原行为。
+当前配置 `theme_pipeline.enabled=true`：制卡阶段正常完成后会继续「候选主题 → 逐篇原始 PDF 定向精读 → 回填修订」。有制卡失败、阻塞或限额延后时推迟主题阶段，避免临时卡片集合产生多批次。可用 `themes-run --json` 显式处理已有粗卡；主题池规则见[统一主题池](unified-theme-pool.md)。
 
 最新保存决策（2026-09-09）：按模板写作，程序只校验流程，不把正文标题、表格、标签、编号、占位词或措辞当作保存门槛。新产物 PROCESS_VALIDATED 表示流程通过，正文 NOT_CHECKED，不是内容质量认证。详见 [保存边界](single-agent-rough-card.md)。
 
@@ -25,7 +25,7 @@ uv run hydro-platform run-once --dry-run --json
 uv run hydro-platform run-once --json
 ```
 
-不需要 item-key，也不需要按篇数改配置。默认自动逐篇处理本轮扫描到的全部可制卡论文，每篇完成立即正式保存到 `evidence-packs/EV-<Key>-<标题短名>/card.md`，不是试运行预览，不要求手动转正。已有卡不自动覆盖。`--no-progress` 关闭 stderr 进度，stdout 保留最终 JSON。
+不需要 item-key，也不需要按篇数改配置。默认自动逐篇处理本轮扫描到的全部可制卡论文，每篇完成立即正式保存到 `paths.evidence_packs_dir/EV-<Key>-<标题短名>/card.md`，不是试运行预览，不要求手动转正。已有卡不自动覆盖。`--no-progress` 关闭 stderr 进度，stdout 保留最终 JSON。
 
 ## 运行顺序
 

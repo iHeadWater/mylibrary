@@ -1,6 +1,6 @@
 # 证据包：统一文献证据池
 
-团队只维护这一份证据包集合，不按学生或主题复制论文档案。主题只引用证据包及精读结果。存储位置为 `hydro-platform/evidence-packs/`。
+团队只维护这一份证据包集合，不按学生或主题复制论文档案。主题只引用证据包及精读结果。存储位置由 `paths.evidence_packs_dir` 决定，当前默认为 `hydro-platform/evidence-packs/`。
 
 ## 编号与来源
 
@@ -32,7 +32,7 @@ EV-父条目Key-简短标题/
 ## 自动保存与复用
 
 1. 取得合格 PDF 后创建 manifest.json 和 PLACEHOLDER 占位 card.md。
-2. 当前单 Agent 自动选八类模板之一，生成详细粗卡；Python 检查来源、非空输出、模板路由及安全写入，不检查正文标题、归因措辞或固定数量。
+2. 当前单 Agent 自动选九类模板之一，生成详细粗卡；Python 检查来源、非空输出、模板路由及安全写入，不检查正文标题、归因措辞或固定数量。
 3. 首次保存为 ROUGH 后，日常扫描、补跑和恢复均跳过已有卡，不因模型/模板更新自动重制。
 4. 候选主题需要更深入证据时，优先判断历史精读是否仍适用；不足才从原始 PDF 再读。
 5. 新精读独立保存，不修改原 card.md。多个主题可引用同一份适用精读；不同问题也可有不同精读。
@@ -52,4 +52,4 @@ uv run hydro-platform run-once --json
 
 细分命令 packages-sync、evidence-generate 和 evidence-generate-trial 供维护/受控试运行使用。已有卡试运行只写本机运行区，不替换原卡。
 
-[操作手册](operator-manual.md) · [单 Agent 制卡](single-agent-rough-card.md) · [统一主题池](unified-theme-pool.md)
+[运行一轮](run-once.md) · [单 Agent 制卡](single-agent-rough-card.md) · [统一主题池](unified-theme-pool.md)
