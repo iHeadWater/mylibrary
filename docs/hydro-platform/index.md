@@ -24,8 +24,10 @@ flowchart LR
     U[研究者] --> C[Codex]
     Z[Zotero<br/>条目与原始 PDF] --> P[hydrolitagent / hydro-platform]
     C --> P
-    P --> A[科研产物根<br/>证据卡、主题、运行记录、文献链接]
-    A --> O[Obsidian<br/>阅读、关联、人工审核]
+    P --> A[当前自动化产物<br/>evidence-packs、themes、activity、reports]
+    A --> O[Markdown 阅读]
+    P -. 目标：受控发布 .-> V[artifact_root / Obsidian Vault<br/>证据卡、正式主题、运行记录、文献链接]
+    V --> O
     O --> U
     P --> R[.runtime<br/>快照、任务、锁、诊断日志]
 ```
@@ -40,12 +42,14 @@ Zotero 保存来源；Python 程序负责确定性的扫描、门禁、状态和
 | 自动证据卡 | 已实现单 Agent、九类模板、证据包和失败恢复；`PROCESS_VALIDATED`只表示流程通过 | 明确自动粗卡升级为 L2/L3 科研证据卡的条件 |
 | 候选主题 | 已实现统一主题池、候选更新、合并、拆分和精读复用 | 把自动候选接入正式的人工筛选门 |
 | 正式主题 | 规则和模板已有，普通运行不会自动建立 | 实现人工决定记录、层级、关系和版本操作 |
-| Obsidian | Markdown 产物可直接阅读，正式工具集成未实现 | 文件型 MCP 先只读，CLI负责打开与差异复核，REST API按需启用 |
+| Obsidian | Markdown 产物可直接打开；自动化目录尚未统一发布到 `artifact_root` | 先建统一发布边界，再以文件型 MCP 只读、CLI 打开和差异复核接入 |
 | research idea | 当前不生成 | 仅从正式主题、已核验 Claim 和明确缺口生成候选，再由研究者与导师判断 |
 
 ## 存储与版本边界
 
-`paths.artifact_root` 是证据卡、主题、运行记录和文献链接的共同父目录，可以指向本机或外部共享位置。四类科研产物必须保持同根，保证相互引用有效。
+当前实现有两组产物路径。`hydro-platform` 自动化使用 `paths.evidence_packs_dir`、`themes_dir`、`activity_dir`、`reports_dir`等以 `project_root` 为基准的目录。合并后又引入 `paths.artifact_root` 及其下的证据卡、主题、运行记录和文献链接目录；这组路径可解析和校验，但尚未被自动化发布代码使用。
+
+目标是将 `artifact_root` 作为 Obsidian 阅读层的统一根目录，通过受控发布器输入已准入的证据卡、正式主题和关系记录。在该发布器实现前，不应把“配置已存在”写成“两套产物已统一”。
 
 以下内容进入 Git：
 
@@ -64,4 +68,3 @@ Zotero 保存来源；Python 程序负责确定性的扫描、门禁、状态和
 ## 文档维护规则
 
 当前规则只在一个地方定义，其他页面通过链接引用，不复制整段内容。当前实现与目标设计必须分开；旧方案、阶段验收和演示讲稿由Git历史保存，不继续占用正式导航。模板的可执行版本以`skills/`和`hydro-platform/templates/`为准，文档只说明用途、关系和版本来源，不再维护第三份模板副本。
-

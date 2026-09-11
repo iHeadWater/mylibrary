@@ -2,7 +2,7 @@
 
 当前配置 `theme_pipeline.enabled=true`：制卡阶段正常完成后会继续「候选主题 → 逐篇原始 PDF 定向精读 → 回填修订」。有制卡失败、阻塞或限额延后时推迟主题阶段，避免临时卡片集合产生多批次。可用 `themes-run --json` 显式处理已有粗卡；主题池规则见[统一主题池](unified-theme-pool.md)。
 
-最新保存决策（2026-09-09）：按模板写作，程序只校验流程，不把正文标题、表格、标签、编号、占位词或措辞当作保存门槛。新产物 PROCESS_VALIDATED 表示流程通过，正文 NOT_CHECKED，不是内容质量认证。详见 [保存边界](single-agent-rough-card.md)。
+当前保存规则：按模板写作，程序只校验流程，不把正文标题、表格、标签、编号、占位词或措辞当作保存门槛。新产物 `PROCESS_VALIDATED` 表示流程通过，正文 `NOT_CHECKED`，不是内容质量认证。详见 [保存边界](single-agent-rough-card.md)。
 
 ## 用户任务与范围
 

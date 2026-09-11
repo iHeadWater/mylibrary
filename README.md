@@ -29,18 +29,16 @@
 
 **分工而非二选一**：容器里走 8002 的 MCP，裸 host 直连 `23119`。本地 API 基址的环境变量首选名是 `ZOTERO_LOCAL_BASE_URL`（`ZOTERO_API_URL` 是旧名）。
 
-## 科研产物路径可配置
+## 科研产物路径与当前边界
 
-证据卡、主题、运行记录、文献链接这四类科研产物**不写死在仓库里**，落点由总配置的 `paths.artifact_root` 决定：
+合并后的配置同时保留了两组产物路径：
 
-- **默认**是仓库根，即四目录 `证据卡/`、`主题/`、`运行记录/`、`文献链接/` 就在仓库根下——与合并前的磁盘布局一致，文件不用挪。
-- **可以指向任意位置**（共享盘、OneDrive 等），配合 `paths.artifact_root_external = true` 即可；不显式开启时指向项目外会直接报错，避免路径被 `../` 悄悄带出去。
-- 归属随位置划分：**根在项目内 = 平台所有**（可清理）；**根在项目外 = 操作者所有**（平台只写不清理）。
-- 四个子目录名同样可配（`paths.evidence_cards_dir` 等），默认即上面四个中文名。
+- `hydro-platform` 自动化当前实际写入 `paths.evidence_packs_dir`、`themes_dir`、`activity_dir`、`reports_dir` 等目录，默认位于 `hydro-platform/` 下。
+- `paths.artifact_root` 及其下的 `证据卡/`、`主题/`、`运行记录/`、`文献链接/` 已能解析和校验，可指向仓库根或显式允许的外部共享位置，但自动化发布尚未接入这四个目录。
 
-默认位置的四个目录已在 `.gitignore` 中声明（**不入库**：它们是运行产物，原始 PDF、Zotero 数据库与本机路径同样不入库）。指向仓库外时 Git 自然不跟踪，ignore 规则无副作用。
+所有实际科研产物、原始 PDF、Zotero 数据库、`.runtime` 和本机路径均不进入 Git。目标是在两组目录之间建立明确的准入与发布边界，再将 `artifact_root` 作为 Obsidian 阅读层；不应把当前的配置字段理解为两套工作流已经打通。
 
-字段与规则见[总配置字段说明](docs/hydro-platform/config.md)与[路径解析规则](docs/hydro-platform/variables.md)。
+字段、现状和目标设计见[总配置字段说明](docs/hydro-platform/config.md)、[自动化边界](docs/hydro-platform/automation.md)和[项目级设计](docs/hydro-platform/project-design.md)。
 
 ## 快速开始
 

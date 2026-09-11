@@ -67,6 +67,6 @@ Python 安装见 [deployment.md](deployment.md)。原生工具命令默认只读
 
 去掉 `--reuse-installed` 会新建独立下载缓存及工具目录，重新下载约42MB。它是显式部署演练，不是日常步骤；报告保留在 `.runtime/native-trials/`，不覆盖旧失败记录。
 
-上述下载证据与沙箱兼容证据来自分开的运行，不宣称同一次 fresh 全链路通过。仍未证明干净异机、真实关机/登录恢复、所有 PDF 或模型科学理解；基础 Python、Zotero、Codex 及私人账号仍需准备。总体边界见 [engineering-status.md](engineering-status.md)，换机步骤见 [recovery.md](recovery.md)。
+上述下载证据与沙箱兼容证据来自分开的运行，不宣称同一次 fresh 全链路通过。仍未证明干净异机、真实关机/登录恢复、所有 PDF 或模型科学理解；基础 Python、Zotero、Codex 及私人账号仍需准备。总体边界见[验证地图](tests.md)，换机步骤见[换机恢复](recovery.md)。
 
 配置切换后复验：503项自动测试通过（28.358秒），doctor12项通过。`verify_zotero_readiness.py` 使用真实已就绪库和隔离知识副本，3卡跳过、6主题步骤复用，第二次调度 ALREADY_COMPLETED，模型/应用启动调用0、原45文件与Zotero进程集合不变；报告 `.runtime/readiness-trials/readiness-check-cp1tpshc/verification.json`。工具路径改变没有触发旧主题重新生成。

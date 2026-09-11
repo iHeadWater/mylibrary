@@ -15,7 +15,7 @@ uv run hydro-platform setup --apply --json
 
 第二条执行安装与恢复。完成或中断后均可重复同一条命令：完整环境复用，已保存卡片按来源对账，不删除未知目录、不为了恢复重调用AI。进度在stderr显示“安装进度”，最终stdout保留一个JSON；加 `--no-progress` 可关闭。
 
-日常处理仍用 `uv run hydro-platform run-once --json`，或由已启用的每日计划运行。日常不需要反复执行setup。
+日常处理仍用 `uv run hydro-platform run-once --json`，或由 `schedule-status --json` 已确认归属正确的每日计划运行。日常不需要反复执行 setup。
 
 ## 开始前
 
@@ -73,14 +73,8 @@ uv run hydro-platform run-once --config hydro-platform/config/config.local.json 
 
 READY不是全部论文已制卡，也不是科学质量认证。`recovered_state_counts`可含等待PDF或阻塞项，后续由原流水线处理。失败不自动重试、不无限重连；计划注册结果不确定时先 `schedule-status --json`，不要复制创建任务。报告在 `.runtime/logs/setup-runs/`，写报告失败时终端会提示，不声称此前动作已回滚。
 
-## 验收证据与边界
+## 验证方式与边界
 
-- 523项自动测试通过（41.038秒）：新增16项setup测试、4项演练器测试；覆盖只读/副作用顺序、缺登录、下载/环境失败、配置变化、恢复冲突、调度失败、中止、日志失败、未知演练目录保护、UTF-8以及隔离Python下辅助模块导入。
-- 同机新目录演练只复制源码/模板/共享知识，不复制旧`.runtime`、`.venv`、`.tools`、PDF或私人配置。首次重新下载安装Python依赖及Poppler、恢复3篇COMPLETED；再次执行两类安装均REUSED。
-- 新目录完整入口两次均跳过3张旧卡、复用6个主题步骤，模型/启动/系统任务调用均被禁止且实际计数0。随后三篇16/17/43页全文提取和沙箱首图渲染通过，三张PNG已查看且可读，原45个运行/知识文件不变。
-- 报告：`.runtime/setup-trials/relocated-903ecba2b46e40d8ac3e0e8b34d55ce0/verification.json`。演练器先后遇到中文输出编码和隔离模式辅助模块导入错误，修复后在原目录继续；旧失败报告保留，不把续跑说成首轮无故障。不是干净新电脑或新账号验证，原Zotero/Codex/基础Python仍在使用；没有创建第二个自动任务。
-- 正式项目随后执行setup --apply成功，20秒左右返回READY_SCHEDULED：两类安装REUSED、3篇COMPLETED、已有HydroPlatform-qinjiajun计划核对通过、最终环境检查12项通过。卡片/主题/事件/日报/成员文件前后哈希一致；本地快照按恢复流程更新。报告 `.runtime/logs/setup-runs/ba6d20791c6947899d347d0584af1af3.json`。不是新增模型制卡或实际登录触发验证。
+运行 `uv run pytest hydro-platform/automation/tests/test_workstation_setup.py hydro-platform/automation/tests/test_setup_verifier.py -q` 检查 setup 的副作用顺序、失败保护、恢复冲突与演练器行为。需要显式进行隔离演练时运行 `uv run python hydro-platform/automation/verify_setup.py`；它会建立新项目副本并下载依赖，不是日常步骤。只有前一进程已确认退出，才用 `--resume <trial_root>` 继续。
 
-需要显式再次演练时运行 `uv run python hydro-platform/automation/verify_setup.py`。它会建立新项目副本并下载依赖，不是日常步骤。只有前一进程已确认退出，才用 `--resume <trial_root>`继续；不得因观察超时盲目重复启动。查看报告比重新跑科研模型更合适。
-
-尚未证明：从零基础软件安装、干净异机的账号/沙箱/调度全链路，以及真实关机、重新登录和云端PDF同步延迟。剩余事项见 [工程化状态](engineering-status.md)，分步操作保留在 [Python部署](deployment.md)、[PDF工具](native-deployment.md)、[运行维护](runtime-maintenance.md)、[每日计划](cron.md)。
+自动测试和同机隔离演练不能证明从零安装基础软件、干净异机账号、真实调度触发、关机后重新登录或云端 PDF 同步延迟。剩余事项见[验证地图](tests.md)，分步操作保留在 [Python 部署](deployment.md)、[PDF 工具](native-deployment.md)、[运行维护](runtime-maintenance.md)、[每日计划](cron.md)。

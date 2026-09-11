@@ -4,7 +4,7 @@
 
 ## 关键事件与日报
 
-`activity_reporting.enabled=true` 让 run-once 在制卡前后记录关键事件并在结束后生成日报，不额外调用AI；`utc_offset_minutes=480` 按UTC+08:00划分日期，`system_actor_id=SYS-CARD-01` 标记系统行为。根目录分别使用 paths.activity_dir、paths.members_dir、paths.reports_dir。显式的 activity-sync / daily-report 命令可独立执行。[完整说明](activities-and-daily-report.md)。本项不是每日触发器；本机已注册的定时计划由scheduler配置。
+`activity_reporting.enabled=true` 让 run-once 在制卡前后记录关键事件并在结束后生成日报，不额外调用AI；`utc_offset_minutes=480` 按UTC+08:00划分日期，`system_actor_id=SYS-CARD-01` 标记系统行为。根目录分别使用 paths.activity_dir、paths.members_dir、paths.reports_dir。显式的 activity-sync / daily-report 命令可独立执行。[完整说明](activities-and-daily-report.md)。本项不是每日触发器；计划是否已注册及其归属必须以 `schedule-status --json` 的实机结果为准。
 
 `zotero.startup`控制统一入口的应用启动和有限等待：当前enabled=true、launch_if_missing=true、executable=null、wait_timeout_seconds=120、poll_interval_seconds=5。null按PATH/常用目录查找，也可填zotero.exe路径；不附加参数，不改账号/同步设置。doctor只核对路径、不启动。旧配置缺本节默认关闭。[字段、关闭方法与待PDF补查](zotero-readiness.md)。
 
@@ -29,6 +29,8 @@
 **唯一例外是科研产物根 `paths.artifact_root`**（证据卡 / 主题 / 运行记录 / 文献链接的落点）。它默认解析到工作区根（仓库根），即王新宇分支原有的磁盘布局；若要指向仓库外的共享位置（共享盘、OneDrive 等），必须同时显式写出 `paths.artifact_root_external = true`。这样外部位置是写明的意图，而不是被 `../outside` 这类相对路径悄悄带出去的。该做法与 `deployment.environment_dir` 允许借用工作区根共享 `.venv` 是同一思路。归属也随之划分：**产物根在项目内 = 平台所有**（正常写入、可清理）；**产物根在项目外 = 操作者所有**（平台只写不清理，不管理其生命周期）。
 
 `paths.artifact_root_external` 未开启时，`artifact_root` 仍受原有 `project_root` 约束——既有的 `paths.evidence_packs_dir` 等键**不受影响**，其规则保持不变。
+
+> **当前实现边界：** `artifact_root` 和其下四个目录已进入配置解析与路径安全校验，但 `hydro-platform` 的制卡、候选主题、活动和日报仍使用以 `project_root` 为基准的 `evidence_packs_dir`、`themes_dir`、`activity_dir` 和 `reports_dir`。改动 `artifact_root` 不会自动搬运这些产物；统一发布属于尚未实现的设计。
 
 当前可配置项：
 
@@ -127,7 +129,7 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 `progress` 在旧配置中整体缺失时使用上述默认值；一旦填写，必须同时提供两个字段。当前进度包含 1/1 单 Agent 启动、工具调用、流程检查和最终保存状态，不含归因或正文结构检查。心跳表示本地程序仍在等待，不证明远端模型健康。进度不会写入最终 JSON，也不会回显模型正文、原始工具输出或凭据。
 
-2026-09-09 最新要求：本机配置、示例和缺省心跳统一改为 60 秒。只减少周期性的“等待中”提示；工具开始/结束、单篇保存、错误等实际事件仍立即显示。下次启动命令生效，不热更新现有队列。显式填写其他合法间隔的自定义配置仍按其原值执行。`run-once` 结尾独立显示“整轮汇总”，按本轮新完成、恢复、跳过、失败、阻塞、等待和延后分别统计，并列出未完成项与主题状态，不沿用最后一篇的保存阶段。
+默认配置、示例和缺省心跳统一为 60 秒。该值只控制周期性的“等待中”提示；工具开始/结束、单篇保存、错误等实际事件仍立即显示。修改在下一次启动时生效，不热更新现有队列。`run-once` 结尾独立显示“整轮汇总”，按本轮新完成、恢复、跳过、失败、阻塞、等待和延后分别统计，并列出未完成项与主题状态。
 
 `card_generator.workflow_mode=single_agent` 是当前模式，主提示词 evidence-card-generation-v8.md、九类模板 2.0.0。模型、强度和超时直接用上表。v8 保留详细写作要求，但保存只检验流程，不校验正文标题、表格、标签、编号或措辞；没有另一个需要用户开启的“宽松模式”。当前配置与示例已更新，仍使用 run-once。草稿预览目录由 `paths.card_trials_dir` 控制。
 
@@ -143,7 +145,7 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 | `idle_timeout_seconds` | `1500` | 无可识别进展事件的最长秒数；1–3600；当前与单 Agent 总时限同为 25 分钟。不是模型思考计时器 |
 | `pdf_tool_call_limit` | `2` | 每个角色的整篇 PDF 工具调用预算；1–5 的整数；检测到超额调用开始事件后终止子进程，防止反复整篇回传 |
 
-2026-09-08 按用户要求关闭 `reconnect_stop_enabled`，当时无进展/会话上限为 1200 秒；2026-09-09 最新要求将两项同时延长至 1500 秒。`10 / 300` 仍保存以便重新启用，但开关为 `false` 时不会因这两项终止。当前单 Agent 总时限为 25 分钟，不因重连重新计时；总超时、无进展时限、PDF 调用预算等仍生效，先触发者停止。底层 CLI 如果自行退出、`turn.failed` 或输出无效，仍按失败处理；没有新增会话内自动重跑机制。延长时间不保证连接恢复，逐条重试仍受 pipeline 冷却和次数约束。
+当前 `reconnect_stop_enabled=false`，因此 `10 / 300` 两个重连停止阈值只作为重新启用时的配置保留。单 Agent 总时限和无进展时限均为 1500 秒，不因重连重新计时；总超时、无进展时限、PDF 调用预算等仍生效，先触发者停止。底层 CLI 自行退出、`turn.failed` 或输出无效仍按失败处理；没有会话内自动重跑机制，逐条重试仍受 pipeline 冷却和次数约束。
 
 旧配置整体缺失本节时，程序仍兼容保守后备值 `2 / 60 / 300 / 2` 且开关为 `true`；只有四个限额字段的旧配置也继续启用原保护。填写本节时必须包含全部四个限额字段，新开关可选；即使关闭也不接受非法限额值。修改后从下一次启动命令生效，不会热更新已运行的子进程。该节只影响连接保护，不改变 PDF 阅读流程。正文格式/归因门禁已由最新产品决策独立移除。这不改变 Codex/ChatGPT 桌面客户端自身的重连行为，也不保证网络恢复。
 
@@ -228,7 +230,7 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 ## 项目安装配置 deployment
 
-每日计划另由 `scheduler` 控制：enabled（本机true、示例false）、task_name、daily_time、poll_interval_minutes、retry_interval_minutes、max_attempts_per_slot、logon_delay_seconds、execution_time_limit_seconds、powershell_executable、command_timeout_seconds。字段含义、修改后是否需重新install和暂停方式见 [调度配置表](cron.md#总配置字段)。仅填配置不代表新机器已经注册任务，需读回schedule-status。
+每日计划另由 `scheduler` 控制：enabled（本机true、示例false）、task_name、daily_time、poll_interval_minutes、retry_interval_minutes、max_attempts_per_slot、logon_delay_seconds、execution_time_limit_seconds、powershell_executable、command_timeout_seconds。字段含义、修改后是否需重新 install 和暂停方式见[调度文档](cron.md)。仅填配置不代表新机器已经注册任务，需读回 `schedule-status`。
 
 `environment_dir` 选择项目 Python 环境：可以是平台内目录，也可以是 uv 工作区根的共享 `.venv`（当前为 `../.venv`，指向平台目录之外），其他取值会被拒绝。`dependency_lock_file` 选择版本/来源/哈希锁；`wheel_cache_dir` 选择下载缓存；`base_python` 是已有基础 Python（null 为当前解释器）；`install_timeout_seconds` 与 `download_timeout_seconds` 分别限制子进程等待和下载套接字。均在总配置修改，无需编辑代码。[字段与换机边界](deployment.md)。环境位于工作区根 `.venv` 时由 uv 管理（`uv sync --all-packages`），平台的 bootstrap 只做核对；为与仓库依赖树隔离而使用平台内环境时，才由平台按锁文件自举安装。更改环境目录后同步改 `pdf_direct_trial.python_executable`，安装器不改生产配置。
 

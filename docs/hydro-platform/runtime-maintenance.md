@@ -1,6 +1,6 @@
 # 环境检查与本地状态恢复
 
-适用版本：2026-09-09。所有路径、共享库和运行参数读取同一个 `hydro-platform/config/config.json`。这两个命令不调用模型、不修改 Zotero、不写共享卡片或主题、不提交/推送 Git，也不安装定时任务。
+所有路径、共享库和运行参数读取同一个 `hydro-platform/config/config.json`。本页两个命令不调用模型、不修改 Zotero、不写共享卡片或主题、不提交/推送 Git，也不安装定时任务。
 
 ## 日常检查
 
@@ -46,19 +46,15 @@ uv run hydro-platform run-once --json
 
 已保存的主题步骤由主题目录及各论文 `readings/` 中的结果记录复用，不依赖恢复日志；`recover` 本身不验证或改写主题。未备份的本地草稿/未完成会话不能靠恢复命令找回。
 
-## 不破坏当前状态的真实验收
+## 不破坏当前状态的恢复验证
 
 ```powershell
 uv run python hydro-platform/automation/verify_runtime_recovery.py
 ```
 
-脚本在配置运行区下创建一个全新的 `recovery-trials/recovery-check-*` 目录，针对真实 Zotero 连续恢复两次，比较任务是否幂等，以及原任务/快照、证据包和主题文件的哈希是否未变。验收目录和 `verification.json` 保留，便于查看；不清理原运行区，不调用模型。
+脚本在配置运行区下创建新的 `recovery-trials/recovery-check-*` 目录，连续恢复两次，比较任务是否幂等，以及原任务、快照、证据包和主题文件的哈希是否未变。验收目录和 `verification.json` 保留；不清理原运行区，不调用模型。自动规则可另用 `uv run pytest hydro-platform/automation/tests/test_runtime_recovery.py -q` 验证。
 
-2026-09-09 实测：qinjiajun（6618088）的 3 篇论文全部恢复为 `COMPLETED`；第二次 `changed_task_count=0`，任务文件字节一致；模型调用 0；38 个原运行/知识文件哈希未变。报告：`.runtime/recovery-trials/recovery-check-revj2_ma/verification.json`。
-
-这是同机新运行目录验收，不是假装已经在另一台电脑完成依赖安装、账号登录、成果备份和自动调度恢复。
-
-贡献/日报接入后又进行了同类实测：`.runtime/recovery-trials/recovery-check-ky6qvvhm/verification.json`，3篇恢复、重复任务零变化、45个原文件（含贡献账本和日报）哈希不变、模型调用0。共享账本也必须实际备份，才能在换机后保留去重历史。
+这是同机新运行目录验收，不能替代另一台电脑的依赖安装、账号登录、成果备份和自动调度恢复。事件账本也必须实际备份，才能在换机后保留去重历史。
 
 ## 其他配置文件
 

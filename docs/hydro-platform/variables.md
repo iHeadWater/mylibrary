@@ -28,7 +28,7 @@
 9. `evidence_cards_dir`、`themes_vault_dir`、`run_records_dir`、`literature_index_dir` 均相对 `artifact_root` 解析，且必须位于 `artifact_root` 内。四者必须同属一个产物根——证据卡与主题互相引用，只挪其一会让相对定位失效；
 10. 归属随位置划分：产物根在项目内 = 平台所有（可清理）；产物根在项目外（共享盘等）= 操作者所有，平台只写不清理。
 
-部署配置 `deployment` 的Python字段见 [安装配置表](deployment.md#单一配置入口)，三个native字段见 [PDF工具配置](native-deployment.md#总配置)。新增字段有集中兼容默认值，实际配置/示例均显式列出；旧 `paths` 必填规则不变。相对可执行程序路径基于项目根目录，裸命令名按 PATH 查找。当前 PDF Python 为 uv 工作区共享的仓库根 `.venv`（`../.venv/Scripts/python.exe`，相对项目根），三个原生工具在 `hydro-platform/.tools/poppler/Library/bin/`，不再依赖旧Windows用户的解释器或Codex缓存绝对路径。[字段与默认值](config.md)。
+部署配置 `deployment` 的 Python 字段见[项目依赖安装](deployment.md)，三个 native 字段见[PDF 工具安装](native-deployment.md)。新增字段有集中兼容默认值，实际配置/示例均显式列出；旧 `paths` 必填规则不变。相对可执行程序路径基于项目根目录，裸命令名按 PATH 查找。当前 PDF Python 为 uv 工作区共享的仓库根 `.venv`（`../.venv/Scripts/python.exe`，相对项目根），三个原生工具在 `hydro-platform/.tools/poppler/Library/bin/`，不再依赖旧 Windows 用户的解释器或 Codex 缓存绝对路径。[字段与默认值](config.md)。
 
 ## 配置与秘密风险
 

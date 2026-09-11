@@ -4,8 +4,8 @@
 
 | 交付边界 | 内容 |
 | --- | --- |
-| 当前已经实现 | Zotero 文献入库与查询、共享库增量扫描、PDF 全文门禁、Codex 单 Agent 制卡、九类证据卡模板、证据包、统一主题池、活动与日报、可配置科研产物路径、CLI 与调度基础设施 |
-| 已完成设计、尚待实现 | Codex 与 Obsidian 的正式集成、候选主题人工确认闭环、稳定的主题层级与卡片—主题关系、主题到 research idea 的生成与评审 |
+| 当前已经实现 | Zotero 文献入库与查询、共享库增量扫描、PDF 全文门禁、Codex 单 Agent 制卡、九类证据卡模板、证据包、统一候选主题池、活动与日报、`artifact_root` 路径解析与校验、CLI 与调度基础设施 |
+| 已完成设计、尚待实现 | 自动化产物到 `artifact_root` 的统一发布、Codex 与 Obsidian 的正式集成、候选主题人工确认闭环、稳定的主题层级与卡片—主题关系、主题到 research idea 的生成与评审 |
 
 ## 1. 总体架构
 
@@ -19,8 +19,9 @@ flowchart LR
     C --> H
     C --> P
     H --> P
-    P --> A[artifact_root<br/>证据卡、主题、运行记录、文献链接]
-    A --> O[Obsidian Vault<br/>阅读、导航、人工审核]
+    P --> A[当前自动化产物<br/>evidence-packs、themes、activity、reports]
+    P -. 目标：准入后统一发布 .-> V[artifact_root<br/>证据卡、正式主题、运行记录、文献链接]
+    V --> O[Obsidian Vault<br/>阅读、导航、人工审核]
     O --> U
     C -. 目标设计：受控搜索与写入 .-> OA[Obsidian Adapter]
     OA -.-> O
@@ -29,7 +30,7 @@ flowchart LR
     G --> P
 ```
 
-当前分支已经实现 Zotero、处理管线、科研产物目录和 Codex CLI 制卡，Markdown 产物也可以被 Obsidian直接打开；但这不等于已经完成 Obsidian 集成。目标架构需要新增独立的 Obsidian Adapter：后台搜索和读取优先使用文件型 MCP，桌面打开和差异复核使用 Obsidian 官方 CLI，需要访问当前活动笔记时再启用 Local REST API。三种接口不得同时写同一个文件。
+当前分支已经实现 Zotero、处理管线和 Codex CLI 制卡，Markdown 产物也可以被 Obsidian 直接打开；但自动化仍写入 `paths.evidence_packs_dir`、`themes_dir`、`activity_dir` 和 `reports_dir`。`artifact_root` 下四个科研目录目前只完成配置解析与路径校验，尚未成为自动发布目标。目标架构需要新增独立的 Obsidian Adapter：后台搜索和读取优先使用文件型 MCP，桌面打开和差异复核使用 Obsidian 官方 CLI，需要访问当前活动笔记时再启用 Local REST API。三种接口不得同时写同一个文件。
 
 正式主题和 research idea 都属于需要人类决策的科研对象。自动化可以提出候选、整理证据和生成草稿，但不能越过人工确认门直接建立正式主题，也不能把“当前文献中尚未发现”自动解释为学术创新。
 
@@ -81,7 +82,7 @@ flowchart LR
 1. 安装并启动 Zotero，确认目标共享库和 PDF 可以从本机访问。
 2. 克隆 `mylibrary`，切换到 `literature-platform`，使用 uv 安装整个 workspace。
 3. 配置 Zotero 群组、Codex 登录与模型、科研产物目录和运行环境，执行预检。
-4. 将 `artifact_root` 设置为 Obsidian Vault 或 Vault 内的统一科研产物根目录，在正式集成完成前由用户直接打开 Markdown 结果。
+4. 核对当前自动化产物目录与 `artifact_root` 的实际解析路径。在统一发布实现前，用户可以用 Obsidian 打开相应 Markdown 目录，但不应依赖修改 `artifact_root` 来自动搬运现有证据包和候选主题。
 
 ### 日常研究
 
@@ -128,7 +129,9 @@ flowchart LR
 | `activity_reporting` | 活动记录、日报、时区和系统身份 |
 | `deployment` / `scheduler` | uv 环境、PDF 工具、依赖锁和本机定时计划 |
 
-`paths.artifact_root` 是证据卡、主题、运行记录和文献链接的共同父目录。四类产物必须放在同一根目录下，避免相互引用失效。目标部署建议将该目录设为一个独立 Obsidian Vault；如果使用已有 Vault，则应放在其中一个明确的项目子目录中。
+`paths` 中存在两组产物契约。当前 `hydro-platform` 自动化实际使用 `evidence_packs_dir`、`themes_dir`、`activity_dir`、`reports_dir` 和 `members_dir`，它们相对 `project_root` 解析。`artifact_root` 下的 `evidence_cards_dir`、`themes_vault_dir`、`run_records_dir` 和 `literature_index_dir` 已能安全解析，但当前代码未将前一组产物发布到后一组。
+
+目标设计将 `artifact_root` 作为 Obsidian 阅读与人工审核层的共同父目录，四类产物必须同根以避免相互引用失效。如果使用已有 Vault，应放在一个明确的项目子目录中；在发布器实现前，不应让两套流程同时写同一文件。
 
 下面是 Obsidian 接入的**拟议配置契约**，当前程序尚不读取这些字段。字段名称在实现时可以调整，但权限语义和验收规则不得被省略。
 
@@ -295,4 +298,3 @@ idea 候选只允许从正式主题产生，输入包括已核验 Claim、明确
 ```
 
 这一部分完成的判据是：证据卡不会因主题调整而被批量重写；候选主题不能绕过人工门自动正式化；一级至三级主题能够被验证和导航；每条主题综合能够回链 Claim；合并与拆分保留历史；每个 idea 候选都能说明其证据基础、可检验性和不确定性。
-

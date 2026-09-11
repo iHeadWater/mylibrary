@@ -102,16 +102,10 @@ REQUIRED_RESEARCH_SKILLS = (
     "skills/hydrology-theme-synthesis/SKILL.md",
 )
 
-# 随合并一起搬进 docs/hydro-platform/ 的中文规范目录。它们属于文档,必须保持
-# 被跟踪、不被 ignore 规则误吞。
+# 当前仍作为正式文档维护的中文规范目录。旧产品稿、证据卡副本、
+# 历史主题规范和未引用图稿已由 Git 历史保留，不再强制空目录存在。
 RESEARCH_DOCS_DIRS = (
     "主题模板",
-    "主题规范",
-    "证据卡规范",
-    "证据卡模板",
-    "证据卡模块",
-    "产品与流程",
-    "图与形成依据",
 )
 
 # ``str.startswith`` accepts a tuple; keep the prefix tuples in a form pytest can print.

@@ -77,7 +77,7 @@ uv run hydro-platform setup --apply --json
 
 setup 编排项目依赖安装、就绪检查、本地任务恢复及按配置恢复 Windows 计划；不代登录、不改总配置、不生成科研内容、不推 Git。基础 Python、Zotero、Codex 以及私人账号需先准备。
 
-指定制卡机才启用 scheduler。只查看资料的机器使用关闭调度的配置，避免重复制卡。setup 本身无模型调用，但注册的计划日后到期可能调用模型。已有同机新目录恢复、依赖安装和本机调度实测；干净新机、关机/重新登录、云端同步延迟未全面验收。
+指定制卡机才启用 scheduler。只查看资料的机器使用关闭调度的配置，避免重复制卡。setup 本身无模型调用，但注册的计划日后到期可能调用模型。配置开启不等于计划已经安装，必须用 `schedule-status --json` 核对任务归属和真实定义。
 
 [完整安装恢复](workstation-setup.md) · [调度](cron.md) · [运行维护](runtime-maintenance.md)
 
@@ -90,7 +90,7 @@ setup 编排项目依赖安装、就绪检查、本地任务恢复及按配置�
 - 不复制 `.venv` 到另一台电脑，应重新创建（共享 `.venv` 用 `uv sync --all-packages`，平台内环境用 `bootstrap --install`）；这是 Python 官方对虚拟环境可移植性的限制，本项目也拒绝直接接管搬动后的环境。[venv 文档](https://docs.python.org/3/library/venv.html)
 - Python 的 bootstrap 不安装 Poppler；另运行 bootstrap-native。两者均不变更账号、不注册调度。换机仍需准备外部前提，再按 [恢复说明](recovery.md) 对账；本地未推送成果不等于远端备份。
 
-## 真实 PDF 验证（可选，不进入日常调度）
+## PDF 部署验证（可选，不进入日常调度）
 
 ```powershell
 .\.venv\Scripts\python.exe hydro-platform\automation\verify_deployment.py --item-key CEXH4PQA --item-key 7F8QLSNY --item-key JUKFEIFC
@@ -98,8 +98,4 @@ setup 编排项目依赖安装、就绪检查、本地任务恢复及按配置�
 
 必须已有任务、证据包及原始 PDF。脚本只读 Zotero，在内存中选择项目 Python，不改总配置；逐页提取文字但只保存字符数，调用固定沙箱检查首图渲染，并记录源哈希和现有知识文件哈希。报告在 `hydro-platform/.runtime/deployment-trials/`。无模型调用、无摘录任务、无内容质量门槛，不是日常制卡附加负担。
 
-实测：新环境 Python 3.14.6 / pypdf 6.18.0，二次安装 REUSED。三篇全文 16/17/43 页、109203/90597/201495 个提取字符，沙箱首图渲染均通过，三张首图可读。45 个原运行/知识文件及三份 PDF 未变。报告 `hydro-platform/.runtime/deployment-trials/deployment-check-75iqophq/verification.json`。实际配置随后切换项目 Python，doctor 9 项通过。
-
-新环境下全量416项测试也通过。再以新环境执行 `hydro-platform/automation/verify_runtime_recovery.py`，新运行目录恢复三篇 COMPLETED，第二轮任务零变化，原45文件未变；报告 `hydro-platform/.runtime/recovery-trials/recovery-check-4p5szrk6/verification.json`。
-
-这只证明同机新 Python 环境与样本兼容，未证明干净新机器、所有 PDF、模型理解或科学质量。每日计划已在本机启用，安装与验证边界见[调度手册](cron.md)；完整换机及其余待验收场景见[工程化缺口](engineering-status.md)。
+验证报告写入 `hydro-platform/.runtime/deployment-trials/`，只对本次选择的样本和机器有效。它不能证明干净新机器、所有 PDF、模型理解、科学质量或 Windows 计划已经可用。自动测试、实机检查和仍待验证的场景见[验证地图](tests.md)，计划归属见[调度手册](cron.md)。

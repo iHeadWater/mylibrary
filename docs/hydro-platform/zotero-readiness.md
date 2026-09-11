@@ -47,13 +47,13 @@
 - `scheduler-state.json`：`PENDING`、`pending_count`、`next_retry_at`、次数及流水线报告路径。`schedule-status`显示等待警告，不把可用的计划定义当作全队列成功。
 - 常见错误：`ZOTERO_EXECUTABLE_NOT_FOUND`（配置路径/安装缺失）、`ZOTERO_START_FAILED`（进程创建失败）、`ZOTERO_READY_TIMEOUT`（有限等待已到）、`GROUP_PERMISSION_DENIED`（账号权限）。不在错误后自动重置或重复制卡。
 
-## 验收证据与剩余边界
+## 验证方式与剩余边界
 
-- 统一主题池完整入口实测：本机Zotero原先未运行，按既有启动配置执行run-once，launch_attempted=true、launched=true、poll_count=2，6.73秒内取得本地API与qinjiajun；随后跳过3卡、复用6主题步骤、模型0，总计7.0秒COMPLETED。记录：.runtime/logs/pipeline-runs/20260909T053608-bc83b9d7808b40f3b36496ac1b2c596d.json。未修改Zotero数据或偏好，未先关闭应用制造测试条件；随后doctor12项通过。
-- `test_zotero_readiness.py`：已就绪不启动、仅一次启动、API/群组延迟、有限预算、到期不再启动、权限失败、配置拒绝、隐藏窗口参数；含真实本地HTTP测试服务由群组不可见变为可见的受控测试。
-- `test_pipeline.py`、`test_scheduled.py`：待PDF→补齐→继续，以及旧卡不重制、待处理不误记完成、冷却/次数、同步时暂缓主题、长期缺PDF不阻塞已有卡主题。
-- `test_doctor.py`：新增检查只定位路径，不启动应用。
-- 本机隔离验收：`.runtime/readiness-trials/readiness-check-kvf8_q5b/verification.json`。实际读取qinjiajun，3张卡跳过、6个主题步骤复用、第二次调度跳过，模型及启动调用0；45个原运行/知识文件哈希、Zotero进程集合不变。副本保留在本地运行区。
-- 可重复运行：`.venv/Scripts/python.exe hydro-platform/automation/verify_zotero_readiness.py`（在仓库根目录执行；`.venv` 为 uv workspace 共享环境）。该验收只针对已有成果复用，明确禁止模型和应用启动调用；缺少成果会失败，不代生成。
+`test_zotero_readiness.py` 覆盖已就绪不启动、仅一次启动、API/群组延迟、有限预算、权限失败、配置拒绝和隐藏窗口参数；`test_pipeline.py`、`test_scheduled.py` 覆盖待 PDF 后续补齐、旧卡复用、冷却和次数；`test_doctor.py` 保证只定位程序而不启动应用。可运行：
 
-现在已有本机Zotero未运行时实际自动启动并继续流水线的证据；这还不是“真实附件从云端下载中恢复”“关机/重新登录”或干净新机验收。没有关闭用户应用制造证明；不保证首次账号登录、云端网络或科学质量。相关：[调度](cron.md)、[工程状态](engineering-status.md)、[验证地图](tests.md)。
+```powershell
+uv run pytest hydro-platform/automation/tests/test_zotero_readiness.py hydro-platform/automation/tests/test_scheduled.py hydro-platform/automation/tests/test_doctor.py -q
+uv run python hydro-platform/automation/verify_zotero_readiness.py
+```
+
+隔离验收只针对当前机器与已有成果复用，不代生成科研内容，也不能证明真实附件从云端下载中恢复、关机后重新登录、干净新机首次登录或科学质量。相关：[调度](cron.md)、[验证地图](tests.md)。

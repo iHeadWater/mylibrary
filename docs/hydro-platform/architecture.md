@@ -26,8 +26,9 @@ flowchart TB
         REPORT[活动与日报]
     end
 
-    subgraph Storage[本机或指定共享位置]
-        ARTIFACTS[artifact_root]
+    subgraph Storage[当前存储]
+        OUTPUTS[project_root 下的自动化产物目录]
+        ARTIFACTS[artifact_root 目录契约<br/>尚未接入自动发布]
         RUNTIME[.runtime]
     end
 
@@ -37,9 +38,10 @@ flowchart TB
     PDF --> GATE
     SCAN --> GATE --> TASKS --> CARD --> THEME
     TASKS --> REPORT
-    CARD --> ARTIFACTS
-    THEME --> ARTIFACTS
-    REPORT --> ARTIFACTS
+    CARD --> OUTPUTS
+    THEME --> OUTPUTS
+    REPORT --> OUTPUTS
+    OUTPUTS -. 目标：准入后发布 .-> ARTIFACTS
     SCAN --> RUNTIME
     TASKS --> RUNTIME
 ```
@@ -76,8 +78,8 @@ flowchart TB
 | 代码、Skills、模板、Schema、测试 | Git工作树 | 跟踪 |
 | 非敏感团队配置与示例 | `hydro-platform/config/` | 跟踪；秘密不得写入 |
 | Zotero条目与原始PDF | Zotero及其合法附件位置 | 不跟踪 |
-| 证据包、自动主题池、活动和日报 | 配置解析出的运行产物目录 | 不跟踪 |
-| 证据卡、正式主题、运行记录、文献链接 | `paths.artifact_root` | 不跟踪，由操作者或团队共享位置管理 |
+| 证据包、自动主题池、活动和日报 | `paths.evidence_packs_dir`、`themes_dir`、`activity_dir`、`reports_dir` | 不跟踪；当前自动化实际使用 |
+| 证据卡、正式主题、运行记录、文献链接 | `paths.artifact_root` 下的四个目录 | 不跟踪；已有配置契约，尚未接入自动化发布 |
 | 快照、任务、锁、草稿和诊断日志 | `hydro-platform/.runtime/` | 不跟踪，可按持久化成果重建 |
 | Python环境和原生PDF工具 | `.venv/`、`hydro-platform/.tools/` | 不跟踪，按依赖锁重建 |
 
@@ -91,7 +93,7 @@ flowchart TB
 
 ## 已知限制
 
-- Obsidian受控接口、正式主题确认和idea生成尚未实现。
+- 自动化产物到 `artifact_root` 的统一发布、Obsidian受控接口、正式主题确认和idea生成尚未实现。
 - 自动粗卡到L2/L3科研证据卡的升级仍依赖人工工作流。
 - 候选主题的工程路由已测试，但模型关联、合并和拆分的科研质量没有机器认证。
 - 大规模语料的检索压缩、干净异机、关机/登录及云端同步延迟场景仍需验证。
@@ -106,4 +108,3 @@ flowchart TB
 - [运行一轮](run-once.md)与[工作站设置](workstation-setup.md)
 - [模板资产](templates.md)与[统一主题池](unified-theme-pool.md)
 - [权限与数据归属](permissions.md)与[验证地图](tests.md)
-
