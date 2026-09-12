@@ -102,3 +102,4 @@ nav:
       - 决策记录:
           - Zotero 入库使用 linked_file: adr/0001-zotero-linked-file-sync.md
           - 不统一两套 Zotero 客户端: adr/0002-zotero-two-clients-boundary.md
+          - 精读产物根可配置: adr/0003-configurable-literature-output-root.md

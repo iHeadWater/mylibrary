@@ -1,23 +1,22 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
 
 
 def _load_dotenv() -> None:
-    """Load .env file from project root into os.environ."""
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    if not env_path.is_file():
-        return
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key, value = key.strip(), value.strip()
-        if key and key not in os.environ:
+    """把仓库根的 .env 载入 os.environ(已存在的键不覆盖)。
+
+    解析本身归 ``_config.read_dotenv_values`` —— 这里曾有第二份手写的
+    dotenv 解析,且不剥离行内注释,``KEY=value  # 注释`` 会把注释一起当值。
+    """
+    from ._config import read_dotenv_values
+
+    for key, value in read_dotenv_values().items():
+        if key not in os.environ:
             os.environ[key] = value
 
 
@@ -166,6 +165,68 @@ def add_query_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser.set_defaults(cmd="query")
 
 
+def add_paths_subparser(subparsers: argparse._SubParsersAction) -> None:
+    parser = subparsers.add_parser(
+        "paths",
+        help="Print the resolved literature product paths",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON (consumed by the skills)",
+    )
+    parser.set_defaults(cmd="paths")
+
+
+def _paths_payload() -> dict[str, object]:
+    """解析出的各产物路径 + 是否在工作区外 + 是否存在。
+
+    由 ``literature._paths`` 提供 —— 那是全仓库唯一知道产物根在哪的地方。
+    """
+    from .literature import _paths
+
+    root = _paths.OUTPUT_ROOT
+    try:
+        external = not root.resolve().is_relative_to(_paths.PROJECT_ROOT.resolve())
+    except (OSError, ValueError):
+        external = True
+
+    payload: dict[str, object] = {
+        "project_root": str(_paths.PROJECT_ROOT),
+        "literature_root": str(root),
+        "external": external,
+    }
+    for key, path in (
+        ("weekly_review", _paths.WEEKLY_REVIEW_DIR),
+        ("papers", _paths.PAPERS_DIR),
+        ("bilibili", _paths.BILIBILI_DIR),
+        ("zotero", _paths.ZOTERO_DIR),
+    ):
+        payload[key] = str(path)
+        payload[f"{key}_exists"] = path.is_dir()
+    return payload
+
+
+def _print_paths(*, as_json: bool) -> None:
+    payload = _paths_payload()
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    suffix = "  (工作区外)" if payload["external"] else ""
+    print(f"仓库根: {payload['project_root']}")
+    print(f"产物根: {payload['literature_root']}{suffix}")
+    for key, label in (
+        ("weekly_review", "周报产物"),
+        ("papers", "PDF"),
+        ("bilibili", "B站上传"),
+        ("zotero", "NotebookLM"),
+    ):
+        mark = "✓" if payload[f"{key}_exists"] else "—"
+        print(f"  {mark} {label:<10} {payload[key]}")
+    if not payload["weekly_review_exists"]:
+        print("\n(带 — 的目录尚未创建;跑对应流程时会自动建)")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="hydrolitagent",
@@ -177,6 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_graph_subparser(subparsers)
     add_merge_subparser(subparsers)
     add_query_subparser(subparsers)
+    add_paths_subparser(subparsers)
     return parser
 
 
@@ -288,6 +350,9 @@ def main() -> None:
                     print(f"  [{n.get('file_type', '?')}] {n['label']}")
                 if len(result["nodes"]) > 15:
                     print(f"  ... and {len(result['nodes']) - 15} more nodes")
+
+    elif args.command == "paths":
+        _print_paths(as_json=args.json)
 
     else:
         parser.print_help()

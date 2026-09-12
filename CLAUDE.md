@@ -111,7 +111,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 ```
 hydrolitagent/       # Knowledge graph toolkit (graphify integration)
 ├── cli.py           # CLI entry point (argparse subcommands)
-├── _config.py       # Shared TOML loader
+├── _config.py       # Shared TOML loader + 精读产物根解析(resolve_literature_root)
 ├── graph/           # Knowledge graph construction + merging
 │   ├── build.py     # Single-topic graph build pipeline
 │   └── merge.py     # Multi-topic merge + D3.js HTML viz
@@ -121,10 +121,10 @@ hydrolitagent/       # Knowledge graph toolkit (graphify integration)
     ├── paper_to_zotero.py # DOI → Zotero (Crossref/arXiv/S2 metadata)
     └── zot_link_gdrive.py # Google Drive → linked_file attachment
 
-configs/             # Prompt and extraction configuration
+configs/             # 配置:graph_prompts.toml · paths.toml(精读产物根的默认值)
 scripts/             # run_paper_pipeline.sh, chunk_fulltext.py (weekly-review 辅助)
 skills/              # Agent skills (zotero-query, paper-to-zotero, 及迁入的 weekly-review 等 6 个)
-outputs/             # 精读产物: outputs/weekly-review/{date}/{cards,article,podcast}
+outputs/             # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
 papers/              # 按主题组织的文献库(10 主题, 6173 篇);知识库核心资产
 docs/                # Documentation site (mkdocs-material)
 hydro-platform/      # 科研知识平台(uv workspace 成员;消费侧:Zotero → 证据包 → 主题池)

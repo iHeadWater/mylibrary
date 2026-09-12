@@ -446,6 +446,9 @@ def make_paths(target_date: dt.date, *, collection_name: str | None = None) -> W
     dirname = target_date.isoformat()
     if collection_name:
         dirname = f"{dirname}-{_safe_filename(collection_name, 'collection')}"
+    # 刻意用模块全局 OUTPUT_ROOT 现算,而不是 import _paths.ZOTERO_DIR:
+    # 后者在 import 期就绑死了,三个测试靠 monkeypatch.setattr(zn,
+    # "OUTPUT_ROOT", tmp_path) 改落点 —— 换常量会直接让它们失效。
     output_dir = OUTPUT_ROOT / "zotero" / dirname
     return WorkflowPaths(
         output_dir=output_dir,

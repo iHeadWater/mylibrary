@@ -800,3 +800,103 @@ def test_research_workflow_artifacts_are_ignored_and_untracked() -> None:
         assert not _is_ignored(f"{rel}/示例.md"), (
             f"ignore 规则命中 {rel}/ ——规则过宽,会吞掉随合并搬入的规范文档"
         )
+
+
+# --------------------------------------------------------------------------------------
+# 11. 精读产物根:可配置,但**默认**位置必须仍受 ignore 规则控制、且不入库
+# --------------------------------------------------------------------------------------
+
+
+LITERATURE_ROOT_SAMPLE = "outputs/weekly-review/2026-08-04/cards/sample.md"
+PATHS_CONFIG_REL = "configs/paths.toml"
+LITERATURE_CONFIG = REPO_ROOT / PATHS_CONFIG_REL
+
+# 凭据绝不能进这个文件 —— 它是要随仓库分发的。
+SECRET_KEY_RE = re.compile(r"api[_-]?key|secret|token|password|passwd", re.IGNORECASE)
+
+# 曾经写成单数 `output/` 的三份 prompt 文本。它们的单数是错的:没有代码创建
+# 那个目录。归一成复数后在这里做负向控制,防止改回去。
+PLURAL_ROOT_SKILLS = (
+    "skills/weekly-review/SKILL.md",
+    "skills/weekly-review/agents/openai.yaml",
+    "skills/bilibili-upload/SKILL.md",
+)
+
+
+def test_literature_output_root_is_configurable_ignored_and_untracked() -> None:
+    """要求:精读产物根可配置,但**默认**落点必须仍受 ignore 规则控制、且不入库。
+
+    与科研产物守卫(见上一条)同一原则,分两处:
+    - MECHANISM:默认位置必须被 ignore 规则命中 —— 规则被删掉就要立刻暴露,
+      而不是等到产物已经被提交进仓库;
+    - OUTCOME:默认位置下不得有任何被跟踪的文件。
+
+    非空性:同时要求承载配置的文件确实存在、确实被跟踪、且**没**被 ignore。
+    否则"配置面已落地"这句话在配置文件缺失或不被分发时会平凡为真。
+
+    最后断言提交进仓库的那份配置是**安全的默认值**:它会被所有用户继承,
+    指向仓库外就不是默认值而是缺陷。
+    """
+
+    # ── MECHANISM ──
+    assert _is_ignored(LITERATURE_ROOT_SAMPLE), (
+        "精读产物的默认位置没有任何 ignore 规则覆盖,可能被误提交;"
+        f"规则应命中 {LITERATURE_ROOT_SAMPLE}"
+    )
+
+    # ── OUTCOME ──
+    tracked = _git_ls_files("outputs")
+    assert not tracked, (
+        "outputs/ 下仍有被跟踪的文件 —— 精读产物是运行产物,应只存在于本地或共享盘:\n  "
+        + "\n  ".join(sorted(tracked))
+    )
+
+    # ── 非空性:配置面本身必须落地且随仓库分发 ──
+    assert LITERATURE_CONFIG.is_file(), (
+        f"{PATHS_CONFIG_REL} 不存在 —— 配置面没有落地,上面的断言会在空集上为真"
+    )
+    assert PATHS_CONFIG_REL in _git_ls_files("configs"), (
+        f"{PATHS_CONFIG_REL} 没有被 git 跟踪 —— 它必须随仓库分发,"
+        "否则每个用户都拿不到默认值"
+    )
+    assert not _is_ignored(PATHS_CONFIG_REL), (
+        f"{PATHS_CONFIG_REL} 被 ignore 规则命中 —— 它必须随仓库分发"
+    )
+
+    # ── 提交的配置必须是安全的默认值 ──
+    shipped = tomllib.loads(LITERATURE_CONFIG.read_text(encoding="utf-8"))["literature"]
+    assert shipped["external"] is False, (
+        "提交进仓库的 paths.toml 不得指向工作区外 —— 它会让所有用户的产物落到同一个外部位置"
+    )
+    root = Path(shipped["root"])
+    assert not root.is_absolute(), "提交的 root 必须是相对路径"
+    assert root == Path("outputs"), (
+        "提交的默认 root 必须与 ignore 规则覆盖的位置一致,否则默认产物会入库"
+    )
+    leaked = [key for key in shipped if SECRET_KEY_RE.search(key)]
+    assert not leaked, f"{PATHS_CONFIG_REL} 里出现疑似凭据键: {leaked}"
+
+    # ── 防漂移:代码默认值必须与提交的配置一致 ──
+    from hydrolitagent._config import resolve_literature_root
+
+    assert resolve_literature_root(env={}, dotenv={}) == REPO_ROOT / "outputs", (
+        "代码解析出的默认产物根与 configs/paths.toml 不一致 —— 同一个事实只能有一个答案"
+    )
+
+
+def test_skill_literals_use_the_plural_outputs_root() -> None:
+    """负向控制:22 处单数 ``output/`` 已归一为 ``outputs/``,防止改回去。
+
+    ``output/`` 从来都是错的:没有代码创建它,``_paths.OUTPUT_ROOT`` 是
+    ``outputs/``,且多数文档写的就是复数。这三份是 prompt 文本,改回去不会有
+    测试以外的任何东西报警 —— 所以要在这里钉住。
+    """
+
+    for rel in PLURAL_ROOT_SKILLS:
+        text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+        assert "output/weekly-review" not in text, (
+            f"{rel} 又出现了单数 output/ —— 它会让 agent 写到一个仓库里不存在的目录"
+        )
+        assert "outputs/weekly-review" in text, (
+            f"{rel} 缺少复数形式的默认字面量 —— 未配置的检出需要它作为回退锚点"
+        )

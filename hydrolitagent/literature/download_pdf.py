@@ -24,7 +24,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Optional
 
-from hydrolitagent.literature._paths import OUTPUT_ROOT
+from hydrolitagent.literature._paths import PAPERS_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -194,18 +194,22 @@ def classify_input(user_input: str) -> dict:
 # Output path resolution
 # ---------------------------------------------------------------------------
 
-DEFAULT_PDF_ROOT = OUTPUT_ROOT / "papers"
+DEFAULT_PDF_ROOT = PAPERS_DIR
 
 
-def default_pdf_dir() -> Path:
-    """Default directory for downloaded PDFs.
+def default_pdf_dir(root: Path | None = None) -> Path:
+    """下载 PDF 的默认目录。
 
-    Uses ``mylibrary/outputs/papers/`` (overridable via ``MYLIBRARY_PDF_ROOT``).
+    优先级:``MYLIBRARY_PDF_ROOT``(旧名,仍兼容) → 显式 ``root`` →
+    精读产物根下的 ``papers/``。产物根见 ``uv run hydrolitagent paths``。
+
+    ``MYLIBRARY_PDF_ROOT`` 只对这一个目录生效,是过渡期的第二个答案;
+    新代码请用产物根,别再加第三个。
     """
     data_root = os.environ.get("MYLIBRARY_PDF_ROOT", "")
     if data_root:
         return Path(data_root)
-    return DEFAULT_PDF_ROOT
+    return root or DEFAULT_PDF_ROOT
 
 
 def slug_from_doi(doi: str) -> str:

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from hydrolitagent.literature._paths import OUTPUT_ROOT
+from hydrolitagent.literature._paths import BILIBILI_DIR
 
 
 def log(msg: str) -> None:
@@ -35,7 +35,7 @@ COVER_WIDTH = 1920
 COVER_HEIGHT = 1080
 DEFAULT_TID = 171  # 科技·人工智能
 DEFAULT_COOKIE_PATH = Path.home() / ".bilibili" / "cookies.json"
-OUTPUT_DIR = OUTPUT_ROOT / "bilibili-upload"
+OUTPUT_DIR = BILIBILI_DIR
 
 # Windows 微软雅黑，Linux/Mac fallback
 _FONT_CANDIDATES = [

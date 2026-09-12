@@ -67,7 +67,11 @@ uv run python -m hydrolitagent.literature.wechat.figure <article.md>
 
 ## 精读产物(知识库)
 
-每周文献综述的产出(分析卡、文章、播客)统一放在 `outputs/weekly-review/{YYYY-MM-DD}/`:
+每周文献综述的产出(分析卡、文章、播客)统一放在 `outputs/weekly-review/{YYYY-MM-DD}/`。
+
+> `outputs/` 只是**默认落点**。产物根可配置——要同步到 OneDrive / Google Drive / 坚果云,
+> 设 `HYDROLITAGENT_LITERATURE_ROOT`,或改 `configs/paths.toml`。见
+> [配置参考](config.md#精读产物根)。用 `uv run hydrolitagent paths` 查看实际落点。
 
 ```
 outputs/weekly-review/2026-08-04/
