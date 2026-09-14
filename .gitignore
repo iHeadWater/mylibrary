@@ -251,3 +251,11 @@ fulltext_*.txt
 证据卡/
 运行记录/
 文献链接/
+
+# ── 本地工具产物与核验截图（不入库）──
+# firecrawl skill 的抓取缓存（detail-*.md 等中间产物）
+.firecrawl/
+# 文档站渲染核验截图,如 hp-index.png / hp-mermaid.png / hp-projdesign.png。
+# 修 Mermaid 渲染时逐页截图核对用,是本地核验材料而非仓库内容;
+# 若某张确实要进文档,应挪到 docs/assets/ 下再单独提交。
+/hp-*.png
