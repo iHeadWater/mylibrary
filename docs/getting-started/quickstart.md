@@ -63,7 +63,7 @@ uv run python scripts/download_paper.py --arxiv 2501.08086 --sync
 ```
 
 arXiv 与 OA DOI（science.org / Copernicus 等）走 curl，秒级；付费墙（SD/Wiley/Nature）需浏览器 + 机构会话。
-重跑同 DOI 幂等跳过（`--allow-duplicate` 强制重建）。
+同 DOI 重跑会把 PDF **补挂到既有条目**（条目在、缺 PDF 的常见情形）；已挂同内容则幂等跳过。
 
 **myopenclaw / hermes 容器（爱码士）**——用打包进容器的 pipeline（需要 paper-fetch）：
 

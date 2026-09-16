@@ -60,7 +60,7 @@ uv run python scripts/download_paper.py --arxiv <id> --sync
 
 - **arXiv 记录质量**:`--sync` 走 `zotero_sync`,建条目委托给 `paper_to_zotero.build_item()`
   (Crossref → arXiv API → Semantic Scholar)。arXiv DOI 在 Crossref 是 404,因此记录来自 arXiv API:
-  `preprint` 类型、真实标题/摘要/日期、`extra` 含 `archiveID: arXiv:<id>`。重跑同 DOI 会**幂等跳过**(强制加 `--allow-duplicate`)。
+  `preprint` 类型、真实标题/摘要/日期、`extra` 含 `archiveID: arXiv:<id>`。重跑同 DOI 会**补挂到既有条目**;已挂同内容才幂等跳过。
 - **post-sync 核验**:Zotero 条目标题/作者与论文一致、`itemType=preprint`、child 为
   `linked_file → attachments:<file>.pdf`、PDF 已在 `GDRIVE_PAPERS_PATH`(= Zotero Desktop 的 Linked Attachment Base Directory)。
 

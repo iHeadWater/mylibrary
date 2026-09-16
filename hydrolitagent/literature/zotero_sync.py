@@ -22,6 +22,7 @@ Environment variables::
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -116,6 +117,61 @@ def _copy_to_gdrive(pdf_path: str | Path, gdrive_dir: str | Path, dest_filename:
 # delegated to hydrolitagent.zotero.paper_to_zotero.build_item(), keeping a
 # single source of truth that handles arXiv preprints correctly.
 
+ATTACHMENT_PATH_PREFIX = "attachments:"
+
+
+def _create_attachment(zot, parent_key: str, attachment_filename: str) -> str:
+    """Create a linked_file attachment under ``parent_key``.
+
+    Uses Zotero's portable ``attachments:`` scheme, which Zotero resolves against
+    the user's "Linked Attachment Base Directory" preference
+    (Zotero → Preferences → Advanced → Files and Folders).
+
+    Args:
+        zot: :class:`pyzotero.zotero.Zotero` client.
+        parent_key: 8-character key of the parent item.
+        attachment_filename: Filename within the linked attachment base directory.
+
+    Returns:
+        The attachment key, or ``""`` when the API reported no success entry.
+    """
+    attach_tmpl = zot.item_template("attachment", "linked_file")
+    attach_tmpl["title"] = attachment_filename
+    attach_tmpl["parentItem"] = parent_key
+    attach_tmpl["path"] = f"{ATTACHMENT_PATH_PREFIX}{attachment_filename}"
+    attach_tmpl["contentType"] = "application/pdf"
+
+    attach_resp = zot.create_items([attach_tmpl])
+    attach_created = attach_resp.get("success", {})
+    return list(attach_created.values())[0] if attach_created else ""
+
+
+def _existing_attachments(zot, parent_key: str) -> list[dict]:
+    """Return the child attachment data dicts of ``parent_key``.
+
+    Best-effort: a failed lookup yields ``[]`` so the caller falls back to
+    creating an attachment rather than aborting the sync.
+    """
+    try:
+        children = zot.children(parent_key)
+    except Exception:
+        return []
+    out: list[dict] = []
+    for child in children:
+        data = child.get("data") or {}
+        if data.get("itemType") == "attachment":
+            out.append(data)
+    return out
+
+
+def _sha256(path: str | Path) -> str:
+    """SHA-256 of a file — distinguishes 'the same PDF' from 'a different PDF'."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
 
 def _create_zotero_item(
     zot,
@@ -156,19 +212,7 @@ def _create_zotero_item(
         raise RuntimeError(f"Failed to create Zotero item: {err_msg}")
 
     parent_key = list(created.values())[0]
-
-    # Create linked_file attachment using Zotero's portable attachments: scheme.
-    # Zotero resolves this against the user's "Linked Attachment Base Directory"
-    # preference (set in Zotero → Preferences → Advanced → Files and Folders).
-    attach_tmpl = zot.item_template("attachment", "linked_file")
-    attach_tmpl["title"] = attachment_filename
-    attach_tmpl["parentItem"] = parent_key
-    attach_tmpl["path"] = f"attachments:{attachment_filename}"
-    attach_tmpl["contentType"] = "application/pdf"
-
-    attach_resp = zot.create_items([attach_tmpl])
-    attach_created = attach_resp.get("success", {})
-    attach_key = list(attach_created.values())[0] if attach_created else ""
+    attach_key = _create_attachment(zot, parent_key, attachment_filename)
 
     return parent_key, attach_key
 
@@ -177,17 +221,21 @@ def _create_zotero_item(
 # CLI
 # ---------------------------------------------------------------------------
 
-# Idempotence uses a local DOI→key index cached inside the GDrive papers folder
-# (`.zotero-sync-index.json`).  A full server scan is avoided on every sync
-# because Zotero's quick-search ``q`` does NOT index the DOI field (verified
-# live), and a top-level scan is slow on large libraries (~7k items ≈ minutes).
+# Duplicate detection uses a local DOI→key index cached inside the GDrive papers
+# folder (`.zotero-sync-index.json`).  Zotero's quick-search ``q`` does NOT index
+# the DOI field (verified live), so the only way to ask "does this DOI already
+# exist?" is a full top-level scan — slow on large libraries (~6k items).
 # The index file is a normal file in the (Google-Drive-synced) papers folder, so
 # it persists across repo re-clones and carries over to other machines sharing
-# the same GDrive folder.  A full scan is triggered only when the index is
-# missing or stale, or with ``--refresh-index``.
+# the same GDrive folder.
+#
+# A HIT is authoritative.  A MISS is NOT: items created outside this pipeline
+# (Zotero desktop, the Beaver importer, the container pipeline) never wrote to
+# the index, so absence means "not indexed", not "does not exist".  Scanning on
+# a miss costs one scan per genuinely-new paper, and is what stops an existing
+# record from silently becoming a duplicate one.
 
 INDEX_FILENAME = ".zotero-sync-index.json"
-INDEX_STALE_DAYS = 30
 
 
 def _index_path(gdrive_dir: str | Path) -> Path:
@@ -224,19 +272,6 @@ def _save_index(gdrive_dir: str | Path, items: dict[str, str]) -> None:
         pass
 
 
-def _index_is_stale(gdrive_dir: str | Path) -> bool:
-    """True when the cached index is older than INDEX_STALE_DAYS."""
-    p = _index_path(gdrive_dir)
-    if not p.exists():
-        return True
-    try:
-        import time as _time
-        age_days = (_time.time() - p.stat().st_mtime) / 86400
-        return age_days > INDEX_STALE_DAYS
-    except OSError:
-        return True
-
-
 def _scan_server_dois(zot) -> dict[str, str]:
     """Full top-level scan → {doi: key}. Expensive — only run on (re)build.
 
@@ -263,14 +298,15 @@ def _scan_server_dois(zot) -> dict[str, str]:
 def _existing_key(zot, doi: str, gdrive_dir: str | Path, refresh: bool) -> str | None:
     """Return an existing Zotero key for ``doi``, or None.
 
-    Uses the local cached index when fresh; runs a one-time full scan when the
-    index is missing/stale or ``refresh=True`` (result is re-cached).
+    A hit in the cached index is authoritative and costs nothing.  A miss forces
+    a server scan, because the index only knows about items this pipeline
+    created — see the note above ``INDEX_FILENAME``.  ``refresh=True`` forces a
+    scan even on a hit.
     """
     items = _load_index(gdrive_dir)
     path = _index_path(gdrive_dir)
-    need_scan = refresh or not path.exists() or (doi not in items and _index_is_stale(gdrive_dir))
-    if need_scan:
-        print("   Building DOI index (one-time server scan — may take a while)...", flush=True)
+    if refresh or not path.exists() or doi not in items:
+        print("   Scanning library for existing DOI (may take a while)...", flush=True)
         items = _scan_server_dois(zot)
         _save_index(gdrive_dir, items)
     return items.get(doi)
@@ -302,6 +338,17 @@ def main():
         "--allow-duplicate",
         action="store_true",
         help="Create a new item even if one with this DOI already exists",
+    )
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Restore the old behaviour: exit without attaching when the DOI exists",
+    )
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="Overwrite the GDrive PDF when the attachment already in this slot "
+        "has different content (default: report a conflict and change nothing)",
     )
     parser.add_argument(
         "--refresh-index",
@@ -368,7 +415,10 @@ def main():
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(2)
 
-    # -- Idempotence: skip when an item with this DOI already exists ------
+    # -- Existing item: attach the PDF to it rather than skipping -----------
+    # This branch used to print SKIP and return, which left the common case
+    # "the record exists but has no PDF" with no way forward short of
+    # --allow-duplicate, which creates a *second* item for the same DOI.
     if not args.allow_duplicate:
         existing = None
         try:
@@ -376,14 +426,91 @@ def main():
         except Exception as e:  # never block the sync on a check failure
             print(f"Note: duplicate check failed ({e}); continuing", file=sys.stderr)
         if existing:
-            print(
-                f"SKIP — item already in library (key {existing}) for DOI {doi}; "
-                "use --allow-duplicate to force"
-            )
+            if args.skip_existing:
+                print(
+                    f"SKIP — item already in library (key {existing}) for DOI {doi}; "
+                    "use --allow-duplicate to force"
+                )
+                if args.json:
+                    print(json.dumps(
+                        {"ok": False, "skipped": True, "zotero_key": existing, "doi": doi}
+                    ))
+                return
+
+            attach_path = f"{ATTACHMENT_PATH_PREFIX}{dest_filename}"
+            same_slot = None
+            for att in _existing_attachments(zot, existing):
+                if (att.get("path") or "") == attach_path:
+                    same_slot = att
+                    break
+
+            if same_slot:
+                target = Path(gdrive_dir) / dest_filename
+                identical = target.exists() and _sha256(target) == _sha256(pdf_path)
+                if identical:
+                    print(f"OK — already attached to {existing} (identical content)")
+                    if args.json:
+                        print(json.dumps({
+                            "ok": True, "action": "unchanged",
+                            "attached_to_existing": True,
+                            "zotero_key": existing, "doi": doi,
+                            "attachment_key": same_slot.get("key", ""),
+                        }))
+                    return
+                if not args.replace:
+                    # Never clobber a good copy behind the user's back.
+                    print(
+                        f"CONFLICT — {dest_filename} is already attached to {existing} "
+                        "but its content differs from the incoming PDF; nothing "
+                        "changed. Re-run with --replace to overwrite it."
+                    )
+                    if args.json:
+                        print(json.dumps({
+                            "ok": False, "action": "conflict",
+                            "attached_to_existing": True,
+                            "zotero_key": existing, "doi": doi,
+                        }))
+                    return
+                try:
+                    gdrive_path = _copy_to_gdrive(pdf_path, gdrive_dir, dest_filename)
+                except OSError as e:
+                    print(f"Error: Failed to copy PDF to GDrive: {e}", file=sys.stderr)
+                    sys.exit(4)
+                print(f"OK — refreshed {dest_filename} in place for {existing}")
+                if args.json:
+                    print(json.dumps({
+                        "ok": True, "action": "refreshed",
+                        "attached_to_existing": True,
+                        "zotero_key": existing, "doi": doi,
+                        "attachment_key": same_slot.get("key", ""),
+                        "gdrive_path": str(gdrive_path),
+                    }))
+                return
+
+            # No attachment in this slot yet: add one to the EXISTING item.
+            try:
+                gdrive_path = _copy_to_gdrive(pdf_path, gdrive_dir, dest_filename)
+            except OSError as e:
+                print(f"Error: Failed to copy PDF to GDrive: {e}", file=sys.stderr)
+                sys.exit(4)
+            attach_key = _create_attachment(zot, existing, dest_filename)
+
+            _idx = _load_index(gdrive_dir)
+            _idx[doi] = existing
+            _save_index(gdrive_dir, _idx)
+
             if args.json:
-                print(json.dumps(
-                    {"ok": False, "skipped": True, "zotero_key": existing, "doi": doi}
-                ))
+                print(json.dumps({
+                    "ok": True, "action": "attached",
+                    "attached_to_existing": True,
+                    "zotero_key": existing, "attachment_key": attach_key,
+                    "doi": doi, "gdrive_path": str(gdrive_path),
+                }))
+            else:
+                print("OK — PDF attached to existing Zotero item")
+                print(f"  Key:        {existing}")
+                print(f"  Attachment: {attach_key} (linked_file -> {attach_path})")
+                print(f"  PDF copied: {gdrive_path}")
             return
 
     # -- Copy PDF to Google Drive folder ----------------------------------
