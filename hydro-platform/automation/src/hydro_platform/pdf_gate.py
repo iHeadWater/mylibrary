@@ -20,7 +20,8 @@ class PdfGateError(RuntimeError):
         self.code = code
 
 
-def _is_pdf_attachment(record: dict[str, Any]) -> bool:
+def is_pdf_attachment(record: dict[str, Any]) -> bool:
+    """Return whether a Zotero child record represents a PDF attachment."""
     data = record.get("data")
     if not isinstance(data, dict) or data.get("itemType") != "attachment":
         return False
@@ -29,7 +30,8 @@ def _is_pdf_attachment(record: dict[str, Any]) -> bool:
     return content_type == "application/pdf" or filename.endswith(".pdf")
 
 
-def _attachment_summary(record: dict[str, Any]) -> dict[str, Any]:
+def attachment_summary(record: dict[str, Any]) -> dict[str, Any]:
+    """Return the stable attachment fields exposed by PDF readiness results."""
     data = record.get("data")
     if not isinstance(data, dict):
         raise PdfGateError("INVALID_API_RESPONSE", "PDF 附件缺少 data 对象")
@@ -73,7 +75,8 @@ def _result(
     return result
 
 
-def _file_url_to_path(value: Any) -> Path:
+def file_url_to_path(value: Any) -> Path:
+    """Convert a local Zotero file URL to a platform path."""
     if not isinstance(value, str) or not value.strip():
         raise PdfGateError("INVALID_FILE_URL", "Zotero 没有返回有效的 PDF 文件地址")
     parsed = urlparse(value.strip())
@@ -84,7 +87,8 @@ def _file_url_to_path(value: Any) -> Path:
     return Path(url2pathname(unquote(parsed.path)))
 
 
-def _inspect_file(path: Path, gate: PdfGateConfig) -> tuple[int, str, str | None]:
+def inspect_pdf_file(path: Path, gate: PdfGateConfig) -> tuple[int, str, str | None]:
+    """Validate a local PDF and return size, SHA-256, and an optional problem code."""
     try:
         size = path.stat().st_size
         with path.open("rb") as handle:
@@ -129,8 +133,8 @@ def evaluate_pdf_gate(
     ):
         raise PdfGateError("INVALID_API_RESPONSE", "Zotero 子条目列表格式异常")
 
-    pdf_records = [record for record in response.data if _is_pdf_attachment(record)]
-    summaries = [_attachment_summary(record) for record in pdf_records]
+    pdf_records = [record for record in response.data if is_pdf_attachment(record)]
+    summaries = [attachment_summary(record) for record in pdf_records]
     if not summaries:
         return _result(
             zotero,
@@ -159,7 +163,7 @@ def evaluate_pdf_gate(
         file_response = api.get_text(
             f"/api/groups/{zotero.group_id}/items/{attachment_key}/file/view/url"
         )
-        file_path = _file_url_to_path(file_response.data)
+        file_path = file_url_to_path(file_response.data)
     except ZoteroApiError as exc:
         if exc.status == 404:
             return _result(
@@ -183,7 +187,7 @@ def evaluate_pdf_gate(
             pdf=pdf,
         )
 
-    size, sha256, file_problem = _inspect_file(file_path, gate)
+    size, sha256, file_problem = inspect_pdf_file(file_path, gate)
     pdf.update(
         {
             "file_size_bytes": size,
