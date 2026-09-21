@@ -14,7 +14,7 @@
 
 ## 可调用的外部表面
 
-- Zotero Desktop Local API：只读配置指定的共享群组及本地附件，不修改 Zotero 数据库和同步偏好。
+- Zotero Desktop Local API：日常流水线只读配置指定的共享群组及本地附件，不修改 Zotero 数据库和同步偏好。`paper-input --user-library`及`paper-input --demo`是显式的本机验收入口，只读个人文库，不改变日常流水线的共享群组边界。
 - Codex CLI：使用已登录的 ChatGPT 账号处理 PDF 和文本；模型、推理强度、超时和代理来自配置。
 - 本地文件系统：只写入经配置解析和边界检查后的目录，对人工改动和来源冲突保留现场。
 - Windows Task Scheduler：通过固定命令安装、查询和移除，不由模型自由构造命令。
@@ -48,7 +48,22 @@
 | `uv run hydro-platform run-once --dry-run --json` | 只预览已有本机任务，不扫描、不调模型、不写入 |
 | `uv run hydro-platform themes-run --json` | 显式推进候选主题池 |
 | `uv run hydro-platform doctor --json` | 只读检查环境、账号、模板和路径 |
+| `uv run hydro-platform paper-input --query "关键词" --json` | 查询配置群组库并返回候选；不会自动选择第一条 |
+| `uv run hydro-platform paper-input --item-key ABCD1234 --json` | 检查单篇父条目、唯一 PDF、本地文件和全文索引状态 |
+| `uv run hydro-platform paper-input --user-library --item-key ABCD1234 --json` | 显式只读个人文库，用于本机验收 |
+| `uv run hydro-platform paper-input --demo --json` | 检查内置公开演示论文；本地缺失时返回 Zotero Connector 抓取链接 |
 | `uv run hydro-platform recover --json` | 从 Zotero 和完整持久化成果重建派生运行状态 |
 | `uv run hydro-platform schedule-status --json` | 读取本机计划任务和最近状态 |
+
+重复传入多个`--item-key`时，命令会逐篇处理。`MULTIPLE_PDFS`、`PDF_MISSING`等单篇问题不会中断后续条目；最终结果使用`COMPLETED_WITH_PROBLEMS`并在`problems`中汇总题名、key、原因和 PDF 候选。
+
+异机运行前必须在仓库根执行`uv sync --all-packages`，启动 Zotero Desktop，并开启“Allow other applications to communicate with Zotero”。默认群组模式还要求目标群组和 PDF 已同步到本机。`--demo`在个人库找不到公开演示论文时只返回文章页、PDF 链接和目标集合提示，不会代替用户点击 Zotero Connector；人工抓取完成后需重新执行。
+
+导入演示论文后，可以显式运行真实 Zotero 验收：
+
+```powershell
+$env:HYDRO_RUN_ZOTERO_DEMO = "1"
+uv run pytest hydro-platform/automation/tests/test_paper_input.py -q
+```
 
 当前团队配置的 `scheduler.enabled=true`，但“配置开启”不等于任意机器已安装计划任务，必须以 `schedule-status` 实机结果为准。调度、失败恢复、模型配置和验证证据分别见[每日调度](cron.md)、[运行一轮](run-once.md)、[配置](config.md)和[验证地图](tests.md)。

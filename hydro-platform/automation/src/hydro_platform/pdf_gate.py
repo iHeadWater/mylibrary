@@ -15,12 +15,13 @@ ITEM_KEY_PATTERN = re.compile(r"^[A-Z0-9]{8}$")
 
 
 class PdfGateError(RuntimeError):
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
 
 
-def _is_pdf_attachment(record: dict[str, Any]) -> bool:
+def is_pdf_attachment(record: dict[str, Any]) -> bool:
+    """Return whether a Zotero child record represents a PDF attachment."""
     data = record.get("data")
     if not isinstance(data, dict) or data.get("itemType") != "attachment":
         return False
@@ -29,7 +30,8 @@ def _is_pdf_attachment(record: dict[str, Any]) -> bool:
     return content_type == "application/pdf" or filename.endswith(".pdf")
 
 
-def _attachment_summary(record: dict[str, Any]) -> dict[str, Any]:
+def attachment_summary(record: dict[str, Any]) -> dict[str, Any]:
+    """Return the stable attachment fields exposed by PDF readiness results."""
     data = record.get("data")
     if not isinstance(data, dict):
         raise PdfGateError("INVALID_API_RESPONSE", "PDF 附件缺少 data 对象")
@@ -73,7 +75,8 @@ def _result(
     return result
 
 
-def _file_url_to_path(value: Any) -> Path:
+def file_url_to_path(value: Any) -> Path:
+    """Convert a local Zotero file URL to a platform path."""
     if not isinstance(value, str) or not value.strip():
         raise PdfGateError("INVALID_FILE_URL", "Zotero 没有返回有效的 PDF 文件地址")
     parsed = urlparse(value.strip())
@@ -84,7 +87,8 @@ def _file_url_to_path(value: Any) -> Path:
     return Path(url2pathname(unquote(parsed.path)))
 
 
-def _inspect_file(path: Path, gate: PdfGateConfig) -> tuple[int, str, str | None]:
+def inspect_pdf_file(path: Path, gate: PdfGateConfig) -> tuple[int, str, str | None]:
+    """Validate a local PDF and return size, SHA-256, and an optional problem code."""
     try:
         size = path.stat().st_size
         with path.open("rb") as handle:
@@ -107,49 +111,49 @@ def _inspect_file(path: Path, gate: PdfGateConfig) -> tuple[int, str, str | None
     return size, digest.hexdigest(), None
 
 
-def evaluate_pdf_gate(
+def resolve_pdf_file(
     zotero: ZoteroConfig,
     gate: PdfGateConfig,
     parent_key: str,
     *,
+    library_base_path: str,
     client: ZoteroClient | None = None,
 ) -> dict[str, Any]:
-    if zotero.group_id is None:
-        raise PdfGateError("CONFIG_ERROR", "PDF 门禁需要目标 Zotero 群组 ID")
+    """Resolve one parent item to a unique, readable local PDF file."""
     normalized_key = parent_key.strip().upper()
     if not ITEM_KEY_PATTERN.fullmatch(normalized_key):
         raise PdfGateError("INVALID_ITEM_KEY", "父条目 Key 必须是 8 位字母或数字")
+    if not library_base_path.startswith("/api/"):
+        raise PdfGateError("INVALID_LIBRARY_PATH", "Zotero 文库路径格式异常")
 
     api = client or ZoteroClient(zotero)
     response = api.get_json(
-        f"/api/groups/{zotero.group_id}/items/{normalized_key}/children"
+        f"{library_base_path}/items/{normalized_key}/children"
     )
     if not isinstance(response.data, list) or any(
         not isinstance(record, dict) for record in response.data
     ):
         raise PdfGateError("INVALID_API_RESPONSE", "Zotero 子条目列表格式异常")
 
-    pdf_records = [record for record in response.data if _is_pdf_attachment(record)]
-    summaries = [_attachment_summary(record) for record in pdf_records]
+    pdf_records = [record for record in response.data if is_pdf_attachment(record)]
+    summaries = [attachment_summary(record) for record in pdf_records]
     if not summaries:
-        return _result(
-            zotero,
-            normalized_key,
-            gate_status="WAITING",
-            reason_code="PDF_MISSING",
-            message="父条目尚无 PDF 附件，等待补充后重试",
-            pdf_count=0,
-        )
+        return {
+            "gate_status": "WAITING",
+            "reason_code": "PDF_MISSING",
+            "message": "父条目尚无 PDF 附件，等待补充后重试",
+            "parent_key": normalized_key,
+            "pdf_attachment_count": 0,
+        }
     if len(summaries) > 1:
-        return _result(
-            zotero,
-            normalized_key,
-            gate_status="BLOCKED",
-            reason_code="MULTIPLE_PDFS",
-            message="父条目包含多个 PDF，无法安全判断主文",
-            pdf_count=len(summaries),
-            candidates=summaries,
-        )
+        return {
+            "gate_status": "BLOCKED",
+            "reason_code": "MULTIPLE_PDFS",
+            "message": "父条目包含多个 PDF，无法安全判断主文",
+            "parent_key": normalized_key,
+            "pdf_attachment_count": len(summaries),
+            "candidates": summaries,
+        }
 
     pdf = summaries[0]
     if pdf.get("parent_key") != normalized_key:
@@ -157,33 +161,31 @@ def evaluate_pdf_gate(
     attachment_key = pdf["attachment_key"]
     try:
         file_response = api.get_text(
-            f"/api/groups/{zotero.group_id}/items/{attachment_key}/file/view/url"
+            f"{library_base_path}/items/{attachment_key}/file/view/url"
         )
-        file_path = _file_url_to_path(file_response.data)
+        file_path = file_url_to_path(file_response.data)
     except ZoteroApiError as exc:
-        if exc.status == 404:
-            return _result(
-                zotero,
-                normalized_key,
-                gate_status="WAITING",
-                reason_code="PDF_FILE_NOT_SYNCED",
-                message="Zotero 已有附件记录，但制卡机尚未取得本地 PDF 文件",
-                pdf_count=1,
-                pdf=pdf,
-            )
-        raise
+        if exc.status != 404:
+            raise
+        return {
+            "gate_status": "WAITING",
+            "reason_code": "PDF_FILE_NOT_SYNCED",
+            "message": "Zotero 已有附件记录，但制卡机尚未取得本地 PDF 文件",
+            "parent_key": normalized_key,
+            "pdf_attachment_count": 1,
+            "pdf": pdf,
+        }
     except PdfGateError as exc:
-        return _result(
-            zotero,
-            normalized_key,
-            gate_status="BLOCKED",
-            reason_code=exc.code,
-            message=str(exc),
-            pdf_count=1,
-            pdf=pdf,
-        )
+        return {
+            "gate_status": "BLOCKED",
+            "reason_code": exc.code,
+            "message": str(exc),
+            "parent_key": normalized_key,
+            "pdf_attachment_count": 1,
+            "pdf": pdf,
+        }
 
-    size, sha256, file_problem = _inspect_file(file_path, gate)
+    size, sha256, file_problem = inspect_pdf_file(file_path, gate)
     pdf.update(
         {
             "file_size_bytes": size,
@@ -199,15 +201,57 @@ def evaluate_pdf_gate(
             "PDF_FILE_TOO_SMALL": "PDF 文件过小，不能视为有效全文",
             "PDF_STRUCTURE_INVALID": "文件缺少有效 PDF 头或结束标记",
         }
+        return {
+            "gate_status": status,
+            "reason_code": file_problem,
+            "message": messages[file_problem],
+            "parent_key": normalized_key,
+            "pdf_attachment_count": 1,
+            "pdf": pdf,
+        }
+
+    return {
+        "gate_status": "READY",
+        "reason_code": "PDF_FILE_READY",
+        "message": "已取得可读取的本地 PDF 文件",
+        "parent_key": normalized_key,
+        "pdf_attachment_count": 1,
+        "pdf": pdf,
+    }
+
+
+def evaluate_pdf_gate(
+    zotero: ZoteroConfig,
+    gate: PdfGateConfig,
+    parent_key: str,
+    *,
+    client: ZoteroClient | None = None,
+) -> dict[str, Any]:
+    if zotero.group_id is None:
+        raise PdfGateError("CONFIG_ERROR", "PDF 门禁需要目标 Zotero 群组 ID")
+    api = client or ZoteroClient(zotero)
+    resolution = resolve_pdf_file(
+        zotero,
+        gate,
+        parent_key,
+        library_base_path=f"/api/groups/{zotero.group_id}",
+        client=api,
+    )
+    normalized_key = resolution["parent_key"]
+    if resolution["gate_status"] != "READY":
         return _result(
             zotero,
             normalized_key,
-            gate_status=status,
-            reason_code=file_problem,
-            message=messages[file_problem],
-            pdf_count=1,
-            pdf=pdf,
+            gate_status=resolution["gate_status"],
+            reason_code=resolution["reason_code"],
+            message=resolution["message"],
+            pdf_count=resolution["pdf_attachment_count"],
+            pdf=resolution.get("pdf"),
+            candidates=resolution.get("candidates"),
         )
+
+    pdf = resolution["pdf"]
+    attachment_key = pdf["attachment_key"]
 
     try:
         fulltext_response = api.get_json(

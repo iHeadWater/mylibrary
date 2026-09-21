@@ -6,7 +6,7 @@ description: |
   Use when the user wants to run the platform, process Zotero papers into evidence cards,
   update the theme pool, read the daily report or contribution ledger, or diagnose the platform.
   Triggers: "跑一次平台", "制卡", "证据包", "证据卡", "主题池", "更新主题", "日报", "贡献账本",
-  "hydro-platform", "run-once", "themes-run", "平台排错", "doctor".
+  "hydro-platform", "paper-input", "run-once", "themes-run", "平台排错", "doctor".
 ---
 
 # 水利科研知识平台（hydro-platform）
@@ -17,7 +17,7 @@ description: |
 
 - **平台目前是 Windows-only。** 计划任务、Poppler 原生工具安装、PDF 沙箱探针都依赖 Windows 的 PowerShell 与 `.exe`。
   在 hermes 容器或 macOS/Linux 上，`setup`、`schedule-*`、`bootstrap-native`、`pdf-direct-read-trial` **不可用**。
-  读取类与制卡类命令（`scan`、`pdf-gate`、`tasks-*`、`run-once`、`themes-run`）的**编排逻辑本身是跨平台的**，但 PDF 工具链未在非 Windows 上验证。
+  读取类与制卡类命令（`paper-input`、`scan`、`pdf-gate`、`tasks-*`、`run-once`、`themes-run`）的**编排逻辑本身是跨平台的**，但 PDF 工具链未在非 Windows 上验证。
 - **前置条件**：Zotero 已登录且目标共享库已同步；Codex CLI 已用账号登录。二者都不满足时命令会明确报错，不会静默降级。
 - **平台不下载 PDF。** 它只读取共享库中**已经附好**的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`（本仓库另一侧能力）。
 
@@ -49,6 +49,7 @@ uv sync --all-packages      # 从仓库根执行；一次装好两个包
 | 只读预览主题池与输入变化（不调模型） | `uv run hydro-platform themes-run --dry-run --json` |
 | 只迁移已有完成主题（不调模型） | `uv run hydro-platform themes-run --migrate-only --json` |
 | 集中检查配置、依赖、登录与 Zotero | `uv run hydro-platform doctor --json` |
+| 查询或检查一篇 Zotero 论文 | `uv run hydro-platform paper-input --query "关键词" --json` |
 | 从 Zotero 与已有成果重建本地任务状态 | `uv run hydro-platform recover --json` |
 
 `run-once` 是**串行**处理本轮全部可制卡论文；已有非占位粗卡不会自动重做。实时进度输出到 stderr，最终 JSON 到 stdout，`--no-progress` 可关闭进度。
@@ -59,6 +60,7 @@ uv sync --all-packages      # 从仓库根执行；一次装好两个包
 |---|---|
 | 列出本机可见的 Zotero 群组库 | `discover-groups` |
 | 检查目标群组能否被后台读取 | `preflight` |
+| 查询候选或校验一个已确认的条目 | `paper-input` |
 | 扫描群组增量 | `scan` |
 | PDF 全文门禁判定 / 交付 | `pdf-gate` / `pdf-delivery` |
 | 任务状态机：同步 / 列表 | `tasks-sync` / `tasks-list` |
@@ -71,7 +73,7 @@ uv sync --all-packages      # 从仓库根执行；一次装好两个包
 | 安装与调度（**Windows**） | `setup` / `bootstrap` / `bootstrap-native` / `schedule-plan` / `schedule-status` / `schedule-install` / `schedule-remove` / `schedule-tick` |
 | 实验性路径读取（非正式入口） | `pdf-direct-read-trial` / `evidence-generate-trial` |
 
-> 上表只列子命令名。执行时一律加前缀，例如 `uv run hydro-platform tasks-list --json`。**完整清单以 `uv run hydro-platform --help` 为准**（当前 29 个子命令），不要凭本表推断不存在某个子命令。
+> 上表只列子命令名。执行时一律加前缀，例如 `uv run hydro-platform tasks-list --json`。**完整清单以 `uv run hydro-platform --help` 为准**（当前 30 个子命令），不要凭本表推断不存在某个子命令。
 
 ## 结果怎么读
 

@@ -23,6 +23,11 @@ from hydro_platform.evidence_templates import (
 from hydro_platform.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
 from hydro_platform.pdf_direct_trial import PdfDirectTrialError, run_pdf_direct_trial
 from hydro_platform.pdf_gate import PdfGateError, evaluate_pdf_gate
+from hydro_platform.paper_input import (
+    prepare_demo_paper,
+    prepare_paper_batch,
+    prepare_paper_input,
+)
 from hydro_platform.failure_records import save_failure_record
 from hydro_platform.progress import ConsoleProgress
 from hydro_platform.pipeline import run_once
@@ -79,6 +84,7 @@ def _parser() -> argparse.ArgumentParser:
         ("daily-report", "从现有任务和事件生成老师每日摘要；不扫描 Zotero、不调用模型"),
         ("scan", "建立基线或检测目标群组中的文献变化"),
         ("pdf-gate", "检查一个父条目的 PDF 全文是否可进入后续处理"),
+        ("paper-input", "按题名搜索候选，或按 item key 检查单篇 Zotero 论文输入"),
         ("pdf-delivery", "复核并交付一个任务对应的 Zotero 原始 PDF"),
         ("tasks-sync", "根据 Zotero 和 PDF 门禁同步本地任务清单"),
         ("tasks-list", "查看本地任务清单，不访问 Zotero"),
@@ -114,6 +120,7 @@ def _parser() -> argparse.ArgumentParser:
             "preflight",
             "scan",
             "pdf-gate",
+            "paper-input",
             "pdf-delivery",
             "tasks-sync",
             "tasks-list",
@@ -129,6 +136,33 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument(
                 "--state",
                 help="覆盖总配置中的本地快照路径",
+            )
+        if name == "paper-input":
+            paper_source = command.add_mutually_exclusive_group(required=True)
+            paper_source.add_argument(
+                "--query",
+                help="按题名、DOI 或关键词搜索候选；只返回候选，不自动选择",
+            )
+            paper_source.add_argument(
+                "--item-key",
+                action="append",
+                help="已人工确认的 Zotero 父条目 Key",
+            )
+            paper_source.add_argument(
+                "--demo",
+                action="store_true",
+                help="检查内置公开演示论文；本地缺失时返回 Connector 抓取链接",
+            )
+            command.add_argument(
+                "--user-library",
+                action="store_true",
+                help="读取个人文库；默认读取配置的群组库",
+            )
+            command.add_argument(
+                "--limit",
+                type=int,
+                default=10,
+                help="搜索候选数，范围 1-50，默认 10",
             )
         if name == "evidence-draft-export":
             command.add_argument("--draft", required=True, help="失败结果中的 diagnostic.draft_path；相对路径基于当前目录")
@@ -173,6 +207,64 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _render_human(result: dict[str, Any]) -> str:
+    if result.get("operation") == "paper_input_batch":
+        lines = [
+            f"单篇输入批处理：{result['status']}",
+            (
+                f"- 总数：{result['total']}；就绪：{result['ready_count']}；"
+                f"问题：{result['problem_count']}"
+            ),
+        ]
+        for problem in result.get("problems", []):
+            title = f" {problem['title']}" if problem.get("title") else ""
+            lines.append(
+                f"- 问题 {problem['item_key']}{title} "
+                f"[{problem['reason_code']}]：{problem['message']}"
+            )
+            lines.extend(
+                (
+                    f"  - 候选 {candidate.get('attachment_key')}: "
+                    f"{candidate.get('filename') or ''}"
+                )
+                for candidate in problem.get("candidates", [])
+            )
+        return "\n".join(lines)
+    if result.get("operation") == "paper_input":
+        if result.get("error"):
+            error = result["error"]
+            return (
+                f"单篇输入失败 [{error.get('code', 'UNKNOWN')}]："
+                f"{error.get('message', '未知错误')}"
+            )
+        lines = [
+            f"单篇输入：{result['status']}"
+            + (
+                f" [{result['reason_code']}]"
+                if result.get("reason_code")
+                else ""
+            ),
+            f"- 说明：{result.get('message', '')}",
+        ]
+        item = result.get("item")
+        if isinstance(item, dict):
+            lines.append(f"- 条目：{item.get('item_key')} {item.get('title') or ''}")
+        pdf = result.get("pdf")
+        if isinstance(pdf, dict):
+            lines.append(
+                f"- PDF：{pdf.get('attachment_key')} "
+                f"{pdf.get('filename') or ''}"
+            )
+        if result.get("source_url"):
+            lines.append(f"- 来源：{result['source_url']}")
+        candidates = result.get("candidates")
+        if isinstance(candidates, list):
+            lines.append(f"- 候选数：{len(candidates)}")
+            lines.extend(
+                f"  - {candidate.get('item_key') or candidate.get('attachment_key')}: "
+                f"{candidate.get('title') or candidate.get('filename') or ''}"
+                for candidate in candidates
+            )
+        return "\n".join(lines)
     if result.get("operation") == "setup":
         return "\n".join(["安装与恢复：" + result["status"]] +
             [f"- {row['name']}: {row['status']}" for row in result["steps"]] +
@@ -363,28 +455,39 @@ def main(argv: Sequence[str] | None = None) -> int:
             base_url=getattr(args, "base_url", None),
             group_id=getattr(args, "group_id", None),
             timeout_seconds=getattr(args, "timeout", None),
-            require_group=args.command
-            in {
-                "setup",
-                "doctor",
-                "recover",
-                "activity-sync",
-                "daily-report",
-                "preflight",
-                "scan",
-                "pdf-gate",
-                "pdf-delivery",
-                "tasks-sync",
-                "tasks-list",
-                "packages-sync",
-                "pdf-direct-read-trial",
-                "evidence-generate",
-                "evidence-generate-trial",
-                "evidence-draft-export",
-                "run-once",
-                "themes-run",
-                "schedule-plan", "schedule-status", "schedule-install", "schedule-remove", "schedule-tick",
-            },
+            require_group=(
+                args.command
+                in {
+                    "setup",
+                    "doctor",
+                    "recover",
+                    "activity-sync",
+                    "daily-report",
+                    "preflight",
+                    "scan",
+                    "pdf-gate",
+                    "pdf-delivery",
+                    "tasks-sync",
+                    "tasks-list",
+                    "packages-sync",
+                    "pdf-direct-read-trial",
+                    "evidence-generate",
+                    "evidence-generate-trial",
+                    "evidence-draft-export",
+                    "run-once",
+                    "themes-run",
+                    "schedule-plan",
+                    "schedule-status",
+                    "schedule-install",
+                    "schedule-remove",
+                    "schedule-tick",
+                }
+                or (
+                    args.command == "paper-input"
+                    and not getattr(args, "user_library", False)
+                    and not getattr(args, "demo", False)
+                )
+            ),
         )
     except ConfigError as exc:
         result = {
@@ -399,6 +502,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = discover_groups(app_config.zotero)
     elif args.command == "preflight":
         result = preflight(app_config.zotero)
+    elif args.command == "paper-input":
+        try:
+            if args.demo:
+                result = prepare_demo_paper(app_config.zotero, app_config.pdf_gate)
+            elif args.item_key and len(args.item_key) > 1:
+                result = prepare_paper_batch(
+                    app_config.zotero,
+                    app_config.pdf_gate,
+                    args.item_key,
+                    library_type="user" if args.user_library else "group",
+                )
+            else:
+                result = prepare_paper_input(
+                    app_config.zotero,
+                    app_config.pdf_gate,
+                    query=args.query,
+                    item_key=args.item_key[0] if args.item_key else None,
+                    library_type="user" if args.user_library else "group",
+                    limit=args.limit,
+                )
+        except (PdfGateError, ZoteroApiError, ValueError) as exc:
+            result = {
+                "schema_version": 1,
+                "ok": False,
+                "operation": "paper_input",
+                "error": {
+                    "code": getattr(exc, "code", "INVALID_INPUT"),
+                    "message": str(exc),
+                },
+            }
     elif args.command == "doctor":
         result = doctor(app_config)
     elif args.command == "bootstrap":

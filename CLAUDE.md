@@ -94,7 +94,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 - 只预览本地任务,不扫 Zotero、不调模型:`uv run hydro-platform run-once --dry-run --json`
 - 只跑主题:`uv run hydro-platform themes-run --json`(`--dry-run` 只读预览)
 - 健康检查:`uv run hydro-platform doctor --json`
-- 全部 29 个子命令:`uv run hydro-platform --help`
+- 全部 30 个子命令:`uv run hydro-platform --help`
 
 不要直接读写平台的状态文件(`.runtime/tasks.json`、`themes/_registry.json`),也不要手工编辑证据包/主题文件——平台原子写入并校验哈希,手改会被判为漂移。完整说明在 `docs/hydro-platform/`。
 
