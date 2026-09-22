@@ -34,6 +34,7 @@
 - 合并前模板曾从外部仓库 `wangxinyu20429-dotcom/Water-Conservancy-Intelligent-Platform` 按团队协作授权复用；两分支合并后该内容已进入本仓库，复用授权问题随之消失。
 - `_catalog.json` 逐项记录来源路径、Git blob SHA、本地版本和适配后内容 SHA-256。
 - 本地版本已升为 2.0.0：正文骨架采用 `skills/hydrology-evidence-cards/` 的 V1.7 版本（六段式/形成机制 + 可见深度规则），并新增第 9 类 `platform-decision-synthesis`；1.1.0 时期的「区分原文陈述、转述、AI 推理与信息边界」要求保留。
+- 本地版本 2.0.1：九类模板正文各补一条「数学公式与金额」LaTeX 转写规则（真实公式写 `$...$` / `$$...$$`、行内不用 `\(...\)`、金额一律转义为 `\$`），正文骨架其余不变。
 - front matter 保留本平台的证据 ID、Zotero 群组与父条目、PDF 指纹、自动分类和模板版本字段——这些是管线契约，校验器 `evidence_templates.py` 强制要求，不得删改。
 
 ### 自动分类边界

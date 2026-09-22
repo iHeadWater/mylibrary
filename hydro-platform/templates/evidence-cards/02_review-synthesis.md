@@ -1,6 +1,6 @@
 ---
 template_id: "review-synthesis"
-template_version: "2.0.0"
+template_version: "2.0.1"
 template_source_commit: "7b0f2b7e209aa566f3c68db817d5c4a71d9f8b19"
 evidence_id: "{{EVIDENCE_ID}}"
 card_state: "{{CARD_STATE}}"
@@ -30,6 +30,8 @@ updated_at: "{{GENERATED_AT}}"
 8. 综述结论的确定性、适用边界和需要回到原始研究核查的承重声明。
 
 综述卡评价的是该来源怎样综合证据，不等于平台自己的决策综合。综述转述的原始结果只有核查原始来源后才能标记为原文已核。
+
+**数学公式与金额（LaTeX 转写）**：真实公式写成 LaTeX——行内 `$...$`、块级长公式 `$$...$$`（前后各留空行），不用 Unicode 纯文本（`R²`→`$R^2$`、`x_i`→`$x_i$`、`σ`→`$\sigma$`），行内不用 `\(...\)`。普通数字、单位与计数保持纯文本，不过度转写。金额一律转义为 `\$`（`$123`→`\$123`），避免与公式的 `$` 配对；反引号只留给代码、文件名、变量名与标签。
 
 ## AI 推理
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "catalog_version": "2.0.0",
+  "catalog_version": "2.0.1",
   "source": {
     "repository": "https://github.com/iHeadWater/mylibrary",
     "commit": "7b0f2b7e209aa566f3c68db817d5c4a71d9f8b19",
@@ -11,7 +11,7 @@
   "adaptation": {
     "owner": "hydro-platform",
     "policy": "content_template_only",
-    "notes": "2.0.0:qinjiajun 分支与王新宇分支合并后,模板层改为仓库内同源。正文骨架采用王新宇 V1.7 版本(六段式/形成机制 + 可见深度规则),并保留管线契约所需的 15 个 front matter 字段与占位符;1.1.0 引入的「## AI 推理」「## 信息边界」归因分区继续保留(原文陈述/原文转述/AI 推理三分与信息边界声明),它对应王新宇侧的 statement_role 机器字段,在本管线中由正文承载;新增第 9 类 platform-decision-synthesis。source_blob_sha 为对应来源文件在本仓库 commit 上的 git blob。"
+    "notes": "2.0.0:qinjiajun 分支与王新宇分支合并后,模板层改为仓库内同源。正文骨架采用王新宇 V1.7 版本(六段式/形成机制 + 可见深度规则),并保留管线契约所需的 15 个 front matter 字段与占位符;1.1.0 引入的「## AI 推理」「## 信息边界」归因分区继续保留(原文陈述/原文转述/AI 推理三分与信息边界声明),它对应王新宇侧的 statement_role 机器字段,在本管线中由正文承载;新增第 9 类 platform-decision-synthesis。source_blob_sha 为对应来源文件在本仓库 commit 上的 git blob。;2.0.1:九类模板正文各补一条「数学公式与金额」LaTeX 转写规则(真实公式写 $...$ / $$...$$、行内不用 \\(...\\)、金额一律转义为 \\$),正文骨架其余不变。"
   },
   "required_template_ids": [
     "original-research",
@@ -28,92 +28,92 @@
     {
       "template_id": "original-research",
       "name": "原创研究证据卡",
-      "local_version": "2.0.0",
+      "local_version": "2.0.1",
       "enabled": true,
       "file": "01_original-research.md",
       "source_path": "skills/hydrology-evidence-cards/assets/templates/01_original-research.md",
       "source_blob_sha": "e016888e85fe23fb2ad77dc88daa433bf68826be",
-      "content_sha256": "4ecc653bcf7906691b1baae7ed4c17660fc20301b5b6ffeda7b2230450349903"
+      "content_sha256": "88b15068eba98ef75e7a20e6730e86727f4df14a1ee30e5c864abfc16d8f6154"
     },
     {
       "template_id": "review-synthesis",
       "name": "综述与证据综合证据卡",
-      "local_version": "2.0.0",
+      "local_version": "2.0.1",
       "enabled": true,
       "file": "02_review-synthesis.md",
       "source_path": "skills/hydrology-evidence-cards/assets/templates/02_review-synthesis.md",
       "source_blob_sha": "a2b33b04b09ca656de67f603f3e347a9492576c6",
-      "content_sha256": "8bcc6d3366d80ce6167eed657d5e0bba7da4dc5f2b3a397e0d786da505b8d171"
+      "content_sha256": "b48cc3c2aa7a11b61270fe0f2f87319ce6f83709cb2f3a05a5bf189e4a85110e"
     },
     {
       "template_id": "survey-monitoring-statistics",
       "name": "调查监测与统计报告证据卡",
-      "local_version": "2.0.0",
+      "local_version": "2.0.1",
       "enabled": true,
       "file": "03_survey-monitoring-statistics.md",
       "source_path": "skills/hydrology-evidence-cards/assets/templates/03_survey-monitoring-statistics.md",
       "source_blob_sha": "ca5b143e70696adbea9ce6366fb43a99890a7aa6",
-      "content_sha256": "addda0e84cd44b263b807c74c5c98ffcad704e2a700450db89ec35aa243bd807"
+      "content_sha256": "0f5ef4aeb4f12fef053666d98e9cbfc3eab14e1bf3a43d1617885621c1421c42"
     },
     {
       "template_id": "engineering-report",
       "name": "工程项目报告证据卡",
-      "local_version": "2.0.0",
+      "local_version": "2.0.1",
       "enabled": true,
       "file": "04_engineering-report.md",
       "source_path": "skills/hydrology-evidence-cards/assets/templates/04_engineering-report.md",
       "source_blob_sha": "2e9d458c7b87a5ec3b90772f803a1330f2f4d843",
-      "content_sha256": "1e3bc8348b8706bcf07fb109fe6bba6174308b78dbadb7382c1e5ef2b864a34c"
+      "content_sha256": "3de7dfbec4ff909721c0fe05e0ac7486da8f32264fafb10f778c948c6483a52b"
     },
     {
       "template_id": "book-chapter",
       "name": "图书与章节证据卡",
-      "local_version": "2.0.0",
+      "local_version": "2.0.1",
       "enabled": true,
       "file": "05_book-chapter.md",
       "source_path": "skills/hydrology-evidence-cards/assets/templates/05_book-chapter.md",
       "source_blob_sha": "de032d260f75b99738906a2013e09c820f4d8cdc",
-      "content_sha256": "ae57aec9cc2f0371d148e1bcd103f78ce942539c07f02a54ae01c8ce011a971d"
+      "content_sha256": "cbda9fa5a09bb5552f2071d38f26c8aeef683db4e9a100edad1ea85498063499"
     },
     {
       "template_id": "standard-guideline-policy",
       "name": "标准指南与政策证据卡",
-      "local_version": "2.0.0",
+      "local_version": "2.0.1",
       "enabled": true,
       "file": "06_standard-guideline-policy.md",
       "source_path": "skills/hydrology-evidence-cards/assets/templates/06_standard-guideline-policy.md",
       "source_blob_sha": "ae825e5f20d6fff2f3dde88ab816718192d35195",
-      "content_sha256": "9689aad9b773637cafce44ce7e910feac6e559f67c4911cdbdbe2d1efd4ddb5a"
+      "content_sha256": "5ae1140a80d3419a46f014f420403d9383e294b92e1bd2390ed8c774fbcc7a42"
     },
     {
       "template_id": "dataset-data-product",
       "name": "数据集及数据产品证据卡",
-      "local_version": "2.0.0",
+      "local_version": "2.0.1",
       "enabled": true,
       "file": "07_dataset-data-product.md",
       "source_path": "skills/hydrology-evidence-cards/assets/templates/07_dataset-data-product.md",
       "source_blob_sha": "94df830e94cecc0636f6f52ad17d5d14c58f9dcb",
-      "content_sha256": "9575790e7c24819e8c7566b476883e2644976f5314eef8f76c6f4e196d17fca0"
+      "content_sha256": "d9a5bb53b3c0997542be09173d0f8564b8d076634e6d077c6f81a0a74f8f7ecc"
     },
     {
       "template_id": "software-model-code",
       "name": "软件模型与代码证据卡",
-      "local_version": "2.0.0",
+      "local_version": "2.0.1",
       "enabled": true,
       "file": "08_software-model-code.md",
       "source_path": "skills/hydrology-evidence-cards/assets/templates/08_software-model-code.md",
       "source_blob_sha": "4480ae59eeba36414fc880b15cb2f058baa39649",
-      "content_sha256": "9efc35dd72a425624ad9ca73401882febd1e41ea08772f839eb0f8131e9cf293"
+      "content_sha256": "cdda1e0c3c8258ed829d91857d8f5b7d0024e34ec8bc277c9ad0edbcbe2a68d5"
     },
     {
       "template_id": "platform-decision-synthesis",
       "name": "平台证据综合与决策卡",
-      "local_version": "2.0.0",
+      "local_version": "2.0.1",
       "enabled": true,
       "file": "09_platform-decision-synthesis.md",
       "source_path": "skills/hydrology-evidence-cards/assets/templates/09_platform-decision-synthesis.md",
       "source_blob_sha": "281224f7c2c0bfcce6354d26c983e26fa18b549f",
-      "content_sha256": "e8344712dad2ed2aad7f36e0492120be93e9e45332bdd0cc5fbb180c067c1f0c"
+      "content_sha256": "e849d2332a24900d4894f58cc66324e36050f2cd5da1d10b9bd48db3dd578561"
     }
   ]
 }

@@ -106,9 +106,10 @@ class EvidenceTemplateValidationTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         # 2.0.0:与王新宇分支合并后,模板正文改用其 V1.7 版本,
         # 并新增第 9 类 platform-decision-synthesis(原 1.1.0 为八类)。
+        # 2.0.1:九类模板正文各补一条数学公式与金额的 LaTeX 转写规则。
         self.assertEqual(result["template_count"], 9)
         self.assertEqual(result["enabled_count"], 9)
-        self.assertEqual(result["catalog_version"], "2.0.0")
+        self.assertEqual(result["catalog_version"], "2.0.1")
         self.assertEqual(
             result["source_commit"],
             "7b0f2b7e209aa566f3c68db817d5c4a71d9f8b19",

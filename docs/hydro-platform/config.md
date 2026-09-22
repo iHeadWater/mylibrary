@@ -131,7 +131,7 @@ Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在制�
 
 默认配置、示例和缺省心跳统一为 60 秒。该值只控制周期性的“等待中”提示；工具开始/结束、单篇保存、错误等实际事件仍立即显示。修改在下一次启动时生效，不热更新现有队列。`run-once` 结尾独立显示“整轮汇总”，按本轮新完成、恢复、跳过、失败、阻塞、等待和延后分别统计，并列出未完成项与主题状态。
 
-`card_generator.workflow_mode=single_agent` 是当前模式，主提示词 evidence-card-generation-v8.md、九类模板 2.0.0。模型、强度和超时直接用上表。v8 保留详细写作要求，但保存只检验流程，不校验正文标题、表格、标签、编号或措辞；没有另一个需要用户开启的“宽松模式”。当前配置与示例已更新，仍使用 run-once。草稿预览目录由 `paths.card_trials_dir` 控制。
+`card_generator.workflow_mode=single_agent` 是当前模式，主提示词 evidence-card-generation-v8.md、九类模板 2.0.1。模型、强度和超时直接用上表。v8 保留详细写作要求，但保存只检验流程，不校验正文标题、表格、标签、编号或措辞；没有另一个需要用户开启的“宽松模式”。当前配置与示例已更新，仍使用 run-once。草稿预览目录由 `paths.card_trials_dir` 控制。
 
 旧配置未填 workflow_mode 时按 multi_agent 解释，必须提供完整 multi_agent_workflow，且 local_path/v2 或 project_mcp/v1 配套。当前 single_agent 要求 local_path，若仍提供 multi_agent_workflow 则配置报错，避免看似生效的角色设置误导；不会自动回退。未知提供者仍报错，不凭空支持任意 API。
 
