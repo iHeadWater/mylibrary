@@ -110,7 +110,7 @@ def test_one_call_returns_traceable_unvalidated_pair_in_shared_root(draft_case, 
 
 @pytest.mark.parametrize("change", [
     {"status": "WAITING"}, {"status": "SELECTION_REQUIRED"}, {"ok": False},
-    {"schema_version": True}, {"operation": "paper_input_batch"}, {"pdf_attachment_count": 2},
+    {"requested_item_key": "OTHER123"}, {"schema_version": True}, {"operation": "paper_input_batch"}, {"pdf_attachment_count": 2},
     {"library": {"type": "group", "id": 0}}, {"library": {"type": "user", "id": True}},
 ])
 def test_not_ready_or_ambiguous_input_never_calls_model(draft_case, change):

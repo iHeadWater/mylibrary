@@ -64,3 +64,22 @@ def test_forged_source_receipts_rejected(draft_case):
     draft=json.loads(Path(result["draft_path"]).read_text(encoding="utf-8"))
     draft["reading_record"]["pages_requested_successfully"]=[1]
     assert not source_access_acceptable(draft["reading_record"])
+
+
+@pytest.mark.parametrize("malformed", [None, "bad", []])
+def test_malformed_read_event_is_structured_failure(draft_case, malformed):
+    data = events(draft_case)
+    data[0]["message"] = malformed
+    result, _ = invoke(draft_case, data)
+    assert not result["ok"] and result["error"]["code"] == "CLAUDE_PDF_GENERATION_FAILED"
+
+
+def test_smoke_implements_shared_adapter_interface(draft_case):
+    cfg = replace(draft_case[0].card_generator, adapter="claude_cli")
+    event = {"type":"result", "subtype":"success", "is_error":False, "result":"HYDRO_GENERATOR_OK"}
+    runner = Mock(return_value=subprocess.CompletedProcess([], 0, json.dumps(event), ""))
+    adapter = ClaudeCliAdapter(cfg, runner=runner, finder=lambda _: "claude.exe")
+    result = adapter.smoke_test()
+    assert result["ok"] and result["model_invoked"]
+    command = runner.call_args.args[0]
+    assert command[command.index("--tools")+1] == ""
