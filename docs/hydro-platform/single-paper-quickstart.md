@@ -62,6 +62,8 @@ YOURKEY1 替换为候选中的真实 key。搜索只返回候选，不自动替�
 
 ## #43：生成器、PDF 工具和产物目录
 
+Windows 生成环境请放在自己可访问的普通项目目录。本次在用户 Temp 目录中安装虽然成功，沙箱却无法启动其中的 Python；改用普通项目目录、重新建立 .venv 并安装项目工具后，PDF 读取和渲染预检通过。不要直接搬运旧 .venv，也不要通过关闭沙箱绕过失败。
+
 配置沿用 workflow_mode=single_agent、pdf_reader.adapter=local_path。安装 Codex CLI 并在自己的账号下完成 codex login；不能复用作者登录文件。card_generator.executable 可填 PATH 中的 codex 或自己机器上原生 codex.exe 的绝对路径。
 
 Windows npm 安装若通过 codex.cmd 调用时出现命令行过长，应把该字段设为该安装内的原生 codex.exe。可用以下命令列出候选，再明确选择；不要复制作者用户目录，也不要未检查就自动取第一项：
@@ -70,6 +72,8 @@ Windows npm 安装若通过 codex.cmd 调用时出现命令行过长，应把该
 $codexPackage = Join-Path (npm root -g) '@openai/codex'
 Get-ChildItem -LiteralPath $codexPackage -Recurse -Filter codex.exe | Select-Object -ExpandProperty FullName
 ~~~
+
+尚未安装 Codex CLI 时，可在安装 Node.js/npm 后执行 npm install -g @openai/codex，再执行 codex login。已有 CLI 则无需重复安装。安装及登录可参考 [Codex 官方说明](https://developers.openai.com/codex/cli/)。
 
 修改 config.local.json 中的 executable 后保存为 UTF-8。模型及推理强度可通过 card_generator.model / reasoning_effort 选择，null 沿用使用者的 Codex 设置。
 
