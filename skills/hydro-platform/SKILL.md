@@ -39,6 +39,22 @@ uv sync --all-packages      # 从仓库根执行；一次装好两个包
 
 **不要**用 `bootstrap --install` 去创建这个环境（那是给"与仓库依赖树隔离的部署"用的另一条路径）。在共享环境模式下，`bootstrap` 只做**校验**并提示 `uv sync`。
 
+## 单篇主体卡草稿（#30）
+
+收到 #29 的单篇 READY JSON 后，在仓库根运行：
+
+~~~powershell
+uv run --package hydro-platform-automation hydro-platform evidence-generate --paper-input paper-input.json --json
+~~~
+
+此入口要求 single_agent + local_path；个人库和群组库均可使用，无需再次扫描 Zotero。
+一次调用同时生成详细正文和固定机器字段。输出仅为 DRAFT_PENDING_VALIDATION，
+不代表 #31 校验通过，不自动执行 #32 修正或 #35 正式保存，不触发主题或 idea。
+文件按 #27 的统一规则写入精读产物根下 zotero/<文库类型>-<文库ID>-<父条目key>/drafts/<草稿ID>/。
+根目录通过 configs/paths.toml 或 HYDROLITAGENT_LITERATURE_ROOT 配置；默认 outputs/。
+输入失败、PDF 不可读或输出不可解析时报告结构化失败，不自动重试模型。
+完整协议及运行前提见 docs/hydro-platform/subject-card-draft.md。
+
 ## 日常命令
 
 | 需要做什么 | 命令（仓库根执行） |

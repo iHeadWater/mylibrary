@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
+from hydro_platform.card_draft import generate_subject_card_draft
 from hydro_platform.card_generators import build_card_generator_adapter
 from hydro_platform.card_generation import (
     CardGenerationError,
@@ -146,7 +147,6 @@ def _parser() -> argparse.ArgumentParser:
             "pdf-gate",
             "pdf-delivery",
             "pdf-direct-read-trial",
-            "evidence-generate",
             "evidence-generate-trial",
         }:
             command.add_argument(
@@ -155,6 +155,9 @@ def _parser() -> argparse.ArgumentParser:
                 help="需要检查的 Zotero 父条目 Key",
             )
         if name == "evidence-generate":
+            source = command.add_mutually_exclusive_group(required=True)
+            source.add_argument("--item-key", help="旧证据包流程的 Zotero 父条目 Key")
+            source.add_argument("--paper-input", help="#29 的单篇 READY JSON 文件，或 - 从 stdin 读取；仅生成待校验草稿")
             command.add_argument(
                 "--retry-quality-failed",
                 action="store_true",
@@ -173,6 +176,12 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _render_human(result: dict[str, Any]) -> str:
+    if result.get("operation") == "subject_card_draft":
+        if not result.get("ok"):
+            return f"主体卡草稿失败（{result.get('failed_stage', 'input')}）：{result['error']['message']}"
+        return ("已生成待校验主体卡草稿；未通过内容门禁、未正式发布"
+                f"\n- 正文：{result['card_path']}\n- 正文、机器字段与来源记录：{result['draft_path']}"
+                f"\n- 精读产物根：{result['literature_root']}")
     if result.get("operation") == "setup":
         return "\n".join(["安装与恢复：" + result["status"]] +
             [f"- {row['name']}: {row['status']}" for row in result["steps"]] +
@@ -357,6 +366,10 @@ def _emit(result: dict[str, Any], as_json: bool) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     _configure_stdio()
     args = _parser().parse_args(argv)
+    if getattr(args, "paper_input", None) and args.retry_quality_failed:
+        _emit({"schema_version": 1, "ok": False, "error": {
+            "code": "CARD_DRAFT_RETRY_UNSUPPORTED", "message": "主体卡草稿为单次调用，不支持任务重试参数"}}, args.json)
+        return 2
     try:
         app_config = load_config(
             args.config,
@@ -384,7 +397,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "run-once",
                 "themes-run",
                 "schedule-plan", "schedule-status", "schedule-install", "schedule-remove", "schedule-tick",
-            },
+            } and not getattr(args, "paper_input", None),
         )
     except ConfigError as exc:
         result = {
@@ -607,6 +620,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "message": str(exc),
                 },
             }
+    elif args.command == "evidence-generate" and args.paper_input:
+        try:
+            raw = sys.stdin.read() if args.paper_input == "-" else Path(args.paper_input).read_text(encoding="utf-8-sig")
+            paper_input = json.loads(raw)
+        except (OSError, ValueError):
+            result = {"schema_version": 1, "operation": "subject_card_draft", "ok": False,
+                      "status": "FAILED", "failed_stage": "input", "model_invoked": False,
+                      "error": {"code": "CARD_DRAFT_INPUT_INVALID", "message": "无法读取单篇论文输入 JSON"}}
+        else:
+            progress_config = app_config.card_generator.progress
+            with ConsoleProgress(enabled=progress_config.enabled and not args.no_progress,
+                                 heartbeat_interval_seconds=progress_config.heartbeat_interval_seconds,
+                                 initial_activity="检查单篇输入、PDF 和精读产物根") as progress:
+                result = generate_subject_card_draft(app_config, paper_input, progress=progress)
+                progress.finish(result)
     elif args.command in {"evidence-generate", "evidence-generate-trial", "pdf-direct-read-trial"}:
         progress_config = app_config.card_generator.progress
         with ConsoleProgress(

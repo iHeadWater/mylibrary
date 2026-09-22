@@ -333,6 +333,15 @@ def _build_prompt(
         "generated_at": generated_at,
         "enabled_template_ids": sorted(templates),
     }
+    return build_template_prompt(prompt_info, context, templates)
+
+
+def build_template_prompt(
+    prompt_info: dict[str, str],
+    context: dict[str, Any],
+    templates: dict[str, dict[str, Any]],
+) -> str:
+    """Share the existing template-driven prompt with the single-paper draft path."""
     sections = [
         prompt_info["content"].rstrip(),
         "\n## 本次任务身份\n",
