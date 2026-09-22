@@ -7,6 +7,9 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
+from hydro_platform.card_draft import generate_subject_card_draft
+from hydro_platform.card_validation import ValidationAssets, validate_subject_card_file
+from hydro_platform.ai_config import resolve_ai_config, subject_card_config, describe_ai, AIConfigError
 from hydro_platform.card_generators import build_card_generator_adapter
 from hydro_platform.card_generation import (
     CardGenerationError,
@@ -14,6 +17,7 @@ from hydro_platform.card_generation import (
     generate_evidence_card_trial,
 )
 from hydro_platform.config import ConfigError, load_config
+from hydro_platform.paper_input_config import load_paper_input_config
 from hydro_platform.draft_export import export_evidence_draft
 from hydro_platform.evidence_packages import EvidencePackageError, sync_evidence_packages
 from hydro_platform.evidence_templates import (
@@ -23,6 +27,11 @@ from hydro_platform.evidence_templates import (
 from hydro_platform.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
 from hydro_platform.pdf_direct_trial import PdfDirectTrialError, run_pdf_direct_trial
 from hydro_platform.pdf_gate import PdfGateError, evaluate_pdf_gate
+from hydro_platform.paper_input import (
+    prepare_demo_paper,
+    prepare_paper_batch,
+    prepare_paper_input,
+)
 from hydro_platform.failure_records import save_failure_record
 from hydro_platform.progress import ConsoleProgress
 from hydro_platform.pipeline import run_once
@@ -79,6 +88,7 @@ def _parser() -> argparse.ArgumentParser:
         ("daily-report", "从现有任务和事件生成老师每日摘要；不扫描 Zotero、不调用模型"),
         ("scan", "建立基线或检测目标群组中的文献变化"),
         ("pdf-gate", "检查一个父条目的 PDF 全文是否可进入后续处理"),
+        ("paper-input", "按题名搜索候选，或按 item key 检查单篇 Zotero 论文输入"),
         ("pdf-delivery", "复核并交付一个任务对应的 Zotero 原始 PDF"),
         ("tasks-sync", "根据 Zotero 和 PDF 门禁同步本地任务清单"),
         ("tasks-list", "查看本地任务清单，不访问 Zotero"),
@@ -87,6 +97,7 @@ def _parser() -> argparse.ArgumentParser:
         ("generator-preflight", "检查 Codex CLI 和 ChatGPT 账号登录状态"),
         ("generator-smoke-test", "执行一次无论文、只读的 Codex 最小模型调用"),
         ("evidence-generate", "读取一篇 Zotero PDF 并生成首张粗证据卡"),
+        ("evidence-validate", "离线校验主体卡草稿并保存记录，不调用模型、不正式发布"),
         ("evidence-draft-export", "离线导出已完成的制卡草稿为 Markdown 预览，不调用模型或修改正式卡"),
         ("run-once", "自动检查共享库并串行生成待处理证据卡；不安装调度、不推送 Git"),
         ("themes-run", "粗卡生成候选主题，逐篇定向精读并回填修订；自动续跑、不转正式主题"),
@@ -99,11 +110,12 @@ def _parser() -> argparse.ArgumentParser:
         command = subparsers.add_parser(name, help=help_text)
         command.add_argument(
             "--config",
-            default=_default_config_path(),
-            help="总配置文件路径；默认读取项目 config/config.json",
+            default=None if name in {"evidence-validate", "evidence-generate", "paper-input"} else _default_config_path(),
+            help=("可选总配置；校验默认直接使用随仓库分发的资产" if name == "evidence-validate"
+                  else "总配置文件路径；默认读取项目 config/config.json"),
         )
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
-        if not name.startswith("schedule-") and name not in {"setup", "bootstrap", "bootstrap-native", "generator-preflight", "generator-smoke-test", "evidence-draft-export"}:
+        if not name.startswith("schedule-") and name not in {"setup", "bootstrap", "bootstrap-native", "generator-preflight", "generator-smoke-test", "evidence-draft-export", "evidence-validate"}:
             command.add_argument("--base-url", help="覆盖本机 Zotero API 地址")
             command.add_argument("--timeout", type=float, help="请求超时秒数")
         if name in {
@@ -114,6 +126,7 @@ def _parser() -> argparse.ArgumentParser:
             "preflight",
             "scan",
             "pdf-gate",
+            "paper-input",
             "pdf-delivery",
             "tasks-sync",
             "tasks-list",
@@ -129,6 +142,39 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument(
                 "--state",
                 help="覆盖总配置中的本地快照路径",
+            )
+        if name == "evidence-validate":
+            command.add_argument("--assets-root", help="选择另一份 hydro-platform 资产根；与 --config 互斥")
+            command.add_argument("--report-dir", default=os.environ.get("HYDRO_PLATFORM_VALIDATION_REPORT_DIR"),
+                                 help="校验记录根；默认草稿旁 validations/，支持环境变量 HYDRO_PLATFORM_VALIDATION_REPORT_DIR")
+            command.add_argument("--draft", required=True, help="#30 保存的 draft.json")
+            command.add_argument("--paper-input", required=True, help="对应的 #29 READY JSON 文件")
+        if name == "paper-input":
+            paper_source = command.add_mutually_exclusive_group(required=True)
+            paper_source.add_argument(
+                "--query",
+                help="按题名、DOI 或关键词搜索候选；只返回候选，不自动选择",
+            )
+            paper_source.add_argument(
+                "--item-key",
+                action="append",
+                help="已人工确认的 Zotero 父条目 Key",
+            )
+            paper_source.add_argument(
+                "--demo",
+                action="store_true",
+                help="检查内置公开演示论文；本地缺失时返回 Connector 抓取链接",
+            )
+            command.add_argument(
+                "--user-library",
+                action="store_true",
+                help="读取个人文库；默认读取配置的群组库",
+            )
+            command.add_argument(
+                "--limit",
+                type=int,
+                default=10,
+                help="搜索候选数，范围 1-50，默认 10",
             )
         if name == "evidence-draft-export":
             command.add_argument("--draft", required=True, help="失败结果中的 diagnostic.draft_path；相对路径基于当前目录")
@@ -146,7 +192,6 @@ def _parser() -> argparse.ArgumentParser:
             "pdf-gate",
             "pdf-delivery",
             "pdf-direct-read-trial",
-            "evidence-generate",
             "evidence-generate-trial",
         }:
             command.add_argument(
@@ -155,6 +200,15 @@ def _parser() -> argparse.ArgumentParser:
                 help="需要检查的 Zotero 父条目 Key",
             )
         if name == "evidence-generate":
+            command.add_argument("--ai-config", help="模型选择 TOML；默认 configs/ai.toml")
+            command.add_argument("--ai-provider", choices=["codex", "claude"])
+            command.add_argument("--ai-model", help="所选服务可用的模型名")
+            command.add_argument("--ai-executable", help="本机 CLI 可执行文件名或绝对路径")
+            command.add_argument("--ai-timeout", type=float)
+            command.add_argument("--output-root", help="本次产物根；沿用 #27 的解析器")
+            source = command.add_mutually_exclusive_group(required=True)
+            source.add_argument("--item-key", help="旧证据包流程的 Zotero 父条目 Key")
+            source.add_argument("--paper-input", help="#29 的单篇 READY JSON 文件，或 - 从 stdin 读取；仅生成待校验草稿")
             command.add_argument(
                 "--retry-quality-failed",
                 action="store_true",
@@ -169,10 +223,89 @@ def _parser() -> argparse.ArgumentParser:
                 help="关闭 stderr 实时进度，仅保留最终结果",
             )
 
+    ai = subparsers.add_parser("ai-config", help="查看模型选择与精读产物根，不运行模型")
+    ai.add_argument("--ai-config")
+    ai.add_argument("--ai-provider", choices=["codex", "claude"])
+    ai.add_argument("--ai-model")
+    ai.add_argument("--ai-executable")
+    ai.add_argument("--ai-timeout", type=float)
+    ai.add_argument("--output-root")
+    ai.add_argument("--json", action="store_true")
     return parser
 
 
 def _render_human(result: dict[str, Any]) -> str:
+    if result.get("operation") == "subject_card_validation":
+        lines = ["主体卡代码校验：" + result["status"] + "（不代表科研结论正确或正式发布）"]
+        lines += [f"- {item['code']} {item['path']}：{item['message']}"
+                  for item in result.get("errors", []) + result.get("warnings", [])]
+        if result.get("validation_path"):
+            lines.append("校验记录：" + result["validation_path"])
+        return "\n".join(lines)
+    if result.get("operation") == "subject_card_draft":
+        if not result.get("ok"):
+            return f"主体卡草稿失败（{result.get('failed_stage', 'input')}）：{result['error']['message']}"
+        return ("已生成待校验主体卡草稿；未通过内容门禁、未正式发布"
+                f"\n- 正文：{result['card_path']}\n- 正文、机器字段与来源记录：{result['draft_path']}"
+                f"\n- 精读产物根：{result['literature_root']}")
+    if result.get("operation") == "paper_input_batch":
+        lines = [
+            f"单篇输入批处理：{result['status']}",
+            (
+                f"- 总数：{result['total']}；就绪：{result['ready_count']}；"
+                f"问题：{result['problem_count']}"
+            ),
+        ]
+        for problem in result.get("problems", []):
+            title = f" {problem['title']}" if problem.get("title") else ""
+            lines.append(
+                f"- 问题 {problem['item_key']}{title} "
+                f"[{problem['reason_code']}]：{problem['message']}"
+            )
+            lines.extend(
+                (
+                    f"  - 候选 {candidate.get('attachment_key')}: "
+                    f"{candidate.get('filename') or ''}"
+                )
+                for candidate in problem.get("candidates", [])
+            )
+        return "\n".join(lines)
+    if result.get("operation") == "paper_input":
+        if result.get("error"):
+            error = result["error"]
+            return (
+                f"单篇输入失败 [{error.get('code', 'UNKNOWN')}]："
+                f"{error.get('message', '未知错误')}"
+            )
+        lines = [
+            f"单篇输入：{result['status']}"
+            + (
+                f" [{result['reason_code']}]"
+                if result.get("reason_code")
+                else ""
+            ),
+            f"- 说明：{result.get('message', '')}",
+        ]
+        item = result.get("item")
+        if isinstance(item, dict):
+            lines.append(f"- 条目：{item.get('item_key')} {item.get('title') or ''}")
+        pdf = result.get("pdf")
+        if isinstance(pdf, dict):
+            lines.append(
+                f"- PDF：{pdf.get('attachment_key')} "
+                f"{pdf.get('filename') or ''}"
+            )
+        if result.get("source_url"):
+            lines.append(f"- 来源：{result['source_url']}")
+        candidates = result.get("candidates")
+        if isinstance(candidates, list):
+            lines.append(f"- 候选数：{len(candidates)}")
+            lines.extend(
+                f"  - {candidate.get('item_key') or candidate.get('attachment_key')}: "
+                f"{candidate.get('title') or candidate.get('filename') or ''}"
+                for candidate in candidates
+            )
+        return "\n".join(lines)
     if result.get("operation") == "setup":
         return "\n".join(["安装与恢复：" + result["status"]] +
             [f"- {row['name']}: {row['status']}" for row in result["steps"]] +
@@ -357,34 +490,85 @@ def _emit(result: dict[str, Any], as_json: bool) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     _configure_stdio()
     args = _parser().parse_args(argv)
+    if args.command == "evidence-validate":
+        try:
+            if args.config and args.assets_root:
+                raise ConfigError("--config 与 --assets-root 不能同时指定")
+            assets = (ValidationAssets.from_config(load_config(args.config, require_group=False))
+                      if args.config else ValidationAssets.from_root(args.assets_root))
+            result = validate_subject_card_file(assets, args.draft, args.paper_input, report_dir=args.report_dir)
+        except (ConfigError, OSError, ValueError) as exc:
+            _emit({"schema_version": 1, "ok": False, "error": {
+                "code": "CONFIG_ERROR", "message": str(exc)}}, args.json)
+            return 2
+        _emit(result, args.json)
+        return 0 if result["ok"] else 3
+    if getattr(args, "paper_input", None) and getattr(args, "retry_quality_failed", False):
+        _emit({"schema_version": 1, "ok": False, "error": {
+            "code": "CARD_DRAFT_RETRY_UNSUPPORTED", "message": "主体卡草稿为单次调用，不支持任务重试参数"}}, args.json)
+        return 2
+    if args.command == "ai-config" or (args.command == "evidence-generate" and args.paper_input):
+        try:
+            selection = resolve_ai_config(args.ai_config, provider=args.ai_provider, model=args.ai_model,
+                         executable=args.ai_executable, timeout_seconds=args.ai_timeout)
+            if args.command == "ai-config":
+                result = describe_ai(selection, output_root=args.output_root)
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return 0
+            base = load_config(args.config, require_group=False) if args.config else None
+            config = subject_card_config(selection, base_config=base)
+            raw = sys.stdin.read() if args.paper_input == "-" else Path(args.paper_input).read_text(encoding="utf-8-sig")
+            record = json.loads(raw)
+            with ConsoleProgress(enabled=not args.no_progress, heartbeat_interval_seconds=60,
+                                 initial_activity="检查单篇输入与所选模型接口") as progress:
+                result = generate_subject_card_draft(config, record, progress=progress, output_root=args.output_root)
+                progress.finish(result)
+        except json.JSONDecodeError:
+            result = {"ok": False, "error": {"code": "CARD_DRAFT_INPUT_INVALID", "message": "无法读取单篇论文输入 JSON"}}
+        except (AIConfigError, ConfigError, OSError, ValueError, RuntimeError) as exc:
+            result = {"ok": False, "error": {"code": "CARD_DRAFT_CONFIG_OR_INPUT_INVALID", "message": str(exc)}}
+        _emit(result, args.json)
+        return 0 if result["ok"] else 3
     try:
-        app_config = load_config(
-            args.config,
+        config_loader = load_paper_input_config if args.command == "paper-input" else load_config
+        app_config = config_loader(
+            args.config if args.command == "paper-input" else (args.config or _default_config_path()),
             base_url=getattr(args, "base_url", None),
             group_id=getattr(args, "group_id", None),
             timeout_seconds=getattr(args, "timeout", None),
-            require_group=args.command
-            in {
-                "setup",
-                "doctor",
-                "recover",
-                "activity-sync",
-                "daily-report",
-                "preflight",
-                "scan",
-                "pdf-gate",
-                "pdf-delivery",
-                "tasks-sync",
-                "tasks-list",
-                "packages-sync",
-                "pdf-direct-read-trial",
-                "evidence-generate",
-                "evidence-generate-trial",
-                "evidence-draft-export",
-                "run-once",
-                "themes-run",
-                "schedule-plan", "schedule-status", "schedule-install", "schedule-remove", "schedule-tick",
-            },
+            require_group=(
+                args.command
+                in {
+                    "setup",
+                    "doctor",
+                    "recover",
+                    "activity-sync",
+                    "daily-report",
+                    "preflight",
+                    "scan",
+                    "pdf-gate",
+                    "pdf-delivery",
+                    "tasks-sync",
+                    "tasks-list",
+                    "packages-sync",
+                    "pdf-direct-read-trial",
+                    "evidence-generate",
+                    "evidence-generate-trial",
+                    "evidence-draft-export",
+                    "run-once",
+                    "themes-run",
+                    "schedule-plan",
+                    "schedule-status",
+                    "schedule-install",
+                    "schedule-remove",
+                    "schedule-tick",
+                }
+                or (
+                    args.command == "paper-input"
+                    and not getattr(args, "user_library", False)
+                    and not getattr(args, "demo", False)
+                )
+            ),
         )
     except ConfigError as exc:
         result = {
@@ -399,6 +583,36 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = discover_groups(app_config.zotero)
     elif args.command == "preflight":
         result = preflight(app_config.zotero)
+    elif args.command == "paper-input":
+        try:
+            if args.demo:
+                result = prepare_demo_paper(app_config.zotero, app_config.pdf_gate)
+            elif args.item_key and len(args.item_key) > 1:
+                result = prepare_paper_batch(
+                    app_config.zotero,
+                    app_config.pdf_gate,
+                    args.item_key,
+                    library_type="user" if args.user_library else "group",
+                )
+            else:
+                result = prepare_paper_input(
+                    app_config.zotero,
+                    app_config.pdf_gate,
+                    query=args.query,
+                    item_key=args.item_key[0] if args.item_key else None,
+                    library_type="user" if args.user_library else "group",
+                    limit=args.limit,
+                )
+        except (PdfGateError, ZoteroApiError, ValueError) as exc:
+            result = {
+                "schema_version": 1,
+                "ok": False,
+                "operation": "paper_input",
+                "error": {
+                    "code": getattr(exc, "code", "INVALID_INPUT"),
+                    "message": str(exc),
+                },
+            }
     elif args.command == "doctor":
         result = doctor(app_config)
     elif args.command == "bootstrap":

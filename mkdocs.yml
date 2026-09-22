@@ -72,12 +72,16 @@ nav:
           - 部署与环境: hydro-platform/deployment.md
           - 原生 PDF 工具: hydro-platform/native-deployment.md
           - Zotero 就绪: hydro-platform/zotero-readiness.md
+          - 单篇论文输入: hydro-platform/paper-input.md
       - 架构与实现:
           - 技术架构: hydro-platform/architecture.md
           - 数据流与用户流程: hydro-platform/flows.md
           - 自动化代码地图: hydro-platform/automation.md
           - 任务状态机: hydro-platform/task-state-machine.md
           - 单 Agent 粗卡: hydro-platform/single-agent-rough-card.md
+          - 单篇流程首次配置: hydro-platform/single-paper-quickstart.md
+          - 单篇主体卡草稿: hydro-platform/subject-card-draft.md
+          - 主体卡校验门禁: hydro-platform/subject-card-validation.md
           - 运行维护: hydro-platform/runtime-maintenance.md
           - 恢复: hydro-platform/recovery.md
           - 权限与成员: hydro-platform/permissions.md
@@ -102,3 +106,4 @@ nav:
       - 决策记录:
           - Zotero 入库使用 linked_file: adr/0001-zotero-linked-file-sync.md
           - 不统一两套 Zotero 客户端: adr/0002-zotero-two-clients-boundary.md
+          - 精读产物根可配置: adr/0003-configurable-literature-output-root.md

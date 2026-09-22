@@ -15,6 +15,17 @@ def source_access_acceptable(access: Any, *, expected_sha256: str | None = None,
         return (access.get("verified") is True
                 and type(access.get("pages_served")) is int and access["pages_served"] == count
                 and type(access.get("visual_pages_served")) is int and access["visual_pages_served"] == count)
+    if access.get("method") == "claude_pdf_read":
+        digest = access.get("source_sha256")
+        pages = access.get("pages_requested_successfully")
+        return (isinstance(digest, str) and len(digest) == 64 and all(c in "0123456789abcdef" for c in digest)
+                and isinstance(access.get("parent_key"), str) and bool(access["parent_key"])
+                and (expected_sha256 is None or digest == expected_sha256)
+                and (expected_parent_key is None or access["parent_key"] == expected_parent_key)
+                and isinstance(pages, list) and all(type(p) is int for p in pages) and pages == list(range(1, count + 1))
+                and all(access.get(k) is True for k in ("source_identity_verified", "source_unchanged",
+                    "model_reading_report_accepted", "model_claim_full_text", "model_claim_visuals", "read_only_tools"))
+                and all(access.get(k) is False for k in ("verified", "full_read_verified", "visual_understanding_verified")))
     if access.get("method") != "local_pdf_path":
         return False
     digest = access.get("source_sha256")

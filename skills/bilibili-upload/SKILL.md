@@ -20,11 +20,11 @@ biliup -u ~/.bilibili/cookies.json login   # scan QR code, valid ~2 years
 
 Ask the user which audio to upload. Common locations:
 
-- `output/weekly-review/{date}/podcast/audio_hydrology.mp3`
-- `output/weekly-review/{date}/podcast/audio_overview.mp3`
+- `outputs/weekly-review/{date}/podcast/audio_hydrology.mp3`
+- `outputs/weekly-review/{date}/podcast/audio_overview.mp3`
 - User may provide a custom path
 
-If the user says "this week's podcast" without a path, list available audio files under `output/weekly-review/` and ask which one.
+If the user says "this week's podcast" without a path, list available audio files under `outputs/weekly-review/` and ask which one.
 
 ### Step 2: Confirm metadata
 

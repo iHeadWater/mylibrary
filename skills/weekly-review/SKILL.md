@@ -20,7 +20,8 @@ This Skill lives in **mylibrary** and is **decoupled from the dailyinfo Python c
 - **Sub-agent reading technique**: The sub-agent MUST read the full paper completely — no skimming, no abstract-only analysis. Read the file in small sequential chunks (limit=50-80 lines each) until the entire content is consumed. Before writing any card, the sub-agent MUST state what percentage of the paper it has read. If the paper is too large to fit in a single chunk, the sub-agent reads across multiple turns, accumulating understanding before writing the card.
 - **No card, no article.** Do not proceed to Phase 3 (article writing) for any paper that lacks a completed analysis card in `cards/`. The card is the fact layer; the article is the narrative layer. Writing an article without cards means all claims are unverifiable — the audit found this is the strongest predictor of factual errors. Papers without cards may be listed in a brief "also added this week" note, but not analyzed in depth.
 - **Card-article sync.** If an article is substantially rewritten after initial creation (Phase 3.5 evaluation feedback, user revision requests), the corresponding analysis cards must be re-audited before the next evaluation pass. After any rewrite that changes factual claims, numbers, terminology, or limitation coverage, the main agent must read each card alongside the revised article and verify: (a) all numbers cited in the article still match the card, (b) no new factual claims were added that the card doesn't support, (c) no card-documented limitations or frameworks were dropped from the article. Run this sync check before re-invoking the Phase 3.5 evaluator.
-- Output directory convention: `output/weekly-review/{YYYY-MM-DD}/` with subdirectories `cards/`, `article/`, `podcast/`. Create all directories before starting analysis.
+- Output directory convention: `outputs/weekly-review/{YYYY-MM-DD}/` with subdirectories `cards/`, `article/`, `podcast/`. Create all directories before starting analysis.
+- **Resolve the product root before writing anything.** The root is configurable (`outputs/` is only its default). Run `uv run hydrolitagent paths --json` and read `literature_root`; call it `$OUT`. **If `$OUT` is not `<repo>/outputs`, substitute `$OUT` for the literal `outputs/` in every path in this document.** Echo the resolved root in your Phase 0 message so a misresolution is visible in the transcript rather than silently landing files in the wrong directory. Note: `python -m hydrolitagent` does not work (no `__main__.py`); use the `uv run hydrolitagent` form.
 - For NotebookLM: call the `notebooklm` CLI directly via Bash. Do not use dailyinfo's `NotebookLMAutomation` wrapper class. If the CLI is unavailable, provide manual fallback steps.
 - **Evaluation is NOT optional**: Phase 3.5 (independent evaluation agent) is a hard gate. Every article must pass evaluation before delivery. The main agent MUST NOT skip or shortcut this phase. If an evaluation finds issues, fix them and re-evaluate until the verdict is "通过".
 
@@ -77,7 +78,7 @@ Every article should follow a natural arc, not a paper list. The default tone is
 
 2. Create the output directory structure:
    ```
-   output/weekly-review/{YYYY-MM-DD}/
+   outputs/weekly-review/{YYYY-MM-DD}/
      cards/
      article/
      podcast/
@@ -115,7 +116,7 @@ Every article should follow a natural arc, not a paper list. The default tone is
 The main agent NEVER reads full papers directly. Every paper gets its own **dedicated sub-agent**. The main agent's role is pure orchestration: launch sub-agents, verify card output, keep context clean for Phase 3 synthesis.
 
 7. For each confirmed paper, the main agent:
-   a. First calls `zotero_get_fulltext` to retrieve the full text. If the result is inline, pass it directly to the sub-agent. If it's a persisted-output file path, pass the file path to the sub-agent — the sub-agent will read the file in chunks. **If the paper is extremely large (>100K chars, e.g. a multi-hundred-page annual report), pre-split it first:** run `python scripts/chunk_fulltext.py <saved_json> --output-dir output/weekly-review/{date}/chunks/ [--markers markers.json]` to split the fulltext into manageable files by section markers (or fixed-size chunks as fallback). `chunk_fulltext.py` accepts either `result` (emitted by `scripts/fetch_collection_fulltext.py`) or `content` (emitted by `zotero_get_fulltext`) as the field holding the text. Then pass individual chunk file paths to sub-agents. **If the Local API fulltext is unavailable or 404 (common for GDrive-stored PDFs), fall back to reading the local PDF directly from `G:/我的云端硬盘/Documents/Papers/Zotero_Papers/{filename}.pdf`** — many Zotero PDFs have unresolved attachment paths but ARE present on the G drive. For arXiv preprints, download from `https://arxiv.org/pdf/{id}`. Use `zotero_get_file_info` to find the filename, or list the G-drive directory directly.
+   a. First calls `zotero_get_fulltext` to retrieve the full text. If the result is inline, pass it directly to the sub-agent. If it's a persisted-output file path, pass the file path to the sub-agent — the sub-agent will read the file in chunks. **If the paper is extremely large (>100K chars, e.g. a multi-hundred-page annual report), pre-split it first:** run `python scripts/chunk_fulltext.py <saved_json> --output-dir outputs/weekly-review/{date}/chunks/ [--markers markers.json]` to split the fulltext into manageable files by section markers (or fixed-size chunks as fallback). `chunk_fulltext.py` accepts either `result` (emitted by `scripts/fetch_collection_fulltext.py`) or `content` (emitted by `zotero_get_fulltext`) as the field holding the text. Then pass individual chunk file paths to sub-agents. **If the Local API fulltext is unavailable or 404 (common for GDrive-stored PDFs), fall back to reading the local PDF directly from `G:/我的云端硬盘/Documents/Papers/Zotero_Papers/{filename}.pdf`** — many Zotero PDFs have unresolved attachment paths but ARE present on the G drive. For arXiv preprints, download from `https://arxiv.org/pdf/{id}`. Use `zotero_get_file_info` to find the filename, or list the G-drive directory directly.
    b. Launches a sub-agent with:
       - The paper's full text (inline) OR the file path to read (persisted output)
       - The **analysis card template** (8 sections below)
@@ -358,7 +359,7 @@ Each article/direction gets its own independent podcast. One podcast covers 2-4 
     **Step 16a — Analysis cards for this direction only (mandatory):**
     ```bash
     NOTEBOOKLM_HOME="..." \
-      notebooklm source add output/weekly-review/{date}/cards/{paper_slug}.md \
+      notebooklm source add outputs/weekly-review/{date}/cards/{paper_slug}.md \
         --type text --title "{Paper Title} — Analysis Card" --json
     ```
 
@@ -372,14 +373,14 @@ Each article/direction gets its own independent podcast. One podcast covers 2-4 
     **Step 16c — Article for this direction (narrative structure):**
     ```bash
     NOTEBOOKLM_HOME="..." \
-      notebooklm source add output/weekly-review/{date}/article/article_{date}_{theme}.md \
+      notebooklm source add outputs/weekly-review/{date}/article/article_{date}_{theme}.md \
         --type text --title "Article: {theme}" --json
     ```
 
     **Step 16d — Podcast prompt for this direction:**
     ```bash
     NOTEBOOKLM_HOME="..." \
-      notebooklm source add output/weekly-review/{date}/podcast/podcast_{theme}.md \
+      notebooklm source add outputs/weekly-review/{date}/podcast/podcast_{theme}.md \
         --type text --title "Podcast Instructions" --json
     ```
 
@@ -442,10 +443,10 @@ Each article/direction gets its own independent podcast. One podcast covers 2-4 
 
     # Step 16a: Upload analysis cards (one per paper in this direction)
     NOTEBOOKLM_HOME="..." \
-      notebooklm source add output/weekly-review/{date}/cards/{paper1_slug}.md \
+      notebooklm source add outputs/weekly-review/{date}/cards/{paper1_slug}.md \
         --type text --title "{Paper1 Title} — Analysis Card" --json
     NOTEBOOKLM_HOME="..." \
-      notebooklm source add output/weekly-review/{date}/cards/{paper2_slug}.md \
+      notebooklm source add outputs/weekly-review/{date}/cards/{paper2_slug}.md \
         --type text --title "{Paper2 Title} — Analysis Card" --json
 
     # Step 16b: Upload original PDFs (one per paper; skip if genuinely unavailable)
@@ -455,12 +456,12 @@ Each article/direction gets its own independent podcast. One podcast covers 2-4 
 
     # Step 16c: Upload article (narrative structure)
     NOTEBOOKLM_HOME="..." \
-      notebooklm source add output/weekly-review/{date}/article/article_{date}_{theme}.md \
+      notebooklm source add outputs/weekly-review/{date}/article/article_{date}_{theme}.md \
         --type text --title "Article: {theme}" --json
 
     # Step 16d: Upload podcast prompt
     NOTEBOOKLM_HOME="..." \
-      notebooklm source add output/weekly-review/{date}/podcast/podcast_{theme}.md \
+      notebooklm source add outputs/weekly-review/{date}/podcast/podcast_{theme}.md \
         --type text --title "Podcast Instructions" --json
 
     # Step 17.5: Verify all 4 source categories present (HARD GATE)
@@ -473,7 +474,7 @@ Each article/direction gets its own independent podcast. One podcast covers 2-4 
         --wait --timeout 900 --interval 5 --retry 3 --language zh_Hans --json
 
     NOTEBOOKLM_HOME="..." \
-      notebooklm download audio output/weekly-review/{date}/podcast/audio_{theme}.mp3 \
+      notebooklm download audio outputs/weekly-review/{date}/podcast/audio_{theme}.mp3 \
         --force --json
     ```
 
@@ -487,7 +488,7 @@ Each article/direction gets its own independent podcast. One podcast covers 2-4 
 
     ```bash
     # Step 1: Compute MD5 hashes of all downloaded audio files
-    cd output/weekly-review/{date}/podcast
+    cd outputs/weekly-review/{date}/podcast
     md5sum audio_*.mp3  # macOS: md5 audio_*.mp3
 
     # Step 2: Verify ALL hashes are UNIQUE
@@ -524,7 +525,7 @@ Each article/direction gets its own independent podcast. One podcast covers 2-4 
 | No papers found in 7-day range | Offer to expand to 14 days, or check if the user has the correct Zotero collection selected |
 | Full text unavailable (scanned/OCR-failed PDF, or Local API 404 for GDrive-stored PDF) | Use `zotero_get_item` for metadata + abstract-based analysis. Mark card clearly: "⚠️ 全文不可用，仅基于摘要分析". Still use a sub-agent — it works from metadata instead of full text. If the PDF exists on G:/ drive, read it directly instead of settling for abstract-only. |
 | Sub-agent fails to read paper completely | Check if the sub-agent reported <100% coverage. If so, re-launch with a smaller chunk size (limit=30-40) and explicit instruction to continue until end-of-file. If the file is fundamentally unreadable (corrupted JSON, encoding error), fall back to abstract-based analysis with clear marking. |
-| Full text too large for single sub-agent (>100K chars) | Use `python scripts/chunk_fulltext.py <fulltext.json> --output-dir output/weekly-review/{date}/chunks/ --markers markers.json` to pre-split the fulltext (it reads the text from either the `result` or the `content` field). Create a `markers.json` with `{"section": {"start": "...", "end": "..."}}` entries using the paper's section headers. Then launch one sub-agent per chunk file. For a 1M+ character document, this can produce ~10 manageable chunks. |
+| Full text too large for single sub-agent (>100K chars) | Use `python scripts/chunk_fulltext.py <fulltext.json> --output-dir outputs/weekly-review/{date}/chunks/ --markers markers.json` to pre-split the fulltext (it reads the text from either the `result` or the `content` field). Create a `markers.json` with `{"section": {"start": "...", "end": "..."}}` entries using the paper's section headers. Then launch one sub-agent per chunk file. For a 1M+ character document, this can produce ~10 manageable chunks. |
 | Sub-agent fails to write analysis card | Retry once with a tighter prompt. If it still fails, the main agent writes the card directly from metadata and flags it for extra scrutiny in evaluation. |
 | Sub-agent writes card but factual claims are unverifiable | If the card lacks specific section/page references, ask the sub-agent (via SendMessage) to add them. If the sub-agent is gone, spot-verify 3-5 claims directly and annotate the card with verification notes. |
 | Sub-agent accumulation of mediocre cards | If multiple sub-agents return shallow or generic analysis, pause. The reading technique may need adjustment — try adding more specific extraction instructions (e.g., "quote the paper's own research question from Section 1", "extract exact numbers from results tables"). |
@@ -542,7 +543,7 @@ Each article/direction gets its own independent podcast. One podcast covers 2-4 
 
 After each phase, report progress:
 
-- **Phase 0**: "输出目录已创建: `output/weekly-review/{date}/`"
+- **Phase 0**: "产物根 `$OUT`（来自 `uv run hydrolitagent paths`）→ 输出目录已创建: `$OUT/weekly-review/{date}/`"
 - **Phase 1**: "从 Zotero 获取到 N 篇论文（{date_range}），用户确认 M 篇"
 - **Phase 2**: "已完成 M 篇深度解析（N 篇通过子代理），分析卡保存至 `cards/`" — list the slugs
 - **Phase 3**: "故事架构: {single narrative / N separate articles}" → "文章已生成: `article/article_{date}.md` ({word_count} 字)"
@@ -554,8 +555,8 @@ Final summary:
 > ## 本周文献综述完成
 > - **日期范围**: {start} ~ {end}
 > - **论文数**: {N} 篇深度解析
-> - **文章**: `output/weekly-review/{date}/article/article_{date}.md`
+> - **文章**: `outputs/weekly-review/{date}/article/article_{date}.md`
 > - **评估**: {通过 / N issues resolved}
-> - **分析卡**: `output/weekly-review/{date}/cards/`
+> - **分析卡**: `outputs/weekly-review/{date}/cards/`
 > - **播客**: {audio_path 或 "需手动生成"}
 > - **下一步**: {建议}

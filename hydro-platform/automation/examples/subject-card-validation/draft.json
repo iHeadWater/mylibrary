@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "draft_id": "3131313131313131",
+  "created_at": "2026-01-01T00:00:00Z",
+  "status": "DRAFT_PENDING_VALIDATION",
+  "content_validation_performed": false,
+  "scientific_correctness_verified": false,
+  "production_eligible": false,
+  "source": {
+    "library": {
+      "type": "user",
+      "id": 0
+    },
+    "parent_key": "PAPER001",
+    "requested_item_key": "PAPER001",
+    "attachment_key": "PDF00001",
+    "pdf_sha256": "31ea99f638e9b7ac19f770b47db32dae316751618199f21faf7ba3c93bbbf03b",
+    "pdf_size_bytes": 1024,
+    "pdf_page_count": 2,
+    "item": {
+      "item_key": "PAPER001",
+      "title": "Synthetic validation example (not a real paper)"
+    }
+  },
+  "card_body_markdown": "# Synthetic example\n\nF001: This is a fixed software test, not a scientific paper. It checks the offline validation interface. The machine fields describe the artificial question, method, result and limitations.\n",
+  "machine_fields": {
+    "schema_version": 1,
+    "research_questions": [
+      {
+        "statement": "This artificial example tests whether an offline gate accepts a complete record.",
+        "statement_role": "original_statement",
+        "information_status": "reported",
+        "source_locations": [
+          {
+            "pdf_page": 1,
+            "section": "Synthetic example",
+            "figure": null,
+            "table": null
+          }
+        ]
+      }
+    ],
+    "study_objects_and_scales": [
+      {
+        "statement": "The example contains one synthetic object and two declared pages.",
+        "statement_role": "original_statement",
+        "information_status": "reported",
+        "source_locations": [
+          {
+            "pdf_page": 1,
+            "section": "Synthetic example",
+            "figure": null,
+            "table": null
+          }
+        ]
+      }
+    ],
+    "data_and_methods": [
+      {
+        "statement": "A fixed example supplies structured fields without reading a real PDF.",
+        "statement_role": "original_statement",
+        "information_status": "reported",
+        "source_locations": [
+          {
+            "pdf_page": 1,
+            "section": "Synthetic example",
+            "figure": null,
+            "table": null
+          }
+        ]
+      }
+    ],
+    "comparison_baselines": [
+      {
+        "statement": "The comparison case removes a required field to exercise the failure path.",
+        "statement_role": "original_statement",
+        "information_status": "reported",
+        "source_locations": [
+          {
+            "pdf_page": 1,
+            "section": "Synthetic example",
+            "figure": null,
+            "table": null
+          }
+        ]
+      }
+    ],
+    "findings": [
+      {
+        "statement": "F001: the example provides a complete machine-readable finding.",
+        "statement_role": "original_statement",
+        "information_status": "reported",
+        "source_locations": [
+          {
+            "pdf_page": 1,
+            "section": "Synthetic example",
+            "figure": null,
+            "table": null
+          }
+        ],
+        "finding_id": "F001"
+      }
+    ],
+    "boundaries": [
+      {
+        "statement": "These invented fixture values do not constitute scientific evidence.",
+        "statement_role": "original_statement",
+        "information_status": "reported",
+        "source_locations": [
+          {
+            "pdf_page": 1,
+            "section": "Synthetic example",
+            "figure": null,
+            "table": null
+          }
+        ]
+      }
+    ],
+    "missing_information": [
+      {
+        "statement": "There is no real paper or experiment; this fixture cannot support scientific conclusions.",
+        "statement_role": "information_boundary",
+        "information_status": "not_applicable",
+        "source_locations": []
+      }
+    ]
+  },
+  "reading_record": {
+    "method": "local_pdf_path",
+    "source_sha256": "31ea99f638e9b7ac19f770b47db32dae316751618199f21faf7ba3c93bbbf03b",
+    "parent_key": "PAPER001",
+    "page_count": 2,
+    "source_identity_verified": true,
+    "source_unchanged": true,
+    "model_reading_report_accepted": true
+  },
+  "provenance": {
+    "prompt_version": "evidence-card-generation-v8",
+    "prompt_sha256": "94d3cbdf4d5adb41be440ba21057d1243baa71077e1db55c9789652832128556",
+    "draft_prompt_version": "subject-card-draft-v1",
+    "draft_prompt_sha256": "99245a3c394e4f181cc1ab2fd69f64cd0f9cfca35ade3911fe5011b75a5dc0d4",
+    "combined_prompt_sha256": "73d0330a11b8aec3ea8bd4b64877ea0d282e098224df183d71252345f90a3fbf",
+    "output_schema_sha256": "75da50d9651c760488bfe045b486d2b4063803c71b476d8a452d0c5ed29578cb",
+    "template_id": "original-research",
+    "template_version": "2.0.0",
+    "template_sha256": "4ecc653bcf7906691b1baae7ed4c17660fc20301b5b6ffeda7b2230450349903",
+    "catalog_version": "2.0.0",
+    "model": null,
+    "reasoning_effort": null,
+    "generation_protocol_version": "codex-local-pdf-v1",
+    "reading_prompt_version": "pdf-local-reading-v1",
+    "reading_prompt_sha256": "04869bca4910358839fe731cecd4a38e4db3fbed60c37f729308c3aeabefc01d"
+  }
+}

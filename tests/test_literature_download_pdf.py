@@ -413,6 +413,9 @@ def test_default_pdf_dir_respects_env(monkeypatch, tmp_path):
 def test_default_pdf_dir_uses_outputs_when_no_env(monkeypatch):
     """Without MYLIBRARY_PDF_ROOT, uses mylibrary/outputs/papers."""
     monkeypatch.delenv("MYLIBRARY_PDF_ROOT", raising=False)
+    # 产物根也只测"未配置"这一支;开发者 shell 里若设了它,这条断言会随
+    # OUTPUT_ROOT 一起漂移,读起来就不像是在测默认值了。
+    monkeypatch.delenv("HYDROLITAGENT_LITERATURE_ROOT", raising=False)
     from hydrolitagent.literature._paths import OUTPUT_ROOT
 
     assert default_pdf_dir() == OUTPUT_ROOT / "papers"

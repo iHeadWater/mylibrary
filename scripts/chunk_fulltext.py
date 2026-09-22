@@ -14,11 +14,11 @@ Usage::
 
     # Marker mode (requires a markers.json file)
     python scripts/chunk_fulltext.py fulltext.json --markers markers.json \\
-        --output-dir output/weekly-review/2026-07-05/chunks/
+        --output-dir outputs/weekly-review/2026-07-05/chunks/
 
     # Fixed-size mode
     python scripts/chunk_fulltext.py fulltext.json --chunk-size 50000 \\
-        --output-dir output/weekly-review/2026-07-05/chunks/
+        --output-dir outputs/weekly-review/2026-07-05/chunks/
 
 Markers JSON format::
 

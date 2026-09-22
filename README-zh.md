@@ -170,7 +170,7 @@ configs/                 # Prompt / 提取配置
 scripts/                 # run_paper_pipeline.sh, download_paper.py(隐身一键 PDF 下载), chunk_fulltext.py
 skills/                  # 10 个 Agent skill
 docs/                    # 文档站点(mkdocs-material)
-outputs/                 # 精读产物:outputs/weekly-review/{date}/{cards,article,podcast}
+outputs/                 # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
 papers/                  # 按主题组织的文献库(10 个主题)
 
 hydro-platform/          # 科研知识平台(uv workspace 成员)

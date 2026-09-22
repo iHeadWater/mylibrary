@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "operation": "paper_input",
+  "ok": true,
+  "status": "READY",
+  "pdf_attachment_count": 1,
+  "library": {
+    "type": "user",
+    "id": 0
+  },
+  "requested_item_key": "PAPER001",
+  "item": {
+    "item_key": "PAPER001",
+    "title": "Synthetic validation example (not a real paper)"
+  },
+  "pdf": {
+    "attachment_key": "PDF00001",
+    "parent_key": "PAPER001",
+    "local_path": "/example/papers/demo.pdf",
+    "file_size_bytes": 1024,
+    "sha256": "31ea99f638e9b7ac19f770b47db32dae316751618199f21faf7ba3c93bbbf03b",
+    "fulltext_indexed": false
+  }
+}

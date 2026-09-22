@@ -150,6 +150,8 @@ class ConsoleProgress:
                 self._write(f"失败，停在本阶段；错误码：{code}（详见最终结果）")
             elif result.get("action") == "SKIPPED_EXISTING_CARD":
                 self._write("已跳过：已有证据卡，未调用模型")
+            elif result.get("operation") == "subject_card_draft":
+                self._write("待校验主体卡草稿已保存；未通过内容门禁、未正式发布")
             elif result.get("operation") == "evidence_generate_trial":
                 self._write("试运行完成并保存；正式卡片与任务未修改")
             else:
