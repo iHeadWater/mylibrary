@@ -14,6 +14,13 @@ Windows 以下使用 `.\.venv\Scripts\python.exe`，macOS/Linux 替换为 `.venv
 
 合并前分支范围：#40 提供输入，#43 基于 #27 提供生成，#44 基于 #43 提供校验。单独拉取 #44 不包含尚未合并的 #40；三步连跑需要这些 PR 均可用，或先准备一份已有的单篇 READY JSON。
 
+合并前也可使用已组合三条 PR 并处理 CLI 冲突的 `codex/paper-cli-integration` 分支试运行：
+
+```powershell
+git fetch origin
+git switch --track origin/codex/paper-cli-integration
+```
+
 ## 1. 本机 Zotero 输入：不调用模型
 
 打开 Zotero，启用「允许此计算机上的其他应用程序与 Zotero 通信」，确保 PDF 已下载。
