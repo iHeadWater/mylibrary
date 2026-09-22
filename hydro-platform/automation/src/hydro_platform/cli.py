@@ -14,6 +14,7 @@ from hydro_platform.card_generation import (
     generate_evidence_card_trial,
 )
 from hydro_platform.config import ConfigError, load_config
+from hydro_platform.paper_input_config import load_paper_input_config
 from hydro_platform.draft_export import export_evidence_draft
 from hydro_platform.evidence_packages import EvidencePackageError, sync_evidence_packages
 from hydro_platform.evidence_templates import (
@@ -105,7 +106,7 @@ def _parser() -> argparse.ArgumentParser:
         command = subparsers.add_parser(name, help=help_text)
         command.add_argument(
             "--config",
-            default=_default_config_path(),
+            default=None if name == "paper-input" else _default_config_path(),
             help="总配置文件路径；默认读取项目 config/config.json",
         )
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
@@ -450,7 +451,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     _configure_stdio()
     args = _parser().parse_args(argv)
     try:
-        app_config = load_config(
+        config_loader = load_paper_input_config if args.command == "paper-input" else load_config
+        app_config = config_loader(
             args.config,
             base_url=getattr(args, "base_url", None),
             group_id=getattr(args, "group_id", None),

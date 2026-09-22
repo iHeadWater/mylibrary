@@ -48,8 +48,8 @@
 | `uv run hydro-platform run-once --dry-run --json` | 只预览已有本机任务，不扫描、不调模型、不写入 |
 | `uv run hydro-platform themes-run --json` | 显式推进候选主题池 |
 | `uv run hydro-platform doctor --json` | 只读检查环境、账号、模板和路径 |
-| `uv run hydro-platform paper-input --query "关键词" --json` | 查询配置群组库并返回候选；不会自动选择第一条 |
-| `uv run hydro-platform paper-input --item-key ABCD1234 --json` | 检查单篇父条目、唯一 PDF、本地文件和全文索引状态 |
+| `python scripts/paper_input.py --group-id GROUP_ID --query "关键词"` | 查询配置群组库并返回候选；不会自动选择第一条 |
+| `python scripts/paper_input.py --group-id GROUP_ID --item-key ABCD1234` | 检查单篇父条目、唯一 PDF、本地文件和全文索引状态 |
 | `uv run hydro-platform paper-input --user-library --item-key ABCD1234 --json` | 显式只读个人文库，用于本机验收 |
 | `uv run hydro-platform paper-input --demo --json` | 检查内置公开演示论文；本地缺失时返回 Zotero Connector 抓取链接 |
 | `uv run hydro-platform recover --json` | 从 Zotero 和完整持久化成果重建派生运行状态 |
@@ -67,3 +67,5 @@ uv run pytest hydro-platform/automation/tests/test_paper_input.py -q
 ```
 
 当前团队配置的 `scheduler.enabled=true`，但“配置开启”不等于任意机器已安装计划任务，必须以 `schedule-status` 实机结果为准。调度、失败恢复、模型配置和验证证据分别见[每日调度](cron.md)、[运行一轮](run-once.md)、[配置](config.md)和[验证地图](tests.md)。
+
+单篇输入的独立命令、默认配置及环境变量覆盖见[单篇论文输入](paper-input.md)。该入口不需要 AI 相关安装或登录。

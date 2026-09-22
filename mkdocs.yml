@@ -72,6 +72,7 @@ nav:
           - 部署与环境: hydro-platform/deployment.md
           - 原生 PDF 工具: hydro-platform/native-deployment.md
           - Zotero 就绪: hydro-platform/zotero-readiness.md
+          - 单篇论文输入: hydro-platform/paper-input.md
       - 架构与实现:
           - 技术架构: hydro-platform/architecture.md
           - 数据流与用户流程: hydro-platform/flows.md

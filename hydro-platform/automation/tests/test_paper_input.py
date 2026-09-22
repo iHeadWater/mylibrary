@@ -719,6 +719,7 @@ class PaperInputTests(unittest.TestCase):
             exit_code = main(
                 [
                     "paper-input",
+                    "--user-library",
                     "--item-key",
                     "PROBLEM1",
                     "--item-key",
@@ -766,6 +767,7 @@ class PaperInputTests(unittest.TestCase):
             exit_code = main(
                 [
                     "paper-input",
+                    "--user-library",
                     "--item-key",
                     "PROBLEM1",
                     "--item-key",
@@ -806,7 +808,7 @@ class PaperInputTests(unittest.TestCase):
         output = StringIO()
 
         with redirect_stdout(output):
-            exit_code = main(["paper-input", "--item-key", "bad-key"])
+            exit_code = main(["paper-input", "--user-library", "--item-key", "bad-key"])
 
         self.assertEqual(exit_code, 3)
         self.assertIn("INVALID_ITEM_KEY", output.getvalue())
@@ -835,3 +837,44 @@ class PaperInputLiveIntegrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StandaloneInputConfigTests(unittest.TestCase):
+    def test_defaults_do_not_read_model_config(self):
+        from hydro_platform.paper_input_config import load_paper_input_config
+        with patch.dict(os.environ, {"HYDRO_PLATFORM_CONFIG": "absent-private-config.json"}):
+            config = load_paper_input_config()
+        self.assertEqual(config.zotero.base_url, "http://127.0.0.1:23119")
+        self.assertIsNone(config.zotero.group_id)
+
+    def test_input_environment_and_cli_override_file(self):
+        from hydro_platform.paper_input_config import load_paper_input_config
+        with tempfile.TemporaryDirectory() as temp:
+            config = Path(temp) / "input.toml"
+            config.write_text('[zotero]\ngroup_id = 3\ntimeout_seconds = 4.0\n', encoding="utf-8")
+            with patch.dict(os.environ, {"HYDRO_PLATFORM_ZOTERO_GROUP_ID": "5"}):
+                self.assertEqual(load_paper_input_config(config).zotero.group_id, 5)
+                self.assertEqual(load_paper_input_config(config, group_id="7").zotero.group_id, 7)
+
+    def test_legacy_json_reads_only_input_fields(self):
+        from hydro_platform.paper_input_config import load_paper_input_config
+        with tempfile.TemporaryDirectory() as temp:
+            config = Path(temp) / "local.json"
+            config.write_text('{"zotero":{"group_id":7},"card_generator":"invalid obsolete AI config"}', encoding="utf-8")
+            self.assertEqual(load_paper_input_config(config).zotero.group_id, 7)
+
+    def test_missing_group_is_actionable(self):
+        from hydro_platform.paper_input_config import load_paper_input_config
+        from hydro_platform.config import ConfigError
+        with self.assertRaisesRegex(ConfigError, "--user-library"):
+            load_paper_input_config(require_group=True)
+
+    def test_invalid_network_config_is_rejected(self):
+        from hydro_platform.paper_input_config import load_paper_input_config
+        from hydro_platform.config import ConfigError
+        for url in ("ftp://localhost", "http://user:pass@localhost", "http://localhost/anything", "http://localhost:invalid"):
+            with self.subTest(url=url), self.assertRaises(ConfigError):
+                load_paper_input_config(base_url=url)
+        for timeout in (float("nan"), 0, -1, True):
+            with self.subTest(timeout=timeout), self.assertRaises(ConfigError):
+                load_paper_input_config(timeout_seconds=timeout)
