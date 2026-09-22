@@ -58,6 +58,10 @@ draft.json 的 schema_version=1，含以下内容：
 
 机器字段与正文在同一次调用中生成，不增加一次抽取调用。输出格式定义在 automation/schemas/subject-card-draft-output.schema.json，补充提示词为 automation/prompts/subject-card-draft-v1.md。
 
+## 草稿校验
+
+生成后使用 [主体卡代码校验门禁](subject-card-validation.md) 检查最低内容、原文位置及来源版本一致性。校验单独保存记录，不修改草稿状态或正文；下游须通过统一读取接口复核 PASS。
+
 ## 失败与后续边界
 
 不可读取或已变化的 PDF、错误来源身份、不支持的模板、无法解析的正文或机器字段、写入失败均返回结构化 FAILED，包含 error.code、failed_stage 和 model_invoked；不自动重试。模型已调用但输出未被接受时，可从 error.diagnostic.unvalidated_model_output_path 找到原始诊断输出（若提供方已保存），该文件不是主体卡草稿。

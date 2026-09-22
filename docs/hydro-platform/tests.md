@@ -11,6 +11,7 @@
 | PDF 门禁与交付 | 缺失、过小、无可用文本、身份变化和越界文件不得进入制卡 | `test_pdf_gate.py`、`test_pdf_delivery.py`、`test_pdf_sandbox.py` | 已有自动测试 |
 | 证据卡模板 | 九类模板的来源、版本、front matter 和内容指纹必须一致 | `test_evidence_templates.py` 与 `evidence-templates-validate` | 已有自动测试 |
 | 单 Agent 制卡 | 来源错误、空输出、非法模板、重复生成和人工改动必须停止保存 | `test_single_agent.py`、`test_card_generation.py`、`test_card_saving.py` | 已有自动测试 |
+| 主体卡校验门禁 | 最低内容、来源和版本绑定、旧 PASS 失效、失败不能进入主题输入 | test_card_validation.py | 已有自动测试 |
 | 任务、锁与中断恢复 | 并发运行不得双写，完整待发布记录可恢复，损坏或冲突记录不得覆盖 | `test_pipeline.py`、`test_draft_recovery.py`、`test_runtime_recovery.py` | 已有自动测试 |
 | 候选主题池 | CREATE / UPDATE / MERGE / SPLIT 的来源、编号、血缘和原子发布必须保持，旧粗卡不得被修改 | `test_themes.py`、`test_theme_pool.py`、`test_codex_text.py` | 已有自动测试 |
 | 活动与日报 | 首次只建基线，事件去重，未知身份不猜测，日报冲突不覆盖 | `test_activity_reporting.py` | 已有自动测试 |

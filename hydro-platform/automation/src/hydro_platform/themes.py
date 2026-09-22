@@ -413,3 +413,32 @@ def run_themes(config, *, progress=None, dry_run=False, text_adapter=None, pdf_a
             report.pop("report_path", None)
             report.update(ok=False, report_warning="摘要写入失败；已保存的主题和精读不会撤销")
     return report
+
+
+
+def load_subject_card_sources(config, selected):
+    """#33 input boundary: accept #30 drafts only through the #31 gate.
+
+    The legacy evidence-pack scanner remains separate. Resolve every selection
+    before returning any input for a theme-generation call.
+    """
+    from hydro_platform.card_validation import CardValidationError, load_validated_subject_card
+    if not isinstance(selected, list) or not selected:
+        raise ThemeError("CARD_SELECTION_INVALID", "需要显式选择主体卡、输入和校验记录")
+    result = []
+    for reference in selected:
+        if not isinstance(reference, dict) or any(
+            not isinstance(reference.get(key), (str, Path))
+            for key in ("draft_path", "input_path", "validation_path")
+        ):
+            raise ThemeError("CARD_SELECTION_INVALID", "主体卡选择缺少草稿、输入或校验记录路径")
+        try:
+            accepted = load_validated_subject_card(config, **{
+                key: reference[key] for key in ("draft_path", "input_path", "validation_path")
+            })
+        except CardValidationError as exc:
+            raise ThemeError(exc.code, str(exc), validation=exc.report) from exc
+        draft = accepted["draft"]
+        result.append({"card": draft["card_body_markdown"], "source": draft["source"],
+                       "machine_fields": draft["machine_fields"], "validation": accepted["validation"]})
+    return result

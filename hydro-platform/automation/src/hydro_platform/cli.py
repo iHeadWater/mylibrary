@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from hydro_platform.card_draft import generate_subject_card_draft
+from hydro_platform.card_validation import validate_subject_card_file
 from hydro_platform.card_generators import build_card_generator_adapter
 from hydro_platform.card_generation import (
     CardGenerationError,
@@ -88,6 +89,7 @@ def _parser() -> argparse.ArgumentParser:
         ("generator-preflight", "检查 Codex CLI 和 ChatGPT 账号登录状态"),
         ("generator-smoke-test", "执行一次无论文、只读的 Codex 最小模型调用"),
         ("evidence-generate", "读取一篇 Zotero PDF 并生成首张粗证据卡"),
+        ("evidence-validate", "离线校验主体卡草稿并保存记录，不调用模型、不正式发布"),
         ("evidence-draft-export", "离线导出已完成的制卡草稿为 Markdown 预览，不调用模型或修改正式卡"),
         ("run-once", "自动检查共享库并串行生成待处理证据卡；不安装调度、不推送 Git"),
         ("themes-run", "粗卡生成候选主题，逐篇定向精读并回填修订；自动续跑、不转正式主题"),
@@ -104,7 +106,7 @@ def _parser() -> argparse.ArgumentParser:
             help="总配置文件路径；默认读取项目 config/config.json",
         )
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
-        if not name.startswith("schedule-") and name not in {"setup", "bootstrap", "bootstrap-native", "generator-preflight", "generator-smoke-test", "evidence-draft-export"}:
+        if not name.startswith("schedule-") and name not in {"setup", "bootstrap", "bootstrap-native", "generator-preflight", "generator-smoke-test", "evidence-draft-export", "evidence-validate"}:
             command.add_argument("--base-url", help="覆盖本机 Zotero API 地址")
             command.add_argument("--timeout", type=float, help="请求超时秒数")
         if name in {
@@ -131,6 +133,9 @@ def _parser() -> argparse.ArgumentParser:
                 "--state",
                 help="覆盖总配置中的本地快照路径",
             )
+        if name == "evidence-validate":
+            command.add_argument("--draft", required=True, help="#30 保存的 draft.json")
+            command.add_argument("--paper-input", required=True, help="对应的 #29 READY JSON 文件")
         if name == "evidence-draft-export":
             command.add_argument("--draft", required=True, help="失败结果中的 diagnostic.draft_path；相对路径基于当前目录")
         if name in {"run-once", "themes-run"}:
@@ -176,6 +181,13 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _render_human(result: dict[str, Any]) -> str:
+    if result.get("operation") == "subject_card_validation":
+        lines = ["主体卡代码校验：" + result["status"] + "（不代表科研结论正确或正式发布）"]
+        lines += [f"- {item['code']} {item['path']}：{item['message']}"
+                  for item in result.get("errors", []) + result.get("warnings", [])]
+        if result.get("validation_path"):
+            lines.append("校验记录：" + result["validation_path"])
+        return "\n".join(lines)
     if result.get("operation") == "subject_card_draft":
         if not result.get("ok"):
             return f"主体卡草稿失败（{result.get('failed_stage', 'input')}）：{result['error']['message']}"
@@ -366,7 +378,7 @@ def _emit(result: dict[str, Any], as_json: bool) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     _configure_stdio()
     args = _parser().parse_args(argv)
-    if getattr(args, "paper_input", None) and args.retry_quality_failed:
+    if getattr(args, "paper_input", None) and getattr(args, "retry_quality_failed", False):
         _emit({"schema_version": 1, "ok": False, "error": {
             "code": "CARD_DRAFT_RETRY_UNSUPPORTED", "message": "主体卡草稿为单次调用，不支持任务重试参数"}}, args.json)
         return 2
@@ -408,7 +420,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         _emit(result, args.json)
         return 2
 
-    if args.command == "discover-groups":
+    if args.command == "evidence-validate":
+        result = validate_subject_card_file(app_config, args.draft, args.paper_input)
+    elif args.command == "discover-groups":
         result = discover_groups(app_config.zotero)
     elif args.command == "preflight":
         result = preflight(app_config.zotero)

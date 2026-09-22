@@ -55,6 +55,15 @@ uv run --package hydro-platform-automation hydro-platform evidence-generate --pa
 输入失败、PDF 不可读或输出不可解析时报告结构化失败，不自动重试模型。
 完整协议及运行前提见 docs/hydro-platform/subject-card-draft.md。
 
+## 主体卡代码校验（#31）
+
+生成主体卡草稿后，使用 evidence-validate --draft <draft.json> --paper-input <READY.json> --json。
+该入口离线运行，检查最低内容、字段、原文位置及版本绑定，单独追加保存 validation.json。
+PASS 只表示当前代码规则通过，不能声称科学结论正确或正式发布。字数仅作提示。
+主题侧读取这些草稿必须使用 themes.load_subject_card_sources；不要仅检查 JSON 中的 PASS 字样。
+任何草稿、输入或规则变化都需要重新校验，不能沿用旧报告。失败修正由 #32 处理。
+完整协议见 docs/hydro-platform/subject-card-validation.md。
+
 ## 日常命令
 
 | 需要做什么 | 命令（仓库根执行） |
