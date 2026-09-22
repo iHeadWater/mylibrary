@@ -16,6 +16,7 @@ from hydro_platform.card_generation import (
 )
 from hydro_platform.evidence_templates import EvidenceTemplateError
 from hydro_platform.publication import atomic_text
+from hydro_platform.source_access import source_access_acceptable
 
 POLICY = "subject-card-validation-v1"
 FIELDS = ("research_questions", "study_objects_and_scales", "data_and_methods",
@@ -34,6 +35,7 @@ class ValidationAssets:
     draft_prompt: Path
     reading_prompt: Path
     output_schema: Path
+    claude_reading_prompt: Path = Path(__file__).resolve().parents[2] / "prompts/pdf-claude-reading-v1.md"
 
     def __post_init__(self):
         for field in fields(self):
@@ -46,7 +48,8 @@ class ValidationAssets:
                    root / "automation/prompts/evidence-card-generation-v8.md",
                    root / "automation/prompts/subject-card-draft-v1.md",
                    root / "automation/prompts/pdf-local-reading-v1.md",
-                   root / "automation/schemas/subject-card-draft-output.schema.json")
+                   root / "automation/schemas/subject-card-draft-output.schema.json",
+                   root / "automation/prompts/pdf-claude-reading-v1.md")
 
     @classmethod
     def from_config(cls, config):
@@ -168,7 +171,13 @@ def _provenance(assets, draft, record, identity, add):
     templates = {k: v for k, v in templates.items() if k in SINGLE_SOURCE_TEMPLATES}
     base = _read_prompt(assets.generation_prompt)
     supplement = _read_prompt(assets.draft_prompt)
-    reading = _read_prompt(assets.reading_prompt)
+    recorded = draft.get("provenance")
+    protocol = recorded.get("generation_protocol_version") if isinstance(recorded, dict) else None
+    claude = protocol == "claude-local-pdf-v1"
+    reading = _read_prompt(assets.claude_reading_prompt if claude else assets.reading_prompt)
+    access = draft.get("reading_record")
+    if isinstance(access, dict) and access.get("method") != ("claude_pdf_read" if claude else "local_pdf_path"):
+        add("CARD_READING_RECORD_INVALID", "/reading_record/method", "阅读记录与所选后端协议不一致")
     provenance = draft.get("provenance")
     if not isinstance(provenance, dict):
         add("CARD_PROVENANCE_MISSING", "/provenance", "缺少提示词和模板版本信息")
@@ -178,7 +187,7 @@ def _provenance(assets, draft, record, identity, add):
         "draft_prompt_version": supplement["version"], "draft_prompt_sha256": supplement["sha256"],
         "reading_prompt_version": reading["version"], "reading_prompt_sha256": reading["sha256"],
         "output_schema_sha256": hashlib.sha256(assets.output_schema.read_text(encoding="utf-8").encode("utf-8")).hexdigest(),
-        "catalog_version": catalog["catalog_version"], "generation_protocol_version": "codex-local-pdf-v1",
+        "catalog_version": catalog["catalog_version"], "generation_protocol_version": "claude-local-pdf-v1" if claude else "codex-local-pdf-v1",
     }
     tid = provenance.get("template_id")
     template = templates.get(tid) if isinstance(tid, str) else None
@@ -259,10 +268,13 @@ def validate_subject_card(config, draft, paper_input):
     if (not isinstance(access, dict) or access.get("source_sha256") != source.get("pdf_sha256")
         or access.get("parent_key") != source.get("parent_key")
         or type(access.get("page_count")) is not int or access["page_count"] != pages
-        or access.get("method") != "local_pdf_path"
+        or access.get("method") not in {"local_pdf_path", "claude_pdf_read"}
         or any(access.get(k) is not True for k in ("source_identity_verified", "source_unchanged",
                                                   "model_reading_report_accepted"))):
         add("CARD_READING_RECORD_INVALID", "/reading_record", "阅读记录与草稿来源不一致或未被接受")
+    if isinstance(access, dict) and access.get("method") == "claude_pdf_read" and not source_access_acceptable(
+            access, expected_sha256=source.get("pdf_sha256"), expected_parent_key=source.get("parent_key")):
+        add("CARD_READING_RECORD_INVALID", "/reading_record", "Claude 的只读 PDF 回执或来源身份不完整")
     body = draft.get("card_body_markdown")
     visible = re.sub(r"<!--.*?-->|(?m:^[ \t]*#{1,6}[ \t]+[^\r\n]*$)", "", body, flags=re.S) if isinstance(body, str) else ""
     if not _content(visible):

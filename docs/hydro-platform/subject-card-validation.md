@@ -11,7 +11,7 @@ uv sync --all-packages --locked
 .\.venv\Scripts\python.exe -m hydro_platform evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 ~~~
 
-默认直接使用当前检出代码对应的模板、提示词和 schema，不读取 config.json 或 HYDRO_PLATFORM_CONFIG。无需 Zotero、PDF 文件、群组 ID、Poppler 或 Codex 登录。输入中原始 PDF 的绝对路径只作为生成时的历史信息，支持 Windows 盘符/UNC 和 POSIX 路径，不按校验电脑的当前目录重新解析。退出码 0 表示 PASS，3 表示校验或记录保存失败，配置错误为 2。人类可读输出也会列出错误码、字段路径和原因。
+默认直接使用当前检出代码对应的模板、所选后端的阅读提示词和 schema，不读取 config.json 或 HYDRO_PLATFORM_CONFIG。无需 Zotero、PDF 文件、群组 ID、Poppler 或 Codex 登录。输入中原始 PDF 的绝对路径只作为生成时的历史信息，支持 Windows 盘符/UNC 和 POSIX 路径，不按校验电脑的当前目录重新解析。退出码 0 表示 PASS，3 表示校验或记录保存失败，配置错误为 2。人类可读输出也会列出错误码、字段路径和原因。
 
 ### 首次使用与路径选择
 
@@ -143,3 +143,10 @@ uv run pytest hydro-platform/automation/tests/test_card_validation.py hydro-plat
 通过与失败夹具覆盖内容、字段、页码、版本、来源、旧 PASS 失效、记录保存失败以及下游准入；另检查短正文可通过、长正文不能掩盖缺项、校验不调用模型且不修改原草稿。
 
 真实草稿可以直接用于离线验证，但无论 PASS 或 FAIL 都不能作为科学正确性的背书。自动修正属于 #32，正式保存属于 #35。
+
+
+## Codex 与 Claude 使用同一个代码校验入口
+
+#43 两种后端生成相同主体卡字段。校验器依据 `generation_protocol_version` 选择已注册的阅读协议：Codex 为 `codex-local-pdf-v1` / `local_pdf_path`，Claude 为 `claude-local-pdf-v1` / `claude_pdf_read`。两者均绑定来源身份、物理页数和提示词版本；Claude 额外检查只读 PDF 成功回执的页范围完整，不伪造 Codex 沙箱预检记录。
+
+可直接运行 `python scripts/paper_validate.py --draft 路径 --paper-input 路径`。校验本身没有模型调用，也不要求安装任何模型客户端；参数与平台入口一致，独立脚本始终输出 JSON。自动改写主体卡不是此 PR 的职责。
