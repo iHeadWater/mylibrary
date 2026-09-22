@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from hydro_platform.card_draft import generate_subject_card_draft
-from hydro_platform.card_validation import validate_subject_card_file
+from hydro_platform.card_validation import ValidationAssets, validate_subject_card_file
 from hydro_platform.card_generators import build_card_generator_adapter
 from hydro_platform.card_generation import (
     CardGenerationError,
@@ -102,8 +102,9 @@ def _parser() -> argparse.ArgumentParser:
         command = subparsers.add_parser(name, help=help_text)
         command.add_argument(
             "--config",
-            default=_default_config_path(),
-            help="总配置文件路径；默认读取项目 config/config.json",
+            default=None if name == "evidence-validate" else _default_config_path(),
+            help=("可选总配置；校验默认直接使用随仓库分发的资产" if name == "evidence-validate"
+                  else "总配置文件路径；默认读取项目 config/config.json"),
         )
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
         if not name.startswith("schedule-") and name not in {"setup", "bootstrap", "bootstrap-native", "generator-preflight", "generator-smoke-test", "evidence-draft-export", "evidence-validate"}:
@@ -134,6 +135,9 @@ def _parser() -> argparse.ArgumentParser:
                 help="覆盖总配置中的本地快照路径",
             )
         if name == "evidence-validate":
+            command.add_argument("--assets-root", help="选择另一份 hydro-platform 资产根；与 --config 互斥")
+            command.add_argument("--report-dir", default=os.environ.get("HYDRO_PLATFORM_VALIDATION_REPORT_DIR"),
+                                 help="校验记录根；默认草稿旁 validations/，支持环境变量 HYDRO_PLATFORM_VALIDATION_REPORT_DIR")
             command.add_argument("--draft", required=True, help="#30 保存的 draft.json")
             command.add_argument("--paper-input", required=True, help="对应的 #29 READY JSON 文件")
         if name == "evidence-draft-export":
@@ -378,6 +382,19 @@ def _emit(result: dict[str, Any], as_json: bool) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     _configure_stdio()
     args = _parser().parse_args(argv)
+    if args.command == "evidence-validate":
+        try:
+            if args.config and args.assets_root:
+                raise ConfigError("--config 与 --assets-root 不能同时指定")
+            assets = (ValidationAssets.from_config(load_config(args.config, require_group=False))
+                      if args.config else ValidationAssets.from_root(args.assets_root))
+            result = validate_subject_card_file(assets, args.draft, args.paper_input, report_dir=args.report_dir)
+        except (ConfigError, OSError, ValueError) as exc:
+            _emit({"schema_version": 1, "ok": False, "error": {
+                "code": "CONFIG_ERROR", "message": str(exc)}}, args.json)
+            return 2
+        _emit(result, args.json)
+        return 0 if result["ok"] else 3
     if getattr(args, "paper_input", None) and getattr(args, "retry_quality_failed", False):
         _emit({"schema_version": 1, "ok": False, "error": {
             "code": "CARD_DRAFT_RETRY_UNSUPPORTED", "message": "主体卡草稿为单次调用，不支持任务重试参数"}}, args.json)
@@ -420,9 +437,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         _emit(result, args.json)
         return 2
 
-    if args.command == "evidence-validate":
-        result = validate_subject_card_file(app_config, args.draft, args.paper_input)
-    elif args.command == "discover-groups":
+    if args.command == "discover-groups":
         result = discover_groups(app_config.zotero)
     elif args.command == "preflight":
         result = preflight(app_config.zotero)

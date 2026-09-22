@@ -1,6 +1,7 @@
 """#31: fixed #30 provider fixtures, no network or scientific correctness claim."""
 from copy import deepcopy
 import json
+import shutil
 from pathlib import Path
 from unittest.mock import patch
 
@@ -245,7 +246,7 @@ def test_cannot_claim_pass_when_report_cannot_be_saved(case):
 def test_cli_offline_personal_library_and_exit_status(case, capsys):
     with patch.object(cli, "load_config", return_value=case[0]) as config, \
          patch.object(cli, "preflight", side_effect=AssertionError("no Zotero")):
-        args = ["evidence-validate", "--draft", str(case[3]), "--paper-input", str(case[4]), "--json"]
+        args = ["evidence-validate", "--config", "explicit-config.json", "--draft", str(case[3]), "--paper-input", str(case[4]), "--json"]
         assert cli.main(args) == 0
         passed = json.loads(capsys.readouterr().out)
         assert passed["status"] == "PASS"
@@ -300,3 +301,84 @@ def test_missing_reference_identifies_the_result_without_parsing_message(case):
     result = check(case)
     assert {e["finding_id"] for e in result["errors"]
             if e["code"] == "CARD_FINDING_REFERENCE"} == {"F001", "F002"}
+
+
+
+def test_cli_default_ignores_machine_config_and_accepts_external_report_dir(case, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("HYDRO_PLATFORM_CONFIG", str(tmp_path / "nonexistent-private.json"))
+    monkeypatch.chdir(tmp_path)
+    dest = tmp_path / "selected-reports"
+    with patch.object(cli, "load_config", side_effect=AssertionError("must not load machine config")):
+        assert cli.main(["evidence-validate", "--draft", str(case[3]), "--paper-input", str(case[4]),
+                         "--report-dir", str(dest), "--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert Path(result["validation_path"]).is_relative_to(dest)
+    assert Path(result["asset_paths"]["output_schema"]).is_file()
+    assert not (case[3].parent / "validations").exists()
+
+
+def test_report_environment_and_command_line_priority(case, tmp_path, monkeypatch, capsys):
+    env_dir, explicit = tmp_path / "environment", tmp_path / "explicit"
+    monkeypatch.setenv("HYDRO_PLATFORM_VALIDATION_REPORT_DIR", str(env_dir))
+    args = ["evidence-validate", "--draft", str(case[3]), "--paper-input", str(case[4]), "--json"]
+    assert cli.main(args) == 0
+    assert Path(json.loads(capsys.readouterr().out)["validation_path"]).is_relative_to(env_dir)
+    assert cli.main(args + ["--report-dir", str(explicit)]) == 0
+    assert Path(json.loads(capsys.readouterr().out)["validation_path"]).is_relative_to(explicit)
+
+
+def test_assets_can_be_selected_from_a_relocated_copy(case, tmp_path):
+    original = gate.ValidationAssets.from_root()
+    root = tmp_path / "another checkout" / "hydro-platform"
+    alternate = gate.ValidationAssets.from_root(root)
+    for name, source in original.as_dict().items():
+        if name == "templates_dir":
+            continue
+        target = Path(alternate.as_dict()[name])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+    for source in original.templates_dir.glob("*.md"):
+        shutil.copyfile(source, alternate.templates_dir / source.name)
+    report = gate.validate_subject_card(alternate, case[1], case[2])
+    assert report["ok"], report
+    changed = alternate.generation_prompt
+    changed.write_text(changed.read_text(encoding="utf-8") + "\nModified asset.\n", encoding="utf-8")
+    assert "CARD_VERSION_MISMATCH" in codes(gate.validate_subject_card(alternate, case[1], case[2]))
+
+
+@pytest.mark.parametrize("source_path", [
+    "C:\\research\\paper.pdf", "/home/research/paper.pdf", "\\\\server\\share\\paper.pdf",
+])
+def test_foreign_origin_path_is_not_resolved_again_on_this_host(case, source_path):
+    from hydro_platform.card_generation import _load_template_bundle, _read_prompt, build_template_prompt
+    from hydro_platform.card_draft import SINGLE_SOURCE_TEMPLATES
+    import hashlib
+    assets = gate.ValidationAssets.from_root()
+    _, templates = _load_template_bundle(assets.templates_dir, assets.catalog_file)
+    templates = {k:v for k,v in templates.items() if k in SINGLE_SOURCE_TEMPLATES}
+    case[2]["pdf"]["local_path"] = source_path
+    source = case[1]["source"]
+    context = {"library":case[2]["library"],"item":case[2]["item"],
+               "zotero_parent_key":source["parent_key"],"zotero_attachment_key":source["attachment_key"],
+               "source_pdf_sha256":source["pdf_sha256"],"source_pdf_absolute_path":source_path,
+               "reading_scope":"FULL_PDF","card_state":"DRAFT_PENDING_VALIDATION",
+               "enabled_template_ids":sorted(templates)}
+    prompt = build_template_prompt(_read_prompt(assets.generation_prompt), context, templates)
+    prompt += "\n" + _read_prompt(assets.draft_prompt)["content"]
+    case[1]["provenance"]["combined_prompt_sha256"] = hashlib.sha256(prompt.encode()).hexdigest()
+    result = gate.validate_subject_card(assets, case[1], case[2])
+    assert result["ok"], result
+
+
+def test_assets_root_and_config_are_mutually_exclusive(case, capsys):
+    assert cli.main(["evidence-validate", "--draft", str(case[3]), "--paper-input", str(case[4]),
+                     "--config", "local.json", "--assets-root", "elsewhere", "--json"]) == 2
+    assert json.loads(capsys.readouterr().out)["error"]["code"] == "CONFIG_ERROR"
+
+
+def test_shipped_example_passes_without_private_config_or_pdf(tmp_path, monkeypatch):
+    root = Path(__file__).resolve().parents[1] / "examples/subject-card-validation"
+    draft = gate._read_json(root / "draft.json")
+    record = gate._read_json(root / "paper-input.json")
+    monkeypatch.chdir(tmp_path)
+    assert gate.validate_subject_card(None, draft, record)["ok"]

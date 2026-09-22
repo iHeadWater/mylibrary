@@ -78,6 +78,7 @@ nav:
           - 自动化代码地图: hydro-platform/automation.md
           - 任务状态机: hydro-platform/task-state-machine.md
           - 单 Agent 粗卡: hydro-platform/single-agent-rough-card.md
+          - 单篇流程首次配置: hydro-platform/single-paper-quickstart.md
           - 单篇主体卡草稿: hydro-platform/subject-card-draft.md
           - 主体卡校验门禁: hydro-platform/subject-card-validation.md
           - 运行维护: hydro-platform/runtime-maintenance.md

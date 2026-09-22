@@ -6,8 +6,9 @@ import json
 import re
 import uuid
 from copy import deepcopy
+from dataclasses import dataclass, fields
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from hydro_platform.card_draft import KEY, SHA256, PROMPT, SCHEMA, SINGLE_SOURCE_TEMPLATES
 from hydro_platform.card_generation import (
@@ -22,6 +23,57 @@ FIELDS = ("research_questions", "study_objects_and_scales", "data_and_methods",
 FINDING = re.compile(r"F[0-9]{3,}")
 PLACEHOLDERS = {"", "-", "—", "todo", "tbd", "n/a", "待补", "待填写", "待补充", "未填写",
                 "未报告", "不适用", "not reported", "not applicable"}
+
+
+@dataclass(frozen=True)
+class ValidationAssets:
+    """Portable, public path interface; no account or machine configuration required."""
+    templates_dir: Path
+    catalog_file: Path
+    generation_prompt: Path
+    draft_prompt: Path
+    reading_prompt: Path
+    output_schema: Path
+
+    def __post_init__(self):
+        for field in fields(self):
+            object.__setattr__(self, field.name, Path(getattr(self, field.name)).expanduser().resolve())
+
+    @classmethod
+    def from_root(cls, platform_root=None):
+        root = Path(platform_root) if platform_root is not None else Path(__file__).resolve().parents[3]
+        return cls(root / "templates/evidence-cards", root / "templates/evidence-cards/_catalog.json",
+                   root / "automation/prompts/evidence-card-generation-v8.md",
+                   root / "automation/prompts/subject-card-draft-v1.md",
+                   root / "automation/prompts/pdf-local-reading-v1.md",
+                   root / "automation/schemas/subject-card-draft-output.schema.json")
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(config.paths.evidence_card_templates_dir,
+                   config.paths.evidence_card_template_catalog_file,
+                   config.paths.evidence_card_generation_prompt_file, PROMPT,
+                   config.card_generator.pdf_direct_trial.reading_prompt_file, SCHEMA)
+
+    def as_dict(self):
+        return {field.name: str(getattr(self, field.name)) for field in fields(self)}
+
+
+def _assets(config):
+    if config is None:
+        return ValidationAssets.from_root()
+    return config if isinstance(config, ValidationAssets) else ValidationAssets.from_config(config)
+
+
+def _source_path(value):
+    """Historical source path, interpreted in its origin OS, never in the current CWD."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    for kind in (PureWindowsPath, PurePosixPath):
+        path = kind(value)
+        if path.is_absolute():
+            return str(path)
+    return None
 
 
 class CardValidationError(RuntimeError):
@@ -102,7 +154,7 @@ def _input_identity(record, add):
         or not _text(item.get("title")) or not isinstance(pdf.get("sha256"), str)
         or not SHA256.fullmatch(pdf["sha256"]) or type(pdf.get("file_size_bytes")) is not int
         or pdf["file_size_bytes"] < 1 or not _text(pdf.get("local_path"))
-        or not Path(pdf["local_path"]).is_absolute()):
+        or _source_path(pdf["local_path"]) is None):
         add("CARD_INPUT_INVALID", "/paper_input", "输入身份、大小、哈希或路径无效")
         return None
     return {"library": library, "parent_key": parent, "requested_item_key": requested,
@@ -110,14 +162,13 @@ def _input_identity(record, add):
             "pdf_size_bytes": pdf["file_size_bytes"], "item": item}
 
 
-def _provenance(config, draft, record, identity, add):
+def _provenance(assets, draft, record, identity, add):
     """Compare recorded versions with the actual configured assets, not a model claim."""
-    catalog, templates = _load_template_bundle(config.paths.evidence_card_templates_dir,
-                                              config.paths.evidence_card_template_catalog_file)
+    catalog, templates = _load_template_bundle(assets.templates_dir, assets.catalog_file)
     templates = {k: v for k, v in templates.items() if k in SINGLE_SOURCE_TEMPLATES}
-    base = _read_prompt(config.paths.evidence_card_generation_prompt_file)
-    supplement = _read_prompt(PROMPT)
-    reading = _read_prompt(config.card_generator.pdf_direct_trial.reading_prompt_file)
+    base = _read_prompt(assets.generation_prompt)
+    supplement = _read_prompt(assets.draft_prompt)
+    reading = _read_prompt(assets.reading_prompt)
     provenance = draft.get("provenance")
     if not isinstance(provenance, dict):
         add("CARD_PROVENANCE_MISSING", "/provenance", "缺少提示词和模板版本信息")
@@ -126,7 +177,7 @@ def _provenance(config, draft, record, identity, add):
         "prompt_version": base["version"], "prompt_sha256": base["sha256"],
         "draft_prompt_version": supplement["version"], "draft_prompt_sha256": supplement["sha256"],
         "reading_prompt_version": reading["version"], "reading_prompt_sha256": reading["sha256"],
-        "output_schema_sha256": hashlib.sha256(SCHEMA.read_text(encoding="utf-8").encode("utf-8")).hexdigest(),
+        "output_schema_sha256": hashlib.sha256(assets.output_schema.read_text(encoding="utf-8").encode("utf-8")).hexdigest(),
         "catalog_version": catalog["catalog_version"], "generation_protocol_version": "codex-local-pdf-v1",
     }
     tid = provenance.get("template_id")
@@ -140,7 +191,7 @@ def _provenance(config, draft, record, identity, add):
             "library": record["library"], "item": record["item"],
             "zotero_parent_key": identity["parent_key"], "zotero_attachment_key": identity["attachment_key"],
             "source_pdf_sha256": identity["pdf_sha256"],
-            "source_pdf_absolute_path": str(Path(record["pdf"]["local_path"]).resolve()),
+            "source_pdf_absolute_path": _source_path(record["pdf"]["local_path"]),
             "reading_scope": "FULL_PDF", "card_state": "DRAFT_PENDING_VALIDATION",
             "enabled_template_ids": sorted(templates),
         }
@@ -155,6 +206,7 @@ def _provenance(config, draft, record, identity, add):
 
 def validate_subject_card(config, draft, paper_input):
     """Pure with respect to input artifacts: read assets, return a report, never invoke AI."""
+    assets = _assets(config)
     errors, warnings = [], []
     def add(code, path, message, **details):
         errors.append({"code": code, "path": path, "message": message, **details})
@@ -219,7 +271,7 @@ def validate_subject_card(config, draft, paper_input):
         warnings.append({"code": "CARD_TEXT_SHORT", "path": "/card_body_markdown",
                          "message": "正文较短，请关注信息覆盖；字数不决定是否通过"})
     try:
-        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))["properties"]["machine_fields"]
+        schema = json.loads(assets.output_schema.read_text(encoding="utf-8"))["properties"]["machine_fields"]
         fields = draft.get("machine_fields")
         _shape(fields, schema, "/machine_fields", add)
         fields = fields if isinstance(fields, dict) else {}
@@ -264,9 +316,9 @@ def validate_subject_card(config, draft, paper_input):
             add("CARD_FINDING_REFERENCE", "/card_body_markdown", f"正文没有引用机器结果 {fid}", finding_id=fid)
         for fid in sorted(body_ids - ids):
             add("CARD_FINDING_REFERENCE", "/card_body_markdown", f"正文引用了未定义的结果 {fid}", finding_id=fid)
-        _provenance(config, draft, paper_input, identity, add)
+        _provenance(assets, draft, paper_input, identity, add)
     except (OSError, ValueError, KeyError, CardGenerationError, EvidenceTemplateError) as exc:
-        add("CARD_RULESET_UNAVAILABLE", "/provenance", f"无法读取校验所需协议或版本资产：{type(exc).__name__}")
+        add("CARD_RULESET_UNAVAILABLE", "/provenance", f"无法读取校验所需协议或版本资产：{type(exc).__name__}", asset_paths=assets.as_dict())
     report.update(ok=not errors, status="FAIL" if errors else "PASS",
                   eligible_for_theme_generation=not errors)
     return report
@@ -286,21 +338,22 @@ def _read_json(path):
                       parse_constant=invalid_constant, object_pairs_hook=unique)
 
 
-def validate_subject_card_file(config, draft_path, input_path):
+def validate_subject_card_file(config, draft_path, input_path, *, report_dir=None):
     """Save only an append-only validation record; the draft remains byte-identical."""
     try:
         path = Path(draft_path).resolve(strict=True)
         draft, record = _read_json(path), _read_json(input_path)
         report = validate_subject_card(config, draft, record)
-        directory = path.parent / "validations"
-        if not directory.resolve().is_relative_to(path.parent):
+        directory = (Path(report_dir).expanduser().resolve() if report_dir is not None
+                     else path.parent / "validations")
+        if report_dir is None and not directory.resolve().is_relative_to(path.parent):
             raise OSError("校验记录目录越界")
         # A unique directory avoids overwriting any existing record, even on collision.
         directory = directory / report["validation_id"]
         directory.mkdir(parents=True, exist_ok=False)
         target = directory / "validation.json"
         atomic_text(target, json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n")
-        return {**report, "validation_path": str(target)}
+        return {**report, "validation_path": str(target), "asset_paths": _assets(config).as_dict()}
     except (OSError, ValueError, TypeError, RecursionError) as exc:
         return {"schema_version": 1, "operation": "subject_card_validation", "ok": False, "status": "FAIL",
                 "eligible_for_theme_generation": False, "content_validation_performed": False,

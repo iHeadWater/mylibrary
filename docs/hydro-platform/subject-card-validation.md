@@ -1,16 +1,45 @@
 # 主体卡代码校验门禁
 
-#31 接收 #30 的 draft.json 及其对应 #29 READY 输入记录，按确定性规则返回 PASS 或 FAIL。校验器不调用模型，不读取 Zotero，也不重新读取 PDF；它比较已有输入、阅读记录及本机配置的版本资产。PASS 仅表示这些代码规则通过，不证明原文支持结论或科研内容正确。
+#31 接收 #30 的 draft.json 及其对应 #29 READY 输入记录，按确定性规则返回 PASS 或 FAIL。校验器不调用模型，不读取 Zotero，也不重新读取 PDF；它比较已有输入、阅读记录及所选版本资产。PASS 仅表示这些代码规则通过，不证明原文支持结论或科研内容正确。
 
 ## 命令与记录
 
 在仓库根运行：
 
 ~~~powershell
-uv run --package hydro-platform-automation hydro-platform evidence-validate --config hydro-platform/config/config.json --draft <草稿目录>/draft.json --paper-input paper-input.json --json
+uv sync --all-packages --locked
+uv run --package hydro-platform-automation hydro-platform evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 ~~~
 
-个人库无需群组 ID；无需 Codex 登录。退出码 0 表示 PASS，3 表示校验或记录保存失败，配置错误为 2。人类可读输出也会列出错误码、字段路径和原因。
+默认直接使用当前检出代码对应的模板、提示词和 schema，不读取 config.json 或 HYDRO_PLATFORM_CONFIG。无需 Zotero、PDF 文件、群组 ID、Poppler 或 Codex 登录。输入中原始 PDF 的绝对路径只作为生成时的历史信息，支持 Windows 盘符/UNC 和 POSIX 路径，不按校验电脑的当前目录重新解析。退出码 0 表示 PASS，3 表示校验或记录保存失败，配置错误为 2。人类可读输出也会列出错误码、字段路径和原因。
+
+### 首次使用与路径选择
+
+完整分阶段安装说明见[单篇流程首次配置](single-paper-quickstart.md)。仓库附带合成示例，不需要私人论文或配置，可直接验证入口：
+
+~~~powershell
+uv run --package hydro-platform-automation hydro-platform evidence-validate --draft hydro-platform/automation/examples/subject-card-validation/draft.json --paper-input hydro-platform/automation/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo --json
+~~~
+
+该示例只验证程序规则，不能用于科研。报告存到 outputs/validation-demo/<validation_id>/validation.json。
+
+| 选择项 | 默认值与覆盖方式 |
+| --- | --- |
+| 模板、提示词、schema | 当前检出代码旁的 hydro-platform；--assets-root 可选择另一份完整 hydro-platform 目录 |
+| 各个资产文件 | Python 公共接口 ValidationAssets 可逐个指定；from_root(root) 按仓库布局构造 |
+| 兼容已有配置 | 显式 --config 路径；与 --assets-root 互斥；完整配置仍须有效，个人库 group_id 设 null |
+| 报告位置 | --report-dir > HYDRO_PLATFORM_VALIDATION_REPORT_DIR > 草稿旁 validations/ |
+| 输入与 CLI 相对路径 | 相对于当前工作目录；也可传绝对路径 |
+
+JSON 命令结果返回 asset_paths 及 validation_path，便于确认实际使用的位置。自选报告目录适用于只读共享输入；每次运行创建唯一子目录。换资产后仍严格比较版本指纹，不能靠换路径跳过校验。
+
+~~~python
+from hydro_platform.card_validation import ValidationAssets, validate_subject_card_file
+
+# None 使用随当前检出代码分发的资产；也可传 ValidationAssets.from_root(root)。
+report = validate_subject_card_file(None, draft_path, input_path, report_dir=report_directory)
+# ValidationAssets 的六个路径均可独立传入，也兼容原 AppConfig 参数。
+~~~
 
 原草稿保持逐字节不变。每次校验在其旁边追加：
 
@@ -88,7 +117,7 @@ PDF 页数须与阅读记录一致；阅读记录还必须确认来源身份、�
 
 ## 下游如何使用
 
-底层读取接口为 card_validation.load_validated_subject_card(config, draft_path, input_path, validation_path)。主题侧统一入口为 themes.load_subject_card_sources(config, selected)：
+下游 config 同样可以传 None（默认资产）、ValidationAssets 或已有 AppConfig。底层读取接口为 card_validation.load_validated_subject_card(config, draft_path, input_path, validation_path)。主题侧统一入口为 themes.load_subject_card_sources(config, selected)：
 
 ~~~python
 sources = load_subject_card_sources(config, [{

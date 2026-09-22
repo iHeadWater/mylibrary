@@ -4,13 +4,13 @@
 
 ## 运行
 
-先按[安装说明](workstation-setup.md)配置并登录 Codex CLI；配置中 card_generator.workflow_mode 必须为 single_agent，PDF reader adapter 必须为 local_path。模型、推理强度和 PDF 工具沿用现有配置。#29 尚未合并时也可传入同协议 fixture，入口不会重复访问 Zotero、查找附件或要求群组 ID。
+先按[单篇流程首次配置](single-paper-quickstart.md)从示例建立自己的 config.local.json，并安装 PDF 工具、登录 Codex CLI；配置中 card_generator.workflow_mode 必须为 single_agent，PDF reader adapter 必须为 local_path。模型、推理强度和 PDF 工具沿用现有配置。#29 尚未合并时也可传入同协议 fixture，入口不会重复访问 Zotero、查找附件或要求群组 ID。
 
 在仓库根运行：
 
 ~~~powershell
 uv sync --all-packages
-uv run --package hydro-platform-automation hydro-platform evidence-generate --config hydro-platform/config/config.json --paper-input paper-input.json --json
+uv run --package hydro-platform-automation hydro-platform evidence-generate --config hydro-platform/config/config.local.json --paper-input paper-input.json --json
 ~~~
 
 --paper-input - 从标准输入读取 JSON；--no-progress 关闭 stderr 进度，不影响 stdout JSON。--paper-input 与旧 --item-key 互斥，旧入口保持原行为。新入口不接受 --retry-quality-failed。
