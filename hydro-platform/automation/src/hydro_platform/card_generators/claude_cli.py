@@ -23,7 +23,10 @@ def read_receipts(events, source, count):
     for event in events:
         if event.get("type") not in {"assistant", "user"}:
             continue
-        blocks = event.get("message", {}).get("content", [])
+        message = event.get("message")
+        if not isinstance(message, dict):
+            raise ValueError("工具消息格式无效")
+        blocks = message.get("content", [])
         if not isinstance(blocks, list):
             continue
         for block in blocks:
@@ -36,6 +39,8 @@ def read_receipts(events, source, count):
                         continue
                     raise ValueError("出现 Read 之外的工具活动")
                 data = block.get("input", {})
+                if not isinstance(data, dict):
+                    raise ValueError("Read 输入格式无效")
                 file = data.get("file_path")
                 if not isinstance(file, str) or Path(file).resolve() != source.resolve():
                     raise ValueError("读取了本次 PDF 之外的文件")

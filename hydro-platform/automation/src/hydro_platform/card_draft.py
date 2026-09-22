@@ -60,7 +60,7 @@ def _input(record: Any) -> tuple[dict, Path]:
     parent, attachment = item.get("item_key"), pdf.get("attachment_key")
     requested = record.get("requested_item_key")
     if (not all(isinstance(k, str) and KEY.fullmatch(k) for k in (parent, attachment, requested))
-        or parent == attachment or pdf.get("parent_key") != parent
+        or parent == attachment or requested not in (parent, attachment) or pdf.get("parent_key") != parent
         or not isinstance(item.get("title"), str) or not item["title"].strip()
         or not isinstance(pdf.get("sha256"), str) or not SHA256.fullmatch(pdf["sha256"])
         or type(pdf.get("file_size_bytes")) is not int or pdf["file_size_bytes"] < 1
