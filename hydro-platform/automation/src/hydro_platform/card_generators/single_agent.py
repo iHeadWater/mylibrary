@@ -88,7 +88,7 @@ class SingleAgentCardGeneratorAdapter:
             access = result.get("source_access")
             if (not source_access_acceptable(access, expected_sha256=digest,
                                              expected_parent_key=kwargs["zotero_parent_key"])
-                or access.get("method") != "local_pdf_path" or result.get("ephemeral") is not True):
+                or access.get("method") not in {"local_pdf_path", "claude_pdf_read"} or result.get("ephemeral") is not True):
                 raise ValueError("单 Agent 来源身份、阅读记录或会话隔离不符合协议")
             output = result.get("output")
             if not isinstance(output, dict):

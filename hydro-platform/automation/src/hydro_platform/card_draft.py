@@ -134,7 +134,7 @@ def _save(root: Path, draft: dict) -> dict:
             "card_path": str(card)}
 
 
-def generate_subject_card_draft(app_config, paper_input: Any, *, adapter=None, progress=None) -> dict:
+def generate_subject_card_draft(app_config, paper_input: Any, *, adapter=None, progress=None, output_root=None) -> dict:
     """Return a DRAFT_PENDING_VALIDATION or a structured failure; never retry."""
     result = {"schema_version": 1, "operation": "subject_card_draft", "ok": False,
               "status": "FAILED", "model_invoked": False,
@@ -147,7 +147,7 @@ def generate_subject_card_draft(app_config, paper_input: Any, *, adapter=None, p
         if cfg.workflow_mode != "single_agent" or cfg.pdf_reader.adapter != "local_path":
             _fail("CARD_DRAFT_SINGLE_AGENT_REQUIRED", "主体卡草稿只支持 single_agent + local_path")
         stage = "assets"
-        root = resolve_literature_root()  # Same resolver and precedence as PR #27.
+        root = resolve_literature_root(root=output_root)  # Same resolver and precedence as PR #27.
         base_prompt = _read_prompt(app_config.paths.evidence_card_generation_prompt_file)
         supplement = _read_prompt(PROMPT)
         catalog, all_templates = _load_template_bundle(

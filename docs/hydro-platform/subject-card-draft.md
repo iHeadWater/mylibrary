@@ -1,73 +1,63 @@
-# 单篇主体卡草稿
+# 从单篇 PDF 生成主体卡草稿
 
-#30 接收 #29 的单篇 READY 输入，复用现有单 Agent PDF 阅读、八类单来源模板和 evidence-generate 入口，一次模型调用同时生成详细卡片正文与机器字段。输出始终是待校验草稿，供后续 #31 校验、#32 有限修正和 #35 正式保存使用。
+#30 复用现有单 Agent、模板、输出 schema 与结果处理代码。**命令行负责组织工作，模型负责理解论文并生成内容**。#40 的 Zotero/PDF 输入检查与 #44 的结构校验仍是普通程序，不需要运行模型。本 PR 不修改 Codex/Claude 软件或模型，不提交账号、API key 或本机登录文件。
 
-## 运行
+## 从普通终端运行
 
-先按[安装说明](workstation-setup.md)配置并登录 Codex CLI；配置中 card_generator.workflow_mode 必须为 single_agent，PDF reader adapter 必须为 local_path。模型、推理强度和 PDF 工具沿用现有配置。#29 尚未合并时也可传入同协议 fixture，入口不会重复访问 Zotero、查找附件或要求群组 ID。
+先安装 Python 3.12–3.14、uv 和你选用的一种 CLI（Codex 或 Claude），并用自己的账号完成该 CLI 的登录。按现有 API 用法认证时，将凭据设置在本机环境变量中，不写到本仓库配置。仓库根运行：
 
-在仓库根运行：
+```powershell
+uv sync --all-packages --locked
+.\.venv\Scripts\python.exe -m hydro_platform ai-config --json
+.\.venv\Scripts\python.exe -m hydro_platform evidence-generate --paper-input paper-input.json --ai-provider codex --json
+# 或使用 Claude；无需同时安装 Codex
+.\.venv\Scripts\python.exe -m hydro_platform evidence-generate --paper-input paper-input.json --ai-provider claude --json
+```
 
-~~~powershell
-uv sync --all-packages
-uv run --package hydro-platform-automation hydro-platform evidence-generate --config hydro-platform/config/config.json --paper-input paper-input.json --json
-~~~
+macOS/Linux 使用 `.venv/bin/python`。`paper-input.json` 是 #40 确认单篇后返回的 READY 记录，不能传搜索候选列表或批处理外层结果。支持 `--paper-input -` 从 stdin 读取。无需配置群组、计划任务或复制作者的 `config.local.json`。
 
---paper-input - 从标准输入读取 JSON；--no-progress 关闭 stderr 进度，不影响 stdout JSON。--paper-input 与旧 --item-key 互斥，旧入口保持原行为。新入口不接受 --retry-quality-failed。
+Codex 沿用现有本地 PDF 阅读适配器，需要 pypdf（项目安装已含）及 Poppler 的 `pdfinfo`、`pdftoppm` 等工具；使用项目安装或自己的 PATH，也可显式覆盖工具路径。Claude 使用自身原生 PDF Read 工具，不要求 Poppler。Claude CLI 需支持 `--safe-mode`、`--restricted`、`--no-session-persistence` 和结构化输出（本机验证版本 2.1.278）；旧版本不支持时请升级，不会退回不受限模式。
 
-输入必须包含 schema_version=1、operation=paper_input、ok=true、status=READY、pdf_attachment_count=1，以及：
+## 与 #27 一致的公开默认值和覆盖
 
-| 字段 | 内容 |
-| --- | --- |
-| library | type 为 user/group，id 为文库 ID；本机个人库允许 0 |
-| requested_item_key | #29 接收的原始父条目或附件 key |
-| item | item_key、title 以及来源元数据 |
-| pdf | attachment_key、parent_key、local_path、file_size_bytes、sha256 |
-| pdf.fulltext_indexed | 可以为 false；本流程直接读取本地 PDF |
+`configs/ai.toml` 提交默认 provider=codex；模型名为空表示使用所选 CLI 的默认值。配置优先级：**命令行 → 进程环境变量 → 仓库 `.env` → TOML → 内置默认值**。配置中不接收密钥字段。
 
-父条目和附件必须对应，PDF 必须是绝对路径；生成前核对文件头、大小与 SHA-256，生成后再次核对哈希。READY 是输入就绪状态，不是内容校验结论。
+| 选择 | 命令行 | 环境变量 |
+|---|---|---|
+| 后端 | `--ai-provider codex或claude` | `HYDRO_PLATFORM_AI_PROVIDER` |
+| 模型 | `--ai-model 模型名` | `HYDRO_PLATFORM_AI_MODEL` |
+| CLI 程序 | `--ai-executable 本机路径` | `HYDRO_PLATFORM_AI_EXECUTABLE` |
+| 超时 | `--ai-timeout 秒数` | `HYDRO_PLATFORM_AI_TIMEOUT_SECONDS` |
+| 配置文件 | `--ai-config 本机TOML` | `HYDRO_PLATFORM_AI_CONFIG` |
 
-## 与 #27 相同的产物目录
+`reasoning_effort`、`python_executable`、`pdfinfo_executable`、`pdftotext_executable`、`pdftoppm_executable` 也可在 TOML 或对应 `HYDRO_PLATFORM_AI_` 大写环境变量中设置。模型可用性由使用者的服务决定，程序不假设所有账号拥有同一模型。Windows npm 安装会优先识别同一安装目录里的原生 exe，避免长参数经过 cmd 包装器失败；仍可显式指定路径。
 
-直接复用 hydrolitagent._config.resolve_literature_root，不新增根目录配置或回退到旧证据包目录。依次读取进程环境变量、仓库 .env、configs/paths.toml，最后使用仓库 outputs/。在配置文件中指向仓库外目录须设置 external=true；环境变量覆盖规则与 #27 一致。
+Claude 运行采用隔离的只读模式，不加载项目插件或命令。若自己的认证仅写在 Claude 用户 settings 的 `env` 中，请在启动本命令的终端导出相应认证环境变量；程序不会复制或打印该文件。普通 CLI 账号登录由 CLI 自己管理。
 
-~~~text
-<literature_root>/
-└── zotero/
-    └── <user|group>-<library_id>-<parent_key>/
-        └── drafts/
-            └── <draft_id>/
-                ├── card.md
-                └── draft.json
-~~~
+产物根直接调用 #27 的同一解析器：`--output-root` → `HYDROLITAGENT_LITERATURE_ROOT`（进程优先于 `.env`）→ `configs/paths.toml` → 仓库 `outputs/`。`ai-config --json` 会显示实际落点。相对产物根从仓库根解析；外部目录遵守 #27 的显式选择规则，只追加不清理。
 
-每次显式运行产生独立草稿 ID，保留旧草稿。card.md 顶部明确标记“待校验”；draft.json 最后原子写入，是这一对文件完成保存的标志。写入失败返回 FAILED，不把残留 Markdown 视作完成草稿。目录不得通过链接逃逸出产物根。PDF 继续保存在 Zotero；模型诊断和临时阅读文件沿用本机运行目录。
+```text
+<产物根>/zotero/<user|group>-<文库ID>-<父条目Key>/drafts/<版本ID>/
+├── card.md
+└── draft.json
+```
 
-## 草稿协议
+每次新建草稿版本。`--config` 仅用于显式复用旧平台的 PDF/模板路径；新用户使用上述小配置即可。新入口不会自动读取 `HYDRO_PLATFORM_CONFIG`。
 
-draft.json 的 schema_version=1，含以下内容：
+## 复用什么、检查什么
 
-- status=DRAFT_PENDING_VALIDATION；content_validation_performed、production_eligible、scientific_correctness_verified 均为 false，由程序设定。
-- source：文库身份、原始输入 key、父条目与附件 key、PDF 哈希/大小/页数和条目元数据。
-- card_body_markdown：所选详细模板正文；排除 platform-decision-synthesis，不生成主题或 idea。
-- machine_fields：schema_version=1，以及 research_questions、study_objects_and_scales、data_and_methods、comparison_baselines、findings、boundaries、missing_information 七个数组。
-- provenance：基础及补充提示词版本/哈希、组合提示词哈希、输出 schema 哈希、模板及目录版本、模型与推理配置、阅读协议版本。
-- reading_record、process_audit、usage、warnings：现有阅读流程的来源和执行记录，不等于全文科学正确性已验证。
+模型选择进入现有 `build_card_generator_adapter`，两种后端都经过 `SingleAgentCardGeneratorAdapter`，共用模板、提示词、机器字段与待校验保存逻辑。没有另造第二套主体卡业务流程。
 
-每条机器记录含 statement、statement_role、information_status、source_locations；findings 另含 finding_id。statement_role 区分原文陈述、转述、AI 推断和信息边界，information_status 区分已报告、未报告、不适用和无法读取。source_locations 含 PDF 物理页码（从 1 开始）、章节、图号、表号；无法定位时使用 null 并说明边界，不编造位置。
-
-机器字段与正文在同一次调用中生成，不增加一次抽取调用。输出格式定义在 automation/schemas/subject-card-draft-output.schema.json，补充提示词为 automation/prompts/subject-card-draft-v1.md。
-
-## 失败与后续边界
-
-不可读取或已变化的 PDF、错误来源身份、不支持的模板、无法解析的正文或机器字段、写入失败均返回结构化 FAILED，包含 error.code、failed_stage 和 model_invoked；不自动重试。模型已调用但输出未被接受时，可从 error.diagnostic.unvalidated_model_output_path 找到原始诊断输出（若提供方已保存），该文件不是主体卡草稿。
-
-本层只检查输入、来源协议和可解析的数据形状，不判断字段是否充分、结论是否正确、引文是否支持陈述或公式是否完整。空数组和无法定位的信息可以进入待校验草稿；#31 负责这些内容门禁。本入口不写任务完成状态、不向正式证据包发布、不更新主题池。
+- Codex 保留既有沙箱 PDF 路径读取协议。
+- Claude 只开放原生 Read，检查成功回执覆盖所有物理页；禁止命令、写文件、MCP 和联网搜索工具。
+- 两者均检查 PDF 身份/哈希未变、页数和阅读声明一致。阅读工具活动不等于科研理解已被独立验证。
+- 草稿始终 `DRAFT_PENDING_VALIDATION`，不自称已通过内容校验、科学正确或正式发布。七类字段由模型填充，缺失或错误交给 #31 程序报告。
+- 登录失败、缺工具、超时、读取不完整或输出不合协议返回结构化失败；不偷偷换模型、不自动重试。
 
 ## 验证
 
-~~~powershell
-uv run pytest hydro-platform/automation/tests/test_card_draft.py tests/test_literature_paths.py
-~~~
+```powershell
+uv run pytest hydro-platform/automation/tests/test_card_draft.py hydro-platform/automation/tests/test_ai_config.py hydro-platform/automation/tests/test_claude_cli.py
+```
 
-固定 PDF 和模拟模型输出覆盖：一次模型调用、个人/群组库身份、未索引 PDF、输入与哈希变化、不可解析输出、模板排除、只标记待校验、配置优先级、只追加写入和 CLI 兼容性。真实论文演示还需要本机 PDF、有效的 Codex CLI 登录及现有 PDF 工具；运行结果保存在配置的产物目录中，不提交个人论文或生成卡片到 Git。
+包含配置覆盖、两种后端的同一草稿契约、页数/身份绑定和 Claude 只读工具回执负向测试。真实论文测试结果与模型账号、服务状态有关；不把仅模拟接口的测试称为真实模型验证。

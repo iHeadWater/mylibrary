@@ -92,14 +92,14 @@ def run_streaming_prompt(
     command: Sequence[str], prompt: str, timeout_seconds: float,
     environment: Mapping[str, str] | None = None, *,
     progress: ProgressCallback | None = None, server: str = "hydro_pdf_reader",
-    connection_guard: ConnectionGuardConfig | None = None,
+    connection_guard: ConnectionGuardConfig | None = None, cwd=None, provider_label="Codex",
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env.update(environment or {})
     deadline = time.monotonic() + timeout_seconds
     guard = ConnectionGuard(connection_guard or ConnectionGuardConfig(), server)
     process = subprocess.Popen(
-        list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
         text=True, encoding="utf-8", errors="replace", env=env,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
@@ -143,7 +143,7 @@ def run_streaming_prompt(
         threading.Thread(target=send_input, daemon=True),
     ]
     try:
-        report_progress(progress, "phase", message="Codex 子进程已启动，等待模型服务响应")
+        report_progress(progress, "phase", message=f"{provider_label} 子进程已启动，等待模型服务响应")
         for thread in threads:
             thread.start()
         while True:
@@ -154,7 +154,7 @@ def run_streaming_prompt(
             if remaining <= 0:
                 raise subprocess.TimeoutExpired(command, timeout_seconds)
             if errors:
-                raise subprocess.SubprocessError("读取 Codex 进程输出失败") from errors[0]
+                raise subprocess.SubprocessError(f"读取 {provider_label} 进程输出失败") from errors[0]
             try:
                 process.wait(timeout=min(0.1, remaining))
             except subprocess.TimeoutExpired:
@@ -167,8 +167,8 @@ def run_streaming_prompt(
         if reason is not None:
             raise ExecutionStopped(*reason, guard.snapshot())
         if errors:
-            raise subprocess.SubprocessError("读取 Codex 进程输出失败") from errors[0]
-        report_progress(progress, "phase", message="Codex 进程已退出，正在校验输出并判定结果")
+            raise subprocess.SubprocessError(f"读取 {provider_label} 进程输出失败") from errors[0]
+        report_progress(progress, "phase", message=f"{provider_label} 进程已退出，正在校验输出并判定结果")
         return subprocess.CompletedProcess(command, process.returncode, "".join(stdout), "".join(stderr))
     except BaseException as exc:
         if isinstance(exc, ExecutionStopped):

@@ -281,7 +281,7 @@ def test_cli_consumes_ready_json_without_zotero_or_group(draft_case, tmp_path, c
         code = cli.main(["evidence-generate", "--paper-input", str(input_file), "--json", "--no-progress"])
     result = json.loads(capsys.readouterr().out)
     assert code == 0, result
-    assert loader.call_args.kwargs["require_group"] is False
+    loader.assert_not_called()
     assert result["status"] == "DRAFT_PENDING_VALIDATION"
     assert len(provider.calls) == 1
 
