@@ -95,7 +95,7 @@ def _check_wire(value: Any, schema: dict, path: str = "machine_fields") -> None:
         "array": isinstance(value, list),
         "string": isinstance(value, str),
         "integer": type(value) is int,
-        "number": type(value) in (int, float) and math.isfinite(value),
+        "number": type(value) is int or (type(value) is float and math.isfinite(value)),
     }.get(types, False)
     if not valid or ("enum" in schema and value not in schema["enum"]):
         _fail("CARD_DRAFT_OUTPUT_INVALID", f"机器字段无法解析：{path}")

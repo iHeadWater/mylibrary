@@ -181,7 +181,7 @@ def test_no_content_gate_or_claim_of_semantic_verification(draft_case):
     fields = draft_case[2].outputs[0]["machine_fields"]
     fields["research_questions"] = []
     fields["findings"][0]["finding_id"] = ""
-    fields["findings"][0]["source_locations"][0]["pdf_page"] = 999
+    fields["findings"][0]["source_locations"][0]["pdf_page"] = 10 ** 400
     result = run(draft_case)
     assert result["ok"], result
     draft = json.loads(Path(result["draft_path"]).read_text(encoding="utf-8"))
