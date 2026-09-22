@@ -1,6 +1,6 @@
 ---
 template_id: "platform-decision-synthesis"
-template_version: "2.0.0"
+template_version: "2.0.1"
 template_source_commit: "7b0f2b7e209aa566f3c68db817d5c4a71d9f8b19"
 evidence_id: "{{EVIDENCE_ID}}"
 card_state: "{{CARD_STATE}}"
