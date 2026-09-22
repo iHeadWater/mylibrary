@@ -6,7 +6,7 @@
 
 ~~~powershell
 uv sync --all-packages --locked
-uv run --package hydro-platform-automation hydro-platform evidence-validate --draft hydro-platform/automation/examples/subject-card-validation/draft.json --paper-input hydro-platform/automation/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo --json
+.\.venv\Scripts\python.exe -m hydro_platform evidence-validate --draft hydro-platform/automation/examples/subject-card-validation/draft.json --paper-input hydro-platform/automation/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo --json
 ~~~
 
 预期退出码 0、status=PASS，可能含短正文提示。每次报告在 outputs/validation-demo/<validation_id>/validation.json，输入不会被修改。不需要 config.json、Zotero、Codex、Poppler 或模型登录。

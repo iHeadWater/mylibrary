@@ -2,6 +2,25 @@
 
 以下命令从仓库根目录运行，面向 Windows PowerShell。先安装 Git、uv 和 Python 3.12–3.14（项目约束 >=3.12,<3.15）。使用仓库源码及锁文件，不只复制 automation/src。
 
+## 直接执行项目代码
+
+三个步骤均在普通 PowerShell 终端运行 Python 程序。先在对应检出的仓库根安装一次依赖，再执行命令：
+
+~~~powershell
+uv sync --all-packages --locked
+.\.venv\Scripts\python.exe -m hydro_platform --help
+~~~
+
+无需激活环境，Python 路径指向当前检出的 .venv；也可激活该环境后使用 python -m hydro_platform。下面所有命令都是项目的代码入口。
+
+| 步骤 | Python 模块后的子命令 | 输入 | 输出 |
+| --- | --- | --- | --- |
+| 论文输入 | paper-input | 关键词或明确的条目 key | 候选列表或 READY JSON |
+| 生成草稿 | evidence-generate | 单篇 READY JSON | card.md、draft.json |
+| 校验草稿 | evidence-validate | draft.json 及对应 READY JSON | PASS/FAIL 和 validation.json |
+
+程序依赖、用户需要选择的路径及执行失败的处理按步骤列在下面。三个分支未合并前，须在具有相应入口的检出中执行。
+
 ## 先确认检出的分支
 
 | 步骤 | 实现所在 PR / 分支 | 本步骤需要 |
@@ -16,7 +35,7 @@
 uv sync --all-packages --locked
 ~~~
 
-每份检出各建自己的 .venv。后续 uv run 命令从对应检出的根目录执行。仅运行 #44 校验可跳过后面全部账户和 PDF 配置，直接到“离线校验”。
+每份检出各建自己的 .venv。后续 Python 命令从对应检出的根目录执行。仅运行 #44 校验可跳过后面全部账户和 PDF 配置，直接到“离线校验”。
 
 ## #40 / #43：建立自己的配置
 
@@ -36,7 +55,7 @@ $cfg.card_generator.proxy.url = $null
 个人库设 zotero.group_id=null，并在 paper-input 使用 --user-library。示例里的 REPLACE_WITH_ZOTERO_GROUP_ID 不是有效值，即使使用个人库也必须替换。共享库使用 discover-groups 查到的自己可访问的 ID，写入配置或通过 paper-input --group-id 指定；不要同时传 --user-library。
 
 ~~~powershell
-uv run --package hydro-platform-automation hydro-platform discover-groups --config hydro-platform/config/config.local.json --json
+.\.venv\Scripts\python.exe -m hydro_platform discover-groups --config hydro-platform/config/config.local.json --json
 ~~~
 
 默认关闭代理及每日计划任务。确需代理时填写自己的地址，保留 localhost/127.0.0.1/::1 的直连配置。此单篇流程不需要注册计划任务，也不需要复制他人的凭据。
@@ -50,9 +69,9 @@ paths.project_root=.. 相对于配置文件所在目录解析；其余模板和�
 在包含 #40 的检出中先搜索，再用返回的实际 item key 明确选择：
 
 ~~~powershell
-uv run --package hydro-platform-automation hydro-platform paper-input --config hydro-platform/config/config.local.json --user-library --query '论文标题关键词' --json
+.\.venv\Scripts\python.exe -m hydro_platform paper-input --config hydro-platform/config/config.local.json --user-library --query '论文标题关键词' --json
 New-Item -ItemType Directory -Force outputs | Out-Null
-uv run --package hydro-platform-automation hydro-platform paper-input --config hydro-platform/config/config.local.json --user-library --item-key YOURKEY1 --json | Set-Content -Encoding utf8 outputs/paper-input.json
+.\.venv\Scripts\python.exe -m hydro_platform paper-input --config hydro-platform/config/config.local.json --user-library --item-key YOURKEY1 --json | Set-Content -Encoding utf8 outputs/paper-input.json
 if ($LASTEXITCODE -ne 0) { throw '输入未就绪，请查看 paper-input.json 的状态和原因。' }
 ~~~
 
@@ -80,8 +99,8 @@ Get-ChildItem -LiteralPath $codexPackage -Recurse -Filter codex.exe | Select-Obj
 项目通过锁文件把 Poppler 安装到 hydro-platform/.tools/poppler，默认三个工具路径与这个目录一致，不需要作者机器上的工具缓存：
 
 ~~~powershell
-uv run --package hydro-platform-automation hydro-platform bootstrap-native --config hydro-platform/config/config.local.json --install --json
-uv run --package hydro-platform-automation hydro-platform generator-preflight --config hydro-platform/config/config.local.json --json
+.\.venv\Scripts\python.exe -m hydro_platform bootstrap-native --config hydro-platform/config/config.local.json --install --json
+.\.venv\Scripts\python.exe -m hydro_platform generator-preflight --config hydro-platform/config/config.local.json --json
 ~~~
 
 安装需要联网。安装成功和生成器登录预检分别检查；generator-preflight 不证明 PDF 阅读及实际模型调用一定成功。已经安装了 PDF 工具的使用者可在 pdf_reader 的 pdfinfo_executable、pdftotext_executable、pdftoppm_executable 指定自己的路径。默认 Python 阅读器为 pypdf，由 uv sync 安装；pdf_direct_trial.python_executable=../.venv/Scripts/python.exe 指向当前检出的虚拟环境。
@@ -93,7 +112,7 @@ uv run --package hydro-platform-automation hydro-platform generator-preflight --
 在包含 #43 的检出（也可使用 #44）中，用刚刚取得的 JSON 的实际路径生成：
 
 ~~~powershell
-uv run --package hydro-platform-automation hydro-platform evidence-generate --config hydro-platform/config/config.local.json --paper-input '输入文件的实际路径/paper-input.json' --json
+.\.venv\Scripts\python.exe -m hydro_platform evidence-generate --config hydro-platform/config/config.local.json --paper-input '输入文件的实际路径/paper-input.json' --json
 ~~~
 
 命令会调用模型。PDF local_path 是取得 READY 时该电脑上的真实绝对路径，生成前后还会检查文件哈希。换电脑生成时，须在新电脑重新执行 #40；不能只复制原 JSON 或手改 hash 假装匹配。生成成功后使用结果返回的 draft_path，默认在 outputs/zotero/<文库身份>/drafts/<draft_id>/draft.json，状态仍是待校验。
@@ -103,7 +122,7 @@ uv run --package hydro-platform-automation hydro-platform evidence-generate --co
 不需要上述 config.local.json、Zotero、Codex 登录、Poppler 或原 PDF。先用仓库的合成示例确认安装可运行：
 
 ~~~powershell
-uv run --package hydro-platform-automation hydro-platform evidence-validate --draft hydro-platform/automation/examples/subject-card-validation/draft.json --paper-input hydro-platform/automation/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo --json
+.\.venv\Scripts\python.exe -m hydro_platform evidence-validate --draft hydro-platform/automation/examples/subject-card-validation/draft.json --paper-input hydro-platform/automation/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo --json
 ~~~
 
 预期退出码 0、PASS；合成示例不是科研证据。实际校验时把 --draft 与 --paper-input 换为同一次生成的配对文件。可以把这两份 JSON 复制到其他电脑离线校验，原 PDF 路径保留为历史信息，无需改写。

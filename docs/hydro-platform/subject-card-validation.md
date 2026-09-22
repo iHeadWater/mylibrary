@@ -4,11 +4,11 @@
 
 ## 命令与记录
 
-在仓库根运行：
+在普通 PowerShell 终端的仓库根目录直接运行项目代码：
 
 ~~~powershell
 uv sync --all-packages --locked
-uv run --package hydro-platform-automation hydro-platform evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
+.\.venv\Scripts\python.exe -m hydro_platform evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 ~~~
 
 默认直接使用当前检出代码对应的模板、提示词和 schema，不读取 config.json 或 HYDRO_PLATFORM_CONFIG。无需 Zotero、PDF 文件、群组 ID、Poppler 或 Codex 登录。输入中原始 PDF 的绝对路径只作为生成时的历史信息，支持 Windows 盘符/UNC 和 POSIX 路径，不按校验电脑的当前目录重新解析。退出码 0 表示 PASS，3 表示校验或记录保存失败，配置错误为 2。人类可读输出也会列出错误码、字段路径和原因。
@@ -18,7 +18,7 @@ uv run --package hydro-platform-automation hydro-platform evidence-validate --dr
 完整分阶段安装说明见[单篇流程首次配置](single-paper-quickstart.md)。仓库附带合成示例，不需要私人论文或配置，可直接验证入口：
 
 ~~~powershell
-uv run --package hydro-platform-automation hydro-platform evidence-validate --draft hydro-platform/automation/examples/subject-card-validation/draft.json --paper-input hydro-platform/automation/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo --json
+.\.venv\Scripts\python.exe -m hydro_platform evidence-validate --draft hydro-platform/automation/examples/subject-card-validation/draft.json --paper-input hydro-platform/automation/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo --json
 ~~~
 
 该示例只验证程序规则，不能用于科研。报告存到 outputs/validation-demo/<validation_id>/validation.json。
