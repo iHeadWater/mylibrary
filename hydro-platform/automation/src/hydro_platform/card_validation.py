@@ -323,7 +323,9 @@ def validate_subject_card(config, draft, paper_input):
                         add("CARD_FINDING_ID_INVALID", entry + "/finding_id", "结果编号必须是唯一的 F001 格式")
                     else:
                         ids.add(fid)
-        body_ids = set(re.findall(r"(?<![A-Za-z0-9])F[0-9]{3,}(?![A-Za-z0-9])", visible)) if isinstance(body, str) else set()
+        # Headings are visible references too. Strip them only for the nonempty-body check above.
+        reference_text = re.sub(r"<!--.*?-->", "", body, flags=re.S) if isinstance(body, str) else ""
+        body_ids = set(re.findall(r"(?<![A-Za-z0-9])F[0-9]{3,}(?![A-Za-z0-9])", reference_text))
         for fid in sorted(ids - body_ids):
             add("CARD_FINDING_REFERENCE", "/card_body_markdown", f"正文没有引用机器结果 {fid}", finding_id=fid)
         for fid in sorted(body_ids - ids):
