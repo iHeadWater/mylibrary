@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -206,6 +207,7 @@ def test_builds_journal_article_from_crossref(monkeypatch):
 # ---------------------------------------------------------------------------
 
 from hydrolitagent.literature.zotero_sync import (  # noqa: E402
+    _existing_key,
     _load_index,
     _save_index,
     _scan_server_dois,
@@ -256,6 +258,61 @@ def test_index_load_save_roundtrip(tmp_path):
 
 def test_index_load_returns_empty_when_missing(tmp_path):
     assert _load_index(tmp_path) == {}
+
+
+def test_existing_key_hit_in_index_costs_no_scan(tmp_path):
+    """A hit is authoritative — no server round-trip on the common re-run."""
+    _save_index(tmp_path, {"10.1234/test.1": "AAAA1111"})
+    mock_zot = MagicMock()
+
+    key = _existing_key(mock_zot, "10.1234/test.1", tmp_path, refresh=False)
+
+    assert key == "AAAA1111"
+    mock_zot.top.assert_not_called()
+
+
+def test_existing_key_miss_forces_scan_even_when_index_is_fresh(tmp_path):
+    """Regression: a freshly-written index that LACKS the DOI must not be trusted.
+
+    The index only knows about items this pipeline created.  Records added by
+    Zotero desktop, the Beaver importer or the container pipeline are absent
+    from it, so treating a miss as "does not exist" silently created a duplicate
+    Zotero item for a paper that was already in the library.
+    """
+    _save_index(tmp_path, {"10.9999/unrelated": "ZZZZ9999"})  # exists and is fresh
+    mock_zot = _mock_zot_scan([
+        {"key": "BBBB2222", "data": {"itemType": "journalArticle", "DOI": "10.1234/test.1"}},
+    ])
+
+    key = _existing_key(mock_zot, "10.1234/test.1", tmp_path, refresh=False)
+
+    assert key == "BBBB2222"
+
+
+def test_existing_key_returns_none_when_scan_finds_nothing(tmp_path):
+    """A genuine miss still returns None, so new papers are created normally."""
+    _save_index(tmp_path, {})
+    mock_zot = _mock_zot_scan([])
+
+    assert _existing_key(mock_zot, "10.1234/test.1", tmp_path, refresh=False) is None
+
+
+def test_existing_key_scans_when_index_file_absent(tmp_path):
+    mock_zot = _mock_zot_scan([
+        {"key": "CCCC3333", "data": {"itemType": "journalArticle", "DOI": "10.1234/test.1"}},
+    ])
+
+    assert _existing_key(mock_zot, "10.1234/test.1", tmp_path, refresh=False) == "CCCC3333"
+
+
+def test_existing_key_refresh_forces_scan_on_hit(tmp_path):
+    """--refresh-index overrides a cached hit and re-reads the server."""
+    _save_index(tmp_path, {"10.1234/test.1": "STALEKEY1"})
+    mock_zot = _mock_zot_scan([
+        {"key": "FRESHKEY", "data": {"itemType": "journalArticle", "DOI": "10.1234/test.1"}},
+    ])
+
+    assert _existing_key(mock_zot, "10.1234/test.1", tmp_path, refresh=True) == "FRESHKEY"
 
 
 # ---------------------------------------------------------------------------
@@ -337,3 +394,190 @@ def test_create_zotero_item_attachment_failure_is_not_fatal():
     parent, attach = _create_zotero_item(mock_zot, {"itemType": "journalArticle"}, {}, "test.pdf")
     assert parent == "ABC12345"
     assert attach == ""
+
+
+# ---------------------------------------------------------------------------
+# Existing-item behaviour: attach instead of skip
+# ---------------------------------------------------------------------------
+# Regression: this branch used to print "SKIP — item already in library" and
+# return without touching attachments, so "record exists but has no PDF" had no
+# way forward short of --allow-duplicate, which created a SECOND item.
+
+from hydrolitagent.literature.zotero_sync import (  # noqa: E402
+    _existing_attachments,
+    _sha256,
+)
+
+INCOMING_PDF_BYTES = b"%PDF-1.4\nfresh content from the downloader\n"
+DOI = "10.1234/test.1"
+# slug_from_doi drops the "10.1234/" prefix, so the linked file is test.1.pdf.
+SLOT_PATH = "attachments:test.1.pdf"
+EXISTING_KEY = "EXIST123"
+
+
+def _run_sync_main(
+    monkeypatch,
+    tmp_path,
+    extra_args=(),
+    *,
+    children=(),
+    existing_key=EXISTING_KEY,
+    gdrive_seed=None,
+):
+    """Drive ``zotero_sync.main()`` end-to-end with a mocked Zotero client.
+
+    Returns ``(mock_zot, gdrive_dir, pdf_path)``.  Metadata enrichment and the
+    PDF verifier are stubbed so the run stays offline.
+    """
+    from hydrolitagent.literature import zotero_sync as zsync
+    from hydrolitagent.zotero import paper_to_zotero as p2z
+
+    pdf_path = tmp_path / "incoming.pdf"
+    pdf_path.write_bytes(INCOMING_PDF_BYTES)
+    gdrive_dir = tmp_path / "gdrive"
+    gdrive_dir.mkdir()
+    if gdrive_seed is not None:
+        (gdrive_dir / "test.1.pdf").write_bytes(gdrive_seed)
+
+    monkeypatch.setenv("GDRIVE_PAPERS_PATH", str(gdrive_dir))
+    monkeypatch.setenv("ZOTERO_API_KEY", "test-key")
+    monkeypatch.setenv("ZOTERO_LIBRARY_ID", "12345")
+    monkeypatch.setattr(sys, "argv", ["zotero_sync", str(pdf_path), DOI, *extra_args])
+    monkeypatch.setattr(zsync, "verify_pdf", lambda p: _make_pdf_meta(doi=DOI))
+    monkeypatch.setattr(zsync, "_existing_key", lambda *a, **k: existing_key)
+    monkeypatch.setattr(
+        p2z, "build_item", lambda doi, fallback: ({"itemType": "journalArticle",
+                                                   "title": "T", "creators": []}, {})
+    )
+
+    mock_zot = MagicMock()
+    mock_zot.item_template.side_effect = lambda t, *a: {"itemType": t}
+    mock_zot.children.return_value = list(children)
+    mock_zot.create_items.return_value = {"success": {"0": "NEWATT01"}}
+
+    with patch("pyzotero.zotero.Zotero", return_value=mock_zot):
+        zsync.main()
+    return mock_zot, gdrive_dir, pdf_path
+
+
+def test_sync_attaches_to_existing_item_when_slot_empty(monkeypatch, tmp_path):
+    """Item exists with no attachment -> attach to THAT item, create no parent."""
+    mock_zot, gdrive_dir, _ = _run_sync_main(monkeypatch, tmp_path, children=[])
+
+    # Exactly one create_items call: the attachment. No parent was created.
+    assert mock_zot.create_items.call_count == 1
+    created = mock_zot.create_items.call_args_list[0][0][0][0]
+    assert created["parentItem"] == EXISTING_KEY
+    assert created["path"] == SLOT_PATH
+    assert created["contentType"] == "application/pdf"
+    # The PDF was copied into the linked attachment base directory.
+    assert (gdrive_dir / "test.1.pdf").read_bytes() == INCOMING_PDF_BYTES
+
+
+def test_sync_skips_when_same_slot_holds_identical_content(monkeypatch, tmp_path):
+    """Same slot + same bytes -> no-op (idempotent re-run)."""
+    mock_zot, gdrive_dir, _ = _run_sync_main(
+        monkeypatch,
+        tmp_path,
+        children=[{"key": "OLDATT01", "data": {"itemType": "attachment", "path": SLOT_PATH}}],
+        gdrive_seed=INCOMING_PDF_BYTES,
+    )
+
+    assert mock_zot.create_items.call_count == 0
+    assert (gdrive_dir / "test.1.pdf").read_bytes() == INCOMING_PDF_BYTES
+
+
+def test_sync_skips_conflicting_content_without_replace(monkeypatch, tmp_path):
+    """Same slot + different bytes -> default leaves the existing file alone."""
+    original = b"%PDF-1.4\nTHE GOOD PREVIOUS COPY\n"
+    mock_zot, gdrive_dir, _ = _run_sync_main(
+        monkeypatch,
+        tmp_path,
+        children=[{"key": "OLDATT01", "data": {"itemType": "attachment", "path": SLOT_PATH}}],
+        gdrive_seed=original,
+    )
+
+    assert mock_zot.create_items.call_count == 0
+    # Non-destructive: the incoming file did NOT clobber the good copy.
+    assert (gdrive_dir / "test.1.pdf").read_bytes() == original
+
+
+def test_sync_replaces_conflicting_content_with_replace(monkeypatch, tmp_path):
+    """--replace overwrites in place and still creates no second attachment."""
+    mock_zot, gdrive_dir, _ = _run_sync_main(
+        monkeypatch,
+        tmp_path,
+        ("--replace",),
+        children=[{"key": "OLDATT01", "data": {"itemType": "attachment", "path": SLOT_PATH}}],
+        gdrive_seed=b"%PDF-1.4\nOLD\n",
+    )
+
+    assert mock_zot.create_items.call_count == 0
+    assert (gdrive_dir / "test.1.pdf").read_bytes() == INCOMING_PDF_BYTES
+
+
+def test_sync_attaches_second_attachment_when_filename_differs(monkeypatch, tmp_path):
+    """An attachment in a DIFFERENT slot counts as different content -> attach one more."""
+    mock_zot, _, _ = _run_sync_main(
+        monkeypatch,
+        tmp_path,
+        children=[{"key": "OTHERATT", "data": {"itemType": "attachment",
+                                               "path": "attachments:something-else.pdf"}}],
+    )
+
+    assert mock_zot.create_items.call_count == 1
+    created = mock_zot.create_items.call_args_list[0][0][0][0]
+    assert created["parentItem"] == EXISTING_KEY
+    assert created["path"] == SLOT_PATH
+
+
+def test_sync_skip_existing_reproduces_old_behaviour(monkeypatch, tmp_path):
+    """--skip-existing restores the pre-fix exit-without-attaching path."""
+    mock_zot, gdrive_dir, _ = _run_sync_main(
+        monkeypatch, tmp_path, ("--skip-existing",), children=[]
+    )
+
+    assert mock_zot.create_items.call_count == 0
+    assert not (gdrive_dir / "test.1.pdf").exists()
+
+
+def test_sync_allow_duplicate_still_creates_new_parent(monkeypatch, tmp_path):
+    """--allow-duplicate semantics unchanged: force a brand-new item."""
+    mock_zot, _, _ = _run_sync_main(
+        monkeypatch, tmp_path, ("--allow-duplicate",), children=[]
+    )
+
+    # Parent + attachment, and the parent carries no parentItem of its own.
+    assert mock_zot.create_items.call_count == 2
+    parent_item = mock_zot.create_items.call_args_list[0][0][0][0]
+    assert "parentItem" not in parent_item
+
+
+def test_sha256_distinguishes_content(tmp_path):
+    a = tmp_path / "a.bin"
+    b = tmp_path / "b.bin"
+    a.write_bytes(b"same")
+    b.write_bytes(b"same")
+    c = tmp_path / "c.bin"
+    c.write_bytes(b"different")
+
+    assert _sha256(a) == _sha256(b)
+    assert _sha256(a) != _sha256(c)
+
+
+def test_existing_attachments_filters_non_attachments():
+    """Only child items of itemType 'attachment' are returned."""
+    mock_zot = MagicMock()
+    mock_zot.children.return_value = [
+        {"key": "N1", "data": {"itemType": "note"}},
+        {"key": "A1", "data": {"itemType": "attachment", "path": "attachments:x.pdf"}},
+    ]
+    result = _existing_attachments(mock_zot, "EXIST123")
+    assert [r["path"] for r in result] == ["attachments:x.pdf"]
+
+
+def test_existing_attachments_returns_empty_on_lookup_failure():
+    """A failing children() call degrades to [] rather than aborting the sync."""
+    mock_zot = MagicMock()
+    mock_zot.children.side_effect = RuntimeError("network down")
+    assert _existing_attachments(mock_zot, "EXIST123") == []

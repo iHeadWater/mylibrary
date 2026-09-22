@@ -66,8 +66,8 @@ uv run python scripts/download_paper.py --arxiv 2608.18495 --sync
 uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元数据
 ```
 
-`--sync` 走 `zotero_sync` → `paper_to_zotero.build_item()`：arXiv 记录为 `preprint`（摘要/日期/`archiveID`），
-重跑同 DOI 幂等跳过（强制 `--allow-duplicate`）。
+`--sync` 走 `zotero_sync` → `paper_to_zotero.build_item()`：arXiv 记录为 `preprint`（摘要/日期/`archiveID`）。
+同 DOI 重跑会**补挂**到既有条目（不再只是跳过）；已挂同内容则幂等跳过。
 
 脚本按 DOI 前缀自动路由到对应出版商流程，内置 **stealth Chrome 启动器**
 （真实 Chrome 内核 + 剥离自动化标记），Cloudflare / AMS 人机验证**自动通过**，
