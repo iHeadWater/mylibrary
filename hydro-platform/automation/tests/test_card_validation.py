@@ -400,3 +400,11 @@ def test_claude_draft_uses_same_offline_gate(draft_case):
 def test_provider_protocol_cannot_mismatch_reading_method(case):
     case[1]["provenance"]["generation_protocol_version"] = "claude-local-pdf-v1"
     assert "CARD_READING_RECORD_INVALID" in codes(check(case))
+
+
+
+def test_finding_reference_in_visible_heading_counts(case):
+    case[1]["card_body_markdown"] = "# Fixture\n\n### F001 Result\n\nThis paragraph explains the reported synthetic result."
+    assert check(case)["ok"]
+    case[1]["card_body_markdown"] = "# F001 Heading only\n"
+    assert "CARD_CONTENT_MISSING" in codes(check(case))
