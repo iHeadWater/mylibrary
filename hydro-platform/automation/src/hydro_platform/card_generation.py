@@ -555,7 +555,7 @@ def _validate_workflow_result(
             or (process_only and gates.get("content_validation_performed") is not False)
             or gates.get("independent_review") is not False
             or gates.get("scientific_correctness_verified") is not False
-            or not source_access_acceptable(access) or access.get("method") != "local_pdf_path"
+            or not source_access_acceptable(access) or access.get("method") not in {"local_pdf_path", "claude_pdf_read"}
             or not isinstance(quality_audit, dict) or quality_audit.get("quality_report") != workflow_report
             or not isinstance(roles, dict) or set(roles) != {"card_writer"} or not isinstance(writer, dict)
             or not isinstance(writer.get("execution"), dict)

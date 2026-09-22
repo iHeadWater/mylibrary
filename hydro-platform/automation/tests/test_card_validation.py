@@ -382,3 +382,21 @@ def test_shipped_example_passes_without_private_config_or_pdf(tmp_path, monkeypa
     record = gate._read_json(root / "paper-input.json")
     monkeypatch.chdir(tmp_path)
     assert gate.validate_subject_card(None, draft, record)["ok"]
+
+
+
+def test_claude_draft_uses_same_offline_gate(draft_case):
+    from test_claude_cli import events, invoke
+    result, _ = invoke(draft_case, events(draft_case))
+    assert result["ok"], result
+    draft = json.loads(Path(result["draft_path"]).read_text(encoding="utf-8"))
+    with patch("subprocess.Popen", side_effect=AssertionError("validation must not call a model")):
+        report = gate.validate_subject_card(None, draft, draft_case[1])
+    assert report["ok"], report
+    draft["reading_record"]["pages_requested_successfully"] = [1]
+    assert "CARD_READING_RECORD_INVALID" in codes(gate.validate_subject_card(None, draft, draft_case[1]))
+
+
+def test_provider_protocol_cannot_mismatch_reading_method(case):
+    case[1]["provenance"]["generation_protocol_version"] = "claude-local-pdf-v1"
+    assert "CARD_READING_RECORD_INVALID" in codes(check(case))

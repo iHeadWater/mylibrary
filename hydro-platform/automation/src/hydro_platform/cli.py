@@ -9,6 +9,7 @@ from typing import Any, Sequence
 
 from hydro_platform.card_draft import generate_subject_card_draft
 from hydro_platform.card_validation import ValidationAssets, validate_subject_card_file
+from hydro_platform.ai_config import resolve_ai_config, subject_card_config, describe_ai, AIConfigError
 from hydro_platform.card_generators import build_card_generator_adapter
 from hydro_platform.card_generation import (
     CardGenerationError,
@@ -102,7 +103,7 @@ def _parser() -> argparse.ArgumentParser:
         command = subparsers.add_parser(name, help=help_text)
         command.add_argument(
             "--config",
-            default=None if name == "evidence-validate" else _default_config_path(),
+            default=None if name in {"evidence-validate", "evidence-generate"} else _default_config_path(),
             help=("可选总配置；校验默认直接使用随仓库分发的资产" if name == "evidence-validate"
                   else "总配置文件路径；默认读取项目 config/config.json"),
         )
@@ -164,6 +165,12 @@ def _parser() -> argparse.ArgumentParser:
                 help="需要检查的 Zotero 父条目 Key",
             )
         if name == "evidence-generate":
+            command.add_argument("--ai-config", help="模型选择 TOML；默认 configs/ai.toml")
+            command.add_argument("--ai-provider", choices=["codex", "claude"])
+            command.add_argument("--ai-model", help="所选服务可用的模型名")
+            command.add_argument("--ai-executable", help="本机 CLI 可执行文件名或绝对路径")
+            command.add_argument("--ai-timeout", type=float)
+            command.add_argument("--output-root", help="本次产物根；沿用 #27 的解析器")
             source = command.add_mutually_exclusive_group(required=True)
             source.add_argument("--item-key", help="旧证据包流程的 Zotero 父条目 Key")
             source.add_argument("--paper-input", help="#29 的单篇 READY JSON 文件，或 - 从 stdin 读取；仅生成待校验草稿")
@@ -181,6 +188,14 @@ def _parser() -> argparse.ArgumentParser:
                 help="关闭 stderr 实时进度，仅保留最终结果",
             )
 
+    ai = subparsers.add_parser("ai-config", help="查看模型选择与精读产物根，不运行模型")
+    ai.add_argument("--ai-config")
+    ai.add_argument("--ai-provider", choices=["codex", "claude"])
+    ai.add_argument("--ai-model")
+    ai.add_argument("--ai-executable")
+    ai.add_argument("--ai-timeout", type=float)
+    ai.add_argument("--output-root")
+    ai.add_argument("--json", action="store_true")
     return parser
 
 
@@ -399,9 +414,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         _emit({"schema_version": 1, "ok": False, "error": {
             "code": "CARD_DRAFT_RETRY_UNSUPPORTED", "message": "主体卡草稿为单次调用，不支持任务重试参数"}}, args.json)
         return 2
+    if args.command == "ai-config" or (args.command == "evidence-generate" and args.paper_input):
+        try:
+            selection = resolve_ai_config(args.ai_config, provider=args.ai_provider, model=args.ai_model,
+                         executable=args.ai_executable, timeout_seconds=args.ai_timeout)
+            if args.command == "ai-config":
+                result = describe_ai(selection, output_root=args.output_root)
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return 0
+            base = load_config(args.config, require_group=False) if args.config else None
+            config = subject_card_config(selection, base_config=base)
+            raw = sys.stdin.read() if args.paper_input == "-" else Path(args.paper_input).read_text(encoding="utf-8-sig")
+            record = json.loads(raw)
+            with ConsoleProgress(enabled=not args.no_progress, heartbeat_interval_seconds=60,
+                                 initial_activity="检查单篇输入与所选模型接口") as progress:
+                result = generate_subject_card_draft(config, record, progress=progress, output_root=args.output_root)
+                progress.finish(result)
+        except json.JSONDecodeError:
+            result = {"ok": False, "error": {"code": "CARD_DRAFT_INPUT_INVALID", "message": "无法读取单篇论文输入 JSON"}}
+        except (AIConfigError, ConfigError, OSError, ValueError, RuntimeError) as exc:
+            result = {"ok": False, "error": {"code": "CARD_DRAFT_CONFIG_OR_INPUT_INVALID", "message": str(exc)}}
+        _emit(result, args.json)
+        return 0 if result["ok"] else 3
     try:
         app_config = load_config(
-            args.config,
+            args.config or _default_config_path(),
             base_url=getattr(args, "base_url", None),
             group_id=getattr(args, "group_id", None),
             timeout_seconds=getattr(args, "timeout", None),
@@ -649,21 +686,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "message": str(exc),
                 },
             }
-    elif args.command == "evidence-generate" and args.paper_input:
-        try:
-            raw = sys.stdin.read() if args.paper_input == "-" else Path(args.paper_input).read_text(encoding="utf-8-sig")
-            paper_input = json.loads(raw)
-        except (OSError, ValueError):
-            result = {"schema_version": 1, "operation": "subject_card_draft", "ok": False,
-                      "status": "FAILED", "failed_stage": "input", "model_invoked": False,
-                      "error": {"code": "CARD_DRAFT_INPUT_INVALID", "message": "无法读取单篇论文输入 JSON"}}
-        else:
-            progress_config = app_config.card_generator.progress
-            with ConsoleProgress(enabled=progress_config.enabled and not args.no_progress,
-                                 heartbeat_interval_seconds=progress_config.heartbeat_interval_seconds,
-                                 initial_activity="检查单篇输入、PDF 和精读产物根") as progress:
-                result = generate_subject_card_draft(app_config, paper_input, progress=progress)
-                progress.finish(result)
     elif args.command in {"evidence-generate", "evidence-generate-trial", "pdf-direct-read-trial"}:
         progress_config = app_config.card_generator.progress
         with ConsoleProgress(

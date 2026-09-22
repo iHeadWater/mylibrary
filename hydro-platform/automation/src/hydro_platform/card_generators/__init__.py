@@ -11,6 +11,12 @@ def build_card_generator_adapter(
     config: CardGeneratorConfig,
     *, progress: ProgressCallback | None = None,
 ) -> CardGeneratorAdapter:
+    if config.adapter == "claude_cli":
+        from hydro_platform.card_generators.claude_cli import ClaudeCliAdapter
+        from hydro_platform.card_generators.single_agent import SingleAgentCardGeneratorAdapter
+        if config.workflow_mode != "single_agent" or config.pdf_reader.adapter != "local_path":
+            raise ValueError("Claude 适配器只接入现有单篇 single_agent + local_path 工作流")
+        return SingleAgentCardGeneratorAdapter(ClaudeCliAdapter(config, progress=progress), progress=progress)
     if config.adapter == "codex_cli":
         if config.pdf_reader.adapter == "local_path":
             from hydro_platform.card_generators.codex_local_pdf import CodexLocalPdfAdapter
