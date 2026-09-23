@@ -42,6 +42,44 @@
 
 ## 快速开始
 
+### 只想用自己的论文生成主体卡？从这里开始（Windows PowerShell）
+
+这是可复用的**本地命令行接口**，不是作者电脑上的专用程序，也不是需要开放公网端口的服务。你使用自己的 Zotero 文献、Codex 或 Claude 登录和产物目录；无需作者的账号、目录、`.venv`、Obsidian 或群组库权限。私有仓库仍需获得 GitHub 访问权限。
+
+先安装 Git、Python 3.12–3.14 和 uv。在你自己选择的父目录中执行下面命令；目标 `mylibrary` 应尚不存在。每条成功后再执行下一条：
+
+```powershell
+git clone --branch literature-platform https://github.com/iHeadWater/mylibrary.git mylibrary
+if ($LASTEXITCODE -ne 0) { throw '克隆失败，请检查仓库权限及目标目录' }
+Set-Location -LiteralPath .\mylibrary
+uv sync --all-packages --locked
+if ($LASTEXITCODE -ne 0) { throw '依赖安装失败，请先处理上面的错误' }
+Test-Path .\.venv\Scripts\python.exe
+```
+
+最后应显示 `True`。**所有后续相对路径命令都在这个仓库根目录执行**；不是直接在 `C:\Users\你的用户名` 中执行。新开终端后先进入你自己的仓库目录。
+
+先跑不需要 Zotero、原始 PDF、模型账号的合成示例：
+
+```powershell
+.\.venv\Scripts\python.exe scripts/paper_validate.py --draft hydro-platform/automation/examples/subject-card-validation/draft.json --paper-input hydro-platform/automation/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo
+$LASTEXITCODE
+```
+
+修复版本应返回 `status: PASS`、退出码 `0`；合成示例的短正文提示不影响通过。**不要把文档中的预期结果或 `# passed` 注释当成实际输出。** PR #46 未合并时，需先按[完整上手说明](docs/hydro-platform/single-paper-quickstart.md)切到该 PR 分支，才能验证其修复版示例。
+
+三个公开入口如下（安装后可运行 `--help` 查看参数）：
+
+| 阶段 | 入口 | 输入与输出 | 是否调用模型 |
+| --- | --- | --- | --- |
+| 取得论文 | `python scripts/paper_input.py` | 自己的题名/DOI 或条目 Key → 候选或单篇 READY JSON | 否 |
+| 生成草稿 | `python -m hydro_platform evidence-generate` | READY JSON + `--ai-provider` → `draft_path`、`card_path` | 是 |
+| 代码校验 | `python scripts/paper_validate.py` | READY JSON + `draft_path` → PASS/FAIL、报告路径 | 否 |
+
+表中 `python` 使用上面安装的 `.\.venv\Scripts\python.exe`。**完整步骤、CLI 认证、Poppler、个人/群组库、模型与输出目录覆盖、自动传递 draft_path、返回码及排错见[单篇流程首次配置](docs/hydro-platform/single-paper-quickstart.md)。** 单篇本地流程不需要先填工具链的 DeepSeek/Zotero Web API 密钥，不需要启动 MCP Server。
+
+### 其他工具链与批量自动化
+
 ```bash
 git clone git@github.com:iHeadWater/mylibrary.git
 cd mylibrary
@@ -87,4 +125,4 @@ uv run mkdocs serve     # 本地预览文档站
 uv run pytest           # 两套测试：tests/ 与 hydro-platform/automation/tests/
 ```
 
-已知环境问题：`tests/test_zotero_local_api_integration.py` 依赖 `mcp.server.MCPServer`，与当前安装的 `mcp` 包（只暴露 `Server`）不兼容，会**收集失败**。这是合并前 main 线就存在的问题，与本次合并无关；收集时用 `--ignore=tests/test_zotero_local_api_integration.py` 跳过。
+`tests/test_zotero_local_api_integration.py` 是依赖本机 Zotero 在线及特定文献样本的集成测试，不是所有新用户都能复现同一结果。本次环境有一项因指定样本只有一篇 PDF、测试要求至少两篇而失败。只验证平台代码可运行 `python -m pytest hydro-platform/automation/tests`；完整测试出现失败时应看具体原因，不把排除测试后的结果称为完整全绿。
