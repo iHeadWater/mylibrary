@@ -46,6 +46,8 @@
 
 这是可复用的**本地命令行接口**，不是作者电脑上的专用程序，也不是需要开放公网端口的服务。你使用自己的 Zotero 文献、Codex 或 Claude 登录和产物目录；无需作者的账号、目录、`.venv`、Obsidian 或群组库权限。私有仓库仍需获得 GitHub 访问权限。
 
+如果你在终端里使用 **CC Switch 接入 DeepSeek 的 Claude Code**，生成命令仍选 `--ai-provider claude`：Claude Code 是命令行工具，DeepSeek 是它连接的模型服务。[单篇论文完整教程](docs/hydro-platform/single-paper-quickstart.md)按这套用法展开配置传递、选论文、生成、校验与查看结果，每一步附命令和预期结果。
+
 先安装 Git、Python 3.12–3.14 和 uv。在你自己选择的父目录中执行下面命令；目标 `mylibrary` 应尚不存在。每条成功后再执行下一条：
 
 ```powershell

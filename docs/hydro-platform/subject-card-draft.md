@@ -34,6 +34,8 @@ Codex 沿用现有本地 PDF 阅读适配器，需要 pypdf（项目安装已含
 
 Claude 运行采用隔离的只读模式，不加载项目插件或命令。若自己的认证仅写在 Claude 用户 settings 的 `env` 中，请在启动本命令的终端导出相应认证环境变量；程序不会复制或打印该文件。普通 CLI 账号登录由 CLI 自己管理。
 
+**终端 Claude Code + CC Switch + DeepSeek：**也属于 `--ai-provider claude`，因为这里选择的是命令行适配器，而不是实际模型厂家；不要写成 `--ai-provider deepseek`。CC Switch 为 Claude 配置服务地址、认证与模型映射，仓库启动的 Claude 子进程再调用该服务。隔离进程所需配置导入、直连/代理区别、逐步命令与结果解读见[单篇完整教程](single-paper-quickstart.md)。普通聊天可用不保证当前上游服务满足 PDF 页面读取及结构化输出要求；以真实生成与校验结果为准。
+
 产物根直接调用 #27 的同一解析器：`--output-root` → `HYDROLITAGENT_LITERATURE_ROOT`（进程优先于 `.env`）→ `configs/paths.toml` → 仓库 `outputs/`。`ai-config --json` 会显示实际落点。相对产物根从仓库根解析；外部目录遵守 #27 的显式选择规则，只追加不清理。
 
 ```text
