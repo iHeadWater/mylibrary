@@ -14,13 +14,14 @@ prompt_version: "subject-card-draft-v1"
 - study_objects_and_scales：研究对象、样本及时间和空间尺度。
 - data_and_methods：数据、方法、实验过程、关键参数和假设。
 - comparison_baselines：论文实际使用的比较基线；不适用或未报告时说明原因。
-- findings：主要结果，每条提供 finding_id，例如 F001。正文采用的结果标识与此一致，供后续按结果追溯。
+- findings：主要结果，每条提供唯一 finding_id，例如 F001。正文必须逐字沿用这些编号，且每个 finding_id 都要在可见正文中至少引用一次，不得引用未定义编号。叙述顺序可以调整，但不能改变编号与结果内容的对应关系或遗漏引用。编号错误会使后续校验 FAIL、阻止进入主题生成；生成阶段保存的仍是待校验草稿。
 - boundaries：原文限制、适用条件与推断边界。
 - missing_information：原文未报告、无法取得或不适用的信息及影响。
 
 上述七项均为数组。每条具有 statement、statement_role、information_status 和 source_locations；findings 额外具有 finding_id。
 statement_role 为 original_statement（原文陈述）、original_paraphrase（原文转述他人研究）、ai_inference 或 information_boundary。
 information_status 为 reported、not_reported、not_applicable 或 unavailable。
+二者的耦合是强制的：information_status 取 not_reported、not_applicable 或 unavailable 时，statement_role 必须为 information_boundary，否则后续校验 FAIL。information_status 描述信息在当前论文及本次可用材料中的可获得情况，不表示科学结论已核实。当前论文转述其他研究时，采用 original_paraphrase + reported，定位到当前论文的物理页，并在 statement 中说明“未核查被引原文”；不得冒充当前论文自己的实验结果，也不因未取得被引原文而把当前论文已明确报告的转述改记为 unavailable。
 每条 source_locations 记录 PDF 物理页码（从 1 开始），以及 section、figure、table；不适用的定位项为 null。
 同一结果可以有多个原文位置。缺失或不适用信息不能捏造页码，source_locations 可为空；statement 解释缺失性质及影响。
 保留定量值、单位、比较条件和不确定性；不得把模型推理标成原文结果，也不得把“没有报告”改为“没有发生”。

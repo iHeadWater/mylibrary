@@ -16,7 +16,7 @@ uv sync --all-packages --locked
 
 macOS/Linux 使用 `.venv/bin/python`。`paper-input.json` 是 #40 确认单篇后返回的 READY 记录，不能传搜索候选列表或批处理外层结果。支持 `--paper-input -` 从 stdin 读取。无需配置群组、计划任务或复制作者的 `config.local.json`。
 
-Codex 沿用现有本地 PDF 阅读适配器，需要 pypdf（项目安装已含）及 Poppler 的 `pdfinfo`、`pdftoppm` 等工具；使用项目安装或自己的 PATH，也可显式覆盖工具路径。Claude 使用自身原生 PDF Read 工具，不要求 Poppler。Claude CLI 需支持 `--safe-mode`、`--restricted`、`--no-session-persistence` 和结构化输出（本机验证版本 2.1.278）；旧版本不支持时请升级，不会退回不受限模式。
+Codex 沿用现有本地 PDF 阅读适配器，需要 pypdf（项目安装已含）及 Poppler 的 `pdfinfo`、`pdftoppm` 等工具；使用项目安装或自己的 PATH，也可显式覆盖工具路径。Windows 上验证的 Claude CLI 2.1.280 原生 PDF Read 同样依赖 PATH 中的 `pdftoppm` 渲染页面；缺失时不能把仅取得文本或文件信息当成完整阅读。Claude CLI 需支持 `--safe-mode`、`--restricted`、`--no-session-persistence` 和结构化输出；旧版本不支持时请升级，不会退回不受限模式。安装及 PATH 检查见[首次配置](single-paper-quickstart.md)。`pdf*_executable` 配置用于 Codex 读取适配器，不会替 Claude 原生 Read 设置工具位置。
 
 ## 与 #27 一致的公开默认值和覆盖
 
@@ -49,10 +49,16 @@ Claude 运行采用隔离的只读模式，不加载项目插件或命令。若�
 模型选择进入现有 `build_card_generator_adapter`，两种后端都经过 `SingleAgentCardGeneratorAdapter`，共用模板、提示词、机器字段与待校验保存逻辑。没有另造第二套主体卡业务流程。
 
 - Codex 保留既有沙箱 PDF 路径读取协议。
-- Claude 只开放原生 Read，检查成功回执覆盖所有物理页；禁止命令、写文件、MCP 和联网搜索工具。
+- Claude 只开放原生 Read，检查成功回执覆盖所有物理页；无页码探测不计入覆盖，所有 Read 请求编号必须非空且唯一。失败或错误标志格式异常的回执不能计为成功；禁止命令、写文件、MCP 和联网搜索工具。
 - 两者均检查 PDF 身份/哈希未变、页数和阅读声明一致。阅读工具活动不等于科研理解已被独立验证。
 - 草稿始终 `DRAFT_PENDING_VALIDATION`，不自称已通过内容校验、科学正确或正式发布。七类字段由模型填充，缺失或错误交给 #31 程序报告。
 - 登录失败、缺工具、超时、读取不完整或输出不合协议返回结构化失败；不偷偷换模型、不自动重试。
+
+### 失败诊断边界
+
+保留 `CLAUDE_PDF_GENERATION_FAILED` 等既有错误码。已知协议错误给出具体原因；超时、文件访问、PDF 解析或未知异常使用受控提示，不回显完整命令或任意第三方异常原文，也不落盘原始 CLI stdout/stderr。读取失败可附加模型自报的状态和说明，明确标为“未经独立验证”，不能把它当成程序已确认的根因。
+
+模型说明中识别到命令参数、代码块或异常栈等日志形态时，省略该说明并给出固定排查提示；其余说明去除终端转义和控制字符，过滤已知凭据形态，限制为 600 字符。诊断细节上限 1200 字符。过滤是尽力防护，不保证任意自由文本均可公开。分享错误报告前仍应检查本机路径与私人信息。
 
 ## 验证
 
