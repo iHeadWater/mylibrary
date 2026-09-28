@@ -104,6 +104,39 @@ def test_explicit_missing_information_needs_no_invented_location(case):
     assert "CARD_INFORMATION_BOUNDARY" in codes(check(case))
 
 
+def test_reported_external_paraphrase_is_not_independent_verification(case):
+    statement = case[1]["machine_fields"]["comparison_baselines"][0]
+    statement.update(
+        statement="当前论文第 2 页转述另一研究的比较结果；未核查被引原文。",
+        statement_role="original_paraphrase", information_status="reported",
+    )
+    report = check(case)
+    assert report["status"] == "PASS", report
+    assert not report["scientific_correctness_verified"]
+    statement["source_locations"] = []
+    assert "CARD_LOCATION_REQUIRED" in codes(check(case))
+
+
+@pytest.mark.parametrize("status", ["not_reported", "not_applicable", "unavailable"])
+def test_missing_information_requires_boundary_role_for_every_status(case, status):
+    statement = case[1]["machine_fields"]["comparison_baselines"][0]
+    statement.update(statement="所需比较材料未提供或不适用于当前来源，无法据此比较。",
+                     information_status=status, statement_role="original_paraphrase",
+                     source_locations=[])
+    assert "CARD_INFORMATION_BOUNDARY" in codes(check(case))
+    statement["statement_role"] = "information_boundary"
+    assert check(case)["status"] == "PASS"
+
+
+def test_body_can_reorder_findings_without_renumbering(case):
+    fields = case[1]["machine_fields"]
+    second = deepcopy(fields["findings"][0])
+    second.update(finding_id="F002", statement="Second synthetic result for contract testing.")
+    fields["findings"].append(second)
+    case[1]["card_body_markdown"] = "F002: second fixture result.\n\nF001: first fixture result."
+    assert check(case)["status"] == "PASS"
+
+
 @pytest.mark.parametrize("body", ["", "# Heading only\n", "<!-- F001 hidden -->", "TBD"])
 def test_missing_readable_body_fails_even_with_machine_fields(case, body):
     case[1]["card_body_markdown"] = body

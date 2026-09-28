@@ -78,6 +78,10 @@ PASS 记录的 eligible_for_theme_generation 为 true；scientific_correctness_v
 
 ### 原文位置与结果编号
 
+`information_status` 描述信息在当前论文及本次可用材料中的可获得情况，**不是科学正确性或独立核查状态**。当前论文转述其他研究但未取得被引原文时，使用 `original_paraphrase + reported`，定位到当前论文的物理页，并在 statement 明确注明“未核查被引原文”；不能写成当前论文自己的实验结果。当前来源未报告、确实不适用或所需材料不可获得时，分别使用 `not_reported`、`not_applicable`、`unavailable`，配合 `information_boundary` 说明影响。
+
+正文叙述顺序可以调整；必须保持每个 finding_id 与对应结果的关联，完整引用所有编号且不引用未定义编号。生成阶段允许保存待校验草稿；以下规则失败会阻止下游准入，不会把草稿伪装成已校验产物。
+
 - information_status=reported 的记录至少有一个原文位置，每个位置的 pdf_page 必须是 1 到来源 PDF 总页数之间的整数。
 - section、figure、table 为非空文本或 null；不依据这些文本声称已经验证实际章节、图表存在。
 - not_reported、not_applicable、unavailable 必须明确标为 information_boundary，并写出具体说明；这些记录可以没有原文位置，无需捏造页码。
