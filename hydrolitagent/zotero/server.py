@@ -185,6 +185,31 @@ def _local_api_url(path: str) -> str:
     return f"{LOCAL_API_BASE}{LOCAL_API_USER}{path}"
 
 
+def _local_api_headers() -> dict[str, str]:
+    """Headers every Local API request must carry.
+
+    Zotero's local server validates the ``Host`` header as DNS-rebinding
+    protection and answers ``400 Bad request`` to anything that is not the
+    literal ``127.0.0.1`` or ``localhost`` — other loopback addresses included
+    (measured: ``Host: 127.0.0.2:23119`` is rejected just like
+    ``host.docker.internal:23119``).  The default base is ``host.docker.internal``
+    because that is the only name that reaches the host from inside a container,
+    and that name is exactly what Zotero refuses, so the loopback form is set
+    explicitly and the port is carried over from the base.
+
+    Rewriting the name does not change where the request lands — the connection
+    still goes to ``LOCAL_API_BASE`` — only what Zotero sees as the destination.
+
+    Returns ``{}`` when the base is already loopback, so a host-side run (and
+    every test that points at ``127.0.0.1``) sends exactly what it did before.
+    """
+    parts = urlparse(LOCAL_API_BASE)
+    if parts.hostname in ("127.0.0.1", "localhost"):
+        return {}
+    port = f":{parts.port}" if parts.port else ""
+    return {"Host": f"127.0.0.1{port}"}
+
+
 def _valid_key(key: str) -> bool:
     """Whether ``key`` is shaped like a Zotero key.
 
@@ -838,7 +863,9 @@ async def zotero_get_fulltext(item_key: str) -> str:
     if error:
         return error
     try:
-        async with httpx.AsyncClient(timeout=LOCAL_API_TIMEOUT) as client:
+        async with httpx.AsyncClient(
+            timeout=LOCAL_API_TIMEOUT, headers=_local_api_headers()
+        ) as client:
             payload, error = await _fetch_fulltext_payload(client, item_key)
             if error or payload is None:
                 return _make_error("zotero_get_fulltext", error)
@@ -950,7 +977,9 @@ async def zotero_get_file_info(item_key: str) -> str:
     if error:
         return error
     try:
-        async with httpx.AsyncClient(timeout=LOCAL_API_TIMEOUT) as client:
+        async with httpx.AsyncClient(
+            timeout=LOCAL_API_TIMEOUT, headers=_local_api_headers()
+        ) as client:
             payload, error = await _build_file_info(client, item_key)
             if error or payload is None:
                 return _make_error("zotero_get_file_info", error)
