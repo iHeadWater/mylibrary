@@ -116,7 +116,12 @@ def copernicus_pdf_url(suffix: str) -> str:
         )
     m = re.fullmatch(r"([a-z]+)-(\d{4})-(\d+)", suffix)
     if m:
-        journal = m.group(1)
+        journal, year = m.group(1), m.group(2)
+        # egusphere requires a year directory segment; essd/hess do not
+        if journal == "egusphere":
+            return (
+                f"https://{journal}.copernicus.org/preprints/{year}/{suffix}/{suffix}.pdf"
+            )
         return f"https://{journal}.copernicus.org/preprints/{suffix}/{suffix}.pdf"
     raise ValueError(f"Unrecognized Copernicus suffix: {suffix}")
 
@@ -227,6 +232,19 @@ async def wait_challenge_clear(page, timeout_s: int = 90) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _is_signed_pdf_url(url: str) -> bool:
+    """True only for the real signed PDF viewer URL.
+
+    Must exclude three impostors that all contain the substring 'main.pdf':
+    - the security-verification page (query has 'p=...main.pdf', path is /craft/capi/cfts/init)
+    - the pdfft redirect URL (query has 'pid=...-main.pdf')
+    """
+    return (
+        url.startswith("https://pdf.sciencedirectassets.com/")
+        and "/main.pdf?" in url
+    )
+
+
 async def sd_flow(ctx, pii: str, dest: Path) -> bool:
     """ScienceDirect: article page -> pdfft -> signed main.pdf viewer -> anchor download.
 
@@ -250,29 +268,31 @@ async def sd_flow(ctx, pii: str, dest: Path) -> bool:
         pass  # navigation may be replaced by the redirect chain
     deadline = time.time() + 120
     while time.time() < deadline:
-        if "main.pdf" in page.url:
+        if _is_signed_pdf_url(page.url):
             break
         await asyncio.sleep(4)
-    if "main.pdf" not in page.url:
+    if not _is_signed_pdf_url(page.url):
         log(f"  never reached main.pdf (url={page.url[:70]})")
         return False
     for _ in range(6):  # URL stabilization across secondary redirects
         u1 = page.url
         await asyncio.sleep(5)
-        if page.url == u1 and "main.pdf" in page.url:
+        if page.url == u1 and _is_signed_pdf_url(page.url):
             break
     for attempt in range(4):
-        if "main.pdf" not in page.url:
+        if not _is_signed_pdf_url(page.url):
             await asyncio.sleep(5)
             continue
         try:
             async with page.expect_download(timeout=60000) as dl_info:
                 await page.evaluate(ANCHOR_JS)
             await (await dl_info.value).save_as(str(dest))
-            return True
+            if verify_pdf(dest):
+                return True
+            log(f"  anchor attempt {attempt + 1}: security-verification HTML captured, retrying")
         except Exception:
             log(f"  anchor attempt {attempt + 1} failed, retrying")
-            await asyncio.sleep(6)
+        await asyncio.sleep(6)
     return False
 
 
