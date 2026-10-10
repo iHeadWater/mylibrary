@@ -32,7 +32,7 @@ from hydro_platform.paper_input import (
 from hydro_platform.failure_records import save_failure_record
 from hydro_platform.progress import ConsoleProgress
 from hydro_platform.themes import run_themes
-from hydro_platform.tasks import TaskStoreError, list_tasks, sync_tasks
+from hydro_platform.tasks import TaskStoreError
 from hydro_platform.zotero import ZoteroApiError, preflight
 
 

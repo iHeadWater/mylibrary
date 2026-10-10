@@ -169,11 +169,6 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
         )
     if data["card_status"] == "ROUGH":
         generation = data.get("generation")
-        if isinstance(generation, dict) and generation.get("workflow_protocol_version") == "rough-card-draft-recovery-v1":
-            from hydro_platform.recovered_manifest import recovered_generation_valid
-            if not recovered_generation_valid(generation):
-                raise EvidencePackageError("EVIDENCE_MANIFEST_INVALID", "草稿恢复记录无效，不得伪装成完整执行审计")
-            return data
         required_generation_strings = (
             "generator_adapter",
             "generator_protocol_version",

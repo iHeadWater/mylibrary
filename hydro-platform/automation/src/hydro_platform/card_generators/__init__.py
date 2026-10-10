@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from hydro_platform.card_generators.base import CardGeneratorAdapter
-from hydro_platform.card_generators.codex_cli import CodexCliAdapter
-from hydro_platform.card_generators.multi_agent import MultiAgentCardGeneratorAdapter
 from hydro_platform.config import CardGeneratorConfig
 from hydro_platform.progress import ProgressCallback
 
@@ -11,29 +9,28 @@ def build_card_generator_adapter(
     config: CardGeneratorConfig,
     *, progress: ProgressCallback | None = None,
 ) -> CardGeneratorAdapter:
+    """按配置装配单篇制卡适配器。
+
+    收敛到最小核心后只保留两个后端，且都要求 single_agent + local_path：
+    - `claude_cli`：Claude Code CLI
+    - `codex_cli`：Codex CLI（经 CodexLocalPdfAdapter 直读本地 PDF）
+
+    已随本次收敛移除：multi_agent 工作流（`multi_agent.py`）、
+    以及 codex_cli 非 local_path 的 MCP 读取分支（`pdf_reader_mcp.py`）。
+    """
     if config.adapter == "claude_cli":
         from hydro_platform.card_generators.claude_cli import ClaudeCliAdapter
         from hydro_platform.card_generators.single_agent import SingleAgentCardGeneratorAdapter
         if config.workflow_mode != "single_agent" or config.pdf_reader.adapter != "local_path":
-            raise ValueError("Claude 适配器只接入现有单篇 single_agent + local_path 工作流")
+            raise ValueError("Claude 适配器只接入单篇 single_agent + local_path 工作流")
         return SingleAgentCardGeneratorAdapter(ClaudeCliAdapter(config, progress=progress), progress=progress)
     if config.adapter == "codex_cli":
-        if config.pdf_reader.adapter == "local_path":
-            from hydro_platform.card_generators.codex_local_pdf import CodexLocalPdfAdapter
-            provider = CodexLocalPdfAdapter(config, progress=progress)
-        else:
-            provider = CodexCliAdapter(config, progress=progress)
-        if config.workflow_mode == "single_agent":
-            from hydro_platform.card_generators.single_agent import SingleAgentCardGeneratorAdapter
-            if config.pdf_reader.adapter != "local_path":
-                raise ValueError("单 Agent 当前要求本地 PDF 路径读取")
-            return SingleAgentCardGeneratorAdapter(provider, progress=progress)
-        if config.multi_agent_workflow is None:
-            raise ValueError("证据卡生成必须配置强制多 Agent 工作流")
-        return MultiAgentCardGeneratorAdapter(
-            provider,
-            config.multi_agent_workflow,
-            progress=progress,
+        from hydro_platform.card_generators.codex_local_pdf import CodexLocalPdfAdapter
+        from hydro_platform.card_generators.single_agent import SingleAgentCardGeneratorAdapter
+        if config.workflow_mode != "single_agent" or config.pdf_reader.adapter != "local_path":
+            raise ValueError("Codex 适配器只接入单篇 single_agent + local_path 工作流")
+        return SingleAgentCardGeneratorAdapter(
+            CodexLocalPdfAdapter(config, progress=progress), progress=progress,
         )
     raise ValueError(f"未注册的证据卡生成适配器：{config.adapter}")
 

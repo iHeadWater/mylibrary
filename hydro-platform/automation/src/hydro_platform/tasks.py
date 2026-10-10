@@ -13,7 +13,6 @@ from typing import Any, Callable
 
 from hydro_platform.config import PdfGateConfig, TaskConfig, ZoteroConfig
 from hydro_platform.pdf_gate import evaluate_pdf_gate
-from hydro_platform.snapshot import fetch_snapshot
 from hydro_platform.zotero import ZoteroClient
 
 
@@ -490,46 +489,6 @@ def _summary(registry: dict[str, Any], path: str | Path, *, changed_count: int =
         "tasks": tasks,
         "state_path": str(Path(path).resolve()),
     }
-
-
-def sync_tasks(
-    zotero: ZoteroConfig,
-    pdf_gate: PdfGateConfig,
-    task_config: TaskConfig,
-    task_path: str | Path,
-    lock_path: str | Path,
-    *,
-    page_size: int,
-    client: ZoteroClient | None = None,
-    now: datetime | None = None,
-    snapshot_consumer: Callable[[dict[str, Any]], None] | None = None,
-) -> dict[str, Any]:
-    if zotero.group_id is None:
-        raise TaskStoreError("CONFIG_ERROR", "任务同步需要目标 Zotero 群组 ID")
-    with RuntimeLock(lock_path, stale_seconds=task_config.lock_stale_seconds):
-        registry = load_task_registry(task_path, zotero.group_id, now=now)
-        snapshot = fetch_snapshot(zotero, page_size=page_size, client=client)
-        if snapshot_consumer is not None:
-            snapshot_consumer(snapshot)
-        gates = {
-            parent_key: evaluate_pdf_gate(
-                zotero,
-                pdf_gate,
-                parent_key,
-                client=client,
-            )
-            for parent_key in snapshot["parents"]
-        }
-        changed_count = reconcile_tasks(
-            registry,
-            snapshot,
-            gates,
-            task_config,
-            now=now,
-        )
-        if changed_count or not Path(task_path).exists():
-            save_task_registry(task_path, registry)
-        return _summary(registry, task_path, changed_count=changed_count)
 
 
 def list_tasks(

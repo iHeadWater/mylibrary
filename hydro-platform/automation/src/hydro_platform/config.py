@@ -158,7 +158,7 @@ class CardGeneratorConfig:
     smoke_test_timeout_seconds: float
     generation_timeout_seconds: float
     pdf_reader: PdfReaderConfig
-    workflow_mode: str = "multi_agent"  # legacy configurations remain explicit/readable
+    workflow_mode: str = "single_agent"  # 收敛后只剩单 Agent（multi_agent 已移除）
     multi_agent_workflow: CardQualityWorkflowConfig | None = None
     progress: ProgressConfig = ProgressConfig()
     connection_guard: ConnectionGuardConfig = ConnectionGuardConfig()
@@ -885,7 +885,7 @@ def load_config(
             "card_generator.pdf_reader.output_token_limit 不能大于 200000"
         )
 
-    workflow_mode = raw_card_generator.get("workflow_mode", "multi_agent")
+    workflow_mode = raw_card_generator.get("workflow_mode", "single_agent")
     if workflow_mode not in {"single_agent", "multi_agent"}:
         raise ConfigError("card_generator.workflow_mode 仅支持 single_agent 或 multi_agent")
     multi_agent_workflow = None
