@@ -243,6 +243,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    # 入口统一兜底：默认中文 Windows 控制台（GBK/cp936）打不出 "✓" 等符号，
+    # `paths` 人读分支曾因此抛 UnicodeEncodeError（finding F-R2-003）。
+    # 从源头 reconfigure 而非捕 UnicodeEncodeError——后者会吞掉真正该暴露的
+    # 编码问题；仓库先例见 scripts/download_paper.py 的同款写法。
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, OSError):
+        # 老 Python 无 reconfigure / 流已关闭：不阻断主流程
+        pass
     _load_dotenv()
     parser = build_parser()
     args = parser.parse_args()
