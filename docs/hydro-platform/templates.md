@@ -11,6 +11,22 @@
 
 `hydro-platform/templates/evidence-cards/` 保存平台当前可识别的九类 Markdown 证据卡模板。它们只提供科研内容结构，正文骨架已采用本仓库 `skills/hydrology-evidence-cards/` 的 V1.7 版本；模板不接入该 Skill 的脚本、目录、编号、状态或工作流。
 
+> **与 `skills/hydrology-evidence-cards/assets/templates/` 是什么关系**
+>
+> 那是这九类骨架的**源**，本目录是**派生**：9 个同名文件，正文结构沿用，但本目录这份替换/补充了
+> **管线契约所需的 15 个 front matter 字段与占位符**（`evidence_id` / `card_state` /
+> `zotero_group_id` / `zotero_parent_key` / `source_pdf_sha256` / `template_version` …），
+> 由校验器 `evidence_templates.py` 强制要求。两份文件**内容不同且刻意不同步**：
+>
+> | | `skills/…/assets/templates/` | `hydro-platform/templates/evidence-cards/` |
+> |---|---|---|
+> | 面向 | **人读**证据卡 | **模型生成**粗卡 |
+> | front matter | `profile_schema` / `artifact_types` / `default_evidence_roles` / `conditional_method_modules` | `evidence_id` / `card_state` / `zotero_*` / `source_pdf_sha256` / … |
+> | 谁在用 | `skills/hydrology-evidence-cards/SKILL.md` | `evidence-generate` / `evidence-validate` |
+>
+> 改源目录的正文骨架**不会**自动同步到这里；要同步需按下面「版本规则」升版本、更新 `_catalog.json`
+> 的来源 commit 与内容指纹。
+
 ### 当前模板
 
 | 模板 ID | 文件 | 用途 |

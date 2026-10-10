@@ -93,6 +93,17 @@ L0 and L1 must not be marked verified or directly applicable. Enter L3 only when
 
 Zotero itemType is only a clue. Choose artifact_type from what the object is and evidence_roles from what its claims do in the current research decision.
 
+> **本目录是这九类骨架的源。** 仓库内另有一份**派生**的机器模板在
+> `hydro-platform/templates/evidence-cards/`（9 个同名文件），由本目录的骨架派生：
+> 正文结构沿用，但替换/补充了**管线契约所需的 15 个 front matter 字段与占位符**
+> （`evidence_id` / `card_state` / `zotero_group_id` / `source_pdf_sha256` / `template_version` …），
+> 供 `evidence-generate` 让模型生成粗卡用。
+>
+> **两份刻意不同步**：本目录面向**人读**证据卡（`profile_schema` / `artifact_types` /
+> `default_evidence_roles`），派生那份面向**模型生成**且受校验器 `evidence_templates.py` 强制约束。
+> 改本目录的正文骨架**不会**自动影响那份派生模板；如需同步，按
+> `docs/hydro-platform/templates.md` 的「版本规则」升版本并更新 `_catalog.json` 指纹。
+
 ## Conditional modules
 
 - Add assets/modules/water-context.md when the evidence concerns a concrete water object, basin, station, period, event, scenario or engineering system.
