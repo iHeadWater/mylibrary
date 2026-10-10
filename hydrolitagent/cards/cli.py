@@ -78,7 +78,7 @@ def _parser() -> argparse.ArgumentParser:
         if name in {"paper-input", "evidence-generate", "themes-run"}:
             command.add_argument("--group-id", help="覆盖目标 Zotero 群组 ID")
         if name == "evidence-validate":
-            command.add_argument("--assets-root", help="选择另一份 hydro-platform 资产根；与 --config 互斥")
+            command.add_argument("--assets-root", help="选择另一份资产根（templates/prompts/schemas）；与 --config 互斥")
             command.add_argument("--report-dir", default=os.environ.get("HYDRO_PLATFORM_VALIDATION_REPORT_DIR"),
                                  help="校验记录根；默认草稿旁 validations/，支持环境变量 HYDRO_PLATFORM_VALIDATION_REPORT_DIR")
             command.add_argument("--draft", required=True, help="#30 保存的 draft.json")
