@@ -1,33 +1,5 @@
 {
   "schema_version": 1,
-  "scheduler": {
-    "enabled": true,
-    "task_name": "HydroPlatform-qinjiajun",
-    "daily_time": "09:00",
-    "poll_interval_minutes": 30,
-    "retry_interval_minutes": 60,
-    "max_attempts_per_slot": 3,
-    "logon_delay_seconds": 120,
-    "execution_time_limit_seconds": 0,
-    "powershell_executable": "powershell",
-    "command_timeout_seconds": 30
-  },
-  "deployment": {
-    "native_tools_dir": ".tools/poppler",
-    "native_lock_file": "automation/setup/native-tools.lock.json",
-    "native_cache_dir": ".runtime/native-cache",
-    "environment_dir": "../.venv",
-    "dependency_lock_file": "automation/setup/dependencies.lock.json",
-    "wheel_cache_dir": ".runtime/wheel-cache",
-    "base_python": null,
-    "install_timeout_seconds": 300,
-    "download_timeout_seconds": 30
-  },
-  "activity_reporting": {
-    "enabled": true,
-    "utc_offset_minutes": 480,
-    "system_actor_id": "SYS-CARD-01"
-  },
   "theme_pipeline": {
     "enabled": true,
     "research_goal": null,
@@ -82,9 +54,6 @@
     "timeout_seconds": 5,
     "process_timeout_seconds": 5
   },
-  "scan": {
-    "page_size": 100
-  },
   "pdf_gate": {
     "min_file_size_bytes": 1024,
     "min_text_characters": 1000,
@@ -99,7 +68,11 @@
     "proxy": {
       "enabled": true,
       "url": "http://127.0.0.1:7897",
-      "no_proxy": ["localhost", "127.0.0.1", "::1"]
+      "no_proxy": [
+        "localhost",
+        "127.0.0.1",
+        "::1"
+      ]
     },
     "pdf_direct_trial": {
       "prompt_file": "automation/prompts/pdf-direct-read-trial-v2.md",

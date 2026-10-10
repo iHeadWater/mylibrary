@@ -12,11 +12,6 @@ These tests encode the TARGET state of the restructure, not the current state:
   nothing generated is tracked) and the MECHANISM (the ignore rules that keep it
   from being committed in the first place) are guarded, because the outcome check
   alone only fires after the damage is done;
-* deployment is DUAL-MODE: an ``environment_dir`` that resolves outside
-  ``hydro-platform/`` (the workspace's shared ``.venv``) is owned by ``uv``
-  (``uv sync``) and only verified by the platform, while an ``environment_dir``
-  inside the platform root is still provisioned by the platform itself (venv +
-  hash-locked wheels) for deployments isolated from the repo dependency tree.
 
 They therefore FAIL on a branch where the platform is still rooted at the repo
 root. That is expected and intended: the suite is RED until the restructure lands.
@@ -127,11 +122,6 @@ MIN_PLATFORM_SOURCE_FILES = 20
 PLATFORM_DOCS_DIR = DOCS_ROOT / "hydro-platform"
 MIN_PLATFORM_DOC_FILES = 5
 
-# ``deployment.py`` must not install wheels into the environment itself; ``uv`` owns it.
-WHEEL_INSTALL_CALL = re.compile(
-    r"\b_?(?:[a-z_]*install[a-z_]*wheel[a-z_]*|_wheel[a-z_]*)\s*\(",
-    re.IGNORECASE,
-)
 QUOTED_INSTALL_ARG = re.compile(r"""["']install["']""")
 WHEEL_MATERIAL = re.compile(
     r"\.whl\b|--require-hashes|--no-index|--find-links|\bwheels?\b",
@@ -429,68 +419,6 @@ def test_config_path_contract() -> None:
 # --------------------------------------------------------------------------------------
 # 5. environment directory lives in the workspace .venv
 # --------------------------------------------------------------------------------------
-
-
-def test_environment_dir_in_workspace_venv() -> None:
-    """Requirement: config points the runtime environment at ``<repo root>/.venv``.
-
-    ``deployment.environment_dir`` must resolve (relative to ``hydro-platform/``)
-    to ``<repo root>/.venv``, and
-    ``card_generator.pdf_direct_trial.python_executable`` must live inside that
-    same ``.venv`` - no environment is created outside the workspace.
-    """
-
-    config = _load_platform_config()
-
-    raw_environment_dir = _dig(config, "deployment", "environment_dir")
-    assert isinstance(raw_environment_dir, str), (
-        "deployment.environment_dir must be a string, got "
-        f"{type(raw_environment_dir).__name__}"
-    )
-
-    expected_environment_dir = (REPO_ROOT / ".venv").resolve()
-    environment_dir = _resolve_against_platform(raw_environment_dir)
-    assert environment_dir == expected_environment_dir, (
-        "deployment.environment_dir must resolve to "
-        f"{expected_environment_dir} (relative to {PLATFORM_ROOT}), got "
-        f"{environment_dir} from raw value {raw_environment_dir!r}"
-    )
-
-    raw_python_executable = _dig(
-        config, "card_generator", "pdf_direct_trial", "python_executable"
-    )
-    assert isinstance(raw_python_executable, str), (
-        "card_generator.pdf_direct_trial.python_executable must be a string, got "
-        f"{type(raw_python_executable).__name__}"
-    )
-
-    python_executable = _resolve_against_platform(raw_python_executable)
-    assert _is_within(python_executable, expected_environment_dir), (
-        "card_generator.pdf_direct_trial.python_executable must resolve under "
-        f"{expected_environment_dir}, got {python_executable} from raw value "
-        f"{raw_python_executable!r}"
-    )
-
-
-# --------------------------------------------------------------------------------------
-# 6. dual-mode deployment: uv-managed OR self-contained
-# --------------------------------------------------------------------------------------
-
-# The two modes are told apart by where ``deployment.environment_dir`` resolves
-# relative to the platform root, so containment is the load-bearing primitive.
-DUAL_MODE_BRANCH = "is_relative_to"
-
-# Evidence of the self-contained provisioning path: the hash-locked wheel install.
-HASH_LOCKED_INSTALL_FLAG = "--require-hashes"
-
-
-
-
-# --------------------------------------------------------------------------------------
-# 7. docs links stay inside docs/
-# --------------------------------------------------------------------------------------
-
-
 def test_docs_have_no_escaping_links() -> None:
     """Requirement: documentation links never escape ``docs/``.
 
