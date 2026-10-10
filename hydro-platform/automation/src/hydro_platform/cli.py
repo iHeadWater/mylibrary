@@ -248,26 +248,6 @@ def _render_human(result: dict[str, Any]) -> str:
                 f"\n- 来源提交：{result['source_commit']}"
                 f"\n- 目录：{result['templates_dir']}"
             )
-        if result.get("component") == "card_generator":
-            if result.get("operation") == "smoke_test":
-                usage = result.get("usage") or {}
-                return (
-                    "通过：Codex 最小模型调用成功"
-                    f"\n- 适配器：{result['adapter']}"
-                    f"\n- CLI 版本：{result['cli_version']}"
-                    f"\n- 模型来源：{result['model_source']}"
-                    "\n- 推理强度："
-                    f"{result.get('configured_reasoning_effort') or '模型默认'}"
-                    f"\n- 输出 token：{usage.get('output_tokens', '未知')}"
-                    f"\n- 安全模式：{result['sandbox']} / ephemeral"
-                )
-            return (
-                "通过：Codex CLI 制卡运行环境可用"
-                f"\n- 适配器：{result['adapter']}"
-                f"\n- CLI 版本：{result['cli_version']}"
-                f"\n- 登录方式：{result['detected_auth_mode']}"
-                f"\n- 可执行程序：{result['resolved_executable']}"
-            )
         if "delivery_status" in result:
             return (
                 "通过：Zotero 原始 PDF 已复核，可以交给制卡器"
