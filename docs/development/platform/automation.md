@@ -1,6 +1,6 @@
 # 自动化边界
 
-`hydro-platform` 把可确定的 PDF 门禁、来源身份、字段校验、重复检查和原子保存交给 Python，把主体卡提炼和候选主题综合交给所选 CLI（Codex / Claude）。自动化产出建议和候选知识，不替代研究者确认正式主题、科学结论或 research idea。
+`hydrolitagent/cards/` 把可确定的 PDF 门禁、来源身份、字段校验、重复检查和原子保存交给 Python，把主体卡提炼和候选主题综合交给所选 CLI（Codex / Claude）。自动化产出建议和候选知识，不替代研究者确认正式主题、科学结论或 research idea。
 
 单篇输入链路见[主体卡草稿](../../user-guide/cards/subject-card-draft.md)：接收 `paper-input` 的 READY 记录，一次模型调用输出详细正文和机器字段，按 #27 的产物根保存待校验草稿。
 

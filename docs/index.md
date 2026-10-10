@@ -45,7 +45,7 @@ cp .env.example .env
 # 编辑 .env,填入 ZOTERO_API_KEY 和 ZOTERO_LIBRARY_ID
 ```
 
-> 本仓库只有一个包 **`hydrolitagent`**——原 `hydro-platform` 已并入其 `hydrolitagent/cards/` 子包。`.venv` 与 `uv.lock` 仍只有一份。
+> 本仓库只有一个包 **`hydrolitagent`**——文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包。`.venv` 与 `uv.lock` 仍只有一份。
 
 详见 [安装配置](getting-started/installation.md)。
 

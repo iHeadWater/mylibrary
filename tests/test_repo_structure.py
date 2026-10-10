@@ -204,11 +204,11 @@ def _dig(data: object, *keys: str) -> object:
     current = data
     for index, key in enumerate(keys):
         assert isinstance(current, dict), (
-            f"expected an object at '{'.'.join(keys[:index])}' in hydro-platform config, "
+            f"expected an object at '{'.'.join(keys[:index])}' in the cards config, "
             f"found {type(current).__name__}"
         )
         assert key in current, (
-            f"hydro-platform config is missing the required key '{'.'.join(keys[: index + 1])}'"
+            f"the cards config is missing the required key '{'.'.join(keys[: index + 1])}'"
         )
         current = current[key]
     return current
@@ -280,14 +280,14 @@ def _is_ignored(path: str) -> bool:
 def test_repo_no_generated_artifacts_tracked() -> None:
     """Requirement: generated output must never be committed.
 
-    Under ``hydro-platform/`` the only tracked paths may be the platform's reusable
-    assets (``automation/``, ``templates/``, ``config/``) plus the single file
-    ``hydro-platform/pyproject.toml``. In particular nothing from
-    ``evidence-packs/``, ``themes/``, ``reports/``, ``activity/`` or ``members/``
-    may be tracked - those are runtime products written into the workspace.
+    Inside the ``hydrolitagent/cards/`` package the only tracked paths may be the
+    platform's code (``*.py``) and its reusable assets (``assets/``). In particular
+    nothing from ``evidence-packs/``, ``themes/``, ``reports/``, ``activity/`` or
+    ``members/`` may be tracked - those are runtime products written into the repo
+    root.
 
     Non-vacuity: the precondition requires the platform's real source tree to be
-    tracked under ``hydro-platform/`` (at least ``MIN_PLATFORM_SOURCE_FILES``
+    tracked under ``hydrolitagent/cards/`` (at least ``MIN_PLATFORM_SOURCE_FILES``
     ``.py`` files in its package) - the platform must have actually moved, not
     merely a directory name existing - otherwise the assertions below are
     vacuously true while the platform still sits at the repo root.
@@ -359,7 +359,7 @@ def test_repo_no_platform_readme() -> None:
     (in any case variant) may live under the ``hydrolitagent/cards/`` package tree.
 
     Non-vacuity: the precondition requires the platform's real source tree to be
-    tracked under ``hydro-platform/`` (at least ``MIN_PLATFORM_SOURCE_FILES``
+    tracked under ``hydrolitagent/cards/`` (at least ``MIN_PLATFORM_SOURCE_FILES``
     ``.py`` files in its package) - the platform must have actually moved, not
     merely a directory name existing - otherwise the assertion below is vacuously
     true while the platform still sits at the repo root.
@@ -530,7 +530,7 @@ def test_platform_output_dirs_are_ignored() -> None:
     could be deleted and the suite would stay green until damage was done.
 
     ``git check-ignore`` also decides on paths that do not exist on disk yet, so
-    this is meaningful before ``hydro-platform/`` is even created. It is evaluated
+    this is meaningful before the cards package tree is even created. It is evaluated
     with ``--no-index`` (pure rule evaluation), see ``_is_ignored``.
 
     Positive cases: evidence packs, themes, reports, activity ledgers, member

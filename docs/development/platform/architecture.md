@@ -16,7 +16,7 @@ flowchart TB
         QUERY[查询、附件与全文访问]
     end
 
-    subgraph Platform[hydro-platform]
+    subgraph Platform[hydrolitagent/cards]
         INPUT[单篇论文输入]
         GATE[PDF 门禁与哈希]
         CARD[制卡与模型适配器]
@@ -38,7 +38,7 @@ flowchart TB
     INPUT --> RUNTIME
 ```
 
-仓库只有一个包 `hydrolitagent`——文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包（原 `hydro-platform` 已并入）。`.venv` 与 `uv.lock` 只有一份。自动化运行时为 Windows-only；文献工具链中的部分能力可以独立运行。
+仓库只有一个包 `hydrolitagent`——文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包。`.venv` 与 `uv.lock` 只有一份。自动化运行时为 Windows-only；文献工具链中的部分能力可以独立运行。
 
 ## 组件职责
 

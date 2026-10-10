@@ -6,12 +6,12 @@
 |---|---|---|
 | **入库**（采集） | 论文 PDF **下载** + **建 Zotero 条目**(含 `linked_file` 附件) | `scripts/download_paper.py`、`hydrolitagent/zotero/`、`hydrolitagent/literature/download_pdf.py` |
 | **消费** | 从 Zotero 库读出 → 精读/分析卡 → 主题分类/知识图谱 → 公众号/播客/B 站 | `hydrolitagent/literature/`、`hydrolitagent/graph/`、`skills/` |
-| **消费（文献卡与主题卡）** | 自己的 Zotero 库 → 文献卡 → 校验 → 主题卡 | [`hydro-platform/`](cards/index.md) |
+| **消费（文献卡与主题卡）** | 自己的 Zotero 库 → 文献卡 → 校验 → 主题卡 | [文献卡与主题卡](cards/index.md) |
 
 两点容易搞混:
 
 - **`hydrolitagent` 横跨两侧** —— 入库的几个命令和消费的绝大部分都在它里面。它不是"入库侧"的代名词。
-- **消费侧内部分两支** —— 上面那一支产出**当期内容**(文章、播客、图谱、分析卡);`hydro-platform` 那一支把**你自己的 Zotero 文献**沉淀成**长期可追溯的文献卡与主题卡**。
+- **消费侧内部分两支** —— 上面那一支产出**当期内容**(文章、播客、图谱、分析卡);文献卡与主题卡那一支把**你自己的 Zotero 文献**沉淀成**长期可追溯的文献卡与主题卡**。
 
 ## 入库：下载与入 Zotero
 

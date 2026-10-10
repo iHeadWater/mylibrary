@@ -53,7 +53,7 @@ external = false     # root 指向仓库外时必须显式设为 true
 
 ### 2. 外部路径必须显式 opt-in，但**不在 import 期报错**
 
-`hydro-platform` 的 `paths.artifact_root_external` 是同一约定，但它在 `load_config()` 里直接抛
+`hydrolitagent/cards/` 的 `paths.artifact_root_external` 是同一约定，但它在 `load_config()` 里直接抛
 `ConfigError`。**不照抄这一点**：`literature/_paths.py` 是被库模块 import 的副作用，
 import 就抛会连 `import bilibili_upload` 都炸，而用户只是打错一个路径。
 

@@ -14,7 +14,7 @@ cd mylibrary
 uv sync --all-packages
 ```
 
-> **本仓库只有一个包 `hydrolitagent`**——原独立包 `hydro-platform` 已并入它的
+> **本仓库只有一个包 `hydrolitagent`**——文献卡与主题卡能力在它的
 > `hydrolitagent/cards/` 子包（workspace 成员随之取消）。
 >
 > `uv sync --all-packages` 照旧可用（现在等价于同步根包）。

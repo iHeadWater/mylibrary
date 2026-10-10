@@ -42,7 +42,7 @@ uv sync --all-packages   # 装依赖(原 workspace 成员已并入 hydrolitagent
 cp .env.example .env   # 填入 DEEPSEEK_API_KEY;设置 HYDROLITAGENT_OUTPUT、ZOTERO_API_KEY、ZOTERO_LIBRARY_ID
 ```
 
-> 本仓库只有一个包 **`hydrolitagent`** —— 原 `hydro-platform` 已并入其 `hydrolitagent/cards/` 子包(workspace 成员随之取消)。`.venv` 与 `uv.lock` 仍只有一份;`uv sync --all-packages` 照旧可用。
+> 本仓库只有一个包 **`hydrolitagent`** —— 文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包(workspace 成员随之取消)。`.venv` 与 `uv.lock` 仍只有一份;`uv sync --all-packages` 照旧可用。
 
 完整参考(Zotero Desktop / Linked Attachment Base Directory 配置、环境变量、TOML 配置)见[安装配置](docs/getting-started/installation.md)。
 
@@ -148,7 +148,7 @@ uv run hydrolitagent cards ai-config --json
 | `weekly-report-skill` | NotebookLM 输出 → 公众号周报 MD |
 | `figure-skill-v2` | 每篇论文配图 + 整期封面(优先 PDF 提取,否则智谱 CogView 生成) |
 | `bilibili-upload` | 播客音频 → MP4 → B 站上传 |
-| `hydro-platform` | 文献卡与主题卡平台 CLI 的入口(自己的 Zotero 文献 → 文献卡 → 主题卡)。运行时为 Windows-only。 |
+| `literature-cards` | 文献卡与主题卡平台 CLI 的入口(自己的 Zotero 文献 → 文献卡 → 主题卡)。运行时为 Windows-only。 |
 | `hydrology-evidence-cards` | Zotero 源论文 → 人读证据卡(科研工作流,含机器审计字段) |
 | `hydrology-theme-synthesis` | 文献 → 初步主题 → 人工筛选门 → 正式主题(科研工作流) |
 

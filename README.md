@@ -11,10 +11,10 @@
 | 线 | 做什么 | 代码 / 数据 | 入口 |
 |---|---|---|---|
 | **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/播客/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（12 个技能） | [文档](docs/user-guide/mcp-tools.md) |
-| **文献卡与主题卡平台** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验，**运行时 Windows-only** | `hydrolitagent/cards/`、`skills/hydro-platform/` | [平台文档](docs/user-guide/cards/index.md) |
+| **文献卡与主题卡平台** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验，**运行时 Windows-only** | `hydrolitagent/cards/`、`skills/literature-cards/` | [平台文档](docs/user-guide/cards/index.md) |
 | **科研工作流** | 人读证据卡与主题综合：来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合。纯标准库脚本，人工决策不可绕过 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、`docs/research-workflow/`（中文规范） | [平台总览](docs/research-workflow/index.md) |
 
-**两条线解决的问题不同**，不要混用：`hydro-platform` 追求「给定一篇论文稳定产出可校验的主体卡与候选主题」，科研工作流追求「每一条科学表述都回链可核对的原文，且正式主题必须由人签字」。前者自动化强、不做科研裁决；后者有完整人工决策门，但没有调度器。
+**两条线解决的问题不同**，不要混用：文献卡与主题卡平台追求「给定一篇论文稳定产出可校验的主体卡与候选主题」，科研工作流追求「每一条科学表述都回链可核对的原文，且正式主题必须由人签字」。前者自动化强、不做科研裁决；后者有完整人工决策门，但没有调度器。
 
 ## Zotero 有四种读法，用途不同
 
@@ -85,7 +85,7 @@ $LASTEXITCODE
 ```bash
 git clone git@github.com:iHeadWater/mylibrary.git
 cd mylibrary
-uv sync --all-packages   # 装依赖（原 workspace 成员 hydro-platform 已并入 hydrolitagent/cards）
+uv sync --all-packages   # 装依赖（workspace 成员已并入 hydrolitagent/cards）
 cp .env.example .env     # 填入 DEEPSEEK_API_KEY、ZOTERO_API_KEY、ZOTERO_LIBRARY_ID 等
 ```
 
@@ -112,7 +112,7 @@ python skills/hydrology-theme-synthesis/tests/self_test.py
 |---|---|
 | `hydrolitagent/` | Python 包：Zotero MCP Server、下载/入库、文献处理、知识图谱 |
 | `hydrolitagent/cards/` | 自动化平台：代码 `*.py` 与只读资产 `assets/`（模板 / 提示词 / schema / 示例 / 默认配置），运行产物落仓库根 |
-| `skills/` | 12 个技能：9 个工具链技能 + `hydro-platform` + 两个水利科研技能 |
+| `skills/` | 12 个技能：9 个工具链技能 + `literature-cards` + 两个水利科研技能 |
 | `docs/` | 文档站源码（mkdocs）：英文技术文档 + 平台文档（`user-guide/cards/`、`development/platform/`）与科研规范（`research-workflow/`） |
 | `scripts/`、`configs/`、`docker/` | 入库脚本、图谱提示词、MCP Server 镜像 |
 | `tests/` | pytest 测试（原平台测试已并入这一套） |

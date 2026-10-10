@@ -32,7 +32,7 @@ Accepted
 | **裸 host**（本机、制卡机等直接跑 Python 的场景） | **直连**：元数据走 pyzotero（Zotero Web API，凭据在仓库 `.env`），全文走 Zotero Desktop Local API `127.0.0.1:23119` | 本机进程可直接访问本机 Zotero，无需中间服务 |
 | **容器部署**（docker compose 起的服务） | **8002 的 MCP 服务**（`hydrolitagent/zotero/server.py`，12 个工具） | 容器内 `127.0.0.1` 指向容器自身；其 Local API 默认 `host.docker.internal:23119`，正是为访问宿主 Zotero 而设 |
 
-`hydro-platform` 运行在**裸 host** 上，所以走直连——这与 `CLAUDE.md` 那句"8002 是唯一访问入口"**并不冲突**：后者描述的是容器侧的服务契约（同一句也写着"不要改动它的技术架构——已有其他服务依赖"），只是原文缺少"在容器部署中"这个作用域限定。
+文献卡与主题卡（`hydrolitagent/cards/`）运行在**裸 host** 上，所以走直连——这与 `CLAUDE.md` 那句"8002 是唯一访问入口"**并不冲突**：后者描述的是容器侧的服务契约（同一句也写着"不要改动它的技术架构——已有其他服务依赖"），只是原文缺少"在容器部署中"这个作用域限定。
 
 > 一个必须记住的操作事实：**在裸 host 上使用 Local API 必须设 `ZOTERO_LOCAL_BASE_URL=http://127.0.0.1:23119`**，否则默认的 `host.docker.internal` 在裸 host 上不解析（`getaddrinfo failed`）。**那个默认值是容器契约，不要改它**——要换地址就设环境变量。
 >
@@ -42,7 +42,7 @@ Accepted
 
 **本次不统一两套客户端。** 它们在各自的运行环境里都是正确的实现，合并不会让它们重叠：
 
-- `hydro-platform` 的 `zotero.py` 定位为**只读的 group 访问客户端**，**不承担下载与入库职责**。平台不下载任何 PDF，只读取共享库中已附好的文件。
+- `hydrolitagent/cards/zotero.py` 定位为**只读的 group 访问客户端**，**不承担下载与入库职责**。平台不下载任何 PDF，只读取共享库中已附好的文件。
 - **不把任何一方的下载流程移植到另一方**：`download_paper.py` / `paper_to_zotero.py` 是唯一会下载并创建 Zotero 条目的路径。
 - **8002 MCP 服务保持原样**（含其架构），并保留其写入/管理类工具面。
   > **勘误（2026-10-01）**：本句对工具面的描述与当前代码不符。`server.py` 的 12 个工具**全部只读**（10 个走 Zotero Web API + 2 个走 Local API），并无写入/管理类工具，且与 `ADR-0001`「mylibrary 的 Zotero MCP server 只读」相抵触。原决定「8002 服务保持原样、不整体弃用」本身不受影响，此处仅更正对工具面的描述。

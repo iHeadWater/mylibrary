@@ -12,7 +12,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 本仓库的 Zotero MCP server(`hydrolitagent/zotero/server.py`,streamable HTTP 端口 8002,端点路径 `/mcp`)是唯一的 Zotero 访问入口。**不要改动它的技术架构**——已有其他服务依赖。
 
-> ⚠️ **上句的作用域是容器部署,不是全部场景。** 读取 Zotero 按运行环境分工:**裸 host**(本机、制卡机)走直连——元数据用 pyzotero、全文用 Zotero Desktop Local API `127.0.0.1:23119`;**容器**里才走这个 8002 MCP 服务(它的 Local API 默认 `host.docker.internal:23119`,正是为访问宿主 Zotero 而设)。`hydro-platform` 跑在裸 host,所以走直连,与此处并不冲突。详见 [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md)。
+> ⚠️ **上句的作用域是容器部署,不是全部场景。** 读取 Zotero 按运行环境分工:**裸 host**(本机、制卡机)走直连——元数据用 pyzotero、全文用 Zotero Desktop Local API `127.0.0.1:23119`;**容器**里才走这个 8002 MCP 服务(它的 Local API 默认 `host.docker.internal:23119`,正是为访问宿主 Zotero 而设)。`hydrolitagent cards` 跑在裸 host,所以走直连,与此处并不冲突。详见 [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md)。
 
 工具分两类(见 `server.py` 头部注释):
 - **元数据类**(pyzotero Web API,api.zotero.org):`zotero_search`、`zotero_get_item`、`zotero_get_recent`、`zotero_get_collection_items`、`zotero_get_collections`、`zotero_get_tags`、`zotero_search_by_tag`、`zotero_fulltext_search`、`zotero_get_attachments`、`zotero_get_annotations`
@@ -33,7 +33,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 | `bilibili-upload` | podcast 音频 → MP4 → B 站上传 | 无 |
 | `download-pdf` | 论文 PDF 下载(机构访问) | 无 |
 | `zotero-query` | 文献库查询 | 读库 |
-| `hydro-platform` | 文献卡与主题卡平台 CLI 入口:自己的 Zotero 文献 → 文献卡 → 主题卡。**运行时 Windows-only**,详见该 skill | 直连 Local API |
+| `literature-cards` | 文献卡与主题卡平台 CLI 入口:自己的 Zotero 文献 → 文献卡 → 主题卡。**运行时 Windows-only**,详见该 skill | 直连 Local API |
 | `hydrology-evidence-cards` | 科研工作流:Zotero 源论文 → 人读证据卡(含机器审计字段,默认折叠) | 读库 |
 | `hydrology-theme-synthesis` | 科研工作流:文献 → 初步主题 → **人工筛选门** → 正式主题 → Claim 准入 → 深度主题卷宗 | 读库 |
 

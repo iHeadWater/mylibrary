@@ -8,7 +8,7 @@
 
 ## 路径
 
-`paths.project_root` 相对于 `config.json` 所在目录解析；其余路径相对于 `project_root` 解析。因此，从仓库外部工作目录调用程序时，产物仍会写入正确项目。为避免误写，所有项目路径必须位于 `project_root` 内，运行状态和原始日志还必须位于 `runtime_dir` 内。当前 `paths.project_root` 为 `..`，即 `hydro-platform/` 目录本身。
+`paths.project_root` 相对于 `config.json` 所在目录解析；其余路径相对于 `project_root` 解析。因此，从仓库外部工作目录调用程序时，产物仍会写入正确项目。为避免误写，所有项目路径必须位于 `project_root` 内，运行状态和原始日志还必须位于 `runtime_dir` 内。当前 `paths.project_root` 为 `../../../..`，即仓库根目录。
 
 **唯一例外是科研产物根 `paths.artifact_root`**（证据卡 / 主题 / 运行记录 / 文献链接的落点）。它默认解析到工作区根（仓库根）。若要指向仓库外的共享位置（共享盘、OneDrive 等），必须同时显式写出 `paths.artifact_root_external = true`。这样外部位置是写明的意图，而不是被 `../outside` 这类相对路径悄悄带出去的。归属也随之划分：**产物根在项目内 = 平台所有**（正常写入、可清理）；**产物根在项目外 = 操作者所有**（平台只写不清理，不管理其生命周期）。
 

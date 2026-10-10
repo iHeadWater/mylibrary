@@ -1,24 +1,23 @@
 ---
-name: hydro-platform
+name: literature-cards
 description: |
-  水利科研知识平台的运行入口：从共享 Zotero 库的文献生成可追溯的证据包与持续演化的主题池。
-  面向「无人值守批处理」与「查看/排错已有成果」，不是交互式问答。
-  Use when the user wants to run the platform, process Zotero papers into evidence cards,
-  update the theme pool, read the daily report or contribution ledger, or diagnose the platform.
-  Triggers: "跑一次平台", "制卡", "证据包", "证据卡", "主题池", "更新主题", "日报", "贡献账本",
-  "hydro-platform", "paper-input", "run-once", "themes-run", "平台排错", "doctor".
+  文献卡与主题卡平台的运行入口：从自己的 Zotero 文献生成可追溯的证据卡与持续演化的主题池。
+  命令是 `uv run hydrolitagent cards …` 这一组（5 个子命令），不是交互式问答。
+  Use when the user wants to run the cards platform, turn Zotero papers into evidence cards,
+  update the theme pool, or check model/output configuration.
+  Triggers: "跑一次平台", "制卡", "证据卡", "主题池", "更新主题", "文献卡",
+  "literature-cards", "paper-input", "themes-run", "平台排错", "ai-config".
 ---
 
-# 水利科研知识平台（hydro-platform）
+# 文献卡与主题卡（literature-cards）
 
-**本 skill 只是这个平台 CLI 的入口说明。所有能力都由平台的 Python 代码实现，本文件不重复实现任何逻辑，也不代你判断科研结论。**
+**本 skill 只是这组 `cards` 命令的入口说明。所有能力都由 `hydrolitagent/cards/` 的 Python 代码实现，本文件不重复实现任何逻辑，也不代你判断科研结论。**
 
 ## ⚠️ 适用范围（先读）
 
-- **平台目前是 Windows-only。** 计划任务、Poppler 原生工具安装、PDF 沙箱探针都依赖 Windows 的 PowerShell 与 `.exe`。
-  在 hermes 容器或 macOS/Linux 上，`setup`、`schedule-*`、`bootstrap-native`、`pdf-direct-read-trial` **不可用**。
-  读取类与制卡类命令（`paper-input`、`scan`、`pdf-gate`、`tasks-*`、`run-once`、`themes-run`）的**编排逻辑本身是跨平台的**，但 PDF 工具链未在非 Windows 上验证。
-- **前置条件**：Zotero 已登录且目标共享库已同步；Codex CLI 已用账号登录。二者都不满足时命令会明确报错，不会静默降级。
+- **平台运行时为 Windows-only。** Poppler 原生工具与 PDF 沙箱探针依赖 Windows 的 PowerShell 与 `.exe`；
+  在 hermes 容器或 macOS/Linux 上未验证。
+- **前置条件**：Zotero 已登录且目标库已同步（`paper-input` 走 Local API 读本地 PDF）；`evidence-generate` 需要所选模型 CLI（Codex / Claude）已登录。不满足时命令会明确报错，不会静默降级。
 - **平台不下载 PDF。** 它只读取共享库中**已经附好**的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`（本仓库另一侧能力）。
 
 ## Contract
@@ -34,17 +33,17 @@ YOU MUST 记住平台**不自动同步 Git、不自动登录、不唤醒关机�
 平台的 Python 环境是**仓库根 `.venv`**，由 uv 独占管理：
 
 ```bash
-uv sync --all-packages      # 从仓库根执行（原 workspace 成员已并入 hydrolitagent/cards）
+uv sync --all-packages      # 从仓库根执行
 ```
 
-**不要**用 `bootstrap --install` 去创建这个环境（那是给"与仓库依赖树隔离的部署"用的另一条路径）。在共享环境模式下，`bootstrap` 只做**校验**并提示 `uv sync`。
+**不要**手工创建或复制别人的 `.venv`；换机后重新 `uv sync` 并重新登录所选模型 CLI。
 
 ## 单篇主体卡草稿（#30）
 
 收到 #29 的单篇 READY JSON 后，在仓库根运行：
 
 ~~~powershell
-uv run --package hydro-platform-automation hydro-platform evidence-generate --paper-input paper-input.json --json
+uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
 ~~~
 
 此入口要求 single_agent + local_path；个人库和群组库均可使用，无需再次扫描 Zotero。
@@ -80,7 +79,7 @@ PASS 只表示当前代码规则通过，不能声称科学结论正确或正式
 
 > 完整清单以 `uv run hydrolitagent cards --help` 为准（**当前 5 个子命令**）。
 > `cards` 是 `hydrolitagent` CLI 的子命令组；平台已并入 `hydrolitagent` 包
-> （`hydrolitagent/cards/`），不再有独立的 `hydro-platform` 命令。
+> （`hydrolitagent/cards/`）—— 它是一组子命令，不是独立的包或命令行工具。
 
 ## 结果怎么读
 

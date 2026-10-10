@@ -1,6 +1,6 @@
 # 文献深度处理（Literature CLI）
 
-从 dailyinfo 迁入的文献深度处理能力,属于**消费侧**的当期内容支线(代码在 `hydrolitagent`,但该包横跨入库与消费两侧)。以 **Zotero 库为分界线**:文献进入 Zotero 之前(采集/下载/入库)由 dailyinfo 负责;进入之后由本仓库负责——其中精读/分析卡/主题/公众号/播客/B 站发布是本页的 Literature CLI,而把**自己 Zotero 里的论文**沉淀成**文献卡与主题卡**是消费侧的另一支([`hydro-platform`](cards/index.md),产出长期可追溯资产,Windows-only)。
+从 dailyinfo 迁入的文献深度处理能力,属于**消费侧**的当期内容支线(代码在 `hydrolitagent`,但该包横跨入库与消费两侧)。以 **Zotero 库为分界线**:文献进入 Zotero 之前(采集/下载/入库)由 dailyinfo 负责;进入之后由本仓库负责——其中精读/分析卡/主题/公众号/播客/B 站发布是本页的 Literature CLI,而把**自己 Zotero 里的论文**沉淀成**文献卡与主题卡**是消费侧的另一支([文献卡与主题卡](cards/index.md),产出长期可追溯资产,Windows-only)。
 
 ## 模块结构
 

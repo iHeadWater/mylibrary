@@ -7,7 +7,7 @@
 ```mermaid
 sequenceDiagram
     actor User as 研究者
-    participant CLI as hydro-platform CLI
+    participant CLI as cards CLI
     participant Zotero as Zotero Local API
     participant Model as Codex / Claude CLI
     participant Artifacts as 产物根
