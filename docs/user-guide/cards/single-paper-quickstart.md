@@ -458,7 +458,7 @@ $RunDir = Split-Path -Parent $InputPath
 可以在终端 Claude 的对话输入框提出如下请求（这是给助手的任务描述，不是 PowerShell 命令）：
 
 ```text
-请按当前仓库 docs/hydro-platform/single-paper-quickstart.md，
+请按当前仓库 docs/user-guide/cards/single-paper-quickstart.md，
 帮助我完成自己一篇 Zotero 论文的输入、生成和校验。
 先确认当前仓库位置、库类型、论文题名或 DOI，搜索后让我确认父条目 Key。
 我使用 CC Switch 为 Claude Code 配置的 DeepSeek；适配器仍选 claude。

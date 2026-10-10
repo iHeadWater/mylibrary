@@ -11,8 +11,8 @@
 | 线 | 做什么 | 代码 / 数据 | 入口 |
 |---|---|---|---|
 | **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/播客/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（12 个技能） | [文档](docs/user-guide/mcp-tools.md) |
-| **文献卡与主题卡平台** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验，**运行时 Windows-only** | `hydrolitagent/cards/`、`skills/hydro-platform/` | [`hydro-platform` 文档](docs/hydro-platform/index.md) |
-| **科研工作流** | 人读证据卡与主题综合：来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合。纯标准库脚本，人工决策不可绕过 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、`docs/hydro-platform/`（中文规范） | [平台总览](docs/hydro-platform/research-platform-overview.md) |
+| **文献卡与主题卡平台** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验，**运行时 Windows-only** | `hydrolitagent/cards/`、`skills/hydro-platform/` | [平台文档](docs/user-guide/cards/index.md) |
+| **科研工作流** | 人读证据卡与主题综合：来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合。纯标准库脚本，人工决策不可绕过 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、`docs/research-workflow/`（中文规范） | [平台总览](docs/research-workflow/index.md) |
 
 **两条线解决的问题不同**，不要混用：`hydro-platform` 追求「给定一篇论文稳定产出可校验的主体卡与候选主题」，科研工作流追求「每一条科学表述都回链可核对的原文，且正式主题必须由人签字」。前者自动化强、不做科研裁决；后者有完整人工决策门，但没有调度器。
 
@@ -38,7 +38,7 @@
 
 所有实际科研产物、原始 PDF、Zotero 数据库、`.runtime` 和本机路径均不进入 Git。目标是在两组目录之间建立明确的准入与发布边界，再将 `artifact_root` 作为 Obsidian 阅读层；不应把当前的配置字段理解为两套工作流已经打通。
 
-字段、现状和目标设计见[总配置字段说明](docs/hydro-platform/config.md)、[自动化边界](docs/hydro-platform/automation.md)和[项目级设计](docs/hydro-platform/project-design.md)。
+字段、现状和目标设计见[总配置字段说明](docs/development/platform/config.md)、[自动化边界](docs/development/platform/automation.md)和[项目级设计](docs/development/platform/project-design.md)。
 
 ## 快速开始
 
@@ -46,7 +46,7 @@
 
 这是可复用的**本地命令行接口**，不是作者电脑上的专用程序，也不是需要开放公网端口的服务。你使用自己的 Zotero 文献、Codex 或 Claude 登录和产物目录；无需作者的账号、目录、`.venv`、Obsidian 或群组库权限。私有仓库仍需获得 GitHub 访问权限。
 
-如果你在终端里使用 **CC Switch 接入 DeepSeek 的 Claude Code**，生成命令仍选 `--ai-provider claude`：Claude Code 是命令行工具，DeepSeek 是它连接的模型服务。[单篇论文完整教程](docs/hydro-platform/single-paper-quickstart.md)按这套用法展开配置传递、选论文、生成、校验与查看结果，每一步附命令和预期结果。
+如果你在终端里使用 **CC Switch 接入 DeepSeek 的 Claude Code**，生成命令仍选 `--ai-provider claude`：Claude Code 是命令行工具，DeepSeek 是它连接的模型服务。[单篇论文完整教程](docs/user-guide/cards/single-paper-quickstart.md)按这套用法展开配置传递、选论文、生成、校验与查看结果，每一步附命令和预期结果。
 
 先安装 Git、Python 3.12–3.14 和 uv。在你自己选择的父目录中执行下面命令；目标 `mylibrary` 应尚不存在。每条成功后再执行下一条：
 
@@ -68,7 +68,7 @@ Test-Path .\.venv\Scripts\python.exe
 $LASTEXITCODE
 ```
 
-修复版本应返回 `status: PASS`、退出码 `0`；合成示例的短正文提示不影响通过。**不要把文档中的预期结果或 `# passed` 注释当成实际输出。** PR #46 未合并时，需先按[完整上手说明](docs/hydro-platform/single-paper-quickstart.md)切到该 PR 分支，才能验证其修复版示例。
+修复版本应返回 `status: PASS`、退出码 `0`；合成示例的短正文提示不影响通过。**不要把文档中的预期结果或 `# passed` 注释当成实际输出。** PR #46 未合并时，需先按[完整上手说明](docs/user-guide/cards/single-paper-quickstart.md)切到该 PR 分支，才能验证其修复版示例。
 
 三个公开入口如下（安装后可运行 `--help` 查看参数）：
 
@@ -78,7 +78,7 @@ $LASTEXITCODE
 | 生成草稿 | `python -m hydrolitagent.cards evidence-generate` | READY JSON + `--ai-provider` → `draft_path`、`card_path` | 是 |
 | 代码校验 | `python scripts/paper_validate.py` | READY JSON + `draft_path` → PASS/FAIL、报告路径 | 否 |
 
-表中 `python` 使用上面安装的 `.\.venv\Scripts\python.exe`。**完整步骤、CLI 认证、Poppler、个人/群组库、模型与输出目录覆盖、自动传递 draft_path、返回码及排错见[单篇流程首次配置](docs/hydro-platform/single-paper-quickstart.md)。** 单篇本地流程不需要先填工具链的 DeepSeek/Zotero Web API 密钥，不需要启动 MCP Server。
+表中 `python` 使用上面安装的 `.\.venv\Scripts\python.exe`。**完整步骤、CLI 认证、Poppler、个人/群组库、模型与输出目录覆盖、自动传递 draft_path、返回码及排错见[单篇流程首次配置](docs/user-guide/cards/single-paper-quickstart.md)。** 单篇本地流程不需要先填工具链的 DeepSeek/Zotero Web API 密钥，不需要启动 MCP Server。
 
 ### 其他工具链与批量自动化
 
@@ -113,12 +113,12 @@ python skills/hydrology-theme-synthesis/tests/self_test.py
 | `hydrolitagent/` | Python 包：Zotero MCP Server、下载/入库、文献处理、知识图谱 |
 | `hydrolitagent/cards/` | 自动化平台：代码 `*.py` 与只读资产 `assets/`（模板 / 提示词 / schema / 示例 / 默认配置），运行产物落仓库根 |
 | `skills/` | 12 个技能：9 个工具链技能 + `hydro-platform` + 两个水利科研技能 |
-| `docs/` | 文档站源码（mkdocs）：英文技术文档 + `docs/hydro-platform/`（平台与科研规范，含中文子目录） |
+| `docs/` | 文档站源码（mkdocs）：英文技术文档 + 平台文档（`user-guide/cards/`、`development/platform/`）与科研规范（`research-workflow/`） |
 | `scripts/`、`configs/`、`docker/` | 入库脚本、图谱提示词、MCP Server 镜像 |
 | `tests/` | pytest 测试（原平台测试已并入这一套） |
 | `证据卡/`、`主题/`、`运行记录/`、`文献链接/` | 科研产物（**路径可配**，默认在此，不入 Git） |
 | `_legacy/`、`equation_from_data/`、`google_floodhub/` | 历史代码与论文复现 |
-| `docs/hydro-platform/research-platform-overview.md` | 科研工作流层的完整说明（原王新宇线 README） |
+| `docs/research-workflow/index.md` | 科研工作流层的完整说明（原王新宇线 README） |
 
 ## 文档与测试
 

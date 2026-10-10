@@ -2,7 +2,7 @@
 
 > 本页覆盖**入库**（下载 + 入 Zotero）与**消费侧的当期内容支线**（读库、深度处理）。注意入库只有三件事:论文 PDF 下载 → 建 Zotero 条目 → `linked_file` 附件。
 >
-> 消费侧还有另一支 —— `hydro-platform`:把**自己 Zotero 里**一篇**已经附好 PDF** 的论文生成**主体卡草稿**,用代码校验后,再由若干文献卡形成**候选主题**。它产出的是长期可追溯的文献卡与主题卡,而不是文章/播客这类当期内容;**Windows-only** 运行时。如果你的目标是这一支,见[文献卡与主题卡平台](../hydro-platform/index.md) 或[用户指南总览](../user-guide/index.md)。
+> 消费侧还有另一支 —— `hydro-platform`:把**自己 Zotero 里**一篇**已经附好 PDF** 的论文生成**主体卡草稿**,用代码校验后,再由若干文献卡形成**候选主题**。它产出的是长期可追溯的文献卡与主题卡,而不是文章/播客这类当期内容;**Windows-only** 运行时。如果你的目标是这一支,见[文献卡与主题卡平台](../user-guide/cards/index.md) 或[用户指南总览](../user-guide/index.md)。
 
 ## 场景 1：查文献
 
@@ -102,4 +102,4 @@ uv run python -m hydrolitagent.literature.zotero_notebooklm --collection water -
 - [论文入库流水线详解](../user-guide/paper-pipeline.md) — 完整流程和故障排查
 - [文献深度处理详解](../user-guide/literature.md) — literature CLI 和知识库
 - [Zotero 配置参考](../user-guide/config.md) — 环境变量和配置文件
-- [文献卡与主题卡平台](../hydro-platform/index.md) — **消费侧的另一支**：自己 Zotero 的论文 → 文献卡 → 主题卡（Windows-only）
+- [文献卡与主题卡平台](../user-guide/cards/index.md) — **消费侧的另一支**：自己 Zotero 的论文 → 文献卡 → 主题卡（Windows-only）

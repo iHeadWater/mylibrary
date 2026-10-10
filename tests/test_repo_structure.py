@@ -2,10 +2,11 @@
 
 These tests encode the TARGET state of the restructure, not the current state:
 
-* the platform's code and reusable assets live under a top-level ``hydro-platform/``
-  directory (``automation/``, ``templates/``, ``config/`` + ``pyproject.toml``);
-* the platform's documentation moves into ``docs/hydro-platform/`` and the
-  platform's own README files are dropped;
+* the platform's code and reusable assets live inside ``hydrolitagent/cards/``
+  (modules + ``assets/``) -- the top-level ``hydro-platform/`` directory is gone;
+* the platform's documentation is organised by audience under ``docs/``
+  (``user-guide/cards/``、``development/platform/``、``research-workflow/``)
+  and the platform's own README files are dropped;
 * every generated artefact (evidence packs, themes, reports, activity ledgers,
   member files) stops being tracked by git and is produced into a workspace-local
   ``.venv``-adjacent runtime instead of being committed - both the OUTCOME (test 1:
@@ -110,8 +111,14 @@ PLATFORM_PACKAGE_DIR = CARDS_PACKAGE_DIR
 PLATFORM_PACKAGE_PREFIX = "hydrolitagent/cards/"
 MIN_PLATFORM_SOURCE_FILES = 20
 
-PLATFORM_DOCS_DIR = DOCS_ROOT / "hydro-platform"
-MIN_PLATFORM_DOC_FILES = 5
+# 平台文档已按读者拆到三处（原 docs/hydro-platform/ 随 10-10-docs-restructure 消失）。
+# 三个目录必须都在，且合计篇数不得少于搬迁时的 21 —— 守卫防的是「搬丢了」。
+PLATFORM_DOC_DIRS = (
+    DOCS_ROOT / "user-guide" / "cards",
+    DOCS_ROOT / "development" / "platform",
+    DOCS_ROOT / "research-workflow",
+)
+MIN_PLATFORM_DOC_FILES = 21
 
 QUOTED_INSTALL_ARG = re.compile(r"""["']install["']""")
 WHEEL_MATERIAL = re.compile(
@@ -347,9 +354,9 @@ def test_repo_single_gitignore() -> None:
 def test_repo_no_platform_readme() -> None:
     """Requirement: the platform ships no README files of its own.
 
-    Documentation lives in ``docs/hydro-platform/``; zero tracked files whose
-    basename is ``README.md`` (in any case variant) may live under
-    ``hydro-platform/``.
+    Documentation lives under ``docs/``（平台文档已归入 ``user-guide/cards/`` 与
+    ``development/platform/``）；zero tracked files whose basename is ``README.md``
+    (in any case variant) may live under the ``hydrolitagent/cards/`` package tree.
 
     Non-vacuity: the precondition requires the platform's real source tree to be
     tracked under ``hydro-platform/`` (at least ``MIN_PLATFORM_SOURCE_FILES``
@@ -365,7 +372,8 @@ def test_repo_no_platform_readme() -> None:
     )
     assert not offenders, (
         "README files are still tracked under hydrolitagent/cards/ - platform docs belong in "
-        f"{DOCS_ROOT / 'hydro-platform'}:\n  " + "\n  ".join(offenders)
+        f"{DOCS_ROOT / 'user-guide' / 'cards'} 或 {DOCS_ROOT / 'development' / 'platform'}"
+        ":\n  " + "\n  ".join(offenders)
     )
 
 
@@ -408,26 +416,27 @@ def test_docs_have_no_escaping_links() -> None:
     are fine.
 
     The precondition pins down that the platform's OWN docs have arrived
-    (``docs/hydro-platform/`` with at least ``MIN_PLATFORM_DOC_FILES`` markdown
-    files) rather than accepting any markdown anywhere under ``docs/``. That
+    (``PLATFORM_DOC_DIRS`` holding at least ``MIN_PLATFORM_DOC_FILES`` markdown
+    files in total) rather than accepting any markdown anywhere under ``docs/``. That
     specificity is deliberate and must not be loosened: the repo already has an
     unrelated ``docs/`` tree, so a weaker precondition is *vacuously* satisfied
     before the restructure and would keep this guard green throughout the whole
     refactor. The scan itself stays whole-tree, so inherited docs are covered too.
     """
 
-    platform_docs_dir = DOCS_ROOT / "hydro-platform"
-    assert platform_docs_dir.is_dir(), (
-        f"the platform's documentation must live at {platform_docs_dir}, but that "
-        "directory does not exist - the platform docs have not moved"
-    )
-
-    platform_markdown_files = sorted(platform_docs_dir.rglob("*.md"))
+    platform_markdown_files: list[Path] = []
+    for platform_docs_dir in PLATFORM_DOC_DIRS:
+        assert platform_docs_dir.is_dir(), (
+            f"the platform's documentation must live at {platform_docs_dir}, but that "
+            "directory does not exist - the platform docs have not moved"
+        )
+        platform_markdown_files.extend(sorted(platform_docs_dir.rglob("*.md")))
     assert len(platform_markdown_files) >= MIN_PLATFORM_DOC_FILES, (
-        f"only {len(platform_markdown_files)} markdown file(s) found under "
-        f"{platform_docs_dir} (at least {MIN_PLATFORM_DOC_FILES} are required).\nThe "
-        "rest of docs/ belongs to the wider project and would satisfy a weaker "
-        "precondition vacuously - the platform's own docs must actually be there."
+        f"only {len(platform_markdown_files)} markdown file(s) found across "
+        f"{[str(d.relative_to(REPO_ROOT)) for d in PLATFORM_DOC_DIRS]} (at least "
+        f"{MIN_PLATFORM_DOC_FILES} are required).\nThe rest of docs/ belongs to the "
+        "wider project and would satisfy a weaker precondition vacuously - the "
+        "platform's own docs must actually be there."
     )
 
     markdown_files = sorted(DOCS_ROOT.rglob("*.md"))
@@ -591,7 +600,7 @@ def test_research_workflow_artifacts_are_ignored_and_untracked() -> None:
         )
 
     for name in RESEARCH_DOCS_DIRS:
-        rel = f"docs/hydro-platform/{name}"
+        rel = f"docs/research-workflow/{name}"
         assert (REPO_ROOT / rel).is_dir(), f"缺少随合并搬入的规范目录 {rel}"
         assert not _is_ignored(f"{rel}/示例.md"), (
             f"ignore 规则命中 {rel}/ ——规则过宽,会吞掉随合并搬入的规范文档"

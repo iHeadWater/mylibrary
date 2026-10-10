@@ -26,11 +26,11 @@ mylibrary 承担**情报汇集之后的深度处理**:
 | **文献深度处理** — Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [文献深度处理](docs/user-guide/literature.md) |
 | **知识图谱** — 用 [graphify](https://github.com/graphify) 构建结构化、可查询的知识库(实体提取、社区发现、Obsidian 导出) | `uv run hydrolitagent graph papers/your-topic/` | [模块架构](docs/development/architecture.md) |
 | **论文复现** — 复现 AI 驱动水文学关键论文 | — | `equation_from_data/`、`google_floodhub/` |
-| **文献卡与主题卡平台** — 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验。**运行时为 Windows-only。** | `uv run hydrolitagent cards ai-config --json` | [平台文档](docs/hydro-platform/index.md) |
+| **文献卡与主题卡平台** — 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验。**运行时为 Windows-only。** | `uv run hydrolitagent cards ai-config --json` | [平台文档](docs/user-guide/cards/index.md) |
 
 ## 快速开始
 
-**单篇制卡用户：** 请先看[仓库首页的 Windows PowerShell 入口](README.md)和[从零开始的单篇上手说明](docs/hydro-platform/single-paper-quickstart.md)。支持自己的个人/群组 Zotero 文库、Codex/Claude CLI 和可配置输出目录；不需要作者的本机路径、账号或 `.venv`。以下配置主要服务其他工具链，不是单篇制卡必须照抄的前置条件。
+**单篇制卡用户：** 请先看[仓库首页的 Windows PowerShell 入口](README.md)和[从零开始的单篇上手说明](docs/user-guide/cards/single-paper-quickstart.md)。支持自己的个人/群组 Zotero 文库、Codex/Claude CLI 和可配置输出目录；不需要作者的本机路径、账号或 `.venv`。以下配置主要服务其他工具链，不是单篇制卡必须照抄的前置条件。
 
 ```bash
 # 克隆并安装
@@ -106,15 +106,15 @@ uv run hydrolitagent query outputs/graph/graph.json --search "LSTM"
 
 每次建图会把 `graph.json`、`graph.html`(D3.js)、`GRAPH_REPORT.md`、`obsidian/`(带 `[[wikilinks]]` 的 Obsidian 知识库)写入 `HYDROLITAGENT_OUTPUT` 或 `--output`。
 
-### 文献卡与主题卡平台(`hydro-platform`)
+### 文献卡与主题卡平台
 
 **入库只有两件事 —— 下载 PDF,和建 Zotero 条目。** 本仓库其余的都属于**消费**:读库、精读、主题、知识图谱、公众号、播客。这个平台是消费侧里的一支独立支线 —— 别人产出当期内容,它把**你自己的 Zotero 文献**沉淀成**长期可追溯的文献卡与主题卡**。命令一律从仓库根执行。
 
-> 注意"两侧"不等于"两个包":`hydrolitagent` **横跨两侧**(它既有入库的命令,也含消费侧的大部分),而 `hydro-platform` 纯属消费。
+> 注意“两侧”不等于“两个包”：本仓库**只有一个包** `hydrolitagent`；文献卡与主题卡是它内部的 `hydrolitagent/cards/`，纯属消费侧。
 
 ```bash
 # 单篇输入:从自己的一篇论文得到 READY 记录
-uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --output paper-input.json
+uv run python scripts/paper_input.py --user-library --item-key ABCD1234 --output paper-input.json
 
 # 生成主体卡草稿(调用所选模型)
 uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
@@ -202,7 +202,7 @@ uv run mkdocs serve    # http://127.0.0.1:8000
 uv run mkdocs build --strict
 ```
 
-平台文档在 [`docs/hydro-platform/`](docs/hydro-platform/index.md) —— 从那里入门,完整交接也从这份[平台文档导航](docs/hydro-platform/index.md)开始。保留两套独立 Zotero 客户端的决定记录在 [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md)。
+平台文档在 [`docs/user-guide/cards/`](docs/user-guide/cards/index.md) —— 从那里入门,完整交接也从这份[平台文档导航](docs/user-guide/cards/index.md)开始。保留两套独立 Zotero 客户端的决定记录在 [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md)。
 
 ## 贡献
 

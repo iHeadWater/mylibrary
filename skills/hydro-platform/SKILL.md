@@ -31,10 +31,10 @@ YOU MUST 记住平台**不自动同步 Git、不自动登录、不唤醒关机�
 
 ## 环境
 
-平台的 Python 环境是 **uv workspace 的仓库根 `.venv`**，由 uv 独占管理：
+平台的 Python 环境是**仓库根 `.venv`**，由 uv 独占管理：
 
 ```bash
-uv sync --all-packages      # 从仓库根执行；一次装好两个包
+uv sync --all-packages      # 从仓库根执行（原 workspace 成员已并入 hydrolitagent/cards）
 ```
 
 **不要**用 `bootstrap --install` 去创建这个环境（那是给"与仓库依赖树隔离的部署"用的另一条路径）。在共享环境模式下，`bootstrap` 只做**校验**并提示 `uv sync`。
@@ -53,7 +53,7 @@ uv run --package hydro-platform-automation hydro-platform evidence-generate --pa
 文件按 #27 的统一规则写入精读产物根下 zotero/<文库类型>-<文库ID>-<父条目key>/drafts/<草稿ID>/。
 根目录通过 configs/paths.toml 或 HYDROLITAGENT_LITERATURE_ROOT 配置；默认 outputs/。
 输入失败、PDF 不可读或输出不可解析时报告结构化失败，不自动重试模型。
-完整协议及运行前提见 docs/hydro-platform/subject-card-draft.md。
+完整协议及运行前提见 docs/user-guide/cards/subject-card-draft.md。
 
 ## 主体卡代码校验（#31）
 
@@ -62,7 +62,7 @@ uv run --package hydro-platform-automation hydro-platform evidence-generate --pa
 PASS 只表示当前代码规则通过，不能声称科学结论正确或正式发布。字数仅作提示。
 主题侧读取这些草稿必须使用 themes.load_subject_card_sources；不要仅检查 JSON 中的 PASS 字样。
 任何草稿、输入或规则变化都需要重新校验，不能沿用旧报告。失败修正由 #32 处理。
-完整协议见 docs/hydro-platform/subject-card-validation.md。
+完整协议见 docs/user-guide/cards/subject-card-validation.md。
 
 ## 日常命令
 
@@ -70,7 +70,7 @@ PASS 只表示当前代码规则通过，不能声称科学结论正确或正式
 
 | 需要做什么 | 命令 |
 |---|---|
-| 查一篇自己的论文（个人库；群组库去掉 `--user-library`） | `uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --output paper-input.json` |
+| 查一篇自己的论文（个人库；群组库去掉 `--user-library`） | `uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json` |
 | 从 READY JSON 生成主体卡草稿 | `uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json` |
 | 离线校验主体卡（不调模型） | `uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json` |
 | 从粗卡生成候选主题 | `uv run hydrolitagent cards themes-run --json` |
@@ -92,4 +92,4 @@ PASS 只表示当前代码规则通过，不能声称科学结论正确或正式
 
 ## 深入阅读
 
-平台文档在 `docs/hydro-platform/`：完整操作说明与文档导航见 `docs/hydro-platform/index.md`，排错见 `docs/hydro-platform/recovery.md`，工程状态与已知缺口查阅该目录下现有文档（以 `index.md` 导航为准）。
+平台文档在 `docs/user-guide/cards/`：完整操作说明与文档导航见 `docs/user-guide/cards/index.md`，工程实现与已知缺口见 `docs/development/platform/`（以 `index.md` 导航为准）。

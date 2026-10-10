@@ -1,10 +1,10 @@
 # 总配置字段说明
 
-日常只编辑完整总配置，不改源码。默认使用 `hydro-platform/config/config.json`；`hydro-platform/config/config.example.json` 是可复制的完整示例。私人配置必须显式用 --config 或 HYDRO_PLATFORM_CONFIG 选择，不自动合并。字段与数据的边界划分（哪些属于配置、哪些属于运行状态、证据事实或密钥）见 [配置与密钥边界](variables.md)；目录与存储概览回到[文档入口](index.md)。
+日常只编辑完整总配置，不改源码。默认使用 `hydro-platform/config/config.json`；`hydro-platform/config/config.example.json` 是可复制的完整示例。私人配置必须显式用 --config 或 HYDRO_PLATFORM_CONFIG 选择，不自动合并。字段与数据的边界划分（哪些属于配置、哪些属于运行状态、证据事实或密钥）见 [配置与密钥边界](variables.md)；目录与存储概览回到[文档入口](../../user-guide/cards/index.md)。
 
 `config.json` 是自动化唯一的团队级总配置入口。需要迁移目录、更换 Zotero 本地接口或调整制卡参数时，只修改这个文件，不修改程序源码。所有路径字段必须显式填写；缺失时程序直接报配置错误，不使用源码中的隐含目录默认值。
 
-`paper-input` 是例外：它只按 `configs/paper-input.toml` 读取 `zotero` + `pdf_gate` 两表，不加载模型配置，也不读取 `HYDRO_PLATFORM_CONFIG`。详见[单篇论文输入](paper-input.md)。
+`paper-input` 是例外：它只按 `configs/paper-input.toml` 读取 `zotero` + `pdf_gate` 两表，不加载模型配置，也不读取 `HYDRO_PLATFORM_CONFIG`。详见[单篇论文输入](../../user-guide/cards/paper-input.md)。
 
 ## 路径
 
@@ -129,7 +129,7 @@
 
 ## 主题池 theme_pipeline
 
-`theme_pipeline.enabled=true` 已开启主题入口。`research_goal=null` 表示无预设目标；`model`、`reasoning_effort`、`timeout_seconds` 为 null 时继承 `card_generator` 对应设置。`assets_dir` 指定主题模板与 schema 的目录，默认 `hydro-platform/templates/themes`。结果目录沿用 `paths.themes_dir`，定向精读保存在各论文记录下。模型/目标/模板内容变化产生新的 CHANGE 记录。[现行规则](unified-theme-pool.md)。
+`theme_pipeline.enabled=true` 已开启主题入口。`research_goal=null` 表示无预设目标；`model`、`reasoning_effort`、`timeout_seconds` 为 null 时继承 `card_generator` 对应设置。`assets_dir` 指定主题模板与 schema 的目录，默认 `hydro-platform/templates/themes`。结果目录沿用 `paths.themes_dir`，定向精读保存在各论文记录下。模型/目标/模板内容变化产生新的 CHANGE 记录。[现行规则](../../user-guide/cards/unified-theme-pool.md)。
 
 ## 兼容遗留节
 

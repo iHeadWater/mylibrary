@@ -251,7 +251,7 @@ fulltext_*.txt
 
 # ── 产物根(paths.artifact_root)的默认位置 ──
 # 默认在仓库根;若把 artifact_root 配置到仓库外,这些规则无副作用。
-# 证据卡与主题必须同根(见 docs/hydro-platform/config.md)。
+# 证据卡与主题必须同根(见 docs/development/platform/config.md)。
 主题/
 证据卡/
 运行记录/

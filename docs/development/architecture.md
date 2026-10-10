@@ -1,6 +1,6 @@
 # 模块架构
 
-本仓库的能力分**入库**（只有下载 + 入 Zotero）与**消费**（读库 → 精读/主题/内容产出，以及 `hydro-platform` 的文献卡与主题池）两侧。**`hydrolitagent` 横跨两侧**，[`hydro-platform/`](../hydro-platform/index.md) 纯属消费。分侧导览见[用户指南总览](../user-guide/index.md)。本节先给整体结构，随后展开 `hydrolitagent` 的模块。
+本仓库的能力分**入库**（只有下载 + 入 Zotero）与**消费**（读库 → 精读/主题/内容产出，以及文献卡与主题池）两侧。**`hydrolitagent` 横跨两侧**，[文献卡与主题卡](../user-guide/cards/index.md) 纯属消费。分侧导览见[用户指南总览](../user-guide/index.md)。本节先给整体结构，随后展开 `hydrolitagent` 的模块。
 
 ## 整体结构（节选）
 
@@ -96,7 +96,7 @@ tests/                       # pytest（含迁入的 test_literature_*）
 └─────────────────────────────────────────────────────────┘
 ```
 
-> **上图只画了 `hydrolitagent`（读库与入库为主）。** `hydro-platform` 的数据流方向相反:自己的 Zotero 库 → 单篇输入 → PDF 全文门禁 → 单 Agent 制卡 → 代码校验 → 候选主题池;它产出的是长期可追溯的文献卡与主题卡,产物写在平台目录下且**不入库**,由运行时自建。完整流程见[平台架构](../hydro-platform/architecture.md)与[平台流程](../hydro-platform/flows.md)。
+> **上图只画了 `hydrolitagent`（读库与入库为主）。** `hydro-platform` 的数据流方向相反:自己的 Zotero 库 → 单篇输入 → PDF 全文门禁 → 单 Agent 制卡 → 代码校验 → 候选主题池;它产出的是长期可追溯的文献卡与主题卡,产物写在平台目录下且**不入库**,由运行时自建。完整流程见[平台架构](platform/architecture.md)与[平台流程](platform/flows.md)。
 >
 > 两者都读 Zotero,但**走不同的客户端**:`hydrolitagent` 的 MCP 服务经 8002(容器部署),`hydro-platform` 直连 Zotero Desktop Local API(裸 host)。为什么保留两套、各自适用什么环境,见 [ADR-0002](../adr/0002-zotero-two-clients-boundary.md)。
 

@@ -67,36 +67,34 @@ nav:
       - Zotero → NotebookLM 简报: user-guide/zotero-notebooklm.md
       - 文献深度处理: user-guide/literature.md
       - Zotero 配置参考: user-guide/config.md
-  - 科研知识平台:
-      - 概述: hydro-platform/index.md
-      - 项目级设计: hydro-platform/project-design.md
-      - 上手与运行:
-          - 单篇论文输入: hydro-platform/paper-input.md
-      - 架构与实现:
-          - 技术架构: hydro-platform/architecture.md
-          - 数据流与用户流程: hydro-platform/flows.md
-          - 自动化代码地图: hydro-platform/automation.md
-          - 单 Agent 粗卡: hydro-platform/single-agent-rough-card.md
-          - 单篇流程首次配置: hydro-platform/single-paper-quickstart.md
-          - 单篇主体卡草稿: hydro-platform/subject-card-draft.md
-          - 主体卡校验门禁: hydro-platform/subject-card-validation.md
-          - 运行维护: hydro-platform/runtime-maintenance.md
-      - 知识与产出:
-          - 模板资产: hydro-platform/templates.md
-          - 统一主题池: hydro-platform/unified-theme-pool.md
-          - 科研工作流: hydro-platform/research-platform-overview.md
-      - 配置:
-          - 字段参考: hydro-platform/config.md
-          - 边界与路径规则: hydro-platform/variables.md
-      - 验证地图: hydro-platform/tests.md
+      - 文献卡与主题卡:
+          - 概述: user-guide/cards/index.md
+          - 单篇论文输入: user-guide/cards/paper-input.md
+          - 单篇流程首次配置: user-guide/cards/single-paper-quickstart.md
+          - 单篇主体卡草稿: user-guide/cards/subject-card-draft.md
+          - 主体卡校验门禁: user-guide/cards/subject-card-validation.md
+          - 模板资产: user-guide/cards/templates.md
+          - 统一主题池: user-guide/cards/unified-theme-pool.md
+          - 运行维护: user-guide/cards/runtime-maintenance.md
+  - 科研工作流:
+      - 总览: research-workflow/index.md
       - 主题模板:
-          - 使用说明 V1.3: hydro-platform/主题模板/00_主题模板使用说明_V1.3.md
-          - 初步主题与人工筛选 V1.3: hydro-platform/主题模板/01_初步主题与人工筛选模板_V1.3.md
-          - 既定主题深度综合 V1.3: hydro-platform/主题模板/02_既定主题深度综合模板_V1.3.md
-          - 主题工作流运行账 V1.3: hydro-platform/主题模板/03_主题工作流运行账模板_V1.3.md
+          - 使用说明 V1.3: research-workflow/主题模板/00_主题模板使用说明_V1.3.md
+          - 初步主题与人工筛选 V1.3: research-workflow/主题模板/01_初步主题与人工筛选模板_V1.3.md
+          - 既定主题深度综合 V1.3: research-workflow/主题模板/02_既定主题深度综合模板_V1.3.md
+          - 主题工作流运行账 V1.3: research-workflow/主题模板/03_主题工作流运行账模板_V1.3.md
   - 开发:
       - 模块架构: development/architecture.md
       - 贡献指南: development/contributing.md
+      - 平台实现:
+          - 项目级设计: development/platform/project-design.md
+          - 技术架构: development/platform/architecture.md
+          - 数据流与用户流程: development/platform/flows.md
+          - 自动化代码地图: development/platform/automation.md
+          - 单 Agent 粗卡: development/platform/single-agent-rough-card.md
+          - 字段参考: development/platform/config.md
+          - 边界与路径规则: development/platform/variables.md
+          - 验证地图: development/platform/tests.md
       - 决策记录:
           - Zotero 入库使用 linked_file: adr/0001-zotero-linked-file-sync.md
           - 不统一两套 Zotero 客户端: adr/0002-zotero-two-clients-boundary.md

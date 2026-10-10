@@ -9,14 +9,14 @@ AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:�
 | 侧 | 做什么 | 代码 |
 |---|---|---|
 | **入库**（采集） | 只有两件事:论文 PDF **下载**,以及**建 Zotero 条目**（含 `linked_file` 附件) | `scripts/download_paper.py`、`hydrolitagent/zotero/`、`hydrolitagent/literature/download_pdf.py` |
-| **消费** | 其余全部:从 Zotero 库读出 → 精读/分析卡 → 主题分类/知识图谱 → 公众号/播客/B 站;以及 `hydro-platform` 的文献卡与主题卡 | `hydrolitagent/literature/`、`hydrolitagent/graph/`、`skills/`、[`hydro-platform/`](hydro-platform/index.md) |
+| **消费** | 其余全部:从 Zotero 库读出 → 精读/分析卡 → 主题分类/知识图谱 → 公众号/播客/B 站;以及文献卡与主题卡平台 | `hydrolitagent/literature/`、`hydrolitagent/graph/`、`hydrolitagent/cards/`、`skills/`、[文献卡与主题卡](user-guide/cards/index.md) |
 
 两点容易搞混,先讲清楚:
 
 - **`hydrolitagent` 横跨两侧** —— 入库的几个命令和消费的绝大部分都在它里面,所以它不是"入库侧"的代名词。
-- **两侧产出的东西不同** —— 消费侧的其余部分产出**当期内容**(文章、播客、图谱、分析卡);`hydro-platform` 把**自己 Zotero 的文献**沉淀成**长期可追溯的文献卡与主题卡**,特点是确定性校验、**运行时为 Windows-only**。
+- **两侧产出的东西不同** —— 消费侧的其余部分产出**当期内容**(文章、播客、图谱、分析卡);文献卡与主题卡平台把**自己 Zotero 的文献**沉淀成**长期可追溯的文献卡与主题卡**,特点是确定性校验、**运行时为 Windows-only**。
 
-二者是同一个 **uv workspace** 的两个成员,共享一个 `.venv` 与一份 `uv.lock`。
+两者现在是**同一个包 `hydrolitagent`**(文献卡与主题卡在 `hydrolitagent/cards/`),共用一个 `.venv` 与一份 `uv.lock`。
 
 ## 能力一览
 
@@ -30,7 +30,7 @@ AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:�
 | 文献深度处理 | Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | [文献深度处理](user-guide/literature.md) |
 | 知识图谱 | 用 graphify 构建结构化、可查询的知识库(实体提取、社区发现、Obsidian 导出) | [模块架构](development/architecture.md) |
 | 论文复现 | 复现 AI 驱动水文学关键论文 | `equation_from_data/`、`google_floodhub/` |
-| 文献卡与主题卡平台 | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验。**运行时为 Windows-only。** | [平台文档](hydro-platform/index.md) |
+| 文献卡与主题卡平台 | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验。**运行时为 Windows-only。** | [平台文档](user-guide/cards/index.md) |
 
 ## 快速开始
 
@@ -105,4 +105,4 @@ definitions.py           # 共享常量
 - [模块架构](development/architecture.md) — 代码结构与数据流
 - [贡献指南](development/contributing.md) — 如何运行测试与添加新工具
 - [决策记录](adr/0001-zotero-linked-file-sync.md) — 为什么用 linked_file；[ADR-0002](adr/0002-zotero-two-clients-boundary.md) — 为什么保留两套 Zotero 客户端
-- [文献卡与主题卡平台](hydro-platform/index.md) — 从自己 Zotero 的论文生成文献卡与主题卡(**Windows-only**)
+- [文献卡与主题卡平台](user-guide/cards/index.md) — 从自己 Zotero 的论文生成文献卡与主题卡(**Windows-only**)

@@ -6,7 +6,7 @@
 |---|---|---|
 | **入库**（采集） | 论文 PDF **下载** + **建 Zotero 条目**(含 `linked_file` 附件) | `scripts/download_paper.py`、`hydrolitagent/zotero/`、`hydrolitagent/literature/download_pdf.py` |
 | **消费** | 从 Zotero 库读出 → 精读/分析卡 → 主题分类/知识图谱 → 公众号/播客/B 站 | `hydrolitagent/literature/`、`hydrolitagent/graph/`、`skills/` |
-| **消费（文献卡与主题卡）** | 自己的 Zotero 库 → 文献卡 → 校验 → 主题卡 | [`hydro-platform/`](../hydro-platform/index.md) |
+| **消费（文献卡与主题卡）** | 自己的 Zotero 库 → 文献卡 → 校验 → 主题卡 | [`hydro-platform/`](cards/index.md) |
 
 两点容易搞混:
 
@@ -30,22 +30,22 @@
 | [Zotero → NotebookLM 简报](zotero-notebooklm.md) | 新增论文整理成中文简报 / 音频 / 视频概览 |
 | [Zotero 配置参考](config.md) | 环境变量、TOML 配置、Linked Attachment Base Directory(两侧共用) |
 
-## 消费：长期知识资产（`hydro-platform`）
+## 消费：长期知识资产（文献卡与主题卡）
 
-平台的文档单独成节(见左侧导航「科研知识平台」),这里给几个最常用的入口:
+平台文档已并入「用户指南 / 文献卡与主题卡」与「开发 / 平台实现」两处,这里给几个最常用的入口:
 
 | 页面 | 讲什么 |
 |---|---|
-| [平台概述](../hydro-platform/index.md) | 平台是什么、五条核心命令、边界与限制 |
-| [单篇论文流程](../hydro-platform/single-paper-quickstart.md) | 从自己的 Zotero 选一篇论文 → 生成主体卡 → 代码校验的完整命令流程 |
-| [项目级设计](../hydro-platform/project-design.md) | 总体架构、数据流、用户流程、模块边界、配置、运行和模板关系 |
-| [统一主题池](../hydro-platform/unified-theme-pool.md) | 一个研究问题一个长期主题:候选演化、合并/拆分、正式主题保护 |
-| [配置字段参考](../hydro-platform/config.md) | 平台总配置的逐字段说明 |
+| [平台概述](cards/index.md) | 平台是什么、五条核心命令、边界与限制 |
+| [单篇论文流程](cards/single-paper-quickstart.md) | 从自己的 Zotero 选一篇论文 → 生成主体卡 → 代码校验的完整命令流程 |
+| [项目级设计](../development/platform/project-design.md) | 总体架构、数据流、用户流程、模块边界、配置、运行和模板关系 |
+| [统一主题池](cards/unified-theme-pool.md) | 一个研究问题一个长期主题:候选演化、合并/拆分、正式主题保护 |
+| [配置字段参考](../development/platform/config.md) | 平台总配置的逐字段说明 |
 
-> **适用范围**:平台运行时为 **Windows-only**,代码与文档只在 Windows 上验证过。完整环境准备(CLI 安装、登录与 Poppler)见[单篇论文流程](../hydro-platform/single-paper-quickstart.md)。详见[平台概述](../hydro-platform/index.md)。
+> **适用范围**:平台运行时为 **Windows-only**,代码与文档只在 Windows 上验证过。完整环境准备(CLI 安装、登录与 Poppler)见[单篇论文流程](cards/single-paper-quickstart.md)。详见[平台概述](cards/index.md)。
 
 ## 相关
 
-- [安装配置](../getting-started/installation.md) —— 本仓库是 uv workspace,用 `uv sync --all-packages` 一次装好两个包
+- [安装配置](../getting-started/installation.md) —— 本仓库是单包 `hydrolitagent`,用 `uv sync --all-packages` 装依赖
 - [模块架构](../development/architecture.md) —— 代码结构与数据流
 - [ADR-0002](../adr/0002-zotero-two-clients-boundary.md) —— 为什么读 Zotero 保留两套客户端、各自服务哪种运行环境

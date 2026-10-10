@@ -88,11 +88,11 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 - 公众号润色:`uv run python -m hydrolitagent.literature.wechat.polish <md_file>`
 - 配图/封面:`uv run python -m hydrolitagent.literature.wechat.figure <md_file>` (需 ZHIPUAI_API_KEY)
 
-### 科研知识平台 (hydro-platform)
+### 文献卡与主题卡 (hydrolitagent cards)
 
 **用你自己的 Zotero 文献生成文献卡与主题卡**的最小核心:从一篇指定论文出发生成主体卡草稿、用代码校验,再由若干文献卡形成候选主题。不是交互式问答,也不做批量扫描或无人值守。运行时 **Windows-only**。命令一律从**仓库根**执行,共 5 条:
 
-- 单篇输入(选一篇自己的论文):`uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --output paper-input.json`
+- 单篇输入(选一篇自己的论文):`uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json`
 - 生成主体卡草稿:`uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json`
 - 离线校验主体卡:`uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json`
 - 生成候选主题:`uv run hydrolitagent cards themes-run --json`(`--dry-run` 只读预览)
@@ -100,7 +100,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 全部 5 个子命令:`uv run hydrolitagent cards --help`。
 
-不要直接读写平台的状态文件与主题池注册表(`themes/_registry.json`),也不要手工编辑生成的文献卡/主题文件——平台原子写入并校验哈希,手改会被判为漂移。完整说明在 `docs/hydro-platform/`。
+不要直接读写平台的状态文件与主题池注册表(`themes/_registry.json`),也不要手工编辑生成的文献卡/主题文件——平台原子写入并校验哈希,手改会被判为漂移。完整说明在 `docs/user-guide/cards/`,实现细节在 `docs/development/platform/`。
 
 ### Docs
 - Serve docs: `uv run mkdocs serve`
@@ -131,9 +131,8 @@ skills/              # Agent skills (zotero-query, paper-to-zotero, 及迁入的
 outputs/             # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
 papers/              # 按主题组织的文献库(10 主题, 约 4000 篇);知识库核心资产
 docs/                # Documentation site (mkdocs-material)
-hydro-platform/      # 科研知识平台(uv workspace 成员;消费侧:自己的 Zotero → 文献卡 → 主题卡)
-                     #   automation/ 代码(5 条核心命令) · templates/ 规范资产 · config/ 配置
-                     #   生成产物(文献卡、主题池、运行记录)不入库,由运行时自建
+hydrolitagent/cards/ # 文献卡与主题卡(消费侧:自己的 Zotero → 文献卡 → 主题卡)
+                     #   代码(5 条核心命令) · assets/ 只读资产(模板 / prompt / schema / 示例 / 配置);生成产物落仓库根自建
 tests/               # pytest (test_zotero_server.py, test_paper_to_zotero.py)
 
 equation_from_data/  # Paper reproduction: equation discovery from data

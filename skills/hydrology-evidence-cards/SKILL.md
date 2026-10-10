@@ -102,7 +102,7 @@ Zotero itemType is only a clue. Choose artifact_type from what the object is and
 > **两份刻意不同步**：本目录面向**人读**证据卡（`profile_schema` / `artifact_types` /
 > `default_evidence_roles`），派生那份面向**模型生成**且受校验器 `evidence_templates.py` 强制约束。
 > 改本目录的正文骨架**不会**自动影响那份派生模板；如需同步，按
-> `docs/hydro-platform/templates.md` 的「版本规则」升版本并更新 `_catalog.json` 指纹。
+> `docs/user-guide/cards/templates.md` 的「版本规则」升版本并更新 `_catalog.json` 指纹。
 
 ## Conditional modules
 

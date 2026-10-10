@@ -2,7 +2,7 @@
 
 本平台以你自己的 Zotero 文献库为来源，把一篇论文变成一张可校验的文献卡，再把若干文献卡组织成持续演化的主题卡。Codex 或 Claude CLI 负责内容提炼，Python 负责确定性的门禁、校验与安全写入。Git 只保存可复现的代码、配置、模板、测试和文档。
 
-本页只说明“平台是什么、现在做到哪里、从哪里读起”。面向老师评审的目标设计见[项目级设计](project-design.md)，技术实现、字段和运行步骤分别由专项文档维护。
+本页只说明“平台是什么、现在做到哪里、从哪里读起”。面向老师评审的目标设计见[项目级设计](../../development/platform/project-design.md)，技术实现、字段和运行步骤分别由专项文档维护。
 
 ## 最小核心：五条命令
 
@@ -25,13 +25,13 @@
 | 主体卡草稿生成 | [从单篇 PDF 生成主体卡草稿](subject-card-draft.md) |
 | 主体卡代码校验 | [主体卡代码校验门禁](subject-card-validation.md) |
 | 主题池：候选主题的演化与版本 | [统一文献池与主题池](unified-theme-pool.md) |
-| 技术架构、数据归属与模块边界 | [技术架构](architecture.md) |
-| 数据流、用户流程与失败处理 | [数据流与用户流程](flows.md) |
-| 配置字段、路径与密钥边界 | [总配置字段说明](config.md) · [变量与密钥](variables.md) |
+| 技术架构、数据归属与模块边界 | [技术架构](../../development/platform/architecture.md) |
+| 数据流、用户流程与失败处理 | [数据流与用户流程](../../development/platform/flows.md) |
+| 配置字段、路径与密钥边界 | [总配置字段说明](../../development/platform/config.md) · [变量与密钥](../../development/platform/variables.md) |
 | 证据卡与主题模板 | [公共模板](templates.md) |
-| 验证与测试覆盖 | [验证地图](tests.md) |
-| 科研工作流（人读证据卡与主题综合） | [科研工作流](research-platform-overview.md) |
-| 面向评审的总体设计 | [项目级设计](project-design.md) |
+| 验证与测试覆盖 | [验证地图](../../development/platform/tests.md) |
+| 科研工作流（人读证据卡与主题综合） | [科研工作流](../../research-workflow/index.md) |
+| 面向评审的总体设计 | [项目级设计](../../development/platform/project-design.md) |
 
 ## 单篇核心流程
 

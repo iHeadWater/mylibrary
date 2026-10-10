@@ -4,7 +4,7 @@
 
 ## 目的与范围
 
-用户没有逐卡科研复核的人力；粗卡供后续主题处理使用。“粗”仅表示未围绕某个主题定向深化，不表示只读摘要或省略重要细节。本页止于单篇卡片生成；候选主题与正式主题由[统一主题池](unified-theme-pool.md)和[科研工作流](research-platform-overview.md)处理。
+用户没有逐卡科研复核的人力；粗卡供后续主题处理使用。“粗”仅表示未围绕某个主题定向深化，不表示只读摘要或省略重要细节。本页止于单篇卡片生成；候选主题与正式主题由[统一主题池](../../user-guide/cards/unified-theme-pool.md)和[科研工作流](../../research-workflow/index.md)处理。
 
 ## 当前流程
 
@@ -12,7 +12,7 @@ Python 核对输入记录、原 PDF 和模板索引 → 一个模型独立会话
 
 - 只有一次提供者 generate 调用；CLI 在本次会话内可能调用多次本机工具或自行重连，不是承诺一个网络请求。
 - 不要求摘句、逐字匹配、固定事实数、批判条数或人工审批；不派生子 Agent。
-- 使用九类证据卡模板；当前平台目录版本为 2.0.1，正文骨架基于 V1.7，详见[公共模板](templates.md)。
+- 使用九类证据卡模板；当前平台目录版本为 2.0.1，正文骨架基于 V1.7，详见[公共模板](../../user-guide/cards/templates.md)。
 - 模型、强度和超时来自总配置或 `configs/ai.toml`；一个会话使用 `generation_timeout_seconds`，不再使用六个角色各自的配置。
 
 ## 内容及验收边界
@@ -30,7 +30,7 @@ Python 核对输入记录、原 PDF 和模板索引 → 一个模型独立会话
 
 ## 操作
 
-单篇生成通过 `evidence-generate` 完成，完整命令与返回值见[单篇论文命令行流程](single-paper-quickstart.md)与[主体卡草稿](subject-card-draft.md)。生成的草稿一律为待校验状态，须经 `evidence-validate` 通过后才能进入主题流程。
+单篇生成通过 `evidence-generate` 完成，完整命令与返回值见[单篇论文命令行流程](../../user-guide/cards/single-paper-quickstart.md)与[主体卡草稿](../../user-guide/cards/subject-card-draft.md)。生成的草稿一律为待校验状态，须经 `evidence-validate` 通过后才能进入主题流程。
 
 ## 输出保全与故障
 

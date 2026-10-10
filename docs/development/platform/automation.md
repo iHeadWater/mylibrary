@@ -2,7 +2,7 @@
 
 `hydro-platform` 把可确定的 PDF 门禁、来源身份、字段校验、重复检查和原子保存交给 Python，把主体卡提炼和候选主题综合交给所选 CLI（Codex / Claude）。自动化产出建议和候选知识，不替代研究者确认正式主题、科学结论或 research idea。
 
-单篇输入链路见[主体卡草稿](subject-card-draft.md)：接收 `paper-input` 的 READY 记录，一次模型调用输出详细正文和机器字段，按 #27 的产物根保存待校验草稿。
+单篇输入链路见[主体卡草稿](../../user-guide/cards/subject-card-draft.md)：接收 `paper-input` 的 READY 记录，一次模型调用输出详细正文和机器字段，按 #27 的产物根保存待校验草稿。
 
 ## 自动化清单
 
@@ -36,7 +36,7 @@
 | 命令 | 用途 |
 | --- | --- |
 | `uv run hydrolitagent cards paper-input --user-library --query "关键词" --json` | 在自己的文库中搜索候选；不会自动选择第一条 |
-| `uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --output paper-input.json` | 检查单篇父条目、唯一 PDF、本地文件和全文索引状态 |
+| `uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json` | 检查单篇父条目、唯一 PDF、本地文件和全文索引状态 |
 | `uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json` | 读取该篇 PDF 并生成待校验主体卡草稿 |
 | `uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json` | 离线校验草稿，PASS 才可进入主题流程 |
 | `uv run hydrolitagent cards themes-run --json` | 以若干通过校验的文献卡生成候选主题并回填修订 |
@@ -48,4 +48,4 @@
 
 `--demo`在个人库找不到公开演示论文时只返回文章页、PDF 链接和目标集合提示，不会代替用户点击 Zotero Connector；人工抓取完成后需重新执行。
 
-单篇输入的独立命令、默认配置及环境变量覆盖见[单篇论文输入](paper-input.md)；生成与校验的完整命令流程见[单篇论文命令行流程](single-paper-quickstart.md)。
+单篇输入的独立命令、默认配置及环境变量覆盖见[单篇论文输入](../../user-guide/cards/paper-input.md)；生成与校验的完整命令流程见[单篇论文命令行流程](../../user-guide/cards/single-paper-quickstart.md)。

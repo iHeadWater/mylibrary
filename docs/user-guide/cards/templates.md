@@ -5,7 +5,7 @@
 - `hydro-platform/templates/evidence-cards/`：九类 Markdown 粗卡模板；`_catalog.json` 保存来源提交、本地版本及内容指纹。
 - `hydro-platform/templates/themes/`：已启用的统一主题规划、定向精读、回填模板和传输 schema，不再只是预留目录。
 
-修改证据模板需同步版本和清单指纹。修改主题模板会产生新的输入版本，但不会另建独立主题池或自动重做全部旧精读；旧粗卡也不因模板升级自动覆盖。[统一主题池](unified-theme-pool.md) · [总配置字段](config.md)。
+修改证据模板需同步版本和清单指纹。修改主题模板会产生新的输入版本，但不会另建独立主题池或自动重做全部旧精读；旧粗卡也不因模板升级自动覆盖。[统一主题池](unified-theme-pool.md) · [总配置字段](../../development/platform/config.md)。
 
 ## 证据卡模板库
 

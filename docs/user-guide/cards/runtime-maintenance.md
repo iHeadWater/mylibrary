@@ -40,7 +40,7 @@ uv run hydrolitagent cards ai-config --json
 uv run hydrolitagent cards themes-run --config hydro-platform/config/config.local.json --json
 ```
 
-**`config.local.json` 是另一份完整总配置，不是只填几个覆盖字段的补丁文件。** 路径字段、密钥边界和字段含义见[总配置字段说明](config.md)与[变量与密钥](variables.md)。
+**`config.local.json` 是另一份完整总配置，不是只填几个覆盖字段的补丁文件。** 路径字段、密钥边界和字段含义见[总配置字段说明](../../development/platform/config.md)与[变量与密钥](../../development/platform/variables.md)。
 
 ## 运行日志
 
