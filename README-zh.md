@@ -12,7 +12,7 @@ mylibrary 承担**情报汇集之后的深度处理**:
 - **Zotero 论文入库也是本仓库能力** —— DOI / arXiv / 标题 → PDF → Zotero 条目的流水线(`run_paper_pipeline.sh`)就在本仓库。
 - 上游的兄弟仓库(dailyinfo)负责**进入 Zotero 之前的情报采集**(资讯流、原始下载);本仓库不读它的输出文件。
 
-产物沉淀为**文献知识库**:`papers/` 按主题组织(10 个主题,6000+ 篇),以及 `outputs/` 下的精读分析卡、公众号文章、播客。
+产物沉淀为**文献知识库**:`papers/` 按主题组织(10 个主题,约 4000 篇),以及 `outputs/` 下的精读分析卡、公众号文章、播客。
 
 ## 能力
 
@@ -130,7 +130,7 @@ uv run hydro-platform doctor --json
 - **平台不下载 PDF** —— 只读取共享库中已经附好的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`。
 - **运行时为 Windows-only**:定时调度、Poppler 原生工具安装、PDF 沙箱探针都依赖 Windows。编排逻辑本身与操作系统无关,但只在 Windows 上验证过。
 - 生成的产物(证据包、主题池、日报、贡献账本)**不入库** —— 运行时写入,另行共享。仓库里只有代码、模板、提示词与 schema。
-- 完整命令清单:`uv run hydro-platform --help`(29 个子命令)。
+- 完整命令清单:`uv run hydro-platform --help`(32 个子命令)。
 
 ## Agent Skills
 
@@ -146,6 +146,8 @@ uv run hydro-platform doctor --json
 | `figure-skill-v2` | 每篇论文配图 + 整期封面(优先 PDF 提取,否则智谱 CogView 生成) |
 | `bilibili-upload` | 播客音频 → MP4 → B 站上传 |
 | `hydro-platform` | 科研知识平台 CLI 的入口(共享 Zotero 库 → 证据包 → 主题池)。运行时为 Windows-only。 |
+| `hydrology-evidence-cards` | Zotero 源论文 → 人读证据卡(科研工作流,含机器审计字段) |
+| `hydrology-theme-synthesis` | 文献 → 初步主题 → 人工筛选门 → 正式主题(科研工作流) |
 
 ## 项目结构
 
@@ -170,14 +172,14 @@ hydrolitagent/
 
 configs/                 # Prompt / 提取配置
 scripts/                 # run_paper_pipeline.sh, download_paper.py(隐身一键 PDF 下载), chunk_fulltext.py
-skills/                  # 10 个 Agent skill
+skills/                  # 12 个 Agent skill
 docs/                    # 文档站点(mkdocs-material)
 outputs/                 # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
 papers/                  # 按主题组织的文献库(10 个主题)
 
 hydro-platform/          # 科研知识平台(uv workspace 成员)
 ├── automation/          #   Python:检测 → PDF 门禁 → 任务状态机 → 制卡 → 主题池
-├── templates/           #   可复用资产:八类证据卡模板、主题提示词、JSON schema
+├── templates/           #   可复用资产:九类证据卡模板、主题提示词、JSON schema
 ├── config/              #   非敏感配置与完整示例
 └── pyproject.toml       #   入口:`uv run hydro-platform`
                          #   生成产物(evidence-packs/、themes/、reports/、
@@ -197,7 +199,7 @@ uv run mkdocs serve    # http://127.0.0.1:8000
 uv run mkdocs build --strict
 ```
 
-平台文档在 [`docs/hydro-platform/`](docs/hydro-platform/index.md) —— 从那里入门,完整交接看[平台操作说明](docs/hydro-platform/platform-operations-guide.md)。保留两套独立 Zotero 客户端的决定记录在 [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md)。
+平台文档在 [`docs/hydro-platform/`](docs/hydro-platform/index.md) —— 从那里入门,完整交接也从这份[平台文档导航](docs/hydro-platform/index.md)开始。保留两套独立 Zotero 客户端的决定记录在 [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md)。
 
 ## 贡献
 

@@ -72,7 +72,7 @@ hydrolitagent/
 
 configs/                 # Prompt / 提取配置
 scripts/                 # run_paper_pipeline.sh, download_paper.py (stealth one-command PDF downloader), chunk_fulltext.py
-skills/                  # Agent 可用 Skill(10 个)
+skills/                  # Agent 可用 Skill(12 个)
 docs/                    # 文档站点(mkdocs-material)
 outputs/                 # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
 papers/                  # 按主题组织的文献库(10 个主题)

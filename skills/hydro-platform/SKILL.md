@@ -90,7 +90,7 @@ PASS 只表示当前代码规则通过，不能声称科学结论正确或正式
 | PDF 全文门禁判定 / 交付 | `pdf-gate` / `pdf-delivery` |
 | 任务状态机：同步 / 列表 | `tasks-sync` / `tasks-list` |
 | 证据包骨架同步 | `packages-sync` |
-| 校验八类卡片模板 | `evidence-templates-validate` |
+| 校验九类卡片模板 | `evidence-templates-validate` |
 | 制卡生成器预检 / 冒烟 | `generator-preflight` / `generator-smoke-test` |
 | 生成单篇证据卡 | `evidence-generate` |
 | 导出未保存草稿 | `evidence-draft-export` |
@@ -98,7 +98,7 @@ PASS 只表示当前代码规则通过，不能声称科学结论正确或正式
 | 安装与调度（**Windows**） | `setup` / `bootstrap` / `bootstrap-native` / `schedule-plan` / `schedule-status` / `schedule-install` / `schedule-remove` / `schedule-tick` |
 | 实验性路径读取（非正式入口） | `pdf-direct-read-trial` / `evidence-generate-trial` |
 
-> 上表只列子命令名。执行时一律加前缀，例如 `uv run hydro-platform tasks-list --json`。**完整清单以 `uv run hydro-platform --help` 为准**（当前 30 个子命令），不要凭本表推断不存在某个子命令。
+> 上表只列子命令名。执行时一律加前缀，例如 `uv run hydro-platform tasks-list --json`。**完整清单以 `uv run hydro-platform --help` 为准**（当前 32 个子命令），不要凭本表推断不存在某个子命令。
 
 ## 结果怎么读
 
@@ -110,4 +110,4 @@ PASS 只表示当前代码规则通过，不能声称科学结论正确或正式
 
 ## 深入阅读
 
-平台文档在 `docs/hydro-platform/`：完整操作说明见 `platform-operations-guide.md`，排错见 `operator-manual.md`，工程状态与已知缺口见 `engineering-status.md`。
+平台文档在 `docs/hydro-platform/`：完整操作说明与文档导航见 `docs/hydro-platform/index.md`，排错见 `docs/hydro-platform/recovery.md`，工程状态与已知缺口查阅该目录下现有文档（以 `index.md` 导航为准）。

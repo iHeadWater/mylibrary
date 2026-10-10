@@ -34,6 +34,8 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 | `download-pdf` | 论文 PDF 下载(机构访问) | 无 |
 | `zotero-query` | 文献库查询 | 读库 |
 | `hydro-platform` | 科研知识平台 CLI 入口:共享 Zotero 库 → 证据包 → 主题池。**运行时 Windows-only**,详见该 skill | 直连 Local API |
+| `hydrology-evidence-cards` | 科研工作流:Zotero 源论文 → 人读证据卡(含机器审计字段,默认折叠) | 读库 |
+| `hydrology-theme-synthesis` | 科研工作流:文献 → 初步主题 → **人工筛选门** → 正式主题 → Claim 准入 → 深度主题卷宗 | 读库 |
 
 > `ai-news-weekly-polish` 留在 dailyinfo(它是 dailyinfo pipeline 产物)。`paper-to-zotero`/`run-paper-to-zotero` 属入库端,保留在本仓库作采集入口。
 
@@ -94,7 +96,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 - 只预览本地任务,不扫 Zotero、不调模型:`uv run hydro-platform run-once --dry-run --json`
 - 只跑主题:`uv run hydro-platform themes-run --json`(`--dry-run` 只读预览)
 - 健康检查:`uv run hydro-platform doctor --json`
-- 全部 30 个子命令:`uv run hydro-platform --help`
+- 全部 32 个子命令:`uv run hydro-platform --help`
 
 不要直接读写平台的状态文件(`.runtime/tasks.json`、`themes/_registry.json`),也不要手工编辑证据包/主题文件——平台原子写入并校验哈希,手改会被判为漂移。完整说明在 `docs/hydro-platform/`。
 
@@ -125,7 +127,7 @@ configs/             # 配置:graph_prompts.toml · paths.toml(精读产物根�
 scripts/             # run_paper_pipeline.sh, chunk_fulltext.py (weekly-review 辅助)
 skills/              # Agent skills (zotero-query, paper-to-zotero, 及迁入的 weekly-review 等 6 个)
 outputs/             # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
-papers/              # 按主题组织的文献库(10 主题, 6173 篇);知识库核心资产
+papers/              # 按主题组织的文献库(10 主题, 约 4000 篇);知识库核心资产
 docs/                # Documentation site (mkdocs-material)
 hydro-platform/      # 科研知识平台(uv workspace 成员;消费侧:Zotero → 证据包 → 主题池)
                      #   automation/ 代码 · templates/ 规范资产 · config/ 配置

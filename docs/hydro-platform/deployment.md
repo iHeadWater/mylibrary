@@ -43,7 +43,7 @@ uv run hydro-platform doctor --json
 
 锁文件当前只含 `pypdf==6.18.0`。在共享 `.venv` 模式下，该依赖同时由 `hydro-platform/pyproject.toml` 声明为正式依赖（uv sync 是精确同步，不在依赖图里的包会被移除），安装与升级由 `uv sync` 完成；平台内环境模式使用核对后的本地 wheel、`pip --isolated --no-index --no-deps --require-hashes --only-binary=:all:`，不执行远程脚本、不从源码构建、不将项目安装到全局环境。[pip 安全安装文档](https://pip.pypa.io/en/stable/topics/secure-installs/)
 
-Python 推荐版本为仓库根 `.python-version` 的 3.12.14，支持 >=3.12,<3.15；安装记录实际版本，不承诺所有电脑解释器完全相同。此前 6.10.0 的 [PyPI 安全公告元数据](https://pypi.org/pypi/pypdf/6.10.0/json) 列出多项耗时或内存耗尽问题，因此采用 [6.18.0 的官方包及哈希](https://pypi.org/pypi/pypdf/6.18.0/json)。新版本查询时未列出漏洞，不代表不存在风险，也不是此前 Codex 网络断线的原因诊断。
+Python 推荐版本为仓库根 `.python-version` 的 3.12，支持 >=3.12,<3.15；安装记录实际版本，不承诺所有电脑解释器完全相同。此前 6.10.0 的 [PyPI 安全公告元数据](https://pypi.org/pypi/pypdf/6.10.0/json) 列出多项耗时或内存耗尽问题，因此采用 [6.18.0 的官方包及哈希](https://pypi.org/pypi/pypdf/6.18.0/json)。新版本查询时未列出漏洞，不代表不存在风险，也不是此前 Codex 网络断线的原因诊断。
 
 ## 锁定文件与安装代码
 

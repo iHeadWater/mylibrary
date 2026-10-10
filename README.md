@@ -10,7 +10,7 @@
 
 | 线 | 做什么 | 代码 / 数据 | 入口 |
 |---|---|---|---|
-| **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/播客/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（9 个技能） | [文档](docs/user-guide/mcp-tools.md) |
+| **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/播客/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（12 个技能） | [文档](docs/user-guide/mcp-tools.md) |
 | **自动化平台** | 无人值守的长期知识资产：检测共享 Zotero 库新增 → 全文门禁 → 逐篇证据包 → 主题池 → 日报。确定性、不需手工编辑。**运行时 Windows-only** | `hydro-platform/`、`skills/hydro-platform/` | [`hydro-platform` 文档](docs/hydro-platform/index.md) |
 | **科研工作流** | 人读证据卡与主题综合：来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合。纯标准库脚本，人工决策不可绕过 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、`docs/hydro-platform/`（中文规范） | [平台总览](docs/hydro-platform/research-platform-overview.md) |
 
