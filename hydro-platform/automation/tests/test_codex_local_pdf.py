@@ -20,7 +20,7 @@ from hydro_platform.evidence_packages import EvidencePackageError, load_evidence
 from hydro_platform.source_access import source_access_acceptable
 from test_card_generator import command_result, smoke_jsonl
 from test_config import write_config
-from test_multi_agent_card_generator import common
+from card_generator_fixtures import common
 from test_card_generation import FakeAdapter, GenerationFixture, PARENT_KEY, PDF_HASH, VALID_BODY
 
 ASSETS = Path(__file__).resolve().parents[1]

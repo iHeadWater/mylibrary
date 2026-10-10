@@ -22,7 +22,6 @@ from hydro_platform.config import ConfigError, ConnectionGuardConfig, load_confi
 from hydro_platform.failure_records import save_failure_record
 import test_card_generator as fixtures
 import test_config as config_fixtures
-import test_multi_agent_card_generator as workflow_fixtures
 
 RECONNECT = {"type": "error", "message": "Reconnecting... 1/5 (stream disconnected)"}
 COMPLETED = {"type": "turn.completed"}

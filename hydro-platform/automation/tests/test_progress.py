@@ -20,7 +20,6 @@ from hydro_platform.config import ConfigError, ProgressConfig, REQUIRED_CARD_WOR
 from hydro_platform.progress import ConsoleProgress
 import test_card_generator as generator_fixtures
 import test_config as config_fixtures
-import test_multi_agent_card_generator as workflow_fixtures
 
 class ProgressTests(unittest.TestCase):
     def test_default_heartbeat_waits_sixty_seconds_without_delaying_events(self):
