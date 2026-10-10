@@ -72,8 +72,9 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
             "reasoning_effort": None,
             "smoke_test_timeout_seconds": 120,
             "generation_timeout_seconds": 900,
+            "workflow_mode": "single_agent",
             "pdf_reader": {
-                "adapter": "project_mcp",
+                "adapter": "local_path",
                 "server_name": "hydro_pdf_reader",
                 "python_executable": None,
                 "server_file": "automation/src/hydro_platform/pdf_reader_mcp.py",
@@ -85,42 +86,6 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
                 "output_token_limit": 60000,
                 "startup_timeout_seconds": 15,
                 "tool_timeout_seconds": 120,
-            },
-            "multi_agent_workflow": {
-                "protocol_version": "rough-card-multi-agent-v1",
-                "prompts": {
-                    "fact_extraction": "automation/prompts/fact-extraction-v1.md",
-                    "fact_adjudication": "automation/prompts/fact-adjudication-v1.md",
-                    "critical_analysis": "automation/prompts/critical-analysis-v1.md",
-                    "adversarial_review": "automation/prompts/adversarial-review-v1.md",
-                },
-                "schemas": {
-                    "fact_extraction": "automation/schemas/fact-extraction-output.schema.json",
-                    "fact_adjudication": "automation/schemas/fact-adjudication-output.schema.json",
-                    "critical_analysis": "automation/schemas/critical-analysis-output.schema.json",
-                    "adversarial_review": "automation/schemas/adversarial-review-output.schema.json",
-                },
-                "quality_gate": {
-                    "minimum_verified_facts": 8,
-                    "minimum_critical_analyses": 5,
-                    "minimum_adversarial_challenges": 5,
-                    "maximum_unresolved_high_severity": 0,
-                },
-                "roles": {
-                    name: {
-                        "model": None,
-                        "reasoning_effort": "high",
-                        "timeout_seconds": 1200,
-                    }
-                    for name in (
-                        "fact_extractor_a",
-                        "fact_extractor_b",
-                        "fact_adjudicator",
-                        "critical_analyst",
-                        "card_synthesizer",
-                        "adversarial_reviewer",
-                    )
-                },
             },
         },
     }
@@ -363,80 +328,6 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "reports_dir"):
                 load_config(config_path)
 
-    def test_loads_card_generator_preflight_configuration(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_path = write_config(
-                root,
-                {
-                    "card_generator": {
-                        "executable": "C:/Tools/codex.exe",
-                        "preflight_timeout_seconds": 12.5,
-                    }
-                },
-            )
-
-            config = load_config(config_path)
-
-            self.assertEqual(config.card_generator.adapter, "codex_cli")
-            self.assertEqual(config.card_generator.executable, "C:/Tools/codex.exe")
-            self.assertEqual(config.card_generator.auth_mode, "chatgpt_account")
-            self.assertEqual(config.card_generator.preflight_timeout_seconds, 12.5)
-            self.assertIsNone(config.card_generator.model)
-            self.assertIsNone(config.card_generator.reasoning_effort)
-            self.assertEqual(config.card_generator.smoke_test_timeout_seconds, 120)
-            self.assertEqual(config.card_generator.generation_timeout_seconds, 900)
-            self.assertEqual(config.card_generator.pdf_reader.server_name, "hydro_pdf_reader")
-            self.assertEqual(config.card_generator.pdf_reader.render_dpi, 120)
-            self.assertEqual(
-                config.card_generator.pdf_reader.server_file,
-                root / "automation" / "src" / "hydro_platform" / "pdf_reader_mcp.py",
-            )
-            workflow = config.card_generator.multi_agent_workflow
-            self.assertIsNotNone(workflow)
-            assert workflow is not None
-            self.assertEqual(workflow.protocol_version, "rough-card-multi-agent-v1")
-            self.assertEqual(len(workflow.roles), 6)
-            self.assertEqual(workflow.roles["critical_analyst"].reasoning_effort, "high")
-
-    def test_rejects_missing_required_multi_agent_role(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_path = write_config(root)
-            data = json.loads(config_path.read_text(encoding="utf-8"))
-            del data["card_generator"]["multi_agent_workflow"]["roles"][
-                "adversarial_reviewer"
-            ]
-            config_path.write_text(json.dumps(data), encoding="utf-8")
-
-            with self.assertRaisesRegex(ConfigError, "roles 必须且只能包含"):
-                load_config(config_path)
-
-    def test_rejects_multi_agent_prompt_outside_prompt_directory(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_path = write_config(root)
-            data = json.loads(config_path.read_text(encoding="utf-8"))
-            data["card_generator"]["multi_agent_workflow"]["prompts"][
-                "fact_extraction"
-            ] = "outside.md"
-            config_path.write_text(json.dumps(data), encoding="utf-8")
-
-            with self.assertRaisesRegex(ConfigError, "prompts.fact_extraction"):
-                load_config(config_path)
-
-    def test_rejects_unknown_multi_agent_protocol_version(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_path = write_config(root)
-            data = json.loads(config_path.read_text(encoding="utf-8"))
-            data["card_generator"]["multi_agent_workflow"][
-                "protocol_version"
-            ] = "skip-review-v1"
-            config_path.write_text(json.dumps(data), encoding="utf-8")
-
-            with self.assertRaisesRegex(ConfigError, "protocol_version"):
-                load_config(config_path)
 
     def test_loads_explicit_smoke_test_model(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

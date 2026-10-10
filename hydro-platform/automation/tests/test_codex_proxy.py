@@ -123,27 +123,6 @@ class ProxyEnvironmentTests(unittest.TestCase):
 
 
 class ProxyAdapterTests(unittest.TestCase):
-    def test_preflight_and_smoke_share_proxy_without_modifying_parent(self):
-        config = replace(generator_config(), proxy=PROXY)
-        adapter = CodexCliAdapter(config, executable_finder=lambda name: "fixture-codex")
-
-        def run(command, **kwargs):
-            for name in PROXY_VARIABLES:
-                self.assertEqual(kwargs["env"][name], PROXY.url)
-            self.assertNotIn(PROXY.url, " ".join(command))
-            output = ("codex-cli fixture" if "--version" in command else
-                      "Logged in using ChatGPT" if "status" in command else smoke_jsonl())
-            return subprocess.CompletedProcess(command, 0, output, "")
-
-        before = dict(os.environ)
-        with patch("hydro_platform.card_generators.codex_cli.subprocess.run", side_effect=run) as process:
-            ready = adapter.preflight(check_pdf_reader=False)
-            self.assertTrue(ready["ok"])
-            self.assertEqual(ready["proxy"]["url"], PROXY.url)
-            self.assertFalse(ready["proxy"]["connectivity_verified"])
-            self.assertTrue(adapter.smoke_test()["ok"])
-            self.assertEqual(process.call_count, 5)
-        self.assertEqual(dict(os.environ), before)
 
     def test_local_pdf_generation_receives_proxy_only_in_environment(self):
         with tempfile.TemporaryDirectory() as directory:

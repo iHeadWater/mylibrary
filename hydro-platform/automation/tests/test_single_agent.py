@@ -281,24 +281,6 @@ class SingleAgentTests(unittest.TestCase):
             self.assertNotIn("secret path", json.dumps(result))
             self.assertEqual(result["warnings"][0]["code"], "SCRATCH_CLEANUP_FAILED")
 
-    def test_single_config_has_no_six_role_assets_and_rejects_ambiguous_mode(self):
-        with tempfile.TemporaryDirectory() as directory:
-            config = write_config(Path(directory))
-            data = json.loads(config.read_text())
-            data["card_generator"].update(workflow_mode="single_agent")
-            data["card_generator"]["pdf_reader"]["adapter"] = "local_path"
-            with self.subTest(mode="ambiguous"):
-                config.write_text(json.dumps(data))
-                with self.assertRaises(ConfigError):
-                    load_config(config)
-            del data["card_generator"]["multi_agent_workflow"]
-            config.write_text(json.dumps(data))
-            self.assertIsNone(load_config(config).card_generator.multi_agent_workflow)
-            data["card_generator"]["workflow_mode"] = "unknown"
-            config.write_text(json.dumps(data))
-            with self.assertRaises(ConfigError):
-                load_config(config)
-
     def test_all_nine_adapted_templates_have_attribution_and_no_human_review_fields(self):
         root = Path(__file__).resolve().parents[2] / "templates" / "evidence-cards"
         templates = list(root.glob("0*.md"))

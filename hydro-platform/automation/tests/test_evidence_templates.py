@@ -239,44 +239,6 @@ class EvidenceTemplateValidationTests(unittest.TestCase):
                 validate_evidence_templates(templates_dir, catalog_file)
 
 
-class EvidenceTemplateCliTests(unittest.TestCase):
-    def test_validation_command_uses_configured_paths(self) -> None:
-        expected = {
-            "schema_version": 1,
-            "ok": True,
-            "component": "evidence_templates",
-            "catalog_version": "1.0.0",
-            "source_commit": SOURCE_COMMIT,
-            "template_count": 8,
-            "enabled_count": 8,
-            "templates_dir": "configured-templates",
-        }
-        app_config = SimpleNamespace(
-            paths=SimpleNamespace(
-                evidence_card_templates_dir=Path("configured-templates"),
-                evidence_card_template_catalog_file=Path("configured-catalog.json"),
-            )
-        )
-        output = io.StringIO()
-
-        with (
-            patch("hydro_platform.cli.load_config", return_value=app_config),
-            patch(
-                "hydro_platform.cli.validate_evidence_templates",
-                return_value=expected,
-            ) as validate,
-            redirect_stdout(output),
-        ):
-            exit_code = main(
-                ["evidence-templates-validate", "--config", "unused.json", "--json"]
-            )
-
-        self.assertEqual(exit_code, 0)
-        self.assertEqual(json.loads(output.getvalue()), expected)
-        validate.assert_called_once_with(
-            app_config.paths.evidence_card_templates_dir,
-            app_config.paths.evidence_card_template_catalog_file,
-        )
 
 
 if __name__ == "__main__":

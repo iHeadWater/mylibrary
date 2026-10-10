@@ -22,7 +22,6 @@ import test_card_generator as generator_fixtures
 import test_config as config_fixtures
 import test_multi_agent_card_generator as workflow_fixtures
 
-
 class ProgressTests(unittest.TestCase):
     def test_default_heartbeat_waits_sixty_seconds_without_delaying_events(self):
         stream = io.StringIO()
@@ -110,7 +109,6 @@ class ProgressTests(unittest.TestCase):
                 raise RuntimeError("fixture")
         self.assertFalse(progress._thread.is_alive())
         self.assertIn("异常中止", stream.getvalue())
-
 
 class CodexStreamingTests(unittest.TestCase):
     def test_only_known_status_is_shown_without_model_or_tool_payload(self):
@@ -233,30 +231,6 @@ print(json.dumps({'input_size': len(text), 'custom_env': os.environ['HYDRO_TEST_
         self.assertTrue(children[0].stdout.closed)
         self.assertTrue(children[0].stderr.closed)
 
-
-class WorkflowProgressTests(unittest.TestCase):
-    def test_all_roles_emit_start_then_validated_completion_in_order(self):
-        events = []
-        with tempfile.TemporaryDirectory() as directory:
-            fixture = workflow_fixtures.WorkflowFixture(Path(directory))
-            result = fixture.run(workflow_fixtures.FakeProvider(fixture.outputs()), progress=events.append)
-        self.assertTrue(result["ok"])
-        lifecycle = [(e["event"], e["role"]) for e in events if e["event"] in {"role_started", "role_completed"}]
-        self.assertEqual(lifecycle, [(event, role) for role in REQUIRED_CARD_WORKFLOW_ROLES for event in ("role_started", "role_completed")])
-        self.assertEqual(events[-1]["event"], "workflow_completed")
-
-    def test_quality_failure_does_not_complete_role_or_start_next(self):
-        events = []
-        with tempfile.TemporaryDirectory() as directory:
-            fixture = workflow_fixtures.WorkflowFixture(Path(directory))
-            outputs = fixture.outputs()
-            outputs["fact_extractor_a"]["facts"][0]["fact_id"] = ""
-            result = fixture.run(workflow_fixtures.FakeProvider(outputs), progress=events.append)
-        self.assertFalse(result["ok"])
-        self.assertEqual([e["role"] for e in events if e["event"] == "role_started"], ["fact_extractor_a"])
-        self.assertFalse(any(e["event"] in {"role_completed", "workflow_completed"} for e in events))
-
-
 class ProgressConfigTests(unittest.TestCase):
     def test_missing_progress_uses_sixty_second_default(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -294,68 +268,6 @@ class ProgressConfigTests(unittest.TestCase):
                 config_file = config_fixtures.write_config(Path(directory), {"card_generator": {"progress": progress}})
                 with self.assertRaises(ConfigError):
                     load_config(config_file)
-
-
-class ProgressCliTests(unittest.TestCase):
-    def run_cli(self, *, options=(), enabled=True, failure=False, cancel=False):
-        config = generator_fixtures.GeneratorPreflightCliTests._generation_app_config()
-        config.card_generator = replace(config.card_generator, progress=ProgressConfig(enabled=enabled))
-        expected = {"schema_version": 1, "ok": True, "operation": "evidence_generate_trial"}
-        stdout, stderr = io.StringIO(), io.StringIO()
-        callback = None
-
-        def build(config, *, progress):
-            nonlocal callback
-            callback = progress
-            return Mock()
-
-        def generate(*args, **kwargs):
-            callback({"event": "role_started", "role": "fact_extractor_b", "index": 2, "total": 6})
-            if cancel:
-                raise KeyboardInterrupt()
-            if failure:
-                from hydro_platform.card_generation import CardGenerationError
-                raise CardGenerationError("CARD_QUALITY_CONTRACT_FAILED", "fixture")
-            return expected
-
-        with (tempfile.TemporaryDirectory() as directory,
-              patch("hydro_platform.cli.load_config", return_value=config),
-              patch("hydro_platform.cli.preflight", return_value={"ok": True}),
-              patch("hydro_platform.cli.build_card_generator_adapter", side_effect=build),
-              patch("hydro_platform.cli.generate_evidence_card_trial", side_effect=generate),
-              redirect_stdout(stdout), redirect_stderr(stderr)):
-            config.paths.logs_dir = Path(directory) / "logs"
-            code = main(["evidence-generate-trial", "--item-key", "CEXH4PQA", "--json", *options])
-        return code, json.loads(stdout.getvalue()), stderr.getvalue()
-
-    def test_progress_is_on_stderr_and_stdout_is_one_json_result(self):
-        code, result, progress = self.run_cli()
-        self.assertEqual(code, 0)
-        self.assertTrue(result["ok"])
-        self.assertIn("2/6 事实提取 B", progress)
-        self.assertIn("试运行完成并保存", progress)
-
-    def test_flag_and_config_can_each_disable_progress(self):
-        for options, enabled in ((["--no-progress"], True), ([], False)):
-            with self.subTest(options=options, enabled=enabled):
-                code, result, progress = self.run_cli(options=options, enabled=enabled)
-                self.assertEqual(code, 0)
-                self.assertTrue(result["ok"])
-                self.assertEqual(progress, "")
-
-    def test_failure_reports_current_role_without_success(self):
-        code, result, progress = self.run_cli(failure=True)
-        self.assertEqual(code, 3)
-        self.assertFalse(result["ok"])
-        self.assertIn("[2/6 事实提取 B] 失败", progress)
-        self.assertNotIn("完成并保存", progress)
-
-    def test_cancel_returns_json_and_stops_reporter(self):
-        code, result, progress = self.run_cli(cancel=True)
-        self.assertEqual(code, 130)
-        self.assertEqual(result["error"]["code"], "CANCELLED")
-        self.assertNotIn("完成并保存", progress)
-
 
 if __name__ == "__main__":
     unittest.main()

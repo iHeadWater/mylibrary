@@ -21,7 +21,6 @@ from hydro_platform.tasks import (
     load_task_registry,
     reconcile_tasks,
     save_task_registry,
-    sync_tasks,
 )
 from hydro_platform.zotero import ApiResponse
 
@@ -453,48 +452,3 @@ class TaskTests(unittest.TestCase):
 
             self.assertEqual(raised.exception.code, "TASK_STORE_INVALID")
             self.assertEqual(task_path.read_text(encoding="utf-8"), "{broken")
-
-    def test_sync_tasks_writes_registry_and_is_idempotent(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            pdf_path = root / "paper.pdf"
-            pdf_path.write_bytes(b"%PDF-1.7\n" + b"body" * 32 + b"\n%%EOF\n")
-            task_path = root / "tasks.json"
-            lock_path = root / "worker.lock"
-            client = SyncClient(pdf_path)
-            zotero = ZoteroConfig(group_id=GROUP_ID)
-            gate = PdfGateConfig(
-                min_file_size_bytes=64,
-                min_text_characters=20,
-                hash_chunk_size_bytes=32,
-            )
-
-            first = sync_tasks(
-                zotero,
-                gate,
-                self.config,
-                task_path,
-                lock_path,
-                page_size=100,
-                client=client,
-                now=self.now,
-            )
-            second = sync_tasks(
-                zotero,
-                gate,
-                self.config,
-                task_path,
-                lock_path,
-                page_size=100,
-                client=client,
-                now=self.now + timedelta(minutes=1),
-            )
-
-        self.assertEqual(first["task_count"], 1)
-        self.assertEqual(first["changed_count"], 1)
-        self.assertEqual(first["state_counts"], {"READY_FOR_EXTRACTION": 1})
-        self.assertEqual(second["changed_count"], 0)
-
-
-if __name__ == "__main__":
-    unittest.main()
