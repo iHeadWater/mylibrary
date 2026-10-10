@@ -22,7 +22,7 @@ uv run python -m hydrolitagent.zotero.server
 zotero_search(query="flood forecasting", limit=10)
 # → 返回标题、作者、日期、DOI、摘要片段
 
-# 全文搜索（需要 Zotero 桌面版运行）
+# 全文搜索（Web API，走云端已有全文索引）
 zotero_fulltext_search(query="LSTM streamflow", limit=20)
 
 # 按标签搜索

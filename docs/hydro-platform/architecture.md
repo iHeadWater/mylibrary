@@ -56,7 +56,7 @@ flowchart TB
 | `hydrolitagent` | 文献下载、入库、查询、附件和全文访问 | 不管理正式主题生命周期 |
 | 扫描与PDF门禁 | 发现新增、检查父条目/附件、文本量和文件指纹 | 元数据或摘要不能替代全文证据 |
 | 任务与发布 | 任务状态、租约、锁、幂等、恢复和多文件安全保存 | 文件夹存在或单一完成标记不能证明结果完整 |
-| 制卡适配器 | 调用已登录的Codex CLI，按九类模板之一生成详细自动粗卡 | 当前只支持`codex_cli`；流程通过不等于科学正确 |
+| 制卡适配器 | 调用已登录的Codex CLI，按九类模板之一生成详细自动粗卡 | 总配置字段`card_generator.adapter`目前仅接受`codex_cli`（`run-once`流水线只有`codex_cli`）；单篇`evidence-generate`另经`configs/ai.toml`支持`claude_cli`。流程通过不等于科学正确 |
 | 主题池 | 基于全池粗卡、既有候选和适用精读执行CREATE/UPDATE/MERGE/SPLIT | 只能处理候选主题，不能自动建立正式主题 |
 | 活动与日报 | 记录关键事件并生成非AI日报 | 不代表科研质量评审 |
 | Obsidian Adapter | 尚未实现 | 目标接口见[项目级设计](project-design.md) |

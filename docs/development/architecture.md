@@ -2,7 +2,7 @@
 
 本仓库的能力分**入库**（只有下载 + 入 Zotero）与**消费**（读库 → 精读/主题/内容产出，以及 `hydro-platform` 的证据包与主题池）两侧。**`hydrolitagent` 横跨两侧**，[`hydro-platform/`](../hydro-platform/index.md) 纯属消费。分侧导览见[用户指南总览](../user-guide/index.md)。本节先给整体结构，随后展开 `hydrolitagent` 的模块。
 
-## 整体结构
+## 整体结构（节选）
 
 ```text
 hydrolitagent/
@@ -104,7 +104,7 @@ tests/                       # pytest（含迁入的 test_literature_*）
 
 ## `server.py` — MCP Server
 
-- **框架**：FastMCP (mcp.server)
+- **框架**：`MCPServer`（mcp 2.x，`mcp.server`；mcp 2.0.0 起 `mcp.server.fastmcp` 已不存在）
 - **传输**：streamable HTTP，端口 8002(端点路径 `/mcp`)
 - **Web API 客户端**：pyzotero.Zotero（从环境变量初始化）
 - **Local API 客户端**：httpx.AsyncClient

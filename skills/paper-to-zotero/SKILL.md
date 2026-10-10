@@ -366,6 +366,6 @@ Some publisher servers (especially Copernicus) have very slow transfer speeds an
 | Conference paper update fails 400 | `'publicationTitle' is not a valid field for type 'conferencePaper'` | Use `proceedingsTitle` instead of `publicationTitle` for conferencePaper |
 | rclone timeout on `ls` | Command hangs | Use `timeout 10 rclone lsl gdrive:` or just `rclone copy` directly |
 | curl not installed | "command not found" | Use Python urllib instead |
-| **Zotero attachment shows "附件未找到"** | Used `imported_url` linkMode via raw REST API | NEVER use raw REST API for attachments. Use `zot-link-gdrive.py` or `paper-to-zotero.py --pdf-filename` — both use `linked_file` + `attachments:` scheme that works reliably |
+| **Zotero attachment shows "附件未找到"** | Used `imported_url` linkMode via raw REST API | NEVER use raw REST API for attachments. Use `hydrolitagent/zotero/zot_link_gdrive.py` or `hydrolitagent/zotero/paper_to_zotero.py --pdf-filename` — both use `linked_file` + `attachments:` scheme that works reliably |
 | Python SSL `UNEXPECTED_EOF_WHILE_READING` | urllib fails to connect to some servers | Use `ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)` with `check_hostname=False, verify_mode=CERT_NONE`, or `wget -c` (without `--no-check-certificate` unless SSL truly fails) |
 | `wget --no-check-certificate` triggers security scan | User prompted to approve every download | Use Python urllib as primary download method; only use `--no-check-certificate` as last resort |

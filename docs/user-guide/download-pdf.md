@@ -175,7 +175,7 @@ SSRN 预印本免费下载。Cloudflare 挑战在 MCP 浏览器 profile 下自�
 | `browser_evaluate` + `fetch()` + `readAsDataURL()` | Base64 超 MCP 传输限制 → 崩溃 |
 | `browser_run_code` + `require('fs')` | MCP 运行时未定义 `require` |
 | `mcp__plugin_ecc_playwright__*` | 需要 Chrome 扩展桥，非独立 |
-| `python scripts/zotero_sync.py` | 用 `uv run python`——conda Python 缺依赖 |
+| `python -m hydrolitagent.literature.zotero_sync` | 用 `uv run python`——conda Python 缺依赖 |
 | 裸 Playwright Chromium 反复被 Cloudflare 拦 | `navigator.webdriver` 指纹暴露；用 stealth 启动器（`channel="chrome"` + 去 automation 标记） |
 | `context.request` 拉 ScienceDirect 签名 PDF | assets CDN 对非浏览器 TLS 指纹返回 403（AMS 可用，SD 不可用） |
 | main.pdf URL 一出现就注入锚点 | 二次重定向会摧毁执行上下文——先等 URL 稳定 |

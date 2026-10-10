@@ -2,6 +2,8 @@
 
 Zotero MCP Server 通过 streamable HTTP 传输在端口 8002 上暴露 12 个工具(不是 SSE)。消费者通过 `http://zotero-mcp:8002/mcp` 连接。
 
+> ⚠️ **工具名与 dailyinfo 的 Zotero 插件 MCP 不同，勿混用**：本仓库取全文是 **`zotero_get_fulltext`**，dailyinfo 插件叫 **`zotero_get_item_fulltext`**——后者在本 server 不存在，反之亦然。批量脚本/提示词跨仓复用时先核对工具名。
+
 ## 工具概览
 
 ### Web API 工具（10 个）
