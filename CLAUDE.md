@@ -33,7 +33,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 | `bilibili-upload` | podcast 音频 → MP4 → B 站上传 | 无 |
 | `download-pdf` | 论文 PDF 下载(机构访问) | 无 |
 | `zotero-query` | 文献库查询 | 读库 |
-| `hydro-platform` | 科研知识平台 CLI 入口:共享 Zotero 库 → 证据包 → 主题池。**运行时 Windows-only**,详见该 skill | 直连 Local API |
+| `hydro-platform` | 文献卡与主题卡平台 CLI 入口:自己的 Zotero 文献 → 文献卡 → 主题卡。**运行时 Windows-only**,详见该 skill | 直连 Local API |
 | `hydrology-evidence-cards` | 科研工作流:Zotero 源论文 → 人读证据卡(含机器审计字段,默认折叠) | 读库 |
 | `hydrology-theme-synthesis` | 科研工作流:文献 → 初步主题 → **人工筛选门** → 正式主题 → Claim 准入 → 深度主题卷宗 | 读库 |
 
@@ -90,15 +90,17 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 ### 科研知识平台 (hydro-platform)
 
-**消费侧的长期资产支线**(入库只有两件事:下载 PDF + 建 Zotero 条目;其余都算消费):把共享 Zotero 库里已有的论文沉淀成证据包与主题池,产出的是长期可追溯的知识资产而非当期内容。不是交互式问答。运行时 **Windows-only**。命令一律从**仓库根**执行:
+**用你自己的 Zotero 文献生成文献卡与主题卡**的最小核心:从一篇指定论文出发生成主体卡草稿、用代码校验,再由若干文献卡形成候选主题。不是交互式问答,也不做批量扫描或无人值守。运行时 **Windows-only**。命令一律从**仓库根**执行,共 5 条:
 
-- 跑完一整轮(检测 → 门禁 → 制卡 → 主题 → 账本 → 日报):`uv run hydro-platform run-once --json`
-- 只预览本地任务,不扫 Zotero、不调模型:`uv run hydro-platform run-once --dry-run --json`
-- 只跑主题:`uv run hydro-platform themes-run --json`(`--dry-run` 只读预览)
-- 健康检查:`uv run hydro-platform doctor --json`
-- 全部 32 个子命令:`uv run hydro-platform --help`
+- 单篇输入(选一篇自己的论文):`uv run hydro-platform paper-input --user-library --item-key ABCD1234 --output paper-input.json`
+- 生成主体卡草稿:`uv run hydro-platform evidence-generate --paper-input paper-input.json --ai-provider codex --json`
+- 离线校验主体卡:`uv run hydro-platform evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json`
+- 生成候选主题:`uv run hydro-platform themes-run --json`(`--dry-run` 只读预览)
+- 只读自查模型与产物根:`uv run hydro-platform ai-config --json`
 
-不要直接读写平台的状态文件(`.runtime/tasks.json`、`themes/_registry.json`),也不要手工编辑证据包/主题文件——平台原子写入并校验哈希,手改会被判为漂移。完整说明在 `docs/hydro-platform/`。
+全部 5 个子命令:`uv run hydro-platform --help`。
+
+不要直接读写平台的状态文件与主题池注册表(`themes/_registry.json`),也不要手工编辑生成的文献卡/主题文件——平台原子写入并校验哈希,手改会被判为漂移。完整说明在 `docs/hydro-platform/`。
 
 ### Docs
 - Serve docs: `uv run mkdocs serve`
@@ -129,10 +131,9 @@ skills/              # Agent skills (zotero-query, paper-to-zotero, 及迁入的
 outputs/             # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
 papers/              # 按主题组织的文献库(10 主题, 约 4000 篇);知识库核心资产
 docs/                # Documentation site (mkdocs-material)
-hydro-platform/      # 科研知识平台(uv workspace 成员;消费侧:Zotero → 证据包 → 主题池)
-                     #   automation/ 代码 · templates/ 规范资产 · config/ 配置
-                     #   生成产物(evidence-packs/ themes/ reports/ activity/ members/)
-                     #   不入库,由运行时自建
+hydro-platform/      # 科研知识平台(uv workspace 成员;消费侧:自己的 Zotero → 文献卡 → 主题卡)
+                     #   automation/ 代码(5 条核心命令) · templates/ 规范资产 · config/ 配置
+                     #   生成产物(文献卡、主题池、运行记录)不入库,由运行时自建
 tests/               # pytest (test_zotero_server.py, test_paper_to_zotero.py)
 
 equation_from_data/  # Paper reproduction: equation discovery from data

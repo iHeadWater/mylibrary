@@ -1,6 +1,6 @@
 # 模块架构
 
-本仓库的能力分**入库**（只有下载 + 入 Zotero）与**消费**（读库 → 精读/主题/内容产出，以及 `hydro-platform` 的证据包与主题池）两侧。**`hydrolitagent` 横跨两侧**，[`hydro-platform/`](../hydro-platform/index.md) 纯属消费。分侧导览见[用户指南总览](../user-guide/index.md)。本节先给整体结构，随后展开 `hydrolitagent` 的模块。
+本仓库的能力分**入库**（只有下载 + 入 Zotero）与**消费**（读库 → 精读/主题/内容产出，以及 `hydro-platform` 的文献卡与主题池）两侧。**`hydrolitagent` 横跨两侧**，[`hydro-platform/`](../hydro-platform/index.md) 纯属消费。分侧导览见[用户指南总览](../user-guide/index.md)。本节先给整体结构，随后展开 `hydrolitagent` 的模块。
 
 ## 整体结构（节选）
 
@@ -21,10 +21,11 @@ hydrolitagent/
 
 hydro-platform/              # 消费侧（uv workspace 成员；运行时 Windows-only）
 ├── automation/src/hydro_platform/    # 平台代码
-│   ├── pipeline.py          # run-once 串行编排（检测→制卡→主题→账本→日报）
-│   ├── tasks.py             # 任务状态机 + 跨平台锁 + 租约
+│   ├── cli.py               # 五条核心命令的注册与分发
+│   ├── paper_input.py       # 单篇 Zotero 论文输入（个人/群组库）
+│   ├── card_draft.py        # 单篇主体卡草稿生成
+│   ├── card_validation.py   # 主体卡确定性代码校验门禁
 │   ├── pdf_gate.py          # PDF 全文门禁（体积 / 可抽取字符 / SHA-256）
-│   ├── card_generation.py   # 单 Agent 制卡编排
 │   ├── theme_pool.py        # 主题池：哈希链注册表 + 合并/拆分血缘
 │   └── publication.py       # 原子写入与崩溃可恢复的多文件提交
 ├── templates/               # 九类证据卡模板、主题提示词、JSON schema
@@ -98,7 +99,7 @@ tests/                       # pytest（含迁入的 test_literature_*）
 └─────────────────────────────────────────────────────────┘
 ```
 
-> **上图只画了 `hydrolitagent`（读库与入库为主）。** `hydro-platform` 的数据流方向相反:Zotero 共享库 → 检测增量 → PDF 全文门禁 → 单 Agent 制卡 → 证据包 → 主题池 → 日报;它产出的是长期可追溯的知识资产,产物写在平台目录下且**不入库**,由运行时自建。完整流程见[平台架构](../hydro-platform/architecture.md)与[平台流程](../hydro-platform/flows.md)。
+> **上图只画了 `hydrolitagent`（读库与入库为主）。** `hydro-platform` 的数据流方向相反:自己的 Zotero 库 → 单篇输入 → PDF 全文门禁 → 单 Agent 制卡 → 代码校验 → 候选主题池;它产出的是长期可追溯的文献卡与主题卡,产物写在平台目录下且**不入库**,由运行时自建。完整流程见[平台架构](../hydro-platform/architecture.md)与[平台流程](../hydro-platform/flows.md)。
 >
 > 两者都读 Zotero,但**走不同的客户端**:`hydrolitagent` 的 MCP 服务经 8002(容器部署),`hydro-platform` 直连 Zotero Desktop Local API(裸 host)。为什么保留两套、各自适用什么环境,见 [ADR-0002](../adr/0002-zotero-two-clients-boundary.md)。
 

@@ -9,12 +9,12 @@ AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:�
 | 侧 | 做什么 | 代码 |
 |---|---|---|
 | **入库**（采集） | 只有两件事:论文 PDF **下载**,以及**建 Zotero 条目**（含 `linked_file` 附件) | `scripts/download_paper.py`、`hydrolitagent/zotero/`、`hydrolitagent/literature/download_pdf.py` |
-| **消费** | 其余全部:从 Zotero 库读出 → 精读/分析卡 → 主题分类/知识图谱 → 公众号/播客/B 站;以及 `hydro-platform` 的证据包与主题池 | `hydrolitagent/literature/`、`hydrolitagent/graph/`、`skills/`、[`hydro-platform/`](hydro-platform/index.md) |
+| **消费** | 其余全部:从 Zotero 库读出 → 精读/分析卡 → 主题分类/知识图谱 → 公众号/播客/B 站;以及 `hydro-platform` 的文献卡与主题卡 | `hydrolitagent/literature/`、`hydrolitagent/graph/`、`skills/`、[`hydro-platform/`](hydro-platform/index.md) |
 
 两点容易搞混,先讲清楚:
 
 - **`hydrolitagent` 横跨两侧** —— 入库的几个命令和消费的绝大部分都在它里面,所以它不是"入库侧"的代名词。
-- **两侧产出的东西不同** —— 消费侧的其余部分产出**当期内容**(文章、播客、图谱、分析卡);`hydro-platform` 产出**长期可追溯的知识资产**(证据包、主题池、日报),特点是无人值守、确定性、**运行时为 Windows-only**。
+- **两侧产出的东西不同** —— 消费侧的其余部分产出**当期内容**(文章、播客、图谱、分析卡);`hydro-platform` 把**自己 Zotero 的文献**沉淀成**长期可追溯的文献卡与主题卡**,特点是确定性校验、**运行时为 Windows-only**。
 
 二者是同一个 **uv workspace** 的两个成员,共享一个 `.venv` 与一份 `uv.lock`。
 
@@ -30,7 +30,7 @@ AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:�
 | 文献深度处理 | Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | [文献深度处理](user-guide/literature.md) |
 | 知识图谱 | 用 graphify 构建结构化、可查询的知识库(实体提取、社区发现、Obsidian 导出) | [模块架构](development/architecture.md) |
 | 论文复现 | 复现 AI 驱动水文学关键论文 | `equation_from_data/`、`google_floodhub/` |
-| 科研知识平台 | **消费侧的长期资产支线**:检测共享 Zotero 库新增论文 → 全文门禁 → 逐篇证据包 → 持续演化的主题池 → 日报。无人值守、确定性、不需手工编辑。**运行时为 Windows-only。** | [平台文档](hydro-platform/index.md) |
+| 文献卡与主题卡平台 | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验。**运行时为 Windows-only。** | [平台文档](hydro-platform/index.md) |
 
 ## 快速开始
 
@@ -77,13 +77,13 @@ docs/                    # 文档站点(mkdocs-material)
 outputs/                 # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
 papers/                  # 按主题组织的文献库(10 个主题)
 
-hydro-platform/          # 科研知识平台(uv workspace 成员;消费侧:Zotero → 证据包 → 主题池)
-├── automation/          #   Python:检测 → PDF 门禁 → 任务状态机 → 制卡 → 主题池
+hydro-platform/          # 文献卡与主题卡平台(uv workspace 成员;消费侧:自己的 Zotero → 文献卡 → 主题卡)
+├── automation/          #   Python:单篇输入 → PDF 门禁 → 制卡 → 校验 → 主题池
 ├── templates/           #   可复用资产:九类证据卡模板、主题提示词、JSON schema
 ├── config/              #   非敏感配置与完整示例
 └── pyproject.toml       #   入口:`uv run hydro-platform`
-                         #   生成产物(evidence-packs/、themes/、reports/、
-                         #   activity/、members/)不入库,由运行时自建。
+                         #   生成产物(文献卡、主题池、运行记录)不入库,
+                         #   由运行时自建。
 
 equation_from_data/      # 论文复现:从数据发现方程
 google_floodhub/         # 论文复现:Google 洪水预测
@@ -105,4 +105,4 @@ definitions.py           # 共享常量
 - [模块架构](development/architecture.md) — 代码结构与数据流
 - [贡献指南](development/contributing.md) — 如何运行测试与添加新工具
 - [决策记录](adr/0001-zotero-linked-file-sync.md) — 为什么用 linked_file；[ADR-0002](adr/0002-zotero-two-clients-boundary.md) — 为什么保留两套 Zotero 客户端
-- [科研知识平台](hydro-platform/index.md) — **消费侧的长期资产支线**:证据包、主题池、日报(**Windows-only**)
+- [文献卡与主题卡平台](hydro-platform/index.md) — 从自己 Zotero 的论文生成文献卡与主题卡(**Windows-only**)

@@ -1,70 +1,75 @@
 # 文献研究平台
 
-本平台以 Zotero 为文献与原始 PDF 的事实来源，把新增文献转化为可追溯的证据卡、候选主题和研究记录。Codex 是主要交互与任务编排入口；Obsidian 是目标中的阅读、导航和人工审核空间。
+本平台以你自己的 Zotero 文献库为来源，把一篇论文变成一张可校验的文献卡，再把若干文献卡组织成持续演化的主题卡。Codex 或 Claude CLI 负责内容提炼，Python 负责确定性的门禁、校验与安全写入。Git 只保存可复现的代码、配置、模板、测试和文档。
 
-本页只负责说明“平台是什么、现在做到哪里、下一步去哪里”。项目级目标设计见[项目级设计](project-design.md)，技术实现、配置和运行步骤分别由专项文档维护。
+本页只说明“平台是什么、现在做到哪里、从哪里读起”。面向老师评审的目标设计见[项目级设计](project-design.md)，技术实现、字段和运行步骤分别由专项文档维护。
+
+## 最小核心：五条命令
+
+| 阶段 | 命令 | 做什么 |
+| --- | --- | --- |
+| 输入 | `paper-input` | 按题名搜索候选，或按条目 Key 检查单篇 Zotero 论文，得到 READY 输入记录 |
+| 生成 | `evidence-generate` | 读取该篇 PDF 的正文，调用所选模型生成主体卡草稿 |
+| 校验 | `evidence-validate` | 离线校验草稿并保存校验记录，不调用模型、不正式发布 |
+| 主题 | `themes-run` | 以若干通过校验的文献卡为输入，生成候选主题、定向精读并回填修订 |
+| 自查 | `ai-config` | 查看模型选择与精读产物根，不运行模型 |
+
+命令一律从仓库根执行，完整清单见 `uv run hydro-platform --help`。
 
 ## 从这里开始
 
 | 你想了解什么 | 阅读入口 |
 | --- | --- |
-| 老师要求的总体架构、数据流、用户流程、模块边界、配置、运行和模板关系 | [项目级设计](project-design.md) |
-| 当前代码如何组成、数据归谁管理 | [技术架构](architecture.md) |
-| 一篇文献怎样流转，人工在哪些位置介入 | [数据流与用户流程](flows.md) |
-| 第一次安装和换电脑 | [工作站设置](workstation-setup.md) |
-| 日常处理 Zotero 新增文献 | [运行一轮](run-once.md) |
-| 配置字段、路径与密钥边界 | [配置](config.md) · [变量与密钥](variables.md) |
-| 证据卡和主题模板 | [模板资产](templates.md) · [统一主题池](unified-theme-pool.md) |
-| 自动化权限、测试与已知限制 | [自动化边界](automation.md) · [验证地图](tests.md) |
+| 单篇论文从输入到校验的完整命令行流程 | [单篇论文命令行流程](single-paper-quickstart.md) |
+| 单篇 Zotero 论文输入 | [单篇 Zotero 论文输入](paper-input.md) |
+| 主体卡草稿生成 | [从单篇 PDF 生成主体卡草稿](subject-card-draft.md) |
+| 主体卡代码校验 | [主体卡代码校验门禁](subject-card-validation.md) |
+| 主题池：候选主题的演化与版本 | [统一文献池与主题池](unified-theme-pool.md) |
+| 技术架构、数据归属与模块边界 | [技术架构](architecture.md) |
+| 数据流、用户流程与失败处理 | [数据流与用户流程](flows.md) |
+| 配置字段、路径与密钥边界 | [总配置字段说明](config.md) · [变量与密钥](variables.md) |
+| 证据卡与主题模板 | [公共模板](templates.md) |
+| 验证与测试覆盖 | [验证地图](tests.md) |
+| 科研工作流（人读证据卡与主题综合） | [科研工作流](research-platform-overview.md) |
+| 面向评审的总体设计 | [项目级设计](project-design.md) |
 
-## 平台全貌
+## 单篇核心流程
 
 ```mermaid
-flowchart LR
-    U[研究者] --> C[Codex]
-    Z[Zotero<br/>条目与原始 PDF] --> P[hydrolitagent / hydro-platform]
-    C --> P
-    P --> A[当前自动化产物<br/>evidence-packs、themes、activity、reports]
-    A --> O[Markdown 阅读]
-    P -. 目标：受控发布 .-> V[artifact_root / Obsidian Vault<br/>证据卡、正式主题、运行记录、文献链接]
-    V --> O
-    O --> U
-    P --> R[.runtime<br/>快照、任务、锁、诊断日志]
+flowchart TD
+    A["用户指定 Zotero 论文 (paper-input)"] --> B{"输入有效？"}
+    B -- 否 --> B1["停止并说明原因"]
+    B -- 是 --> C["AI 生成主体卡片 (evidence-generate)"]
+    C --> D["代码校验卡片 (evidence-validate)"]
+    D --> E{"通过？"}
+    E -- 否 --> E1["返回错误，定向修正后重新校验"]
+    E -- 是 --> F["若干文献卡 → 候选主题 (themes-run)"]
 ```
 
-Zotero 保存来源；Python 程序负责确定性的扫描、门禁、状态和安全写入；Codex负责内容提炼与主题建议；研究者负责正式主题和 idea 的最终判断。Git只保存可复现的代码与规则，不保存实际科研产物。
+## 平台边界
 
-## 当前能力与目标设计
-
-| 能力 | 当前边界 | 下一步设计 |
-| --- | --- | --- |
-| Zotero 新增检测与 PDF 门禁 | 已实现共享群组扫描、去重、全文可用性检查和来源指纹 | 继续验证云端同步延迟与异机恢复 |
-| 自动证据卡 | 已实现单 Agent、九类模板、证据包和失败恢复；`PROCESS_VALIDATED`只表示流程通过 | 明确自动粗卡升级为 L2/L3 科研证据卡的条件 |
-| 候选主题 | 已实现统一主题池、候选更新、合并、拆分和精读复用 | 把自动候选接入正式的人工筛选门 |
-| 正式主题 | 规则和模板已有，普通运行不会自动建立 | 实现人工决定记录、层级、关系和版本操作 |
-| Obsidian | Markdown 产物可直接打开；自动化目录尚未统一发布到 `artifact_root` | 先建统一发布边界，再以文件型 MCP 只读、CLI 打开和差异复核接入 |
-| research idea | 当前不生成 | 仅从正式主题、已核验 Claim 和明确缺口生成候选，再由研究者与导师判断 |
+- Zotero 条目负责论文身份，条目中的 PDF 负责正文内容。
+- 输入论文必须已经有可读取的全文；不满足时停止并说明原因。
+- 生成调用所选 CLI（Codex 或 Claude）；校验是纯代码检查，不调用模型。
+- 通过校验只表示确定性规则通过，不证明科研内容正确。
+- 正式主题必须经人工确认，`themes-run` 只产出候选，不自动晋级。
 
 ## 存储与版本边界
 
-当前实现有两组产物路径。`hydro-platform` 自动化使用 `paths.evidence_packs_dir`、`themes_dir`、`activity_dir`、`reports_dir`等以 `project_root` 为基准的目录。合并后又引入 `paths.artifact_root` 及其下的证据卡、主题、运行记录和文献链接目录；这组路径可解析和校验，但尚未被自动化发布代码使用。
+单篇流程的产物写入 `--output-root`（默认仓库 `outputs/`）；主题池写入 `paths.themes_dir`。以下内容进入 Git：
 
-目标是将 `artifact_root` 作为 Obsidian 阅读层的统一根目录，通过受控发布器输入已准入的证据卡、正式主题和关系记录。在该发布器实现前，不应把“配置已存在”写成“两套产物已统一”。
-
-以下内容进入 Git：
-
-- 代码、Skills、模板、Schema和测试；
+- 代码、Skills、模板、Schema 和测试；
 - 项目文档、依赖锁和非敏感团队配置；
 - 不包含私人路径、账号和密钥的示例。
 
 以下内容不进入 Git：
 
-- Zotero数据库、原始PDF和账号凭据；
-- `hydro-platform/.runtime/`、`.venv/`和项目内原生工具；
-- `evidence-packs/`、`themes/`、`activity/`、`reports/`及`artifact_root`下的实际科研产物。
+- Zotero 数据库、原始 PDF 和账号凭据；
+- `hydro-platform/.runtime/`、`.venv/` 和项目内原生工具；
+- 实际生成的文献卡、主题和运行记录。
 
-程序不会自动提交或推送Git。需要共享科研产物时，应通过团队另行确认的共享位置和权限策略处理，不能把本地保存写成已经完成远端备份。
+程序不会自动提交或推送 Git。需要共享科研产物时，应通过团队另行确认的共享位置和权限策略处理，不能把本地保存写成已经完成远端备份。
 
 ## 文档维护规则
 
-当前规则只在一个地方定义，其他页面通过链接引用，不复制整段内容。当前实现与目标设计必须分开；旧方案、阶段验收和演示讲稿由Git历史保存，不继续占用正式导航。模板的可执行版本以`skills/`和`hydro-platform/templates/`为准，文档只说明用途、关系和版本来源，不再维护第三份模板副本。
+当前实现与目标设计必须分开；旧方案、阶段验收和演示讲稿由 Git 历史保存，不继续占用正式导航。模板的可执行版本以 `skills/` 和 `hydro-platform/templates/` 为准，文档只说明用途、关系和版本来源，不再维护第三份模板副本。

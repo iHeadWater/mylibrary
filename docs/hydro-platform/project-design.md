@@ -4,33 +4,33 @@
 
 | 交付边界 | 内容 |
 | --- | --- |
-| 当前已经实现 | Zotero 文献入库与查询、共享库增量扫描、PDF 全文门禁、Codex 单 Agent 制卡、九类证据卡模板、证据包、统一候选主题池、活动与日报、`artifact_root` 路径解析与校验、CLI 与调度基础设施 |
+| 当前已经实现 | Zotero 文献入库与查询、单篇论文输入、PDF 全文门禁、Codex / Claude 单 Agent 制卡、九类证据卡模板、主体卡代码校验、统一候选主题池、`artifact_root` 路径解析与校验、CLI 基础设施 |
 | 已完成设计、尚待实现 | 自动化产物到 `artifact_root` 的统一发布、Codex 与 Obsidian 的正式集成、候选主题人工确认闭环、稳定的主题层级与卡片—主题关系、主题到 research idea 的生成与评审 |
 
 ## 1. 总体架构
 
-平台以 Zotero 为文献和原始 PDF 的事实来源，以 Codex 为主要交互与任务编排入口，以 Obsidian 为面向研究者的知识阅读和审核空间。`hydrolitagent` 提供文献入库、检索和全文访问能力，`hydro-platform` 负责增量扫描、全文门禁、模型调用、产物保存、主题候选更新与运行记录。Git 管理代码、配置结构、Skills、模板、Schema、测试和项目文档；实际证据卡、主题、PDF、运行日志等科研产物不进入 Git。
+平台以 Zotero 为文献和原始 PDF 的事实来源，以 Codex / Claude 为内容提炼入口，以 Obsidian 为面向研究者的知识阅读和审核空间。`hydrolitagent` 提供文献入库、检索和全文访问能力，`hydro-platform` 负责单篇论文输入、全文门禁、模型调用、主体卡校验、产物保存、主题候选更新与运行记录。Git 管理代码、配置结构、Skills、模板、Schema、测试和项目文档；实际证据卡、主题、PDF、运行日志等科研产物不进入 Git。
 
 ```mermaid
 flowchart LR
-    U[研究者] --> C[Codex 交互与编排]
+    U[研究者] --> C[Codex / Claude 交互与编排]
     Z[Zotero<br/>元数据与原始 PDF] --> H[hydrolitagent<br/>入库、查询、全文访问]
-    Z --> P[hydro-platform<br/>扫描、门禁、制卡、主题管线]
+    Z --> P[hydro-platform<br/>单篇输入、门禁、制卡、校验、主题管线]
     C --> H
     C --> P
     H --> P
-    P --> A[当前自动化产物<br/>evidence-packs、themes、activity、reports]
+    P --> A[当前产物<br/>文献卡、候选主题、运行记录]
     P -. 目标：准入后统一发布 .-> V[artifact_root<br/>证据卡、正式主题、运行记录、文献链接]
     V --> O[Obsidian Vault<br/>阅读、导航、人工审核]
     O --> U
     C -. 目标设计：受控搜索与写入 .-> OA[Obsidian Adapter]
     OA -.-> O
-    P --> R[.runtime<br/>任务、锁、快照、诊断日志]
+    P --> R[.runtime<br/>锁、诊断日志]
     G[Git<br/>代码、配置、模板、文档、测试] --> H
     G --> P
 ```
 
-当前分支已经实现 Zotero、处理管线和 Codex CLI 制卡，Markdown 产物也可以被 Obsidian 直接打开；但自动化仍写入 `paths.evidence_packs_dir`、`themes_dir`、`activity_dir` 和 `reports_dir`。`artifact_root` 下四个科研目录目前只完成配置解析与路径校验，尚未成为自动发布目标。目标架构需要新增独立的 Obsidian Adapter：后台搜索和读取优先使用文件型 MCP，桌面打开和差异复核使用 Obsidian 官方 CLI，需要访问当前活动笔记时再启用 Local REST API。三种接口不得同时写同一个文件。
+当前分支已经实现 Zotero、单篇处理链路和 Codex / Claude CLI 制卡，Markdown 产物也可以被 Obsidian 直接打开；但自动化产物写入 `--output-root`（默认 `outputs/`）与 `paths.themes_dir`。`artifact_root` 下四个科研目录目前只完成配置解析与路径校验，尚未成为自动发布目标。目标架构需要新增独立的 Obsidian Adapter：后台搜索和读取优先使用文件型 MCP，桌面打开和差异复核使用 Obsidian 官方 CLI，需要访问当前活动笔记时再启用 Local REST API。三种接口不得同时写同一个文件。
 
 正式主题和 research idea 都属于需要人类决策的科研对象。自动化可以提出候选、整理证据和生成草稿，但不能越过人工确认门直接建立正式主题，也不能把“当前文献中尚未发现”自动解释为学术创新。
 
@@ -40,10 +40,10 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A[Zotero 新增文献] --> B[增量扫描与去重]
-    B --> C[PDF 全文门禁<br/>可访问性、文本量、哈希]
-    C --> D[证据包]
-    D --> E[证据卡与 Claim]
+    A[指定的一篇 Zotero 论文] --> B[单篇输入与 PDF 全文门禁<br/>可访问性、文本量、哈希]
+    B --> C[主体卡草稿]
+    C --> D[代码校验与 Claim 准入]
+    D --> E[文献卡与 Claim]
     E --> F[卡片—主题候选关系]
     F --> G[候选主题]
     G --> H{人工筛选门}
@@ -56,7 +56,7 @@ flowchart LR
     L --> M{研究者与导师评审}
 ```
 
-当前自动化已经覆盖从增量扫描到证据卡、主题池和日报的主要技术链路。目标设计对这条链路增加四项约束：
+当前自动化已经覆盖从单篇输入到文献卡、主题池的主要技术链路。目标设计对这条链路增加四项约束：
 
 1. **来源不可替代。** Zotero 元数据只负责识别来源，科学结论必须回到经过校验的原始 PDF 和可定位证据。
 2. **证据卡相对稳定。** 主题变化只更新卡片—主题关系和主题综合，不重复改写证据卡中的原文事实。
@@ -68,7 +68,7 @@ flowchart LR
 | 对象 | 主要内容 | 负责模块 | 生命周期规则 |
 | --- | --- | --- | --- |
 | Zotero 来源 | 条目、附件、元数据、原始 PDF | Zotero / `hydrolitagent` | 原始来源保持可追溯，不由主题模块修改 |
-| 证据包 | 来源快照、PDF 哈希、运行与生成记录 | `hydro-platform` | 每次处理留痕，用于复核和恢复 |
+| 单篇输入与草稿 | 来源快照、PDF 哈希、模型输出与校验记录 | `hydro-platform` | 每次处理留痕，用于复核与追溯 |
 | 证据卡 | 来源解释、Claim、定位、边界、阅读深度 | 证据卡 Skill | 一项来源登记一次；纠错和升级可以修订，主题变化不能触发重写 |
 | 卡片—主题关系 | 卡片或 Claim 对主题的作用、理由与审核结果 | 主题工作流 | 独立于证据卡演化，允许建立、拒绝、撤销和替代 |
 | 候选主题 | 暂定问题、边界假设、代表来源和歧义来源 | 自动化与主题 Skill | 只能用于筛选，不得承担正式综合结论 |
@@ -79,15 +79,15 @@ flowchart LR
 
 ### 首次配置
 
-1. 安装并启动 Zotero，确认目标共享库和 PDF 可以从本机访问。
+1. 安装并启动 Zotero，确认目标文库和 PDF 可以从本机访问。
 2. 克隆 `mylibrary`，切换到 `literature-platform`，使用 uv 安装整个 workspace。
-3. 配置 Zotero 群组、Codex 登录与模型、科研产物目录和运行环境，执行预检。
-4. 核对当前自动化产物目录与 `artifact_root` 的实际解析路径。在统一发布实现前，用户可以用 Obsidian 打开相应 Markdown 目录，但不应依赖修改 `artifact_root` 来自动搬运现有证据包和候选主题。
+3. 配置模型与产物目录，安装并登录一种 CLI（Codex 或 Claude），并准备 Poppler。
+4. 核对当前产物目录与 `artifact_root` 的实际解析路径。在统一发布实现前，用户可以用 Obsidian 打开相应 Markdown 目录，但不应依赖修改 `artifact_root` 来自动搬运现有文献卡和候选主题。
 
 ### 日常研究
 
-1. 用户在 Codex 中提出任务，例如处理新增文献、查看某主题证据或分析研究缺口。
-2. Codex 调用现有工具和自动化管线，读取 Zotero、生成或更新证据卡，并形成候选主题。
+1. 用户在 Codex / Claude 中提出任务，例如处理一篇指定文献、查看某主题证据或分析研究缺口。
+2. 平台读取 Zotero 与 PDF、生成或校验主体卡，并在累积若干文献卡后形成候选主题。
 3. 用户在 Obsidian 中阅读证据卡和候选主题，检查来源、边界、代表文献和相邻主题。
 4. 用户通过 Codex 作出建立、改名、合并、拆分、观察、补证据或拒绝决定；系统保存决定及理由。
 5. 正式主题根据已接受的 Claim 形成综合，列出争议、迁移边界和待补证据。
@@ -103,7 +103,7 @@ flowchart LR
 | --- | --- | --- |
 | Zotero | 保存来源、附件、元数据与原始 PDF | 不保存正式主题判断，不承担知识综合 |
 | `hydrolitagent` | 文献入库、Zotero 查询、全文与附件访问、其他文献工具 | 不决定主题生命周期，不替代人工审核 |
-| `hydro-platform` | 共享库扫描、PDF 门禁、任务状态、Codex 调用、证据包、候选主题池、报告与调度 | 不把自动聚类直接宣布为正式主题或idea |
+| `hydro-platform` | 单篇论文输入、PDF 门禁、Codex / Claude 调用、主体卡校验、候选主题池 | 不把自动聚类直接宣布为正式主题或 idea |
 | 证据卡 Skill | 定义来源分类、阅读深度、Claim、定位、推断边界与卡片验收 | 不决定某张卡必须归入哪个正式主题 |
 | 主题 Skill | 候选主题发现、人工筛选门、正式主题综合、反馈和补证据工作流 | 不修改原始来源，不允许模型独立建立正式主题 |
 | 科研产物目录 | 保存证据卡、主题、运行记录和文献链接，并维持相对引用 | 不保存密钥，不代替 Git 管理代码和模板 |
@@ -120,16 +120,13 @@ flowchart LR
 
 | 配置组 | 当前用途 |
 | --- | --- |
-| `paths` | 项目、运行区、模板、Schema、证据包及科研产物目录 |
-| `zotero` | 本地 API、共享群组、启动等待与请求超时 |
-| `scan` / `pdf_gate` | 增量扫描页大小和 PDF 可用性门禁 |
-| `tasks` / `pipeline` | 任务租约、恢复、单轮限额、重试与冷却 |
+| `paths` | 项目、运行区、模板、Schema 及科研产物目录 |
+| `zotero` | 本地 API、文库/群组、请求超时 |
+| `pdf_gate` | PDF 可用性门禁 |
 | `card_generator` | Codex CLI、模型、推理强度、超时、代理和 PDF 读取方式 |
 | `theme_pipeline` | 主题管线、研究目标、模型继承和主题模板目录 |
-| `activity_reporting` | 活动记录、日报、时区和系统身份 |
-| `deployment` / `scheduler` | uv 环境、PDF 工具、依赖锁和本机定时计划 |
 
-`paths` 中存在两组产物契约。当前 `hydro-platform` 自动化实际使用 `evidence_packs_dir`、`themes_dir`、`activity_dir`、`reports_dir` 和 `members_dir`，它们相对 `project_root` 解析。`artifact_root` 下的 `evidence_cards_dir`、`themes_vault_dir`、`run_records_dir` 和 `literature_index_dir` 已能安全解析，但当前代码未将前一组产物发布到后一组。
+`paths` 中存在两组产物契约。单篇流程写入 `--output-root`（默认 `outputs/`），主题池写入 `paths.themes_dir`，它们相对 `project_root` 解析。`artifact_root` 下的 `evidence_cards_dir`、`themes_vault_dir`、`run_records_dir` 和 `literature_index_dir` 已能安全解析，但当前代码未将前者发布到后一组。
 
 目标设计将 `artifact_root` 作为 Obsidian 阅读与人工审核层的共同父目录，四类产物必须同根以避免相互引用失效。如果使用已有 Vault，应放在一个明确的项目子目录中；在发布器实现前，不应让两套流程同时写同一文件。
 
@@ -184,18 +181,18 @@ uv sync --all-packages
 Copy-Item .env.example .env
 ```
 
-填写本机环境变量和总配置后，先做环境检查：
+填写本机环境变量与配置后，先做只读自查：
 
 ```powershell
-uv run hydro-platform discover-groups --json
-uv run hydro-platform preflight --json
-uv run hydro-platform generator-preflight --json
+uv run hydro-platform ai-config --json
 ```
 
-确认目标群组、Zotero 和 Codex 均可用后，运行一轮完整处理：
+确认模型选择与产物根后，按单篇流程处理自己的论文：
 
 ```powershell
-uv run hydro-platform run-once --json
+uv run hydro-platform paper-input --user-library --item-key ABCD1234 --output paper-input.json
+uv run hydro-platform evidence-generate --paper-input paper-input.json --ai-provider codex --json
+uv run hydro-platform evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 ```
 
 开发或交付前运行文档和测试检查：

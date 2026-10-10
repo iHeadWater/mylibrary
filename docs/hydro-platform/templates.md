@@ -5,7 +5,7 @@
 - `hydro-platform/templates/evidence-cards/`：九类 Markdown 粗卡模板；`_catalog.json` 保存来源提交、本地版本及内容指纹。
 - `hydro-platform/templates/themes/`：已启用的统一主题规划、定向精读、回填模板和传输 schema，不再只是预留目录。
 
-修改证据模板需同步版本和清单指纹。修改主题模板会产生新的输入版本，但不会另建独立主题池或自动重做全部旧精读；旧粗卡也不因模板升级自动覆盖。[证据包](evidence-packs.md) · [主题池](unified-theme-pool.md) · [总配置字段](config.md)。
+修改证据模板需同步版本和清单指纹。修改主题模板会产生新的输入版本，但不会另建独立主题池或自动重做全部旧精读；旧粗卡也不因模板升级自动覆盖。[统一主题池](unified-theme-pool.md) · [总配置字段](config.md)。
 
 ## 证据卡模板库
 
@@ -53,13 +53,7 @@
 
 ### 校验
 
-运行：
-
-```powershell
-uv run hydro-platform evidence-templates-validate --json
-```
-
-只有在模板数量、启用数量、来源、版本、文件路径、front matter 和内容哈希全部通过时才返回 `ok: true`。该命令不访问 Zotero、不调用 Codex，也不改写证据包。
+平台在生成（`evidence-generate`）与校验（`evidence-validate`）时会读取模板目录与 `_catalog.json`，并强制要求模板数量、启用数量、来源、版本、文件路径、front matter 和内容哈希一致；任一项不符即按模板错误停止。校验模板不访问 Zotero、不调用模型，也不改写既有产物。
 
 ## 主题模板
 

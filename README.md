@@ -11,10 +11,10 @@
 | 线 | 做什么 | 代码 / 数据 | 入口 |
 |---|---|---|---|
 | **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/播客/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（12 个技能） | [文档](docs/user-guide/mcp-tools.md) |
-| **自动化平台** | 无人值守的长期知识资产：检测共享 Zotero 库新增 → 全文门禁 → 逐篇证据包 → 主题池 → 日报。确定性、不需手工编辑。**运行时 Windows-only** | `hydro-platform/`、`skills/hydro-platform/` | [`hydro-platform` 文档](docs/hydro-platform/index.md) |
+| **文献卡与主题卡平台** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验，**运行时 Windows-only** | `hydro-platform/`、`skills/hydro-platform/` | [`hydro-platform` 文档](docs/hydro-platform/index.md) |
 | **科研工作流** | 人读证据卡与主题综合：来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合。纯标准库脚本，人工决策不可绕过 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、`docs/hydro-platform/`（中文规范） | [平台总览](docs/hydro-platform/research-platform-overview.md) |
 
-**两条线解决的问题不同**，不要混用：`hydro-platform` 追求「无人值守地产出粗卡与候选主题」，科研工作流追求「每一条科学表述都回链可核对的原文，且正式主题必须由人签字」。前者自动化强、不做法学裁决；后者有完整人工决策门，但没有调度器。
+**两条线解决的问题不同**，不要混用：`hydro-platform` 追求「给定一篇论文稳定产出可校验的主体卡与候选主题」，科研工作流追求「每一条科学表述都回链可核对的原文，且正式主题必须由人签字」。前者自动化强、不做科研裁决；后者有完整人工决策门，但没有调度器。
 
 ## Zotero 有四种读法，用途不同
 
@@ -24,7 +24,7 @@
 |---|---|---|---|
 | MCP Server（12 工具，端口 8002） | `hydrolitagent/zotero/server.py` | 元数据走 Web API，全文/附件走本地 API | 容器内或跨机调用 |
 | 裸机脚本直连 | `hydrolitagent/literature/` | 本地 API `…/api/users/0/` | 裸 host 上的入库与简报 |
-| 共享群组客户端 | `hydro-platform/…/zotero.py` | 共享群组（`/api/groups/<id>/`） | 自动化平台扫描与 PDF 门禁 |
+| 共享群组客户端 | `hydro-platform/…/zotero.py` | 共享群组（`/api/groups/<id>/`） | 文献卡平台的 Zotero 读取与 PDF 门禁 |
 | 只读阅读器 | `skills/hydrology-evidence-cards/scripts/zotero_reader.py` | 个人库 `…/api/users/0/` | 证据卡取材，只读、不改库、不读 SQLite |
 
 **分工而非二选一**：容器里走 8002 的 MCP，裸 host 直连 `23119`。本地 API 基址的环境变量首选名是 `ZOTERO_LOCAL_BASE_URL`（`ZOTERO_API_URL` 是旧名）。
@@ -33,7 +33,7 @@
 
 合并后的配置同时保留了两组产物路径：
 
-- `hydro-platform` 自动化当前实际写入 `paths.evidence_packs_dir`、`themes_dir`、`activity_dir`、`reports_dir` 等目录，默认位于 `hydro-platform/` 下。
+- 单篇流程写入 `--output-root`（默认仓库 `outputs/`），主题池写入 `paths.themes_dir`。
 - `paths.artifact_root` 及其下的 `证据卡/`、`主题/`、`运行记录/`、`文献链接/` 已能解析和校验，可指向仓库根或显式允许的外部共享位置，但自动化发布尚未接入这四个目录。
 
 所有实际科研产物、原始 PDF、Zotero 数据库、`.runtime` 和本机路径均不进入 Git。目标是在两组目录之间建立明确的准入与发布边界，再将 `artifact_root` 作为 Obsidian 阅读层；不应把当前的配置字段理解为两套工作流已经打通。
@@ -98,8 +98,8 @@ uv run python -m hydrolitagent.zotero.server
 # 工具链：DOI / arXiv / 标题 → PDF → Zotero
 bash scripts/run_paper_pipeline.sh "10.1016/j.jhydrol.2023.130249"
 
-# 自动化平台：一轮串行处理（Windows）
-uv run hydro-platform run-once --json
+# 文献卡平台：只读自查模型与产物根（Windows）
+uv run hydro-platform ai-config --json
 
 # 科研工作流：先自测，再制卡
 python skills/hydrology-evidence-cards/tests/self_test.py

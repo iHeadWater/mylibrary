@@ -122,7 +122,7 @@ $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [En
 Get-Command pdftoppm, pdfinfo, pdftotext -ErrorAction Stop
 ```
 
-刷新会替换当前终端临时追加的 PATH，必要时重新追加自己的工具目录。项目内安装方式见[原生部署](native-deployment.md)；其工具目录也必须加入 Claude 进程可继承的 PATH。`ai-config` 能显示配置，但不会替代 PDF 渲染工具检查。
+刷新会替换当前终端临时追加的 PATH，必要时重新追加自己的工具目录。Poppler 的工具目录也必须加入 Claude 进程可继承的 PATH。`ai-config` 能显示配置，但不会替代 PDF 渲染工具检查。
 
 ## 1. 本机 Zotero 输入：不调用模型
 

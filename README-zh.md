@@ -26,7 +26,7 @@ mylibrary 承担**情报汇集之后的深度处理**:
 | **文献深度处理** — Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [文献深度处理](docs/user-guide/literature.md) |
 | **知识图谱** — 用 [graphify](https://github.com/graphify) 构建结构化、可查询的知识库(实体提取、社区发现、Obsidian 导出) | `uv run hydrolitagent graph papers/your-topic/` | [模块架构](docs/development/architecture.md) |
 | **论文复现** — 复现 AI 驱动水文学关键论文 | — | `equation_from_data/`、`google_floodhub/` |
-| **科研知识平台** — **消费侧的长期资产支线**:检测共享 Zotero 库新增论文 → 全文门禁 → 逐篇证据包 → 持续演化的主题池 → 日报。无人值守、确定性、不需手工编辑。**运行时为 Windows-only。** | `uv run hydro-platform run-once --json` | [平台文档](docs/hydro-platform/index.md) |
+| **文献卡与主题卡平台** — 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验。**运行时为 Windows-only。** | `uv run hydro-platform ai-config --json` | [平台文档](docs/hydro-platform/index.md) |
 
 ## 快速开始
 
@@ -106,31 +106,34 @@ uv run hydrolitagent query outputs/graph/graph.json --search "LSTM"
 
 每次建图会把 `graph.json`、`graph.html`(D3.js)、`GRAPH_REPORT.md`、`obsidian/`(带 `[[wikilinks]]` 的 Obsidian 知识库)写入 `HYDROLITAGENT_OUTPUT` 或 `--output`。
 
-### 科研知识平台(`hydro-platform`)
+### 文献卡与主题卡平台(`hydro-platform`)
 
-**入库只有两件事 —— 下载 PDF,和建 Zotero 条目。** 本仓库其余的都属于**消费**:读库、精读、主题、知识图谱、公众号、播客。这个平台是消费侧里的一支独立支线 —— 别人产出当期内容,它产出**长期可追溯的知识资产**:把**共享 Zotero 库**里已有的论文沉淀成**证据包**与持续演化的**主题池**。命令一律从仓库根执行。
+**入库只有两件事 —— 下载 PDF,和建 Zotero 条目。** 本仓库其余的都属于**消费**:读库、精读、主题、知识图谱、公众号、播客。这个平台是消费侧里的一支独立支线 —— 别人产出当期内容,它把**你自己的 Zotero 文献**沉淀成**长期可追溯的文献卡与主题卡**。命令一律从仓库根执行。
 
 > 注意"两侧"不等于"两个包":`hydrolitagent` **横跨两侧**(它既有入库的命令,也含消费侧的大部分),而 `hydro-platform` 纯属消费。
 
 ```bash
-# 跑完一整轮:检测 → 门禁 → 制卡 → 主题 → 账本 → 日报
-uv run hydro-platform run-once --json
+# 单篇输入:从自己的一篇论文得到 READY 记录
+uv run hydro-platform paper-input --user-library --item-key ABCD1234 --output paper-input.json
 
-# 只预览已有本地任务 —— 不扫 Zotero、不调模型
-uv run hydro-platform run-once --dry-run --json
+# 生成主体卡草稿(调用所选模型)
+uv run hydro-platform evidence-generate --paper-input paper-input.json --ai-provider codex --json
 
-# 只跑主题部分;--dry-run 只读预览,不调模型
+# 离线校验主体卡(不调模型)
+uv run hydro-platform evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
+
+# 由若干文献卡生成候选主题;--dry-run 只读预览
 uv run hydro-platform themes-run --json
 uv run hydro-platform themes-run --dry-run --json
 
-# 集中检查(配置、依赖、登录、Zotero)—— 不调模型
-uv run hydro-platform doctor --json
+# 只读自查模型与产物根
+uv run hydro-platform ai-config --json
 ```
 
-- **平台不下载 PDF** —— 只读取共享库中已经附好的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`。
-- **运行时为 Windows-only**:定时调度、Poppler 原生工具安装、PDF 沙箱探针都依赖 Windows。编排逻辑本身与操作系统无关,但只在 Windows 上验证过。
-- 生成的产物(证据包、主题池、日报、贡献账本)**不入库** —— 运行时写入,另行共享。仓库里只有代码、模板、提示词与 schema。
-- 完整命令清单:`uv run hydro-platform --help`(32 个子命令)。
+- **平台不下载 PDF** —— 只读取自己 Zotero 中已经附好的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`。
+- **运行时为 Windows-only**:本地 CLI 的安装、登录与 PDF 工具准备只在 Windows 上验证过。
+- 生成的产物(文献卡、主题池、运行记录)**不入库** —— 运行时写入,另行共享。仓库里只有代码、模板、提示词与 schema。
+- 完整命令清单:`uv run hydro-platform --help`(5 个子命令)。
 
 ## Agent Skills
 
@@ -145,7 +148,7 @@ uv run hydro-platform doctor --json
 | `weekly-report-skill` | NotebookLM 输出 → 公众号周报 MD |
 | `figure-skill-v2` | 每篇论文配图 + 整期封面(优先 PDF 提取,否则智谱 CogView 生成) |
 | `bilibili-upload` | 播客音频 → MP4 → B 站上传 |
-| `hydro-platform` | 科研知识平台 CLI 的入口(共享 Zotero 库 → 证据包 → 主题池)。运行时为 Windows-only。 |
+| `hydro-platform` | 文献卡与主题卡平台 CLI 的入口(自己的 Zotero 文献 → 文献卡 → 主题卡)。运行时为 Windows-only。 |
 | `hydrology-evidence-cards` | Zotero 源论文 → 人读证据卡(科研工作流,含机器审计字段) |
 | `hydrology-theme-synthesis` | 文献 → 初步主题 → 人工筛选门 → 正式主题(科研工作流) |
 
@@ -177,13 +180,13 @@ docs/                    # 文档站点(mkdocs-material)
 outputs/                 # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
 papers/                  # 按主题组织的文献库(10 个主题)
 
-hydro-platform/          # 科研知识平台(uv workspace 成员)
-├── automation/          #   Python:检测 → PDF 门禁 → 任务状态机 → 制卡 → 主题池
+hydro-platform/          # 文献卡与主题卡平台(uv workspace 成员)
+├── automation/          #   Python:单篇输入 → PDF 门禁 → 制卡 → 校验 → 主题池
 ├── templates/           #   可复用资产:九类证据卡模板、主题提示词、JSON schema
 ├── config/              #   非敏感配置与完整示例
 └── pyproject.toml       #   入口:`uv run hydro-platform`
-                         #   生成产物(evidence-packs/、themes/、reports/、
-                         #   activity/、members/)不入库,由运行时自建。
+                         #   生成产物(文献卡、主题池、运行记录)不入库,
+                         #   由运行时自建。
 
 equation_from_data/      # 论文复现:从数据发现方程
 google_floodhub/         # 论文复现:Google 洪水预测

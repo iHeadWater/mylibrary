@@ -52,11 +52,7 @@
 
 ## 操作和保存位置
 
-日常仍只需（在仓库根目录运行，统一前缀 `uv run hydro-platform`）：
-
-    uv run hydro-platform run-once --json
-
-只继续主题部分：
+日常只需（在仓库根目录运行，统一前缀 `uv run hydro-platform`）：
 
     uv run hydro-platform themes-run --json
 
@@ -117,7 +113,7 @@
 
 产品规则：候选必须完成定向精读与回填，并由人确认，才可成为正式主题。
 
-当前尚未开发专用确认命令/界面，`hydro-platform/themes/confirmed/` 只有说明文件，不代表已经有正式主题。普通 run-once / themes-run 不自动晋级，也不向这里写入候选。
+当前尚未开发专用确认命令/界面，`hydro-platform/themes/confirmed/` 只有说明文件，不代表已经有正式主题。普通 `themes-run` 不自动晋级，也不向这里写入候选。
 
 统一池的操作检查保护已标记为正式的主题，不能自动 UPDATE / MERGE / SPLIT；系统可另建候选建议并引用其编号。不要通过随手移动文件或手改注册表模拟确认，这会破坏追溯或触发冲突。
 
