@@ -14,16 +14,16 @@ from unittest.mock import patch
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SOURCE_ROOT))
 
-from hydro_platform.config import PdfGateConfig, ZoteroConfig
-from hydro_platform.cli import main
-from hydro_platform.paper_input import (
+from hydrolitagent.cards.config import PdfGateConfig, ZoteroConfig
+from hydrolitagent.cards.cli import main
+from hydrolitagent.cards.paper_input import (
     DEMO_PAPER,
     PaperInputError,
     prepare_demo_paper,
     prepare_paper_batch,
     prepare_paper_input,
 )
-from hydro_platform.zotero import ApiResponse, ZoteroApiError
+from hydrolitagent.cards.zotero import ApiResponse, ZoteroApiError
 
 
 class FakeClient:
@@ -674,7 +674,7 @@ class PaperInputTests(unittest.TestCase):
         self.assertFalse(result["results"][0]["ok"])
         self.assertTrue(result["results"][1]["ok"])
 
-    @patch("hydro_platform.cli.prepare_demo_paper")
+    @patch("hydrolitagent.cards.cli.prepare_demo_paper")
     def test_cli_exposes_reproducible_demo_without_fixed_item_key(
         self,
         demo: Any,
@@ -697,7 +697,7 @@ class PaperInputTests(unittest.TestCase):
         self.assertEqual(payload["status"], "IMPORT_REQUIRED")
         demo.assert_called_once()
 
-    @patch("hydro_platform.cli.prepare_paper_batch")
+    @patch("hydrolitagent.cards.cli.prepare_paper_batch")
     def test_cli_accepts_repeated_item_keys_for_non_stopping_batch(
         self,
         batch: Any,
@@ -733,7 +733,7 @@ class PaperInputTests(unittest.TestCase):
         self.assertEqual(payload["status"], "COMPLETED_WITH_PROBLEMS")
         self.assertEqual(batch.call_args.args[2], ["PROBLEM1", "READY001"])
 
-    @patch("hydro_platform.cli.prepare_paper_batch")
+    @patch("hydrolitagent.cards.cli.prepare_paper_batch")
     def test_cli_human_batch_output_lists_multiple_pdf_candidates(
         self,
         batch: Any,
@@ -780,7 +780,7 @@ class PaperInputTests(unittest.TestCase):
         self.assertIn("one.pdf", output.getvalue())
         self.assertIn("two.pdf", output.getvalue())
 
-    @patch("hydro_platform.cli.prepare_demo_paper")
+    @patch("hydrolitagent.cards.cli.prepare_demo_paper")
     def test_cli_human_output_describes_import_required(
         self,
         demo: Any,
@@ -841,14 +841,14 @@ if __name__ == "__main__":
 
 class StandaloneInputConfigTests(unittest.TestCase):
     def test_defaults_do_not_read_model_config(self):
-        from hydro_platform.paper_input_config import load_paper_input_config
+        from hydrolitagent.cards.paper_input_config import load_paper_input_config
         with patch.dict(os.environ, {"HYDRO_PLATFORM_CONFIG": "absent-private-config.json"}):
             config = load_paper_input_config()
         self.assertEqual(config.zotero.base_url, "http://127.0.0.1:23119")
         self.assertIsNone(config.zotero.group_id)
 
     def test_input_environment_and_cli_override_file(self):
-        from hydro_platform.paper_input_config import load_paper_input_config
+        from hydrolitagent.cards.paper_input_config import load_paper_input_config
         with tempfile.TemporaryDirectory() as temp:
             config = Path(temp) / "input.toml"
             config.write_text('[zotero]\ngroup_id = 3\ntimeout_seconds = 4.0\n', encoding="utf-8")
@@ -857,21 +857,21 @@ class StandaloneInputConfigTests(unittest.TestCase):
                 self.assertEqual(load_paper_input_config(config, group_id="7").zotero.group_id, 7)
 
     def test_legacy_json_reads_only_input_fields(self):
-        from hydro_platform.paper_input_config import load_paper_input_config
+        from hydrolitagent.cards.paper_input_config import load_paper_input_config
         with tempfile.TemporaryDirectory() as temp:
             config = Path(temp) / "local.json"
             config.write_text('{"zotero":{"group_id":7},"card_generator":"invalid obsolete AI config"}', encoding="utf-8")
             self.assertEqual(load_paper_input_config(config).zotero.group_id, 7)
 
     def test_missing_group_is_actionable(self):
-        from hydro_platform.paper_input_config import load_paper_input_config
-        from hydro_platform.config import ConfigError
+        from hydrolitagent.cards.paper_input_config import load_paper_input_config
+        from hydrolitagent.cards.config import ConfigError
         with self.assertRaisesRegex(ConfigError, "--user-library"):
             load_paper_input_config(require_group=True)
 
     def test_invalid_network_config_is_rejected(self):
-        from hydro_platform.paper_input_config import load_paper_input_config
-        from hydro_platform.config import ConfigError
+        from hydrolitagent.cards.paper_input_config import load_paper_input_config
+        from hydrolitagent.cards.config import ConfigError
         for url in ("ftp://localhost", "http://user:pass@localhost", "http://localhost/anything", "http://localhost:invalid"):
             with self.subTest(url=url), self.assertRaises(ConfigError):
                 load_paper_input_config(base_url=url)

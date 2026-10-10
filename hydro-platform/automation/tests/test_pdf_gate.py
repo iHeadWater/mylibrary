@@ -9,9 +9,9 @@ from pathlib import Path
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SOURCE_ROOT))
 
-from hydro_platform.config import PdfGateConfig, ZoteroConfig
-from hydro_platform.pdf_gate import evaluate_pdf_gate
-from hydro_platform.zotero import ApiResponse, ZoteroApiError
+from hydrolitagent.cards.config import PdfGateConfig, ZoteroConfig
+from hydrolitagent.cards.pdf_gate import evaluate_pdf_gate
+from hydrolitagent.cards.zotero import ApiResponse, ZoteroApiError
 
 
 def attachment(key: str, parent_key: str, filename: str = "paper.pdf") -> dict[str, object]:

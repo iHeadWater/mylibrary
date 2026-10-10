@@ -6,12 +6,13 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT / "hydro-platform/automation/src")]
-from hydro_platform.paper_input_config import load_paper_input_config, describe_config
-from hydro_platform.paper_input import prepare_paper_input, prepare_paper_batch, prepare_demo_paper
-from hydro_platform.pdf_gate import PdfGateError
-from hydro_platform.zotero import ZoteroApiError
-from hydro_platform.config import ConfigError
+# 包已并入 hydrolitagent，加仓库根即可导入；不再需要指向旧的 automation/src。
+sys.path[:0] = [str(ROOT)]
+from hydrolitagent.cards.paper_input_config import load_paper_input_config, describe_config
+from hydrolitagent.cards.paper_input import prepare_paper_input, prepare_paper_batch, prepare_demo_paper
+from hydrolitagent.cards.pdf_gate import PdfGateError
+from hydrolitagent.cards.zotero import ZoteroApiError
+from hydrolitagent.cards.config import ConfigError
 
 
 def main(argv=None):

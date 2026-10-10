@@ -72,7 +72,7 @@ PLATFORM_IGNORED_PATHS = (
 )
 
 PLATFORM_NOT_IGNORED_PATHS = (
-    "hydro-platform/automation/src/hydro_platform/tasks.py",
+    "hydro-platform/automation/src/hydrolitagent.cards/tasks.py",
     "hydro-platform/templates/evidence-cards/_catalog.json",
     "hydro-platform/config/config.json",
     "hydro-platform/pyproject.toml",
@@ -112,7 +112,7 @@ REPO_TESTS_DIR = REPO_ROOT / "tests"
 MIN_PLATFORM_TEST_FILES = 20
 
 # The platform's importable package, in both Path and tracked-path (posix) form.
-PLATFORM_PACKAGE_DIR = PLATFORM_SRC / "hydro_platform"
+PLATFORM_PACKAGE_DIR = PLATFORM_SRC / "hydrolitagent.cards"
 PLATFORM_PACKAGE_PREFIX = PLATFORM_PACKAGE_DIR.relative_to(REPO_ROOT).as_posix() + "/"
 
 # Minimum amount of real platform content that must have moved for the structural
@@ -167,7 +167,7 @@ def _tracked_platform_paths() -> list[str]:
     platform is not actually there. The precondition therefore demands that the
     platform's real source tree has moved - at least
     ``MIN_PLATFORM_SOURCE_FILES`` tracked ``.py`` files under
-    ``hydro-platform/automation/src/hydro_platform/`` - and NOT merely that a path
+    ``hydro-platform/automation/src/hydrolitagent.cards/`` - and NOT merely that a path
     with the right directory name exists.
 
     This specificity is deliberate and must not be loosened: a merge that lands
@@ -376,7 +376,7 @@ def test_config_path_contract() -> None:
     """Requirement: the CLI resolves its default config to ``hydro-platform/config/config.json``.
 
     Importing the package from ``hydro-platform/automation/src`` must expose
-    ``hydro_platform.cli.DEFAULT_CONFIG_PATH`` pointing at the platform's own
+    ``hydrolitagent.cards.cli.DEFAULT_CONFIG_PATH`` pointing at the platform's own
     ``config/config.json`` (which moves with the platform), not at the repo-root
     ``config/`` directory.
     """
@@ -389,10 +389,10 @@ def test_config_path_contract() -> None:
     sys.path.insert(0, str(PLATFORM_SRC))
     try:
         try:
-            from hydro_platform.cli import DEFAULT_CONFIG_PATH  # noqa: PLC0415
+            from hydrolitagent.cards.cli import DEFAULT_CONFIG_PATH  # noqa: PLC0415
         except Exception as exc:  # noqa: BLE001 - reported as a test failure below
             pytest.fail(
-                f"cannot import 'hydro_platform.cli' from {PLATFORM_SRC}: {exc!r}.\n"
+                f"cannot import 'hydrolitagent.cards.cli' from {PLATFORM_SRC}: {exc!r}.\n"
                 "The importable package must live under "
                 "hydro-platform/automation/src so that the CLI (and this contract) "
                 "resolve inside the platform directory."
@@ -411,7 +411,7 @@ def test_config_path_contract() -> None:
     actual = actual.resolve()
 
     assert actual == expected, (
-        f"hydro_platform.cli.DEFAULT_CONFIG_PATH must resolve to {expected}, "
+        f"hydrolitagent.cards.cli.DEFAULT_CONFIG_PATH must resolve to {expected}, "
         f"got {actual} (raw value: {DEFAULT_CONFIG_PATH!r})"
     )
 

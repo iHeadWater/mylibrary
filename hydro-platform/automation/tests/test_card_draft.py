@@ -15,9 +15,9 @@ from pypdf import PdfWriter
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from hydrolitagent import _config as literature_config
-from hydro_platform import card_draft, cli
-from hydro_platform.card_generators.single_agent import SingleAgentCardGeneratorAdapter
-from hydro_platform.config import load_config
+from hydrolitagent.cards import card_draft, cli
+from hydrolitagent.cards.card_generators.single_agent import SingleAgentCardGeneratorAdapter
+from hydrolitagent.cards.config import load_config
 from test_card_generation import FakeAdapter, PARENT_KEY
 from test_codex_local_pdf import LocalProviderFixture
 from test_config import write_config

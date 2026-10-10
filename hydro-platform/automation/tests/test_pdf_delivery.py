@@ -11,11 +11,11 @@ from pathlib import Path
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SOURCE_ROOT))
 
-from hydro_platform.config import PdfGateConfig, TaskConfig, ZoteroConfig
-from hydro_platform.evidence_packages import sync_evidence_packages
-from hydro_platform.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
-from hydro_platform.tasks import build_task_id, save_task_registry
-from hydro_platform.zotero import ApiResponse, ZoteroApiError
+from hydrolitagent.cards.config import PdfGateConfig, TaskConfig, ZoteroConfig
+from hydrolitagent.cards.evidence_packages import sync_evidence_packages
+from hydrolitagent.cards.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
+from hydrolitagent.cards.tasks import build_task_id, save_task_registry
+from hydrolitagent.cards.zotero import ApiResponse, ZoteroApiError
 
 
 GROUP_ID = 6618088

@@ -14,10 +14,10 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from hydro_platform.card_generators.streaming import _status_event, run_streaming_prompt
-from hydro_platform.cli import main
-from hydro_platform.config import ConfigError, ProgressConfig, REQUIRED_CARD_WORKFLOW_ROLES, load_config
-from hydro_platform.progress import ConsoleProgress
+from hydrolitagent.cards.card_generators.streaming import _status_event, run_streaming_prompt
+from hydrolitagent.cards.cli import main
+from hydrolitagent.cards.config import ConfigError, ProgressConfig, REQUIRED_CARD_WORKFLOW_ROLES, load_config
+from hydrolitagent.cards.progress import ConsoleProgress
 import test_card_generator as generator_fixtures
 import test_config as config_fixtures
 
@@ -195,7 +195,7 @@ print(json.dumps({'input_size': len(text), 'custom_env': os.environ['HYDRO_TEST_
             children.append(process)
             return process
 
-        with patch("hydro_platform.card_generators.streaming.subprocess.Popen", side_effect=create):
+        with patch("hydrolitagent.cards.card_generators.streaming.subprocess.Popen", side_effect=create):
             with self.assertRaises(subprocess.TimeoutExpired):
                 run_streaming_prompt([sys.executable, "-c", "import time; time.sleep(10)"], "", 0.3)
         self.assertIsNotNone(children[0].poll())
@@ -223,7 +223,7 @@ print(json.dumps({'input_size': len(text), 'custom_env': os.environ['HYDRO_TEST_
             children.append(process)
             return process
 
-        with patch("hydro_platform.card_generators.streaming.subprocess.Popen", side_effect=create):
+        with patch("hydrolitagent.cards.card_generators.streaming.subprocess.Popen", side_effect=create):
             with self.assertRaises(KeyboardInterrupt):
                 run_streaming_prompt([sys.executable, "-c", "import time; time.sleep(10)"], "", 5)
         self.assertIsNotNone(children[0].poll())

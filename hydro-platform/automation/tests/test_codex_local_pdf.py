@@ -12,12 +12,12 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from hydro_platform.card_generators import build_card_generator_adapter
-from hydro_platform.card_generators.codex_local_pdf import CodexLocalPdfAdapter
-from hydro_platform.card_generation import CardGenerationError, _validate_workflow_result
-from hydro_platform.config import ConfigError, LOCAL_PATH_PROTOCOL_VERSION, REQUIRED_CARD_WORKFLOW_ROLES, load_config
-from hydro_platform.evidence_packages import EvidencePackageError, load_evidence_manifest
-from hydro_platform.source_access import source_access_acceptable
+from hydrolitagent.cards.card_generators import build_card_generator_adapter
+from hydrolitagent.cards.card_generators.codex_local_pdf import CodexLocalPdfAdapter
+from hydrolitagent.cards.card_generation import CardGenerationError, _validate_workflow_result
+from hydrolitagent.cards.config import ConfigError, LOCAL_PATH_PROTOCOL_VERSION, REQUIRED_CARD_WORKFLOW_ROLES, load_config
+from hydrolitagent.cards.evidence_packages import EvidencePackageError, load_evidence_manifest
+from hydrolitagent.cards.source_access import source_access_acceptable
 from test_card_generator import command_result, smoke_jsonl
 from test_config import write_config
 from card_generator_fixtures import common

@@ -15,15 +15,15 @@ from unittest.mock import patch
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SOURCE_ROOT))
 
-from hydro_platform.card_generation import (
+from hydrolitagent.cards.card_generation import (
     CardGenerationError,
     generate_evidence_card,
     generate_evidence_card_trial,
 )
-from hydro_platform.config import PdfGateConfig, TaskConfig, ZoteroConfig
-from hydro_platform.evidence_packages import PLACEHOLDER_CARD
-from hydro_platform.pdf_delivery import PdfDelivery
-from hydro_platform.tasks import build_task_id
+from hydrolitagent.cards.config import PdfGateConfig, TaskConfig, ZoteroConfig
+from hydrolitagent.cards.evidence_packages import PLACEHOLDER_CARD
+from hydrolitagent.cards.pdf_delivery import PdfDelivery
+from hydrolitagent.cards.tasks import build_task_id
 
 
 GROUP_ID = 42
@@ -669,7 +669,7 @@ class CardGenerationTests(unittest.TestCase):
                 real_replace(source, destination)
 
             with patch(
-                "hydro_platform.card_generation.os.replace",
+                "hydrolitagent.cards.card_generation.os.replace",
                 side_effect=replace_with_manifest_failure,
             ):
                 with self.assertRaises(CardGenerationError) as caught:

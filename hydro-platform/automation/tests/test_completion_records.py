@@ -8,9 +8,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from hydro_platform.card_generation import CardGenerationError
-from hydro_platform.evidence_packages import EvidencePackageError, PLACEHOLDER_CARD
-from hydro_platform.publication import text_hash, validate_saved_package
+from hydrolitagent.cards.card_generation import CardGenerationError
+from hydrolitagent.cards.evidence_packages import EvidencePackageError, PLACEHOLDER_CARD
+from hydrolitagent.cards.publication import text_hash, validate_saved_package
 from test_card_generation import FakeAdapter, GenerationFixture, PARENT_KEY
 
 

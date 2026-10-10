@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 import pytest
-from hydro_platform import ai_config as config, cli
+from hydrolitagent.cards import ai_config as config, cli
 
 
 def test_file_dotenv_environment_and_argument_priority(tmp_path, monkeypatch):

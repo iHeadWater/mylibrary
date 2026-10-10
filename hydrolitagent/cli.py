@@ -227,6 +227,21 @@ def _print_paths(*, as_json: bool) -> None:
         print("\n(带 — 的目录尚未创建;跑对应流程时会自动建)")
 
 
+def add_cards_subparser(subparsers: argparse._SubParsersAction) -> None:
+    """文献卡与主题卡：把参数原样透传给 hydrolitagent.cards.cli 自己的 parser。
+
+    用 ``REMAINDER`` 而不是在这里重写 5 条命令的参数定义——那套 parser 已经写好了
+    （``hydrolitagent/cards/cli.py``），重写一遍只会造成两处定义漂移。
+    ``add_help=False`` 让 ``cards --help`` 落到内层 parser，输出那 5 条命令的说明。
+    """
+    # 只用于让 `hydrolitagent --help` 列出 cards；实际派发在 main() 入口拦截，
+    # 不走 argparse（见那里的注释）。
+    subparsers.add_parser(
+        "cards",
+        help="文献卡与主题卡:自己的 Zotero -> 文献卡 -> 主题卡",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="hydrolitagent",
@@ -239,6 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_merge_subparser(subparsers)
     add_query_subparser(subparsers)
     add_paths_subparser(subparsers)
+    add_cards_subparser(subparsers)
     return parser
 
 
@@ -253,6 +269,16 @@ def main() -> None:
         # 老 Python 无 reconfigure / 流已关闭：不阻断主流程
         pass
     _load_dotenv()
+
+    # `cards` 是一整套独立子 CLI（自带 parser 与 5 条命令）。这里直接透传 argv，
+    # 不走 argparse 的 REMAINDER —— 后者会把 `cards --help` 里的 `--help` 当成
+    # 外层选项，报 "unrecognized arguments: --help"。
+    argv = sys.argv[1:]
+    if argv and argv[0] == "cards":
+        from hydrolitagent.cards.cli import main as cards_main
+
+        raise SystemExit(cards_main(argv[1:]))
+
     parser = build_parser()
     args = parser.parse_args()
 

@@ -11,8 +11,8 @@ from pathlib import Path
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SOURCE_ROOT))
 
-from hydro_platform.config import ConfigError, ZoteroConfig, load_config
-from hydro_platform.zotero import ZoteroClient, preflight
+from hydrolitagent.cards.config import ConfigError, ZoteroConfig, load_config
+from hydrolitagent.cards.zotero import ZoteroClient, preflight
 
 
 class StubHandler(BaseHTTPRequestHandler):

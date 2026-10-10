@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "theme_pipeline": {
+    "enabled": true,
+    "research_goal": null,
+    "model": null,
+    "reasoning_effort": null,
+    "timeout_seconds": null,
+    "assets_dir": "hydrolitagent/cards/assets/templates/themes"
+  },
+  "pipeline": {
+    "max_items_per_run": null,
+    "max_run_seconds": null,
+    "max_attempts_per_item": 3,
+    "retry_cooldown_seconds": 3600
+  },
+  "paths": {
+    "project_root": "../../../..",
+    "artifact_root": ".",
+    "artifact_root_external": false,
+    "evidence_cards_dir": "证据卡",
+    "themes_vault_dir": "主题",
+    "run_records_dir": "运行记录",
+    "literature_index_dir": "文献链接",
+    "runtime_dir": ".runtime",
+    "snapshot_file": ".runtime/zotero-snapshot.json",
+    "tasks_file": ".runtime/tasks.json",
+    "lock_file": ".runtime/worker.lock",
+    "logs_dir": ".runtime/logs",
+    "card_trials_dir": ".runtime/card-trials",
+    "evidence_packs_dir": "evidence-packs",
+    "templates_dir": "hydrolitagent/cards/assets/templates",
+    "evidence_card_templates_dir": "hydrolitagent/cards/assets/templates/evidence-cards",
+    "evidence_card_template_catalog_file": "hydrolitagent/cards/assets/templates/evidence-cards/_catalog.json",
+    "evidence_card_generation_prompt_file": "hydrolitagent/cards/assets/prompts/evidence-card-generation-v8.md",
+    "card_generation_output_schema_file": "hydrolitagent/cards/assets/schemas/card-generation-output.schema.json",
+    "themes_dir": "themes",
+    "members_dir": "members",
+    "activity_dir": "activity",
+    "reports_dir": "reports",
+    "prompts_dir": "hydrolitagent/cards/assets/prompts",
+    "schemas_dir": "hydrolitagent/cards/assets/schemas"
+  },
+  "zotero": {
+    "startup": {
+      "enabled": true,
+      "launch_if_missing": true,
+      "executable": null,
+      "wait_timeout_seconds": 120,
+      "poll_interval_seconds": 5
+    },
+    "base_url": "http://127.0.0.1:23119",
+    "group_id": 6618088,
+    "timeout_seconds": 5,
+    "process_timeout_seconds": 5
+  },
+  "pdf_gate": {
+    "min_file_size_bytes": 1024,
+    "min_text_characters": 1000,
+    "hash_chunk_size_bytes": 1048576
+  },
+  "tasks": {
+    "lease_seconds": 1800,
+    "lock_stale_seconds": 300,
+    "max_history_entries": 100
+  },
+  "card_generator": {
+    "proxy": {
+      "enabled": true,
+      "url": "http://127.0.0.1:7897",
+      "no_proxy": [
+        "localhost",
+        "127.0.0.1",
+        "::1"
+      ]
+    },
+    "pdf_direct_trial": {
+      "prompt_file": "hydrolitagent/cards/assets/prompts/pdf-direct-read-trial-v2.md",
+      "reading_prompt_file": "hydrolitagent/cards/assets/prompts/pdf-local-reading-v1.md",
+      "schema_file": "hydrolitagent/cards/assets/schemas/pdf-direct-read-trial-output.schema.json",
+      "timeout_seconds": 1200,
+      "windows_sandbox": "elevated",
+      "shell_executable": "powershell",
+      "preflight_timeout_seconds": 120,
+      "python_executable": "../.venv/Scripts/python.exe",
+      "text_extractor": "pypdf"
+    },
+    "connection_guard": {
+      "reconnect_stop_enabled": false,
+      "reconnect_event_limit": 10,
+      "recovery_timeout_seconds": 300,
+      "idle_timeout_seconds": 1500,
+      "pdf_tool_call_limit": 2
+    },
+    "progress": {
+      "enabled": true,
+      "heartbeat_interval_seconds": 60
+    },
+    "adapter": "codex_cli",
+    "executable": "codex",
+    "auth_mode": "chatgpt_account",
+    "preflight_timeout_seconds": 10,
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "smoke_test_timeout_seconds": 120,
+    "generation_timeout_seconds": 1500,
+    "pdf_reader": {
+      "adapter": "local_path",
+      "server_name": "hydro_pdf_reader",
+      "python_executable": null,
+      "server_file": "hydrolitagent/cards/pdf_reader_mcp.py",
+      "pdfinfo_executable": ".tools/poppler/Library/bin/pdfinfo.exe",
+      "pdftotext_executable": ".tools/poppler/Library/bin/pdftotext.exe",
+      "pdftoppm_executable": ".tools/poppler/Library/bin/pdftoppm.exe",
+      "render_dpi": 120,
+      "max_pages_per_call": 4,
+      "output_token_limit": 60000,
+      "startup_timeout_seconds": 15,
+      "tool_timeout_seconds": 120
+    },
+    "workflow_mode": "single_agent"
+  }
+}

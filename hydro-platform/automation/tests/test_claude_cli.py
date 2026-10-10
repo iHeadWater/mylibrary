@@ -6,10 +6,10 @@ from pathlib import Path
 from unittest.mock import Mock
 import pytest
 from test_card_draft import draft_case
-from hydro_platform.card_draft import generate_subject_card_draft
-from hydro_platform.card_generators.claude_cli import ClaudeCliAdapter, read_receipts
-from hydro_platform.card_generators.single_agent import SingleAgentCardGeneratorAdapter
-from hydro_platform.source_access import source_access_acceptable
+from hydrolitagent.cards.card_draft import generate_subject_card_draft
+from hydrolitagent.cards.card_generators.claude_cli import ClaudeCliAdapter, read_receipts
+from hydrolitagent.cards.card_generators.single_agent import SingleAgentCardGeneratorAdapter
+from hydrolitagent.cards.source_access import source_access_acceptable
 
 
 def events(case):

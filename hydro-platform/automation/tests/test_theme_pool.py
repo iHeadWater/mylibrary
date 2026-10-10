@@ -10,8 +10,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from hydro_platform import themes, theme_pool as pool
-from hydro_platform.publication import atomic_text, text_hash
+from hydrolitagent.cards import themes, theme_pool as pool
+from hydrolitagent.cards.publication import atomic_text, text_hash
 import test_themes as fixtures
 
 
@@ -221,7 +221,7 @@ class ThemePoolTests(unittest.TestCase):
             if path.name == "_registry.json":
                 raise OSError("disk full")
             atomic_text(path, text)
-        with patch("hydro_platform.theme_pool.atomic_text", side_effect=fail):
+        with patch("hydrolitagent.cards.theme_pool.atomic_text", side_effect=fail):
             first = self.run_theme()
         self.assertFalse(first["ok"])
         recovered = self.run_theme()
@@ -233,7 +233,7 @@ class ThemePoolTests(unittest.TestCase):
             if path.name == "index.md":
                 raise OSError("test")
             atomic_text(path, text)
-        with patch("hydro_platform.theme_pool.atomic_text", side_effect=fail):
+        with patch("hydrolitagent.cards.theme_pool.atomic_text", side_effect=fail):
             first = self.run_theme()
         self.assertFalse(first["ok"])
         again = self.run_theme()
@@ -251,7 +251,7 @@ class ThemePoolTests(unittest.TestCase):
         self.assertEqual(path.read_text(encoding="utf-8"), "我的入口")
 
     def test_legacy_migration_preserves_bytes_and_skips_regeneration(self):
-        with patch("hydro_platform.themes._run", themes._run_legacy):
+        with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
             legacy = self.run_theme()
         self.assertTrue(legacy["ok"], legacy)
         protected = {p: p.read_bytes() for root in (Path(legacy["batch_path"]), self.f.package)
@@ -264,7 +264,7 @@ class ThemePoolTests(unittest.TestCase):
         self.assertTrue(all(p.read_bytes() == data for p, data in protected.items()))
 
     def test_multiple_legacy_batches_enter_one_planner_not_isolated_pools(self):
-        with patch("hydro_platform.themes._run", themes._run_legacy):
+        with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
             first = self.run_theme()
             self.changed_goal("legacy-second")
             second = self.run_theme()
@@ -279,7 +279,7 @@ class ThemePoolTests(unittest.TestCase):
         self.assertEqual(len(self.entries()), 2)
 
     def test_migration_only_never_invokes_model_even_if_input_changed(self):
-        with patch("hydro_platform.themes._run", themes._run_legacy):
+        with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
             self.run_theme()
         self.add_paper()
         self.text.generate.reset_mock()
@@ -289,7 +289,7 @@ class ThemePoolTests(unittest.TestCase):
         self.text.generate.assert_not_called()
 
     def test_legacy_migration_dry_run_creates_nothing(self):
-        with patch("hydro_platform.themes._run", themes._run_legacy):
+        with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
             self.run_theme()
         before = {str(p): p.read_bytes() for p in self.config.paths.themes_dir.rglob("*") if p.is_file()}
         result = self.run_theme(dry_run=True)

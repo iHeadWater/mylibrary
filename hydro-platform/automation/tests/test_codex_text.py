@@ -8,8 +8,8 @@ from pathlib import Path
 from unittest.mock import Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from hydro_platform.card_generators.codex_text import CodexTextAdapter
-from hydro_platform.config import CodexProxyConfig, load_config
+from hydrolitagent.cards.card_generators.codex_text import CodexTextAdapter
+from hydrolitagent.cards.config import CodexProxyConfig, load_config
 from test_config import write_config
 from test_card_generator import smoke_jsonl
 

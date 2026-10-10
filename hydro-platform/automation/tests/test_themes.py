@@ -14,12 +14,12 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from hydro_platform.cli import main
-from hydro_platform.config import ConfigError, load_config
-from hydro_platform.pdf_delivery import PdfDeliveryError
-from hydro_platform.publication import text_hash
-from hydro_platform.tasks import PipelineRunLock
-from hydro_platform.themes import ThemeError, _publish, _safe_path, run_themes
+from hydrolitagent.cards.cli import main
+from hydrolitagent.cards.config import ConfigError, load_config
+from hydrolitagent.cards.pdf_delivery import PdfDeliveryError
+from hydrolitagent.cards.publication import text_hash
+from hydrolitagent.cards.tasks import PipelineRunLock
+from hydrolitagent.cards.themes import ThemeError, _publish, _safe_path, run_themes
 from test_card_generation import GenerationFixture, FakeAdapter, PARENT_KEY
 from test_config import write_config
 
@@ -248,7 +248,7 @@ class ThemeTests(unittest.TestCase):
             if path.name == "reading.md":
                 raise OSError("disk temporarily unavailable")
             original(path, content)
-        with patch("hydro_platform.themes._publish", side_effect=fail):
+        with patch("hydrolitagent.cards.themes._publish", side_effect=fail):
             first = self.run_theme()
         self.assertFalse(first["ok"])
         second = self.run_theme()
@@ -337,7 +337,7 @@ class ThemeConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = write_config(Path(tmp))
             output = {"ok": True, "operation": "themes_run", "status": "LOCAL_PREVIEW"}
-            with patch("hydro_platform.cli.run_themes", return_value=output) as operation, redirect_stdout(io.StringIO()) as stream:
+            with patch("hydrolitagent.cards.cli.run_themes", return_value=output) as operation, redirect_stdout(io.StringIO()) as stream:
                 code = main(["themes-run", "--config", str(path), "--json", "--dry-run"])
             self.assertEqual(code, 0)
             self.assertEqual(json.loads(stream.getvalue()), output)

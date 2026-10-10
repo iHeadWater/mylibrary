@@ -10,10 +10,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from hydro_platform.card_generators.single_agent import SingleAgentCardGeneratorAdapter, validate_attribution
-from hydro_platform.card_generation import CardGenerationError, _validate_workflow_result
-from hydro_platform.config import ConfigError, SINGLE_AGENT_PROTOCOL_VERSION, load_config
-from hydro_platform.evidence_packages import EvidencePackageError, load_evidence_manifest
+from hydrolitagent.cards.card_generators.single_agent import SingleAgentCardGeneratorAdapter, validate_attribution
+from hydrolitagent.cards.card_generation import CardGenerationError, _validate_workflow_result
+from hydrolitagent.cards.config import ConfigError, SINGLE_AGENT_PROTOCOL_VERSION, load_config
+from hydrolitagent.cards.evidence_packages import EvidencePackageError, load_evidence_manifest
 from test_card_generation import GenerationFixture, FakeAdapter, PARENT_KEY
 from test_codex_local_pdf import LocalProviderFixture
 from test_config import write_config
@@ -173,8 +173,8 @@ class SingleAgentTests(unittest.TestCase):
         for body in bodies:
             with self.subTest(body=body), tempfile.TemporaryDirectory() as directory, \
                  patch("test_card_generation.PDF_HASH", digest), \
-                 patch("hydro_platform.card_generators.single_agent.validate_attribution", side_effect=AssertionError("no content inspection")), \
-                 patch("hydro_platform.card_generation._validate_template_structure", side_effect=AssertionError("no layout inspection")):
+                 patch("hydrolitagent.cards.card_generators.single_agent.validate_attribution", side_effect=AssertionError("no content inspection")), \
+                 patch("hydrolitagent.cards.card_generation._validate_template_structure", side_effect=AssertionError("no layout inspection")):
                 root = Path(directory)
                 f = GenerationFixture(root)
                 configure_template(f)
@@ -256,7 +256,7 @@ class SingleAgentTests(unittest.TestCase):
     def test_cleanup_failure_does_not_erase_output_or_draft(self):
         with tempfile.TemporaryDirectory() as directory:
             provider = LocalProviderFixture(Path(directory))
-            with patch("hydro_platform.card_generators.codex_local_pdf.shutil.rmtree",
+            with patch("hydrolitagent.cards.card_generators.codex_local_pdf.shutil.rmtree",
                        side_effect=PermissionError(13, "denied")):
                 result = provider.run()
             self.assertTrue(result["ok"], result)
@@ -271,7 +271,7 @@ class SingleAgentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             provider = LocalProviderFixture(Path(directory))
             provider.runner.side_effect = PermissionError(13, "secret path must not be logged")
-            with patch("hydro_platform.card_generators.codex_local_pdf.shutil.rmtree",
+            with patch("hydrolitagent.cards.card_generators.codex_local_pdf.shutil.rmtree",
                        side_effect=PermissionError(13, "cleanup denied")):
                 result = provider.run()
             self.assertFalse(result["ok"])

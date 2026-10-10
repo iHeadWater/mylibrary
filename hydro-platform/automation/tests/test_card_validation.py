@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from hydro_platform import card_validation as gate, cli, themes
+from hydrolitagent.cards import card_validation as gate, cli, themes
 from test_card_draft import draft_case, run
 
 
@@ -43,7 +43,7 @@ def select(case, report):
 
 def test_valid_short_draft_passes_without_ai_or_mutating_inputs(case):
     before = deepcopy(case[1:3])
-    with patch("hydro_platform.card_draft.build_card_generator_adapter", side_effect=AssertionError("no AI")):
+    with patch("hydrolitagent.cards.card_draft.build_card_generator_adapter", side_effect=AssertionError("no AI")):
         report = check(case)
     assert report["status"] == "PASS", report
     assert report["eligible_for_theme_generation"]
@@ -383,8 +383,8 @@ def test_assets_can_be_selected_from_a_relocated_copy(case, tmp_path):
     "C:\\research\\paper.pdf", "/home/research/paper.pdf", "\\\\server\\share\\paper.pdf",
 ])
 def test_foreign_origin_path_is_not_resolved_again_on_this_host(case, source_path):
-    from hydro_platform.card_generation import _load_template_bundle, _read_prompt, build_template_prompt
-    from hydro_platform.card_draft import SINGLE_SOURCE_TEMPLATES
+    from hydrolitagent.cards.card_generation import _load_template_bundle, _read_prompt, build_template_prompt
+    from hydrolitagent.cards.card_draft import SINGLE_SOURCE_TEMPLATES
     import hashlib
     assets = gate.ValidationAssets.from_root()
     _, templates = _load_template_bundle(assets.templates_dir, assets.catalog_file)

@@ -12,8 +12,8 @@ from pathlib import Path
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SOURCE_ROOT))
 
-from hydro_platform.config import PdfGateConfig, TaskConfig, ZoteroConfig
-from hydro_platform.tasks import (
+from hydrolitagent.cards.config import PdfGateConfig, TaskConfig, ZoteroConfig
+from hydrolitagent.cards.tasks import (
     RuntimeLock,
     TaskStoreError,
     claim_task,
@@ -22,7 +22,7 @@ from hydro_platform.tasks import (
     reconcile_tasks,
     save_task_registry,
 )
-from hydro_platform.zotero import ApiResponse
+from hydrolitagent.cards.zotero import ApiResponse
 
 
 GROUP_ID = 6618088

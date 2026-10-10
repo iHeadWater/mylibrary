@@ -14,13 +14,13 @@ from unittest.mock import Mock, patch
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SOURCE_ROOT))
 
-from hydro_platform.card_generators.codex_cli import (
+from hydrolitagent.cards.card_generators.codex_cli import (
     SMOKE_TEST_EXPECTED_TEXT,
     SMOKE_TEST_PROMPT,
     CodexCliAdapter,
 )
-from hydro_platform.cli import main
-from hydro_platform.config import CardGeneratorConfig, PdfReaderConfig
+from hydrolitagent.cards.cli import main
+from hydrolitagent.cards.config import CardGeneratorConfig, PdfReaderConfig
 
 def generator_config(
     *,
@@ -40,7 +40,7 @@ def generator_config(
             adapter="project_mcp",
             server_name="hydro_pdf_reader",
             python_executable=None,
-            server_file=SOURCE_ROOT / "hydro_platform" / "pdf_reader_mcp.py",
+            server_file=SOURCE_ROOT / "hydrolitagent.cards" / "pdf_reader_mcp.py",
             pdfinfo_executable="pdfinfo",
             pdftotext_executable="pdftotext",
             pdftoppm_executable="pdftoppm",

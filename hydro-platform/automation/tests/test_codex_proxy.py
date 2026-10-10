@@ -13,12 +13,12 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from hydro_platform.card_generators.codex_cli import CodexCliAdapter, _run_command, _run_prompt_command
-from hydro_platform.card_generators.proxy import (
+from hydrolitagent.cards.card_generators.codex_cli import CodexCliAdapter, _run_command, _run_prompt_command
+from hydrolitagent.cards.card_generators.proxy import (
     LOCAL_BYPASS, PROXY_VARIABLES, codex_proxy_environment, proxy_summary,
 )
-from hydro_platform.card_generators.streaming import run_streaming_prompt
-from hydro_platform.config import CodexProxyConfig, ConfigError, load_config
+from hydrolitagent.cards.card_generators.streaming import run_streaming_prompt
+from hydrolitagent.cards.config import CodexProxyConfig, ConfigError, load_config
 from test_card_generator import generator_config, smoke_jsonl
 from test_codex_local_pdf import LocalProviderFixture
 from test_config import write_config
@@ -141,7 +141,7 @@ class ProxyAdapterTests(unittest.TestCase):
         for mocked in (True, False):
             with self.subTest(mocked=mocked):
                 prompt_runner = Mock(return_value=subprocess.CompletedProcess([], 0, "", ""))
-                with patch("hydro_platform.card_generators.codex_cli.run_streaming_prompt", prompt_runner):
+                with patch("hydrolitagent.cards.card_generators.codex_cli.run_streaming_prompt", prompt_runner):
                     adapter = CodexCliAdapter(config, **({"prompt_runner": prompt_runner} if mocked else {}))
                     adapter._prompt_runner(["codex", "exec"], "task", 5, metadata)
                 env = prompt_runner.call_args.args[3]

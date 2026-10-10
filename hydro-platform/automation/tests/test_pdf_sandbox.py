@@ -11,8 +11,8 @@ from pathlib import Path
 from unittest.mock import Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from hydro_platform.config import load_config
-from hydro_platform.pdf_sandbox import PROBE_SCRIPT, build_sandbox_probe_command, check_pdf_sandbox
+from hydrolitagent.cards.config import load_config
+from hydrolitagent.cards.pdf_sandbox import PROBE_SCRIPT, build_sandbox_probe_command, check_pdf_sandbox
 from test_config import write_config
 
 

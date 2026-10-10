@@ -14,12 +14,12 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from hydro_platform.card_generators.connection_guard import ConnectionGuard
-from hydro_platform.card_generators.codex_cli import CodexCliAdapter, _safe_exec_diagnostic, _terminal_failure_events
-from hydro_platform.card_generators.streaming import ExecutionStopped, run_streaming_prompt
-from hydro_platform.cli import main
-from hydro_platform.config import ConfigError, ConnectionGuardConfig, load_config
-from hydro_platform.failure_records import save_failure_record
+from hydrolitagent.cards.card_generators.connection_guard import ConnectionGuard
+from hydrolitagent.cards.card_generators.codex_cli import CodexCliAdapter, _safe_exec_diagnostic, _terminal_failure_events
+from hydrolitagent.cards.card_generators.streaming import ExecutionStopped, run_streaming_prompt
+from hydrolitagent.cards.cli import main
+from hydrolitagent.cards.config import ConfigError, ConnectionGuardConfig, load_config
+from hydrolitagent.cards.failure_records import save_failure_record
 import test_card_generator as fixtures
 import test_config as config_fixtures
 
@@ -185,7 +185,7 @@ class GuardProcessTests(unittest.TestCase):
             return process
 
         started = time.monotonic()
-        with patch("hydro_platform.card_generators.streaming.subprocess.Popen", side_effect=spawn):
+        with patch("hydrolitagent.cards.card_generators.streaming.subprocess.Popen", side_effect=spawn):
             with self.assertRaises(ExecutionStopped) as raised:
                 run_streaming_prompt([sys.executable, "-u", "-c", script], "", 10, connection_guard=config)
         self.assertIsNotNone(processes[0].poll())
@@ -246,7 +246,7 @@ class GuardProcessTests(unittest.TestCase):
             processes.append(process)
             return process
 
-        with patch("hydro_platform.card_generators.streaming.subprocess.Popen", side_effect=spawn):
+        with patch("hydrolitagent.cards.card_generators.streaming.subprocess.Popen", side_effect=spawn):
             with self.assertRaises(subprocess.TimeoutExpired):
                 run_streaming_prompt(
                     [sys.executable, "-u", "-c", script], "", 0.5,

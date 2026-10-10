@@ -16,8 +16,8 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(SOURCE_ROOT))
 
-from hydro_platform.cli import main
-from hydro_platform.evidence_templates import (
+from hydrolitagent.cards.cli import main
+from hydrolitagent.cards.evidence_templates import (
     EvidenceTemplateError,
     validate_evidence_templates,
 )

@@ -11,7 +11,7 @@ from pathlib import Path
 SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SOURCE_ROOT))
 
-from hydro_platform.config import ConfigError, load_config
+from hydrolitagent.cards.config import ConfigError, load_config
 
 
 def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path:
@@ -77,7 +77,7 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
                 "adapter": "local_path",
                 "server_name": "hydro_pdf_reader",
                 "python_executable": None,
-                "server_file": "automation/src/hydro_platform/pdf_reader_mcp.py",
+                "server_file": "automation/src/hydrolitagent.cards/pdf_reader_mcp.py",
                 "pdfinfo_executable": "pdfinfo",
                 "pdftotext_executable": "pdftotext",
                 "pdftoppm_executable": "pdftoppm",
