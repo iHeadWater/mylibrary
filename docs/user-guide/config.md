@@ -34,7 +34,7 @@ ZOTERO_LOCAL_BASE_URL=http://host.docker.internal:23119
 | `WECHAT_APPID` | wechat/push.py | 公众号 AppID |
 | `WECHAT_APPSECRET` | wechat/push.py | 公众号 AppSecret |
 | `WECHAT_THUMB_MEDIA_ID` | wechat/push.py | 公众号默认封面 media_id |
-| `NOTEBOOKLM_HOME` | zotero_notebooklm.py | NotebookLM CLI 配置目录(默认 `.tmp/notebooklm`) |
+| `NOTEBOOKLM_HOME` | zotero_notebooklm.py | NotebookLM CLI 配置目录(未设置时用 notebooklm-py 默认 `~/.notebooklm`;本仓库 skill 推荐设为 `.tmp/notebooklm`) |
 | `ZOTERO_LOCAL_BASE_URL` | zotero_notebooklm.py | Zotero 本地 API(默认 `http://127.0.0.1:23119`)；旧名 `ZOTERO_LOCAL_API_URL` 仍兼容 |
 
 > ⚠️ 凭据一律从环境变量读取,不要硬编码进源码。参见 [文献深度处理](literature.md)。
@@ -43,7 +43,7 @@ ZOTERO_LOCAL_BASE_URL=http://host.docker.internal:23119
 > `download_paper.py` 现在都先读 TOML（若存在，容器 myopenclaw 用 `/opt/data/.config/zot/config.toml`），
 > TOML 缺失时才回退到 `.env` 的 `ZOTERO_API_KEY`/`ZOTERO_LIBRARY_ID`。裸 host 无需再手写 TOML。
 
-## 精读产物根
+## 精读产物根 {#reading-output-root}
 
 文献综述/精读的产物(分析卡、文章、播客、PDF、B站上传件)都落在一个**可配置的产物根**下。
 默认是仓库内的 `outputs/`(已被 `.gitignore` 排除)。可以把它指向

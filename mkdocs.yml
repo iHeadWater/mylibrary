@@ -45,6 +45,11 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - admonition
   - footnotes
+  # attr_list 必须早于 toc 生效（attr_list treeprocessor 优先级 8，toc 为 5），
+  # 否则 toc 先按 slugify 生成 id，显式 {#id} 会被忽略。
+  # 用途：让中文标题能带 ASCII 锚点（如 `## 精读产物根 {#reading-output-root}`），
+  # 因为默认 slugify 丢弃非 ASCII，会把中文标题编成 id="_2"。
+  - attr_list
   - toc:
       permalink: true
 

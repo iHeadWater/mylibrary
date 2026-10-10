@@ -39,7 +39,7 @@ cp .env.example .env
 > **产物落点可选。** 精读产物默认写入仓库内的 `outputs/`。要同步到 OneDrive / Google Drive /
 > 坚果云,在 `.env` 里加 `HYDROLITAGENT_LITERATURE_ROOT=<你的目录>` 即可。
 > 用 `uv run hydrolitagent paths` 查看当前实际落点。详见
-> [配置参考](../user-guide/config.md#精读产物根)。
+> [配置参考](../user-guide/config.md#reading-output-root)。
 
 编辑 `.env`，填入以下 Zotero 相关变量：
 

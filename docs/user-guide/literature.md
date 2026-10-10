@@ -6,7 +6,7 @@
 
 ```
 hydrolitagent/literature/
-├── _paths.py              # 路径助手(PROJECT_ROOT/OUTPUT_ROOT/NOTEBOOKLM_HOME)
+├── _paths.py              # 路径助手(PROJECT_ROOT/OUTPUT_ROOT;NOTEBOOKLM_HOME 常量已删,见 ADR-0003)
 ├── download_pdf.py        # 论文 PDF 下载(机构访问)
 ├── zotero_sync.py         # Zotero 入库(linked_file)
 ├── bilibili_upload.py     # B 站发布(封面 → MP4 → biliup 上传)
@@ -54,7 +54,7 @@ uv run python -m hydrolitagent.literature.wechat.figure <article.md>
 | `GDRIVE_PAPERS_PATH` | GDrive 论文文件夹(Linked Attachment Base Directory) | zotero_sync.py |
 | `ZHIPUAI_API_KEY` | 智谱 AI(CogView)配图/封面 | wechat/figure.py |
 | `WECHAT_APPID` / `WECHAT_APPSECRET` / `WECHAT_THUMB_MEDIA_ID` | 公众号发布 | wechat/push.py |
-| `NOTEBOOKLM_HOME` | NotebookLM CLI 配置目录(默认 `.tmp/notebooklm`) | zotero_notebooklm.py |
+| `NOTEBOOKLM_HOME` | NotebookLM CLI 配置目录(未设置时用 notebooklm-py 默认 `~/.notebooklm`;本仓库 skill 推荐设为 `.tmp/notebooklm`) | zotero_notebooklm.py |
 | `ZOTERO_LOCAL_BASE_URL` | Zotero 本地 API(默认 `http://127.0.0.1:23119`)；旧名 `ZOTERO_LOCAL_API_URL` 仍兼容 | zotero_notebooklm.py |
 
 > ⚠️ 凭据一律从环境变量读取,**不要把 API 密钥硬编码进源码**。`push.py` 曾硬编码微信凭据,迁移时已修复为 env 读取。
@@ -71,7 +71,7 @@ uv run python -m hydrolitagent.literature.wechat.figure <article.md>
 
 > `outputs/` 只是**默认落点**。产物根可配置——要同步到 OneDrive / Google Drive / 坚果云,
 > 设 `HYDROLITAGENT_LITERATURE_ROOT`,或改 `configs/paths.toml`。见
-> [配置参考](config.md#精读产物根)。用 `uv run hydrolitagent paths` 查看实际落点。
+> [配置参考](config.md#reading-output-root)。用 `uv run hydrolitagent paths` 查看实际落点。
 
 ```
 outputs/weekly-review/2026-08-04/
