@@ -4,8 +4,8 @@
 
 | 类型 | 示例 | 保存位置 | 是否进入 Git |
 |---|---|---|---|
-| 团队级可调整配置 | 项目目录、运行区、证据卡模板与清单路径、**科研产物根（证据卡/主题/运行记录/文献链接的落点，可指向共享盘）**、Zotero 群组 ID、超时、PDF 门禁阈值、制卡适配器及运行参数 | `hydro-platform/config/config.json` | 是 |
-| 本机覆盖配置 | 本机临时路径或不同端口 | `hydro-platform/config/config.local.json` | 否 |
+| 团队级可调整配置 | 项目目录、运行区、证据卡模板与清单路径、**科研产物根（证据卡/主题/运行记录/文献链接的落点，可指向共享盘）**、Zotero 群组 ID、超时、PDF 门禁阈值、制卡适配器及运行参数 | `hydrolitagent/cards/assets/config/config.json` | 是 |
+| 本机覆盖配置 | 本机临时路径或不同端口 | `hydrolitagent/cards/assets/config/config.local.json` | 否 |
 | 运行时状态 | 运行区、锁、原始日志和可删除的临时处理文件 | `paths.runtime_dir` 指向的目录 | 否 |
 | 证据事实 | 父条目/附件 Key、PDF 哈希、读取方式、来源检查、模型阅读声明、生成审计、版本与时间 | 草稿记录与 `validation.json` | 是 |
 | 本机凭据与密钥 | Codex / Claude CLI 登录凭据、GitHub Token；未来可能使用的大模型 API Key | 凭据存储、环境变量 | 否 |
@@ -13,7 +13,7 @@
 
 ## 路径解析规则
 
-本机配置需用 `--config hydro-platform/config/config.local.json`（或 HYDRO_PLATFORM_CONFIG）显式选择，并填写完整配置；当前没有自动覆盖/合并机制。
+本机配置需用 `--config hydrolitagent/cards/assets/config/config.local.json`（或 HYDRO_PLATFORM_CONFIG）显式选择，并填写完整配置；当前没有自动覆盖/合并机制。
 
 1. `paths.project_root` 相对于总配置文件所在目录解析，也可以填写绝对路径；
 2. 其余项目路径相对于 `project_root` 解析，也可以填写位于项目根目录内的绝对路径；
@@ -26,7 +26,7 @@
 9. `evidence_cards_dir`、`themes_vault_dir`、`run_records_dir`、`literature_index_dir` 均相对 `artifact_root` 解析，且必须位于 `artifact_root` 内。四者必须同属一个产物根——证据卡与主题互相引用，只挪其一会让相对定位失效；
 10. 归属随位置划分：产物根在项目内 = 平台所有（可清理）；产物根在项目外（共享盘等）= 操作者所有，平台只写不清理。
 
-相对可执行程序路径基于项目根目录，裸命令名按 PATH 查找。当前 PDF Python 为 uv 工作区共享的仓库根 `.venv`（`../.venv/Scripts/python.exe`，相对项目根），三个原生工具在 `hydro-platform/.tools/poppler/Library/bin/`。[字段与默认值](config.md)。
+相对可执行程序路径基于项目根目录，裸命令名按 PATH 查找。当前 PDF Python 为仓库根 `.venv`（`.venv/Scripts/python.exe`，相对项目根），三个原生工具在 `.tools/poppler/Library/bin/`。[字段与默认值](config.md)。
 
 ## 配置与秘密风险
 
@@ -46,7 +46,7 @@
 
 ## 新功能的配置验收规则
 
-1. 凡是团队会主动调整且不敏感的参数，必须从 `hydro-platform/config/config.json` 读取，不得写死在源码中；
+1. 凡是团队会主动调整且不敏感的参数，必须从 `hydrolitagent/cards/assets/config/config.json` 读取，不得写死在源码中；
 2. 新配置字段必须同时具有解析、类型或范围校验、使用该字段的实际代码、自动化测试和中文说明；
 3. 配置只能选择已经实现并注册的适配器；填写未知适配器时必须启动失败，不能静默回退；
 4. 路径、模型和工具切换后，不修改源码即可运行对应的已实现能力；

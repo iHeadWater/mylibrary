@@ -44,7 +44,7 @@
 uv run mkdocs build --strict
 
 # 平台自动测试
-uv run pytest hydro-platform/automation/tests
+uv run pytest tests
 
 # 两个科研 Skill 的独立自测
 uv run python skills/hydrology-evidence-cards/tests/self_test.py

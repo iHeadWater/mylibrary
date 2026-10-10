@@ -41,7 +41,7 @@ Python 核对输入记录、原 PDF 和模板索引 → 一个模型独立会话
 
 ## 当前配置与兼容
 
-总入口仍为 `hydro-platform/config/config.json`（单篇也可用 `configs/ai.toml`）。`workflow_mode=single_agent`，`pdf_reader.adapter=local_path`；单 Agent 模式不能同时提供 `multi_agent_workflow`，避免无效角色覆盖值误导。Python 环境是 uv 工作区共享的仓库根 `.venv`（`uv sync --all-packages` 准备）。
+总入口仍为 `hydrolitagent/cards/assets/config/config.json`（单篇也可用 `configs/ai.toml`）。`workflow_mode=single_agent`，`pdf_reader.adapter=local_path`；单 Agent 模式不能同时提供 `multi_agent_workflow`，避免无效角色覆盖值误导。Python 环境是 仓库根 `.venv`（`uv sync --all-packages` 准备）。
 
 主提示词为 `evidence-card-generation-v8.md`，共用读取指引为 `pdf-local-reading-v1.md`。v8 将详细写作要求与保存条件分开，不降低全文阅读范围，不增加模型复核或格式修复调用。读取解释器、shell、沙箱、文字引擎仍放在 `card_generator.pdf_direct_trial` 对象中，与正式路径读取共用。
 

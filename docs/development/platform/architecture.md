@@ -66,12 +66,12 @@ flowchart TB
 | 内容 | 权威来源 | Git策略 |
 | --- | --- | --- |
 | 代码、Skills、模板、Schema、测试 | Git工作树 | 跟踪 |
-| 非敏感团队配置与示例 | `hydro-platform/config/` | 跟踪；秘密不得写入 |
+| 非敏感团队配置与示例 | `hydrolitagent/cards/assets/config/` | 跟踪；秘密不得写入 |
 | Zotero条目与原始PDF | Zotero及其合法附件位置 | 不跟踪 |
 | 文献卡、主题、运行记录、文献链接 | `paths.artifact_root` 下的四个目录 | 不跟踪 |
 | 单篇流程产物与主题池 | `--output-root`（默认 `outputs/`）、`paths.themes_dir` | 不跟踪 |
-| 运行状态与诊断日志 | `hydro-platform/.runtime/` | 不跟踪，可按持久化成果重建 |
-| Python环境和原生PDF工具 | `.venv/`、`hydro-platform/.tools/` | 不跟踪，按依赖锁重建 |
+| 运行状态与诊断日志 | `.runtime/` | 不跟踪，可按持久化成果重建 |
+| Python环境和原生PDF工具 | `.venv/`、`.tools/` | 不跟踪，按依赖锁重建 |
 
 ## 信任与写入边界
 

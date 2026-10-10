@@ -1,6 +1,6 @@
 # 总配置字段说明
 
-日常只编辑完整总配置，不改源码。默认使用 `hydro-platform/config/config.json`；`hydro-platform/config/config.example.json` 是可复制的完整示例。私人配置必须显式用 --config 或 HYDRO_PLATFORM_CONFIG 选择，不自动合并。字段与数据的边界划分（哪些属于配置、哪些属于运行状态、证据事实或密钥）见 [配置与密钥边界](variables.md)；目录与存储概览回到[文档入口](../../user-guide/cards/index.md)。
+日常只编辑完整总配置，不改源码。默认使用 `hydrolitagent/cards/assets/config/config.json`；`hydrolitagent/cards/assets/config/config.example.json` 是可复制的完整示例。私人配置必须显式用 --config 或 HYDRO_PLATFORM_CONFIG 选择，不自动合并。字段与数据的边界划分（哪些属于配置、哪些属于运行状态、证据事实或密钥）见 [配置与密钥边界](variables.md)；目录与存储概览回到[文档入口](../../user-guide/cards/index.md)。
 
 `config.json` 是自动化唯一的团队级总配置入口。需要迁移目录、更换 Zotero 本地接口或调整制卡参数时，只修改这个文件，不修改程序源码。所有路径字段必须显式填写；缺失时程序直接报配置错误，不使用源码中的隐含目录默认值。
 
@@ -88,7 +88,7 @@
 
 填写本节时必须包含全部四个限额字段，`reconnect_stop_enabled` 可选；即使关闭也不接受非法限额值。修改后从下一次启动命令生效，不热更新已运行的子进程。这不改变 Codex/ChatGPT 桌面客户端自身的重连行为，也不保证网络恢复。
 
-失败诊断由 CLI 保存到 `paths.logs_dir`（默认 `hydro-platform/.runtime/logs`），最终 JSON 的 `diagnostic_log_path` 给出位置。只保存已脱敏的公开错误和上下文，不保存原始事件、提示词或论文全文；日志不提交 Git。日志目录不可写时保留原失败结果并给出 `diagnostic_log_warning`。
+失败诊断由 CLI 保存到 `paths.logs_dir`（默认 `.runtime/logs`），最终 JSON 的 `diagnostic_log_path` 给出位置。只保存已脱敏的公开错误和上下文，不保存原始事件、提示词或论文全文；日志不提交 Git。日志目录不可写时保留原失败结果并给出 `diagnostic_log_warning`。
 
 ## 本地 PDF 读取方式
 
@@ -109,11 +109,11 @@
 | `startup_timeout_seconds` | MCP 启动超时 | 大于 0（历史字段） |
 | `tool_timeout_seconds` | 单次工具调用及底层 PDF 工具的超时上限 | 大于 0 |
 
-当前配置与示例均使用项目相对工具路径 `hydro-platform/.tools/poppler/Library/bin/`，PDF Python 使用 uv 工作区共享的仓库根 `.venv`（`../.venv/Scripts/python.exe`，相对项目根），由 `uv sync --all-packages` 恢复。也支持明确配置已有工具路径；改目录时须同步对应字段，不需要改 Python 源码。
+当前配置与示例均使用项目相对工具路径 `.tools/poppler/Library/bin/`，PDF Python 使用仓库根 `.venv`（`.venv/Scripts/python.exe`，相对项目根），由 `uv sync --all-packages` 恢复。也支持明确配置已有工具路径；改目录时须同步对应字段，不需要改 Python 源码。
 
 `card_generator.pdf_direct_trial` 对象名为兼容历史保留，其运行环境字段（`windows_sandbox`、`shell_executable`、`python_executable`、`text_extractor`、`preflight_timeout_seconds`）与正式路径读取共用；该对象中的 `prompt_file`、`schema_file`、`timeout_seconds` 不用于正式制卡。
 
-父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `hydro-platform/.runtime/` 或草稿记录。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](variables.md)。
+父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `.runtime/` 或草稿记录。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](variables.md)。
 
 ## Codex 子进程独立代理
 
@@ -129,15 +129,15 @@
 
 ## 主题池 theme_pipeline
 
-`theme_pipeline.enabled=true` 已开启主题入口。`research_goal=null` 表示无预设目标；`model`、`reasoning_effort`、`timeout_seconds` 为 null 时继承 `card_generator` 对应设置。`assets_dir` 指定主题模板与 schema 的目录，默认 `hydro-platform/templates/themes`。结果目录沿用 `paths.themes_dir`，定向精读保存在各论文记录下。模型/目标/模板内容变化产生新的 CHANGE 记录。[现行规则](../../user-guide/cards/unified-theme-pool.md)。
+`theme_pipeline.enabled=true` 已开启主题入口。`research_goal=null` 表示无预设目标；`model`、`reasoning_effort`、`timeout_seconds` 为 null 时继承 `card_generator` 对应设置。`assets_dir` 指定主题模板与 schema 的目录，默认 `hydrolitagent/cards/assets/templates/themes`。结果目录沿用 `paths.themes_dir`，定向精读保存在各论文记录下。模型/目标/模板内容变化产生新的 CHANGE 记录。[现行规则](../../user-guide/cards/unified-theme-pool.md)。
 
 ## 兼容遗留节
 
 `config.json` 还保留若干历史配置节（`scan`、`tasks`、`pipeline`、`activity_reporting`、`deployment`、`scheduler`）。当前五条命令不驱动这些能力，节本身只是 schema 兼容数据，不会因为无人读取而出错。**不要在这里添加程序不读取的“假配置”冒充已有能力**；新增配置项必须和对应的解析校验、功能实现、测试及本说明同时交付。
 
-Qinjiajun 目标库的群组 ID 保存在可复现的 `hydro-platform/config/config.json` 中；群组 ID 不是密钥，可以进入 Git。
+Qinjiajun 目标库的群组 ID 保存在可复现的 `hydrolitagent/cards/assets/config/config.json` 中；群组 ID 不是密钥，可以进入 Git。
 
-`hydro-platform/config/config.example.json` 用于解释配置结构。只有本机需要覆盖团队配置时，才复制为被 Git 忽略的 `hydro-platform/config/config.local.json`。`config.local.json` 是完整的另一份配置，不会被自动发现，也不会与 `config.json` 合并；使用时显式传入 `--config hydro-platform/config/config.local.json`，或令 `HYDRO_PLATFORM_CONFIG` 指向该文件。
+`hydrolitagent/cards/assets/config/config.example.json` 用于解释配置结构。只有本机需要覆盖团队配置时，才复制为被 Git 忽略的 `hydrolitagent/cards/assets/config/config.local.json`。`config.local.json` 是完整的另一份配置，不会被自动发现，也不会与 `config.json` 合并；使用时显式传入 `--config hydrolitagent/cards/assets/config/config.local.json`，或令 `HYDRO_PLATFORM_CONFIG` 指向该文件。
 
 ## 密钥与配置验收边界
 
