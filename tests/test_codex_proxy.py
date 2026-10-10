@@ -11,8 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
+from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.card_generators.codex_cli import CodexCliAdapter, _run_command, _run_prompt_command
 from hydrolitagent.cards.card_generators.proxy import (
     LOCAL_BYPASS, PROXY_VARIABLES, codex_proxy_environment, proxy_summary,
@@ -23,9 +22,7 @@ from test_card_generator import generator_config, smoke_jsonl
 from test_codex_local_pdf import LocalProviderFixture
 from test_config import write_config
 
-
 PROXY = CodexProxyConfig(True, "http://127.0.0.1:17897", ("intranet.example",))
-
 
 class ProxyConfigTests(unittest.TestCase):
     def load_proxy(self, value):
@@ -63,13 +60,12 @@ class ProxyConfigTests(unittest.TestCase):
             self.assertNotIn("PRIVATE_SECRET", str(caught.exception))
 
     def test_shipped_config_does_not_force_machine_proxy_on_new_install(self):
-        root = Path(__file__).resolve().parents[2]
+        root = ASSETS_DIR
         example = load_config(root / "config/config.example.json", group_id=42)
         self.assertFalse(example.card_generator.proxy.enabled)
         self.assertIsNone(example.card_generator.proxy.url)
         # Current config is parsed too; no model, task or network operations are run.
         self.assertIsInstance(load_config(root / "config/config.json").card_generator.proxy, CodexProxyConfig)
-
 
 class ProxyEnvironmentTests(unittest.TestCase):
     def test_override_is_a_copy_and_preserves_pdf_reader_metadata(self):
@@ -121,7 +117,6 @@ class ProxyEnvironmentTests(unittest.TestCase):
             other = _run_command(command, 5)
             self.assertEqual(json.loads(other.stdout), inherited)
 
-
 class ProxyAdapterTests(unittest.TestCase):
 
     def test_local_pdf_generation_receives_proxy_only_in_environment(self):
@@ -149,7 +144,6 @@ class ProxyAdapterTests(unittest.TestCase):
                 for key, value in metadata.items():
                     self.assertEqual(env[key], value)
                 self.assertNotIn("HTTPS_PROXY", metadata)
-
 
 if __name__ == "__main__":
     unittest.main()

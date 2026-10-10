@@ -19,18 +19,15 @@ hydrolitagent/
 ├── graph/                   # graphify 知识图谱
 └── query/                   # 图查询
 
-hydro-platform/              # 消费侧（uv workspace 成员；运行时 Windows-only）
-├── automation/src/hydro_platform/    # 平台代码
-│   ├── cli.py               # 五条核心命令的注册与分发
-│   ├── paper_input.py       # 单篇 Zotero 论文输入（个人/群组库）
-│   ├── card_draft.py        # 单篇主体卡草稿生成
-│   ├── card_validation.py   # 主体卡确定性代码校验门禁
-│   ├── pdf_gate.py          # PDF 全文门禁（体积 / 可抽取字符 / SHA-256）
-│   ├── theme_pool.py        # 主题池：哈希链注册表 + 合并/拆分血缘
-│   └── publication.py       # 原子写入与崩溃可恢复的多文件提交
-├── templates/               # 九类证据卡模板、主题提示词、JSON schema
-├── config/                  # 非敏感配置 + 完整示例
-└── pyproject.toml           # 入口：uv run hydro-platform
+hydrolitagent/cards/         # 消费侧：文献卡与主题卡（原 hydro-platform，已并入；运行时 Windows-only）
+├── cli.py                   # 五条核心命令的注册与分发
+├── paper_input.py           # 单篇 Zotero 论文输入（个人/群组库）
+├── card_draft.py            # 单篇主体卡草稿生成
+├── card_validation.py       # 主体卡确定性代码校验门禁
+├── pdf_gate.py              # PDF 全文门禁（体积 / 可抽取字符 / SHA-256）
+├── theme_pool.py            # 主题池：哈希链注册表 + 合并/拆分血缘
+├── publication.py           # 原子写入与崩溃可恢复的多文件提交
+└── assets/                  # 只读资产：templates / prompts / schemas / examples / config
 
 scripts/
 ├── run_paper_pipeline.sh    # 论文一键入库 Shell 脚本

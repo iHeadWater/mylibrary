@@ -1,40 +1,12 @@
 {
   "schema_version": 1,
-  "scheduler": {
-    "enabled": false,
-    "task_name": "HydroPlatform-daily",
-    "daily_time": "09:00",
-    "poll_interval_minutes": 30,
-    "retry_interval_minutes": 60,
-    "max_attempts_per_slot": 3,
-    "logon_delay_seconds": 120,
-    "execution_time_limit_seconds": 0,
-    "powershell_executable": "powershell",
-    "command_timeout_seconds": 30
-  },
-  "deployment": {
-    "native_tools_dir": ".tools/poppler",
-    "native_lock_file": "automation/setup/native-tools.lock.json",
-    "native_cache_dir": ".runtime/native-cache",
-    "environment_dir": "../.venv",
-    "dependency_lock_file": "automation/setup/dependencies.lock.json",
-    "wheel_cache_dir": ".runtime/wheel-cache",
-    "base_python": null,
-    "install_timeout_seconds": 300,
-    "download_timeout_seconds": 30
-  },
-  "activity_reporting": {
-    "enabled": true,
-    "utc_offset_minutes": 480,
-    "system_actor_id": "SYS-CARD-01"
-  },
   "theme_pipeline": {
     "enabled": true,
     "research_goal": null,
     "model": null,
     "reasoning_effort": null,
     "timeout_seconds": null,
-    "assets_dir": "templates/themes"
+    "assets_dir": "hydrolitagent/cards/assets/templates/themes"
   },
   "pipeline": {
     "max_items_per_run": null,
@@ -43,9 +15,9 @@
     "retry_cooldown_seconds": 3600
   },
   "paths": {
-    "project_root": "..",
-    "artifact_root": "../",
-    "artifact_root_external": true,
+    "project_root": "../../../..",
+    "artifact_root": ".",
+    "artifact_root_external": false,
     "evidence_cards_dir": "证据卡",
     "themes_vault_dir": "主题",
     "run_records_dir": "运行记录",
@@ -57,17 +29,17 @@
     "logs_dir": ".runtime/logs",
     "card_trials_dir": ".runtime/card-trials",
     "evidence_packs_dir": "evidence-packs",
-    "templates_dir": "templates",
-    "evidence_card_templates_dir": "templates/evidence-cards",
-    "evidence_card_template_catalog_file": "templates/evidence-cards/_catalog.json",
-    "evidence_card_generation_prompt_file": "automation/prompts/evidence-card-generation-v8.md",
-    "card_generation_output_schema_file": "automation/schemas/card-generation-output.schema.json",
+    "templates_dir": "hydrolitagent/cards/assets/templates",
+    "evidence_card_templates_dir": "hydrolitagent/cards/assets/templates/evidence-cards",
+    "evidence_card_template_catalog_file": "hydrolitagent/cards/assets/templates/evidence-cards/_catalog.json",
+    "evidence_card_generation_prompt_file": "hydrolitagent/cards/assets/prompts/evidence-card-generation-v8.md",
+    "card_generation_output_schema_file": "hydrolitagent/cards/assets/schemas/card-generation-output.schema.json",
     "themes_dir": "themes",
     "members_dir": "members",
     "activity_dir": "activity",
     "reports_dir": "reports",
-    "prompts_dir": "automation/prompts",
-    "schemas_dir": "automation/schemas"
+    "prompts_dir": "hydrolitagent/cards/assets/prompts",
+    "schemas_dir": "hydrolitagent/cards/assets/schemas"
   },
   "zotero": {
     "startup": {
@@ -81,9 +53,6 @@
     "group_id": "REPLACE_WITH_ZOTERO_GROUP_ID",
     "timeout_seconds": 5,
     "process_timeout_seconds": 5
-  },
-  "scan": {
-    "page_size": 100
   },
   "pdf_gate": {
     "min_file_size_bytes": 1024,
@@ -99,17 +68,21 @@
     "proxy": {
       "enabled": false,
       "url": null,
-      "no_proxy": ["localhost", "127.0.0.1", "::1"]
+      "no_proxy": [
+        "localhost",
+        "127.0.0.1",
+        "::1"
+      ]
     },
     "pdf_direct_trial": {
-      "prompt_file": "automation/prompts/pdf-direct-read-trial-v2.md",
-      "reading_prompt_file": "automation/prompts/pdf-local-reading-v1.md",
-      "schema_file": "automation/schemas/pdf-direct-read-trial-output.schema.json",
+      "prompt_file": "hydrolitagent/cards/assets/prompts/pdf-direct-read-trial-v2.md",
+      "reading_prompt_file": "hydrolitagent/cards/assets/prompts/pdf-local-reading-v1.md",
+      "schema_file": "hydrolitagent/cards/assets/schemas/pdf-direct-read-trial-output.schema.json",
       "timeout_seconds": 1200,
       "windows_sandbox": "elevated",
       "shell_executable": "powershell",
       "preflight_timeout_seconds": 120,
-      "python_executable": "../.venv/Scripts/python.exe",
+      "python_executable": ".venv/Scripts/python.exe",
       "text_extractor": "pypdf"
     },
     "connection_guard": {
@@ -135,7 +108,7 @@
       "adapter": "local_path",
       "server_name": "hydro_pdf_reader",
       "python_executable": null,
-      "server_file": "automation/src/hydro_platform/pdf_reader_mcp.py",
+      "server_file": "hydrolitagent/cards/pdf_reader_mcp.py",
       "pdfinfo_executable": ".tools/poppler/Library/bin/pdfinfo.exe",
       "pdftotext_executable": ".tools/poppler/Library/bin/pdftotext.exe",
       "pdftoppm_executable": ".tools/poppler/Library/bin/pdftoppm.exe",

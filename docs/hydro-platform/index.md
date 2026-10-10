@@ -14,7 +14,7 @@
 | 主题 | `themes-run` | 以若干通过校验的文献卡为输入，生成候选主题、定向精读并回填修订 |
 | 自查 | `ai-config` | 查看模型选择与精读产物根，不运行模型 |
 
-命令一律从仓库根执行，完整清单见 `uv run hydro-platform --help`。
+命令一律从仓库根执行，完整清单见 `uv run hydrolitagent cards --help`。
 
 ## 从这里开始
 

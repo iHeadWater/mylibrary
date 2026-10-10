@@ -8,7 +8,7 @@
 
 ~~~powershell
 uv sync --all-packages --locked
-.\.venv\Scripts\python.exe -m hydro_platform evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
+.\.venv\Scripts\python.exe -m hydrolitagent.cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 ~~~
 
 默认直接使用当前检出代码对应的模板、所选后端的阅读提示词和 schema，不读取 config.json 或 HYDRO_PLATFORM_CONFIG。无需 Zotero、PDF 文件、群组 ID、Poppler 或 Codex 登录。输入中原始 PDF 的绝对路径只作为生成时的历史信息，支持 Windows 盘符/UNC 和 POSIX 路径，不按校验电脑的当前目录重新解析。退出码 0 表示 PASS，3 表示校验或记录保存失败，配置错误为 2。人类可读输出也会列出错误码、字段路径和原因。
@@ -18,14 +18,14 @@ uv sync --all-packages --locked
 完整分阶段安装说明见[单篇流程首次配置](single-paper-quickstart.md)。仓库附带合成示例，不需要私人论文或配置，可直接验证入口：
 
 ~~~powershell
-.\.venv\Scripts\python.exe -m hydro_platform evidence-validate --draft hydro-platform/automation/examples/subject-card-validation/draft.json --paper-input hydro-platform/automation/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo --json
+.\.venv\Scripts\python.exe -m hydrolitagent.cards evidence-validate --draft hydrolitagent/cards/assets/examples/subject-card-validation/draft.json --paper-input hydrolitagent/cards/assets/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo --json
 ~~~
 
 该示例只验证程序规则，不能用于科研。报告存到 outputs/validation-demo/<validation_id>/validation.json。
 
 | 选择项 | 默认值与覆盖方式 |
 | --- | --- |
-| 模板、提示词、schema | 当前检出代码旁的 hydro-platform；--assets-root 可选择另一份完整 hydro-platform 目录 |
+| 模板、提示词、schema | 包内的 hydrolitagent/cards/assets；--assets-root 可选择另一份完整资产目录 |
 | 各个资产文件 | Python 公共接口 ValidationAssets 可逐个指定；from_root(root) 按仓库布局构造 |
 | 兼容已有配置 | 显式 --config 路径；与 --assets-root 互斥；完整配置仍须有效，个人库 group_id 设 null |
 | 报告位置 | --report-dir > HYDRO_PLATFORM_VALIDATION_REPORT_DIR > 草稿旁 validations/ |
@@ -34,7 +34,7 @@ uv sync --all-packages --locked
 JSON 命令结果返回 asset_paths 及 validation_path，便于确认实际使用的位置。自选报告目录适用于只读共享输入；每次运行创建唯一子目录。换资产后仍严格比较版本指纹，不能靠换路径跳过校验。
 
 ~~~python
-from hydro_platform.card_validation import ValidationAssets, validate_subject_card_file
+from hydrolitagent.cards.card_validation import ValidationAssets, validate_subject_card_file
 
 # None 使用随当前检出代码分发的资产；也可传 ValidationAssets.from_root(root)。
 report = validate_subject_card_file(None, draft_path, input_path, report_dir=report_directory)
@@ -141,7 +141,7 @@ sources = load_subject_card_sources(config, [{
 ## 验证
 
 ~~~powershell
-uv run pytest hydro-platform/automation/tests/test_card_validation.py hydro-platform/automation/tests/test_card_draft.py
+uv run pytest tests/test_card_validation.py tests/test_card_draft.py
 ~~~
 
 通过与失败夹具覆盖内容、字段、页码、版本、来源、旧 PASS 失效、记录保存失败以及下游准入；另检查短正文可通过、长正文不能掩盖缺项、校验不调用模型且不修改原草稿。

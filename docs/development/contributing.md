@@ -3,7 +3,7 @@
 ## 开发环境
 
 ```bash
-# 安装两个 workspace 成员的依赖（含 dev 组）
+# 安装依赖（含 dev 组；workspace 成员已取消，现在等价于装根包）
 uv sync --all-packages
 
 # 确认测试通过

@@ -184,15 +184,15 @@ Copy-Item .env.example .env
 填写本机环境变量与配置后，先做只读自查：
 
 ```powershell
-uv run hydro-platform ai-config --json
+uv run hydrolitagent cards ai-config --json
 ```
 
 确认模型选择与产物根后，按单篇流程处理自己的论文：
 
 ```powershell
-uv run hydro-platform paper-input --user-library --item-key ABCD1234 --output paper-input.json
-uv run hydro-platform evidence-generate --paper-input paper-input.json --ai-provider codex --json
-uv run hydro-platform evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
+uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --output paper-input.json
+uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
+uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 ```
 
 开发或交付前运行文档和测试检查：

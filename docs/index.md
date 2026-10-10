@@ -38,14 +38,14 @@ AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:�
 # 安装
 git clone git@github.com:iHeadWater/mylibrary.git
 cd mylibrary
-uv sync --all-packages   # 把 workspace 的两个包都装进共享的根 .venv
+uv sync --all-packages   # 装根包依赖（原 workspace 成员已并入）
 
 # 配置 Zotero
 cp .env.example .env
 # 编辑 .env,填入 ZOTERO_API_KEY 和 ZOTERO_LIBRARY_ID
 ```
 
-> 本仓库是 **uv workspace**,含两个成员:`hydrolitagent`(根)与 `hydro-platform`。二者共享同一个 `.venv` 和同一个 `uv.lock`。请用 `uv sync --all-packages` —— 裸 `uv sync` 只装根包的依赖,`uv run hydro-platform …` 会不可用。
+> 本仓库只有一个包 **`hydrolitagent`**——原 `hydro-platform` 已并入其 `hydrolitagent/cards/` 子包。`.venv` 与 `uv.lock` 仍只有一份。
 
 详见 [安装配置](getting-started/installation.md)。
 
@@ -77,11 +77,11 @@ docs/                    # 文档站点(mkdocs-material)
 outputs/                 # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
 papers/                  # 按主题组织的文献库(10 个主题)
 
-hydro-platform/          # 文献卡与主题卡平台(uv workspace 成员;消费侧:自己的 Zotero → 文献卡 → 主题卡)
+hydrolitagent/cards/     # 文献卡与主题卡(消费侧:自己的 Zotero → 文献卡 → 主题卡)
 ├── automation/          #   Python:单篇输入 → PDF 门禁 → 制卡 → 校验 → 主题池
 ├── templates/           #   可复用资产:九类证据卡模板、主题提示词、JSON schema
 ├── config/              #   非敏感配置与完整示例
-└── pyproject.toml       #   入口:`uv run hydro-platform`
+└── pyproject.toml       #   入口:`uv run hydrolitagent cards`
                          #   生成产物(文献卡、主题池、运行记录)不入库,
                          #   由运行时自建。
 

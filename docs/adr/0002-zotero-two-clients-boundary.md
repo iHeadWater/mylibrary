@@ -12,7 +12,7 @@ Accepted
 
 合并 `hydro-platform` 时，仓库里出现了**两套彼此独立的 Zotero 客户端**：
 
-| | `hydrolitagent/zotero/server.py` | `hydro-platform/automation/src/hydro_platform/zotero.py` |
+| | `hydrolitagent/zotero/server.py` | `hydrolitagent/cards/zotero.py` |
 |---|---|---|
 | 形态 | FastMCP 服务（端口 8002），12 个工具 | 裸 HTTP 客户端，无服务、无状态 |
 | 底层 | pyzotero（Web API）+ httpx（Local API，仅全文与附件信息 2 个工具，默认 `host.docker.internal:23119`） | `urllib` 直连 Zotero Desktop Local API，默认 `127.0.0.1:23119`，且**强制**主机名只能是 `127.0.0.1`／`localhost`／`::1` |

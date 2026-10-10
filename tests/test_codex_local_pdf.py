@@ -11,7 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from hydrolitagent.cards._paths import ASSETS_DIR, PACKAGE_DIR
 from hydrolitagent.cards.card_generators import build_card_generator_adapter
 from hydrolitagent.cards.card_generators.codex_local_pdf import CodexLocalPdfAdapter
 from hydrolitagent.cards.card_generation import CardGenerationError, _validate_workflow_result
@@ -23,7 +23,7 @@ from test_config import write_config
 from card_generator_fixtures import common
 from test_card_generation import FakeAdapter, GenerationFixture, PARENT_KEY, PDF_HASH, VALID_BODY
 
-ASSETS = Path(__file__).resolve().parents[1]
+ASSETS = ASSETS_DIR
 
 def local_access(digest, parent=PARENT_KEY):
     return {"method": "local_pdf_path", "verified": False, "source_identity_verified": True,

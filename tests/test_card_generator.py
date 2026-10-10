@@ -11,9 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-sys.path.insert(0, str(SOURCE_ROOT))
-
+from hydrolitagent.cards._paths import ASSETS_DIR, PACKAGE_DIR
 from hydrolitagent.cards.card_generators.codex_cli import (
     SMOKE_TEST_EXPECTED_TEXT,
     SMOKE_TEST_PROMPT,
@@ -40,7 +38,7 @@ def generator_config(
             adapter="project_mcp",
             server_name="hydro_pdf_reader",
             python_executable=None,
-            server_file=SOURCE_ROOT / "hydrolitagent.cards" / "pdf_reader_mcp.py",
+            server_file=PACKAGE_DIR / "pdf_reader_mcp.py",
             pdfinfo_executable="pdfinfo",
             pdftotext_executable="pdftotext",
             pdftoppm_executable="pdftoppm",

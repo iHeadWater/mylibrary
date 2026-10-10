@@ -25,7 +25,7 @@ description: |
 
 YOU MUST 通过本节列出的 CLI 子命令操作平台。**不要**直接读写平台的 JSON 状态文件（`.runtime/tasks.json`、`themes/_registry.json`），也不要手工编辑证据包或主题文件——这些由平台原子写入并校验哈希，手改会被判为漂移或人工改动。
 
-YOU MUST 在运行前确认工作目录：命令一律**从仓库根目录**执行，用 `uv run hydro-platform …`。
+YOU MUST 在运行前确认工作目录：命令一律**从仓库根目录**执行，用 `uv run hydrolitagent cards …`。
 
 YOU MUST 记住平台**不自动同步 Git、不自动登录、不唤醒关机电脑**。本地保存不等于已推送。
 
@@ -66,39 +66,21 @@ PASS 只表示当前代码规则通过，不能声称科学结论正确或正式
 
 ## 日常命令
 
-| 需要做什么 | 命令（仓库根执行） |
+命令一律从**仓库根**执行。
+
+| 需要做什么 | 命令 |
 |---|---|
-| 跑完一整轮：检测 → 门禁 → 制卡 → 主题 → 账本 → 日报 | `uv run hydro-platform run-once --json` |
-| 只预览已有本地任务，不扫 Zotero、不调模型 | `uv run hydro-platform run-once --dry-run --json` |
-| 只跑主题部分 | `uv run hydro-platform themes-run --json` |
-| 只读预览主题池与输入变化（不调模型） | `uv run hydro-platform themes-run --dry-run --json` |
-| 只迁移已有完成主题（不调模型） | `uv run hydro-platform themes-run --migrate-only --json` |
-| 集中检查配置、依赖、登录与 Zotero | `uv run hydro-platform doctor --json` |
-| 查询或检查一篇 Zotero 论文 | `uv run hydro-platform paper-input --query "关键词" --json` |
-| 从 Zotero 与已有成果重建本地任务状态 | `uv run hydro-platform recover --json` |
+| 查一篇自己的论文（个人库；群组库去掉 `--user-library`） | `uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --output paper-input.json` |
+| 从 READY JSON 生成主体卡草稿 | `uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json` |
+| 离线校验主体卡（不调模型） | `uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json` |
+| 从粗卡生成候选主题 | `uv run hydrolitagent cards themes-run --json` |
+| 只读预览主题池与输入变化（不调模型） | `uv run hydrolitagent cards themes-run --dry-run --json` |
+| 只迁移已有完成主题（不调模型） | `uv run hydrolitagent cards themes-run --migrate-only --json` |
+| 只读查看模型选择与产物根（不调模型） | `uv run hydrolitagent cards ai-config --json` |
 
-`run-once` 是**串行**处理本轮全部可制卡论文；已有非占位粗卡不会自动重做。实时进度输出到 stderr，最终 JSON 到 stdout，`--no-progress` 可关闭进度。
-
-## 分步命令（排错或定向操作时用）
-
-| 环节 | 命令 |
-|---|---|
-| 列出本机可见的 Zotero 群组库 | `discover-groups` |
-| 检查目标群组能否被后台读取 | `preflight` |
-| 查询候选或校验一个已确认的条目 | `paper-input` |
-| 扫描群组增量 | `scan` |
-| PDF 全文门禁判定 / 交付 | `pdf-gate` / `pdf-delivery` |
-| 任务状态机：同步 / 列表 | `tasks-sync` / `tasks-list` |
-| 证据包骨架同步 | `packages-sync` |
-| 校验九类卡片模板 | `evidence-templates-validate` |
-| 制卡生成器预检 / 冒烟 | `generator-preflight` / `generator-smoke-test` |
-| 生成单篇证据卡 | `evidence-generate` |
-| 导出未保存草稿 | `evidence-draft-export` |
-| 贡献账本同步 / 日报 | `activity-sync` / `daily-report` |
-| 安装与调度（**Windows**） | `setup` / `bootstrap` / `bootstrap-native` / `schedule-plan` / `schedule-status` / `schedule-install` / `schedule-remove` / `schedule-tick` |
-| 实验性路径读取（非正式入口） | `pdf-direct-read-trial` / `evidence-generate-trial` |
-
-> 上表只列子命令名。执行时一律加前缀，例如 `uv run hydro-platform tasks-list --json`。**完整清单以 `uv run hydro-platform --help` 为准**（当前 32 个子命令），不要凭本表推断不存在某个子命令。
+> 完整清单以 `uv run hydrolitagent cards --help` 为准（**当前 5 个子命令**）。
+> `cards` 是 `hydrolitagent` CLI 的子命令组；平台已并入 `hydrolitagent` 包
+> （`hydrolitagent/cards/`），不再有独立的 `hydro-platform` 命令。
 
 ## 结果怎么读
 

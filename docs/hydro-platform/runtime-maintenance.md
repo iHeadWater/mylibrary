@@ -19,7 +19,7 @@ uv sync --all-packages --locked
 自查当前模型选择与产物根：
 
 ```powershell
-uv run hydro-platform ai-config --json
+uv run hydrolitagent cards ai-config --json
 ```
 
 它只读检查配置，不消耗模型额度，也不证明模型服务当时连通或 CLI 已登录。
@@ -37,7 +37,7 @@ uv run hydro-platform ai-config --json
 所有保留命令默认读取 `hydro-platform/config/config.json`；本机覆盖使用被 Git 忽略的完整 `config.local.json`，并通过 `--config` 或 `HYDRO_PLATFORM_CONFIG` 显式选择；系统不进行隐式配置合并。
 
 ```powershell
-uv run hydro-platform themes-run --config hydro-platform/config/config.local.json --json
+uv run hydrolitagent cards themes-run --config hydro-platform/config/config.local.json --json
 ```
 
 **`config.local.json` 是另一份完整总配置，不是只填几个覆盖字段的补丁文件。** 路径字段、密钥边界和字段含义见[总配置字段说明](config.md)与[变量与密钥](variables.md)。

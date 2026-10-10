@@ -12,7 +12,7 @@
 
 ### TP-01：已有主题持续更新
 
-作为老师/学生，我希望新旧论文共同参与已有主题的更新，保留积累的研究进展。设计与实现：`hydro-platform/automation/src/hydro_platform/theme_pool_runner.py`、`hydro-platform/templates/themes/pool-discovery.md`。
+作为老师/学生，我希望新旧论文共同参与已有主题的更新，保留积累的研究进展。设计与实现：`hydrolitagent/cards/theme_pool_runner.py`、`hydrolitagent/cards/assets/templates/themes/pool-discovery.md`。
 
 1. 补充、修正、改名使用UPDATE，沿用theme_id，保存新版本；不覆盖旧版本。
 2. 规划同时取得统一文献池和已有修订主题，不以新增日期或batch为输入边界。
@@ -21,7 +21,7 @@
 
 ### TP-02：候选自动合并与拆分
 
-作为老师/学生，我希望相同问题能够整合、不同问题能够分开，并能看见演变原因。设计：`hydro-platform/automation/src/hydro_platform/theme_pool.py`。
+作为老师/学生，我希望相同问题能够整合、不同问题能够分开，并能看见演变原因。设计：`hydrolitagent/cards/theme_pool.py`。
 
 1. MERGE至少两个当前候选产生一个新编号；SPLIT一个当前候选产生至少两个新编号。
 2. 所有新版本所需精读与回填全部保存后，才一次更新注册表；任一失败时旧主题仍有效。
@@ -31,7 +31,7 @@
 
 ### TP-03：精读按适用性复用
 
-作为维护者，我希望系统利用已有精读，避免仅因新的运行批次就重复读PDF。设计：`hydro-platform/automation/src/hydro_platform/theme_pool.py`。
+作为维护者，我希望系统利用已有精读，避免仅因新的运行批次就重复读PDF。设计：`hydrolitagent/cards/theme_pool.py`。
 
 1. Agent根据原focus、上下文和精读正文选择reuse_reading_id，并说明适用理由；不会仅凭论文相同强制复用。
 2. Python检查引用确实存在、原始来源与当前证据包一致、文件未变；不能引用另一篇或旧来源版本冒充。
@@ -41,7 +41,7 @@
 
 ### TP-04：安全迁移与中断恢复
 
-作为维护者，我希望保留已经付出时间生成的主题，不为迁移重新读论文。设计：`hydro-platform/automation/src/hydro_platform/theme_pool.py`。
+作为维护者，我希望保留已经付出时间生成的主题，不为迁移重新读论文。设计：`hydrolitagent/cards/theme_pool.py`。
 
 1. 全部已完成旧批次接入同一个注册表；同名问题不会仅因标题相同就由程序强行合并。
 2. 原主题编号、旧文件和精读引用保留。只有一个与当前输入完全匹配的旧完成批次时，可直接接入并跳过新模型调用。
@@ -52,28 +52,28 @@
 
 ## 操作和保存位置
 
-日常只需（在仓库根目录运行，统一前缀 `uv run hydro-platform`）：
+日常只需（在仓库根目录运行，统一前缀 `uv run hydrolitagent cards`）：
 
-    uv run hydro-platform themes-run --json
+    uv run hydrolitagent cards themes-run --json
 
 只读预览 / 仅迁移旧成果：
 
-    uv run hydro-platform themes-run --dry-run --json
-    uv run hydro-platform themes-run --migrate-only --json
+    uv run hydrolitagent cards themes-run --dry-run --json
+    uv run hydrolitagent cards themes-run --migrate-only --json
 
-主要阅读入口：`hydro-platform/themes/index.md`。进入主题后主要看精读回填的 revised.md，不必从文件夹猜最新版。不要手改程序维护的索引或注册表；自由编辑这些生成文件会作为保留人工修改的冲突报告，而不是自动覆盖。
+主要阅读入口：`themes/index.md`。进入主题后主要看精读回填的 revised.md，不必从文件夹猜最新版。不要手改程序维护的索引或注册表；自由编辑这些生成文件会作为保留人工修改的冲突报告，而不是自动覆盖。
 
 ### 存储分工
 
 | 位置 | 作用 |
 |---|---|
-| `hydro-platform/themes/index.md` | 当前候选、历史主题与版本链接；给人看的总入口 |
-| `hydro-platform/themes/_registry.json` | 稳定编号、当前版本、历史版本、前身/后继、输入处理指纹 |
-| `hydro-platform/themes/candidates/TH-编号/versions/CHANGE-编号/` | 新主题及更新版本；initial.md 初版、revised.md 回填结果、plan/manifest/结果 JSON |
-| `hydro-platform/themes/changes/CHANGE-编号/` | 一次处理的输入、规划、结果发布记录；不是独立知识池或 Git commit |
-| `hydro-platform/themes/changes/IMPORT-编号/` | 已有成果接入统一池的记录 |
-| `hydro-platform/themes/candidates/BATCH-*/` | 已有旧成果原位置，继续被统一池引用，不搬动或重做 |
-| `hydro-platform/themes/confirmed/` | 正式主题预留区；专用人工确认入口尚未实现 |
+| `themes/index.md` | 当前候选、历史主题与版本链接；给人看的总入口 |
+| `themes/_registry.json` | 稳定编号、当前版本、历史版本、前身/后继、输入处理指纹 |
+| `themes/candidates/TH-编号/versions/CHANGE-编号/` | 新主题及更新版本；initial.md 初版、revised.md 回填结果、plan/manifest/结果 JSON |
+| `themes/changes/CHANGE-编号/` | 一次处理的输入、规划、结果发布记录；不是独立知识池或 Git commit |
+| `themes/changes/IMPORT-编号/` | 已有成果接入统一池的记录 |
+| `themes/candidates/BATCH-*/` | 已有旧成果原位置，继续被统一池引用，不搬动或重做 |
+| `themes/confirmed/` | 正式主题预留区；专用人工确认入口尚未实现 |
 
 演化规则速查：补充/修正沿用主题编号并增加版本；合并/拆分创建新编号、旧主题保留为历史并前后双向追溯；精读适用时复用，问题/重点改变且旧精读不足时再读原始 PDF；定向精读始终存于对应证据包 `readings/`，主题只引用，不改主粗卡；所有新版本准备完才整体发布，失败不先废弃旧主题、已完成步骤可续用；正式主题不能被自动操作覆盖，更新建议另建候选；相同输入不调用模型，换 batch 不构成重读理由。
 
@@ -103,7 +103,7 @@
 - manifest.json：版本状态、来源和实际精读引用。
 - revision-result.json：回填输入、模型结果与执行记录，支持续跑。
 
-新结果准备完后才更新全池注册表；目录中出现半成品不代表它已成为当前主题。请从 `hydro-platform/themes/index.md` 查当前版本；不要手改索引/注册表或移动被引用文件，冲突时程序保留文件而非覆盖。
+新结果准备完后才更新全池注册表；目录中出现半成品不代表它已成为当前主题。请从 `themes/index.md` 查当前版本；不要手改索引/注册表或移动被引用文件，冲突时程序保留文件而非覆盖。
 
 旧 BATCH 目录原样保留并已接入统一池。旧主题下一次更新沿用编号、在新目录追加版本，不改旧链接。精读仍存于对应论文证据包，不复制 PDF 或主粗卡。
 
@@ -113,7 +113,7 @@
 
 产品规则：候选必须完成定向精读与回填，并由人确认，才可成为正式主题。
 
-当前尚未开发专用确认命令/界面，`hydro-platform/themes/confirmed/` 只有说明文件，不代表已经有正式主题。普通 `themes-run` 不自动晋级，也不向这里写入候选。
+当前尚未开发专用确认命令/界面，`themes/confirmed/` 只有说明文件，不代表已经有正式主题。普通 `themes-run` 不自动晋级，也不向这里写入候选。
 
 统一池的操作检查保护已标记为正式的主题，不能自动 UPDATE / MERGE / SPLIT；系统可另建候选建议并引用其编号。不要通过随手移动文件或手改注册表模拟确认，这会破坏追溯或触发冲突。
 
@@ -121,6 +121,6 @@
 
 ## 验证与未证明事项
 
-运行 `uv run pytest hydro-platform/automation/tests/test_theme_pool.py hydro-platform/automation/tests/test_themes.py -q` 验证稳定 ID、复用/重读、合并/拆分、失败保护、迁移和中断恢复等程序规则。这些测试只能证明路由、数据保护与恢复行为。
+运行 `uv run pytest tests/test_theme_pool.py tests/test_themes.py -q` 验证稳定 ID、复用/重读、合并/拆分、失败保护、迁移和中断恢复等程序规则。这些测试只能证明路由、数据保护与恢复行为。
 
 新文献引发的真实模型合并/拆分质量、人工确认体验和大规模文献下的检索压缩仍未验收；不存在机器认证的科学正确性或期刊成果保证。干净异机、关机后登录和云端同步同样属于独立验收项。

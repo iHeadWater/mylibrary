@@ -8,19 +8,13 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-sys.path.insert(0, str(SOURCE_ROOT))
-
 from hydrolitagent.cards.config import (
     REQUIRED_CARD_WORKFLOW_ROLES,
     CardQualityWorkflowConfig,
     CardWorkflowRoleConfig,
 )
 
-
 PAGE_COUNT = 12
-
 
 def evidence(page: int = 2) -> list[dict[str, Any]]:
     return [
@@ -32,7 +26,6 @@ def evidence(page: int = 2) -> list[dict[str, Any]]:
         }
     ]
 
-
 def common(schema_version: int = 1) -> dict[str, Any]:
     return {
         "schema_version": schema_version,
@@ -41,7 +34,6 @@ def common(schema_version: int = 1) -> dict[str, Any]:
         "visual_content_status": "REVIEWED",
         "source_read_evidence": "共12页，已检查正文、末页和图表。",
     }
-
 
 def fact_output(label: str) -> dict[str, Any]:
     return {
@@ -83,7 +75,6 @@ def fact_output(label: str) -> dict[str, Any]:
         ],
     }
 
-
 def adjudication_output() -> dict[str, Any]:
     return {
         **common(),
@@ -116,7 +107,6 @@ def adjudication_output() -> dict[str, Any]:
         "coverage_gaps": [],
     }
 
-
 def critical_output() -> dict[str, Any]:
     return {
         **common(),
@@ -136,7 +126,6 @@ def critical_output() -> dict[str, Any]:
         "overall_assessment": "证据支持主要结论，但存在外推边界。",
     }
 
-
 def synthesis_output() -> dict[str, Any]:
     return {
         **common(schema_version=2),
@@ -145,7 +134,6 @@ def synthesis_output() -> dict[str, Any]:
         "classification_reason": "事实裁决确定为原创研究。",
         "card_body_markdown": "# 原创研究证据卡：测试\n",
     }
-
 
 def review_output(*, verdict: str = "PASS") -> dict[str, Any]:
     status = "SUPPORTED" if verdict == "PASS" else "UNSUPPORTED"
@@ -188,7 +176,6 @@ def review_output(*, verdict: str = "PASS") -> dict[str, Any]:
         "verdict": verdict,
         "verdict_reason": "通过" if verdict == "PASS" else "存在无证据结论",
     }
-
 
 class FakeProvider:
     def __init__(self, outputs: dict[str, dict[str, Any]]):

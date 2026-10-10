@@ -35,12 +35,12 @@
 
 | 命令 | 用途 |
 | --- | --- |
-| `uv run hydro-platform paper-input --user-library --query "关键词" --json` | 在自己的文库中搜索候选；不会自动选择第一条 |
-| `uv run hydro-platform paper-input --user-library --item-key ABCD1234 --output paper-input.json` | 检查单篇父条目、唯一 PDF、本地文件和全文索引状态 |
-| `uv run hydro-platform evidence-generate --paper-input paper-input.json --ai-provider codex --json` | 读取该篇 PDF 并生成待校验主体卡草稿 |
-| `uv run hydro-platform evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json` | 离线校验草稿，PASS 才可进入主题流程 |
-| `uv run hydro-platform themes-run --json` | 以若干通过校验的文献卡生成候选主题并回填修订 |
-| `uv run hydro-platform ai-config --json` | 只读查看模型选择与精读产物根 |
+| `uv run hydrolitagent cards paper-input --user-library --query "关键词" --json` | 在自己的文库中搜索候选；不会自动选择第一条 |
+| `uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --output paper-input.json` | 检查单篇父条目、唯一 PDF、本地文件和全文索引状态 |
+| `uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json` | 读取该篇 PDF 并生成待校验主体卡草稿 |
+| `uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json` | 离线校验草稿，PASS 才可进入主题流程 |
+| `uv run hydrolitagent cards themes-run --json` | 以若干通过校验的文献卡生成候选主题并回填修订 |
+| `uv run hydrolitagent cards ai-config --json` | 只读查看模型选择与精读产物根 |
 
 重复传入多个`--item-key`时，命令会逐篇处理。`MULTIPLE_PDFS`、`PDF_MISSING`等单篇问题不会中断后续条目；最终结果使用`COMPLETED_WITH_PROBLEMS`并在`problems`中汇总题名、key、原因和 PDF 候选。
 

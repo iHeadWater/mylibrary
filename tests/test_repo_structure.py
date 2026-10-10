@@ -24,7 +24,6 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-import sys
 import tomllib
 from pathlib import Path
 
@@ -36,46 +35,51 @@ import pytest
 
 # ``tests/test_repo_structure.py`` -> repo root is the parent of the ``tests`` directory.
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-PLATFORM_ROOT = REPO_ROOT / "hydro-platform"
-PLATFORM_SRC = PLATFORM_ROOT / "automation" / "src"
+# ── 文献卡与主题卡平台（原 hydro-platform，已并入 hydrolitagent/cards）──
+# 代码与只读资产在包内；运行产物在仓库根（见路径契约测试）。
+CARDS_PACKAGE_DIR = REPO_ROOT / "hydrolitagent" / "cards"
+CARDS_ASSETS_DIR = CARDS_PACKAGE_DIR / "assets"
 DOCS_ROOT = REPO_ROOT / "docs"
 
-# Only these tracked paths may live under ``hydro-platform/``.
+# 包根。旧「平台根」概念（一个独立的 hydro-platform/ 项目目录）已随合并消失，
+# 因此 PLATFORM_ROOT 指向包本身，而**运行产物根**是仓库根。
+PLATFORM_ROOT = CARDS_PACKAGE_DIR
+
+# 包内允许被跟踪的路径前缀。包内除了代码就是 assets/，其余一律不该入库。
 ALLOWED_PLATFORM_PREFIXES = (
-    "hydro-platform/automation/",
-    "hydro-platform/templates/",
-    "hydro-platform/config/",
+    "hydrolitagent/cards/",
 )
-ALLOWED_PLATFORM_FILES = ("hydro-platform/pyproject.toml",)
+ALLOWED_PLATFORM_FILES = ()
 
-# Generated output: never tracked, in either the old or the new location.
+# 运行产物：一律落仓库根，且必须被 ignore 规则覆盖。
 FORBIDDEN_PLATFORM_PREFIXES = (
-    "hydro-platform/evidence-packs/",
-    "hydro-platform/themes/",
-    "hydro-platform/reports/",
-    "hydro-platform/activity/",
-    "hydro-platform/members/",
+    "evidence-packs/",
+    "themes/",
+    "reports/",
+    "activity/",
+    "members/",
+    ".runtime/",
+    ".tools/",
 )
 
-# Runtime products / machine-local state that the ignore rules must cover, and the
-# tracked source and reusable assets that must stay visible to git.
+# 必须被 ignore 命中的运行产物/本机状态，与必须**保持入库**的代码与资产。
 PLATFORM_IGNORED_PATHS = (
-    "hydro-platform/evidence-packs/EV-EXAMPLE/card.md",
-    "hydro-platform/themes/_registry.json",
-    "hydro-platform/reports/daily/2026-09-09.json",
-    "hydro-platform/activity/ledger.json",
-    "hydro-platform/members/README.md",
-    "hydro-platform/.runtime/tasks.json",
-    "hydro-platform/.tools/poppler/Library/bin/pdfinfo.exe",
-    "hydro-platform/config/config.local.json",
+    "evidence-packs/EV-EXAMPLE/card.md",
+    "themes/_registry.json",
+    "reports/daily/2026-09-09.json",
+    "activity/ledger.json",
+    "members/README.md",
+    ".runtime/tasks.json",
+    ".tools/poppler/Library/bin/pdfinfo.exe",
+    "hydrolitagent/cards/assets/config/config.local.json",
 )
 
 PLATFORM_NOT_IGNORED_PATHS = (
-    "hydro-platform/automation/src/hydrolitagent.cards/tasks.py",
-    "hydro-platform/templates/evidence-cards/_catalog.json",
-    "hydro-platform/config/config.json",
-    "hydro-platform/pyproject.toml",
+    "hydrolitagent/cards/tasks.py",
+    "hydrolitagent/cards/assets/templates/evidence-cards/_catalog.json",
+    # 负向控制：`themes/` 之类的运行产物规则不得锚错层级而吞掉只读资产。
+    "hydrolitagent/cards/assets/templates/themes/pool-discovery.md",
+    "hydrolitagent/cards/assets/config/config.json",
     ".gitignore",
 )
 
@@ -83,40 +87,27 @@ PLATFORM_NOT_IGNORED_PATHS = (
 # 科研工作流(王新宇线)的产物:默认落在仓库根,落点由 paths.artifact_root 决定
 # --------------------------------------------------------------------------------------
 
-# 四个默认产物目录。它们不放在 hydro-platform/ 下,而是仓库根,因此单独一组常量。
 ARTIFACT_ROOT_DIRS = ("证据卡", "主题", "运行记录", "文献链接")
-
-# 默认位置必须被 ignore 规则命中(git check-ignore 对不存在的路径也会判定,
-# 所以这里用示例文件名即可)。
 ARTIFACT_IGNORED_PATHS = tuple(f"{name}/示例.md" for name in ARTIFACT_ROOT_DIRS)
 
-# 非空性:合并必须真的发生过。合并前本仓库没有这两个 skill,
-# 缺少它们时下面的断言会在空集上通过。
 REQUIRED_RESEARCH_SKILLS = (
     "skills/hydrology-evidence-cards/SKILL.md",
     "skills/hydrology-theme-synthesis/SKILL.md",
 )
 
-# 当前仍作为正式文档维护的中文规范目录。旧产品稿、证据卡副本、
-# 历史主题规范和未引用图稿已由 Git 历史保留，不再强制空目录存在。
 RESEARCH_DOCS_DIRS = (
     "主题模板",
 )
 
-# ``str.startswith`` accepts a tuple; keep the prefix tuples in a form pytest can print.
 _FORBIDDEN_PLATFORM_PREFIXES = tuple(FORBIDDEN_PLATFORM_PREFIXES)
 
-PLATFORM_TESTS_DIR = PLATFORM_ROOT / "automation" / "tests"
+# 两套测试已在本次合并中并为一套，统一在仓库根 tests/。
+PLATFORM_TESTS_DIR = REPO_ROOT / "tests"
 REPO_TESTS_DIR = REPO_ROOT / "tests"
-
 MIN_PLATFORM_TEST_FILES = 20
 
-# The platform's importable package, in both Path and tracked-path (posix) form.
-PLATFORM_PACKAGE_DIR = PLATFORM_SRC / "hydrolitagent.cards"
-PLATFORM_PACKAGE_PREFIX = PLATFORM_PACKAGE_DIR.relative_to(REPO_ROOT).as_posix() + "/"
-
-# Minimum amount of real platform content that must have moved for the structural
-# guards below to mean anything (see ``_tracked_platform_paths`` and test 7).
+PLATFORM_PACKAGE_DIR = CARDS_PACKAGE_DIR
+PLATFORM_PACKAGE_PREFIX = "hydrolitagent/cards/"
 MIN_PLATFORM_SOURCE_FILES = 20
 
 PLATFORM_DOCS_DIR = DOCS_ROOT / "hydro-platform"
@@ -160,26 +151,28 @@ def _git_ls_files(*pathspecs: str) -> list[str]:
 
 
 def _tracked_platform_paths() -> list[str]:
-    """Tracked paths under ``hydro-platform/``, with a non-vacuity precondition.
+    """Tracked paths under ``hydrolitagent/cards/``, with a non-vacuity precondition.
 
     Every assertion in tests 1 and 3 is phrased as "no tracked path under
-    ``hydro-platform/`` looks like X", which is *vacuously* true whenever the
+    ``hydrolitagent/cards/`` looks like X", which is *vacuously* true whenever the
     platform is not actually there. The precondition therefore demands that the
     platform's real source tree has moved - at least
     ``MIN_PLATFORM_SOURCE_FILES`` tracked ``.py`` files under
-    ``hydro-platform/automation/src/hydrolitagent.cards/`` - and NOT merely that a path
+    ``hydrolitagent/cards/`` - and NOT merely that a path
     with the right directory name exists.
 
     This specificity is deliberate and must not be loosened: a merge that lands
-    only ``hydro-platform/pyproject.toml`` (packaging metadata), or an empty
-    ``hydro-platform/`` skeleton, would otherwise satisfy a weak precondition and
+    only a lone packaging file, or an empty
+    ``hydrolitagent/cards/`` skeleton, would otherwise satisfy a weak precondition and
     flip these guards green while the platform's code and its generated products
     are still sitting at the repo root - i.e. while the restructure has not
     happened at all.
     """
 
     tracked = _git_ls_files()
-    platform_paths = [path for path in tracked if path.startswith("hydro-platform/")]
+    platform_paths = [
+        path for path in tracked if path.startswith("hydrolitagent/cards/")
+    ]
 
     source_files = [
         path
@@ -191,8 +184,8 @@ def _tracked_platform_paths() -> list[str]:
         f"{len(source_files)} tracked .py file(s) under '{PLATFORM_PACKAGE_PREFIX}' "
         f"(at least {MIN_PLATFORM_SOURCE_FILES} are required).\nThe platform's actual "
         f"source tree must have moved to {PLATFORM_ROOT} before the assertions below "
-        "mean anything - a directory of that name, or a lone pyproject.toml, is not "
-        "enough. Found under hydro-platform/:\n  "
+        "mean anything - a directory of that name, or a lone packaging file, is not "
+        "enough. Found under hydrolitagent/cards/:\n  "
         + ("\n  ".join(sorted(platform_paths)) or "(nothing)")
     )
     return platform_paths
@@ -215,13 +208,13 @@ def _dig(data: object, *keys: str) -> object:
 
 
 def _load_platform_config() -> dict:
-    """Load ``<repo root>/hydro-platform/config/config.json``."""
+    """Load the shipped total config at ``hydrolitagent/cards/assets/config/config.json``."""
 
-    config_path = PLATFORM_ROOT / "config" / "config.json"
+    config_path = CARDS_ASSETS_DIR / "config" / "config.json"
     assert config_path.is_file(), (
-        f"expected the hydro-platform config at {config_path}, but it does not exist.\n"
-        "The platform's configuration must move with the platform into "
-        f"{PLATFORM_ROOT / 'config'}."
+        f"expected the package config at {config_path}, but it does not exist.\n"
+        "The platform's configuration must travel with the package inside its "
+        f"assets dir: {CARDS_ASSETS_DIR / 'config'}."
     )
     try:
         return json.loads(config_path.read_text(encoding="utf-8"))
@@ -230,11 +223,16 @@ def _load_platform_config() -> dict:
 
 
 def _resolve_against_platform(raw: str) -> Path:
-    """Resolve a config path: absolute stays as-is, relative is anchored at hydro-platform/."""
+    """Resolve a config path: absolute stays as-is, relative is anchored at ``paths.project_root``.
+
+    ``config.json`` 的 23 个路径字段全部相对 ``paths.project_root`` 解析，而
+    ``project_root`` 现在是**仓库根**（不再是原来的 ``hydro-platform/``），因此相对
+    路径的锚点是 ``REPO_ROOT``。
+    """
 
     path = Path(raw)
     if not path.is_absolute():
-        path = PLATFORM_ROOT / path
+        path = REPO_ROOT / path
     return path.resolve()
 
 
@@ -290,11 +288,15 @@ def test_repo_no_generated_artifacts_tracked() -> None:
 
     platform_paths = _tracked_platform_paths()
 
+    # 运行产物根已从 hydro-platform/ 移到仓库根，而 platform_paths 全是
+    # ``hydrolitagent/cards/`` 前缀，永远匹配不到根级的运行产物目录。若仍对
+    # platform_paths 判这里，这条 OUTCOME 守卫会退化成恒真 —— 因此改对**全部**
+    # 被跟踪路径判：产物一旦被误提交，无论落在哪都必须立刻暴露。
     offenders = [
-        path for path in platform_paths if path.startswith(_FORBIDDEN_PLATFORM_PREFIXES)
+        path for path in _git_ls_files() if path.startswith(_FORBIDDEN_PLATFORM_PREFIXES)
     ]
     assert not offenders, (
-        "generated output is still tracked by git under hydro-platform/ "
+        "generated output is still tracked by git "
         "(these paths must be produced at runtime into an ignored workspace dir):\n  "
         + "\n  ".join(sorted(offenders))
     )
@@ -306,7 +308,7 @@ def test_repo_no_generated_artifacts_tracked() -> None:
         and not path.startswith(ALLOWED_PLATFORM_PREFIXES)
     ]
     assert not unexpected, (
-        "unexpected tracked path under hydro-platform/ - only "
+        "unexpected tracked path under hydrolitagent/cards/ - only "
         f"{ALLOWED_PLATFORM_PREFIXES} and {ALLOWED_PLATFORM_FILES} are allowed:\n  "
         + "\n  ".join(sorted(unexpected))
     )
@@ -362,7 +364,7 @@ def test_repo_no_platform_readme() -> None:
         path for path in platform_paths if Path(path).name.lower() == "readme.md"
     )
     assert not offenders, (
-        "README files are still tracked under hydro-platform/ - platform docs belong in "
+        "README files are still tracked under hydrolitagent/cards/ - platform docs belong in "
         f"{DOCS_ROOT / 'hydro-platform'}:\n  " + "\n  ".join(offenders)
     )
 
@@ -373,37 +375,16 @@ def test_repo_no_platform_readme() -> None:
 
 
 def test_config_path_contract() -> None:
-    """Requirement: the CLI resolves its default config to ``hydro-platform/config/config.json``.
+    """Requirement: the CLI resolves its default config to the package's own assets.
 
-    Importing the package from ``hydro-platform/automation/src`` must expose
-    ``hydrolitagent.cards.cli.DEFAULT_CONFIG_PATH`` pointing at the platform's own
-    ``config/config.json`` (which moves with the platform), not at the repo-root
-    ``config/`` directory.
+    ``hydrolitagent.cards.cli.DEFAULT_CONFIG_PATH`` must point at
+    ``hydrolitagent/cards/assets/config/config.json`` —— 配置随包走，不指向仓库根的
+    ``config/`` 目录（那里是工具链线的配置）。
     """
 
-    assert PLATFORM_SRC.is_dir(), (
-        f"the platform source tree must live at {PLATFORM_SRC}, but that directory "
-        "does not exist"
-    )
+    from hydrolitagent.cards.cli import DEFAULT_CONFIG_PATH
 
-    sys.path.insert(0, str(PLATFORM_SRC))
-    try:
-        try:
-            from hydrolitagent.cards.cli import DEFAULT_CONFIG_PATH  # noqa: PLC0415
-        except Exception as exc:  # noqa: BLE001 - reported as a test failure below
-            pytest.fail(
-                f"cannot import 'hydrolitagent.cards.cli' from {PLATFORM_SRC}: {exc!r}.\n"
-                "The importable package must live under "
-                "hydro-platform/automation/src so that the CLI (and this contract) "
-                "resolve inside the platform directory."
-            )
-    finally:
-        try:
-            sys.path.remove(str(PLATFORM_SRC))
-        except ValueError:  # pragma: no cover - defensive
-            pass
-
-    expected = (PLATFORM_ROOT / "config" / "config.json").resolve()
+    expected = (CARDS_ASSETS_DIR / "config" / "config.json").resolve()
 
     actual = Path(DEFAULT_CONFIG_PATH)
     if not actual.is_absolute():
@@ -414,7 +395,6 @@ def test_config_path_contract() -> None:
         f"hydrolitagent.cards.cli.DEFAULT_CONFIG_PATH must resolve to {expected}, "
         f"got {actual} (raw value: {DEFAULT_CONFIG_PATH!r})"
     )
-
 
 # --------------------------------------------------------------------------------------
 # 5. environment directory lives in the workspace .venv
@@ -483,69 +463,48 @@ def test_docs_have_no_escaping_links() -> None:
 # --------------------------------------------------------------------------------------
 
 
-def test_pytest_collects_both_suites() -> None:
-    """Requirement: one ``pytest`` run collects the repo suite and the platform suite.
+def test_pytest_collects_the_merged_suite() -> None:
+    """Requirement: one ``pytest`` run collects the merged suite.
 
-    ``hydro-platform/automation/tests`` must exist with at least 30 ``test_*.py``
-    files, ``tests/`` must hold at least one test module besides this file, and the
-    repo-root ``pyproject.toml`` (when present) must declare
-    ``[tool.pytest.ini_options].testpaths`` covering both directories.
+    本次合并把平台测试从 ``hydro-platform/automation/tests/`` 并入仓库根 ``tests/``。
+    该目录必须至少有 ``MIN_PLATFORM_TEST_FILES`` 个 ``test_*.py``，且仓库根
+    ``pyproject.toml``（存在时）的 ``testpaths`` 必须**恰好**覆盖 ``tests``。
+
+    非空性：只留一个占位文件也算通过的话，这个断言就没有意义了。
     """
 
     assert PLATFORM_TESTS_DIR.is_dir(), (
-        f"the platform test suite must live at {PLATFORM_TESTS_DIR}, but that directory "
-        "does not exist"
+        f"合并后的测试套件必须在 {PLATFORM_TESTS_DIR}，但该目录不存在"
     )
-    platform_test_files = sorted(PLATFORM_TESTS_DIR.glob("test_*.py"))
-    assert len(platform_test_files) >= MIN_PLATFORM_TEST_FILES, (
-        f"expected at least {MIN_PLATFORM_TEST_FILES} test_*.py files under "
-        f"{PLATFORM_TESTS_DIR}, found {len(platform_test_files)}"
+    test_files = sorted(PLATFORM_TESTS_DIR.glob("test_*.py"))
+    assert len(test_files) >= MIN_PLATFORM_TEST_FILES, (
+        f"{PLATFORM_TESTS_DIR} 下至少应有 {MIN_PLATFORM_TEST_FILES} 个 test_*.py，"
+        f"实际 {len(test_files)} 个"
     )
 
-    assert REPO_TESTS_DIR.is_dir(), f"{REPO_TESTS_DIR} does not exist"
-    this_file = Path(__file__).resolve()
-    repo_test_files = [
-        path
-        for path in sorted(REPO_TESTS_DIR.glob("test_*.py"))
-        if path.resolve() != this_file
-    ]
-    assert repo_test_files, (
-        f"{REPO_TESTS_DIR} must contain at least one test_*.py file besides "
-        "test_repo_structure.py; the repo-level suite would otherwise be empty"
+    assert not (REPO_ROOT / "hydro-platform").is_dir(), (
+        "两套测试已合并到 tests/；hydro-platform/ 不应再存在"
     )
 
     pyproject_path = REPO_ROOT / "pyproject.toml"
     if not pyproject_path.is_file():
         return
-
     try:
         pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as exc:  # pragma: no cover - defensive
         pytest.fail(f"{pyproject_path} is not valid TOML: {exc}")
-
     ini_options = pyproject.get("tool", {}).get("pytest", {}).get("ini_options")
     assert ini_options is not None, (
-        f"{pyproject_path} must declare a [tool.pytest.ini_options] section so that a "
-        "single `pytest` run covers both suites"
+        f"{pyproject_path} must declare a [tool.pytest.ini_options] section"
     )
-
     testpaths = ini_options.get("testpaths")
-    assert testpaths, (
-        f"{pyproject_path} must declare [tool.pytest.ini_options].testpaths with both "
-        f"'tests' and '{PLATFORM_TESTS_DIR.relative_to(REPO_ROOT).as_posix()}'"
+    assert testpaths, f"{pyproject_path} must declare testpaths"
+    normalized = sorted(
+        str(e).replace("\\", "/").strip("/").removeprefix("./") for e in testpaths
     )
-
-    normalized = {str(entry).replace("\\", "/").strip("/").removeprefix("./") for entry in testpaths}
-    expected_entries = (
-        "tests",
-        PLATFORM_TESTS_DIR.relative_to(REPO_ROOT).as_posix(),
+    assert normalized == ["tests"], (
+        f"两套已合并，testpaths 应为 ['tests']，实际 {normalized}"
     )
-    missing = [entry for entry in expected_entries if entry not in normalized]
-    assert not missing, (
-        f"pyproject.toml [tool.pytest.ini_options].testpaths is missing {missing}; "
-        f"it must include both suites (found {sorted(normalized)})"
-    )
-
 
 # --------------------------------------------------------------------------------------
 # 9. the ignore rules themselves (the mechanism behind test 1)

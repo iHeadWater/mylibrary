@@ -9,11 +9,9 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from hydrolitagent.cards import themes, theme_pool as pool
 from hydrolitagent.cards.publication import atomic_text, text_hash
 import test_themes as fixtures
-
 
 class ThemePoolTests(unittest.TestCase):
     setUp = fixtures.ThemeTests.setUp
@@ -309,7 +307,6 @@ class ThemePoolTests(unittest.TestCase):
         result = self.run_theme()
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"]["code"], "THEME_FILE_CONFLICT")
-
 
 if __name__ == "__main__":
     unittest.main()

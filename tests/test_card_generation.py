@@ -11,10 +11,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-sys.path.insert(0, str(SOURCE_ROOT))
-
 from hydrolitagent.cards.card_generation import (
     CardGenerationError,
     generate_evidence_card,
@@ -25,7 +21,6 @@ from hydrolitagent.cards.evidence_packages import PLACEHOLDER_CARD
 from hydrolitagent.cards.pdf_delivery import PdfDelivery
 from hydrolitagent.cards.tasks import build_task_id
 
-
 GROUP_ID = 42
 PARENT_KEY = "ABCD1234"
 ATTACHMENT_KEY = "WXYZ5678"
@@ -33,7 +28,6 @@ PDF_HASH = "a" * 64
 SOURCE_COMMIT = "b" * 40
 SOURCE_BLOB = "c" * 40
 NOW = datetime(2026, 9, 7, 1, 2, 3, tzinfo=timezone.utc)
-
 
 TEMPLATE = f'''---
 schema_version: 1
@@ -63,7 +57,6 @@ updated_at: "{{{{GENERATED_AT}}}}"
 | 〔待填写〕 | 〔位置〕 |
 '''
 
-
 VALID_BODY = """# 原创研究证据卡：Test paper
 
 ## 研究结论
@@ -72,7 +65,6 @@ VALID_BODY = """# 原创研究证据卡：Test paper
 |---|---|
 | 原文未报告 | 当前 PDF 无法确认 |
 """
-
 
 class FakeAdapter:
     def __init__(self, output: dict[str, Any] | None = None):
@@ -164,7 +156,6 @@ class FakeAdapter:
             },
         }
 
-
 class FailingAdapter(FakeAdapter):
     def generate(
         self,
@@ -190,7 +181,6 @@ class FailingAdapter(FakeAdapter):
             },
         }
 
-
 class FailingAdapterWithCode(FailingAdapter):
     def __init__(self, code: str, message: str):
         super().__init__()
@@ -204,7 +194,6 @@ class FailingAdapterWithCode(FailingAdapter):
             "ok": False,
             "error": {"code": self.code, "message": self.message},
         }
-
 
 class MissingSourceAccessAdapter(FakeAdapter):
     def generate(
@@ -225,7 +214,6 @@ class MissingSourceAccessAdapter(FakeAdapter):
         )
         result.pop("source_access")
         return result
-
 
 class GenerationFixture:
     def __init__(self, root: Path):
@@ -395,7 +383,6 @@ class GenerationFixture:
             now=NOW,
             delivery_preparer=self.delivery,
         )
-
 
 class CardGenerationTests(unittest.TestCase):
     def test_trial_on_existing_card_preserves_production_card_manifest_and_task(self) -> None:
@@ -685,7 +672,6 @@ class CardGenerationTests(unittest.TestCase):
                 (fixture.package / "manifest.json").read_text(encoding="utf-8")
             )
             self.assertEqual(manifest["card_status"], "PLACEHOLDER")
-
 
 if __name__ == "__main__":
     unittest.main()

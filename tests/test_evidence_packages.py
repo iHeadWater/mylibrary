@@ -7,10 +7,6 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-sys.path.insert(0, str(SOURCE_ROOT))
-
 from hydrolitagent.cards.config import TaskConfig
 from hydrolitagent.cards.evidence_packages import (
     PLACEHOLDER_CARD,
@@ -19,13 +15,11 @@ from hydrolitagent.cards.evidence_packages import (
 )
 from hydrolitagent.cards.tasks import build_task_id, save_task_registry
 
-
 GROUP_ID = 6618088
 PARENT_KEY = "PARENT01"
 ATTACHMENT_KEY = "PDF00001"
 PDF_HASH = "a" * 64
 TASK_ID = build_task_id(GROUP_ID, PARENT_KEY, ATTACHMENT_KEY, PDF_HASH)
-
 
 def ready_task(
     *,
@@ -60,7 +54,6 @@ def ready_task(
         "history": [],
     }
 
-
 def write_registry(path: Path, task: dict[str, object]) -> None:
     save_task_registry(
         path,
@@ -72,7 +65,6 @@ def write_registry(path: Path, task: dict[str, object]) -> None:
             "tasks": {PARENT_KEY: task},
         },
     )
-
 
 class EvidencePackageTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -254,7 +246,6 @@ class EvidencePackageTests(unittest.TestCase):
         self.assertEqual(result["eligible_task_count"], 0)
         self.assertEqual(result["package_count"], 0)
         self.assertEqual(evidence_entries, [])
-
 
 if __name__ == "__main__":
     unittest.main()

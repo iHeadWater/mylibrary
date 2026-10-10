@@ -26,7 +26,7 @@ mylibrary 承担**情报汇集之后的深度处理**:
 | **文献深度处理** — Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [文献深度处理](docs/user-guide/literature.md) |
 | **知识图谱** — 用 [graphify](https://github.com/graphify) 构建结构化、可查询的知识库(实体提取、社区发现、Obsidian 导出) | `uv run hydrolitagent graph papers/your-topic/` | [模块架构](docs/development/architecture.md) |
 | **论文复现** — 复现 AI 驱动水文学关键论文 | — | `equation_from_data/`、`google_floodhub/` |
-| **文献卡与主题卡平台** — 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验。**运行时为 Windows-only。** | `uv run hydro-platform ai-config --json` | [平台文档](docs/hydro-platform/index.md) |
+| **文献卡与主题卡平台** — 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验。**运行时为 Windows-only。** | `uv run hydrolitagent cards ai-config --json` | [平台文档](docs/hydro-platform/index.md) |
 
 ## 快速开始
 
@@ -36,13 +36,13 @@ mylibrary 承担**情报汇集之后的深度处理**:
 # 克隆并安装
 git clone git@github.com:iHeadWater/mylibrary.git
 cd mylibrary
-uv sync --all-packages   # 把 uv workspace 的**两个**包都装进共享的根 .venv
+uv sync --all-packages   # 装依赖(原 workspace 成员已并入 hydrolitagent/cards)
 
 # 配置
 cp .env.example .env   # 填入 DEEPSEEK_API_KEY;设置 HYDROLITAGENT_OUTPUT、ZOTERO_API_KEY、ZOTERO_LIBRARY_ID
 ```
 
-> 本仓库是**uv workspace**,含两个成员:`hydrolitagent`(根)与 `hydro-platform`。二者共享同一个 `.venv` 和同一个 `uv.lock`。请用 `uv sync --all-packages` —— 裸 `uv sync` 只装根包的依赖,`uv run hydro-platform …` 会不可用。
+> 本仓库只有一个包 **`hydrolitagent`** —— 原 `hydro-platform` 已并入其 `hydrolitagent/cards/` 子包(workspace 成员随之取消)。`.venv` 与 `uv.lock` 仍只有一份;`uv sync --all-packages` 照旧可用。
 
 完整参考(Zotero Desktop / Linked Attachment Base Directory 配置、环境变量、TOML 配置)见[安装配置](docs/getting-started/installation.md)。
 
@@ -114,26 +114,26 @@ uv run hydrolitagent query outputs/graph/graph.json --search "LSTM"
 
 ```bash
 # 单篇输入:从自己的一篇论文得到 READY 记录
-uv run hydro-platform paper-input --user-library --item-key ABCD1234 --output paper-input.json
+uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --output paper-input.json
 
 # 生成主体卡草稿(调用所选模型)
-uv run hydro-platform evidence-generate --paper-input paper-input.json --ai-provider codex --json
+uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
 
 # 离线校验主体卡(不调模型)
-uv run hydro-platform evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
+uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 
 # 由若干文献卡生成候选主题;--dry-run 只读预览
-uv run hydro-platform themes-run --json
-uv run hydro-platform themes-run --dry-run --json
+uv run hydrolitagent cards themes-run --json
+uv run hydrolitagent cards themes-run --dry-run --json
 
 # 只读自查模型与产物根
-uv run hydro-platform ai-config --json
+uv run hydrolitagent cards ai-config --json
 ```
 
 - **平台不下载 PDF** —— 只读取自己 Zotero 中已经附好的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`。
 - **运行时为 Windows-only**:本地 CLI 的安装、登录与 PDF 工具准备只在 Windows 上验证过。
 - 生成的产物(文献卡、主题池、运行记录)**不入库** —— 运行时写入,另行共享。仓库里只有代码、模板、提示词与 schema。
-- 完整命令清单:`uv run hydro-platform --help`(5 个子命令)。
+- 完整命令清单:`uv run hydrolitagent cards --help`(5 个子命令)。
 
 ## Agent Skills
 
@@ -180,11 +180,11 @@ docs/                    # 文档站点(mkdocs-material)
 outputs/                 # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
 papers/                  # 按主题组织的文献库(10 个主题)
 
-hydro-platform/          # 文献卡与主题卡平台(uv workspace 成员)
+hydrolitagent/cards/     # 文献卡与主题卡(自己的 Zotero → 文献卡 → 主题卡)
 ├── automation/          #   Python:单篇输入 → PDF 门禁 → 制卡 → 校验 → 主题池
 ├── templates/           #   可复用资产:九类证据卡模板、主题提示词、JSON schema
 ├── config/              #   非敏感配置与完整示例
-└── pyproject.toml       #   入口:`uv run hydro-platform`
+└── pyproject.toml       #   入口:`uv run hydrolitagent cards`
                          #   生成产物(文献卡、主题池、运行记录)不入库,
                          #   由运行时自建。
 

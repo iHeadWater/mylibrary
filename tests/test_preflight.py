@@ -7,13 +7,9 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-sys.path.insert(0, str(SOURCE_ROOT))
-
+from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.config import ConfigError, ZoteroConfig, load_config
 from hydrolitagent.cards.zotero import ZoteroClient, preflight
-
 
 class StubHandler(BaseHTTPRequestHandler):
     routes: dict[str, tuple[int, object, dict[str, str]]] = {}
@@ -35,7 +31,6 @@ class StubHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         return
 
-
 class ZoteroServer:
     def __init__(self, routes: dict[str, tuple[int, object, dict[str, str]]]):
         handler = type("ConfiguredStubHandler", (StubHandler,), {"routes": routes})
@@ -55,7 +50,6 @@ class ZoteroServer:
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=2)
-
 
 class PreflightTests(unittest.TestCase):
     def test_successfully_reads_target_group(self) -> None:
@@ -129,10 +123,9 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(result["error"]["code"], "GROUP_PERMISSION_DENIED")
 
     def test_rejects_unconfigured_example_group_id(self) -> None:
-        config_path = Path(__file__).resolve().parents[2] / "config" / "config.example.json"
+        config_path = ASSETS_DIR / "config" / "config.example.json"
         with self.assertRaises(ConfigError):
             load_config(config_path)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,11 +14,14 @@ cd mylibrary
 uv sync --all-packages
 ```
 
-> **本仓库是 uv workspace，含两个成员**：`hydrolitagent`（根包）与 `hydro-platform`。二者共享同一个 `.venv` 和同一个 `uv.lock`。
+> **本仓库只有一个包 `hydrolitagent`**——原独立包 `hydro-platform` 已并入它的
+> `hydrolitagent/cards/` 子包（workspace 成员随之取消）。
 >
-> 必须用 `uv sync --all-packages` —— 裸 `uv sync` 只装根包的依赖，`uv run hydro-platform …` 会不可用。
+> `uv sync --all-packages` 照旧可用（现在等价于同步根包）。
 >
-> 装好之后两个包的入口分别是 `uv run hydrolitagent …` 与 `uv run hydro-platform …`。注意 `hydrolitagent` **横跨入库与消费两侧**（入库是下载 + 入 Zotero，其余基本都属于消费），而 `hydro-platform` 是消费侧的长期资产支线、**运行时为 Windows-only**。分侧导览见[用户指南总览](../user-guide/index.md)。
+> 入口是 `uv run hydrolitagent …`；文献卡与主题卡走子命令组 `uv run hydrolitagent cards …`
+> （**运行时 Windows-only**）。`hydrolitagent` **横跨入库与消费两侧**（入库是下载 + 入 Zotero，
+> 其余基本都属于消费）。分侧导览见[用户指南总览](../user-guide/index.md)。
 
 ## 配置 Zotero
 

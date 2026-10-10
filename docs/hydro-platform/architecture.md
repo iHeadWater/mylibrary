@@ -38,7 +38,7 @@ flowchart TB
     INPUT --> RUNTIME
 ```
 
-仓库是一个 uv workspace：根包 `hydrolitagent` 与成员包 `hydro-platform` 共用仓库根的 `.venv` 和 `uv.lock`。自动化运行时为 Windows-only；文献工具链中的部分能力可以独立运行。
+仓库只有一个包 `hydrolitagent`——文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包（原 `hydro-platform` 已并入）。`.venv` 与 `uv.lock` 只有一份。自动化运行时为 Windows-only；文献工具链中的部分能力可以独立运行。
 
 ## 组件职责
 

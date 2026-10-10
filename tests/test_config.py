@@ -7,12 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-sys.path.insert(0, str(SOURCE_ROOT))
-
 from hydrolitagent.cards.config import ConfigError, load_config
-
 
 def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path:
     config_dir = root / "config"
@@ -98,7 +93,6 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
     path = config_dir / "config.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     return path
-
 
 class ConfigTests(unittest.TestCase):
     def test_relative_paths_resolve_from_configured_project_root(self) -> None:
@@ -328,7 +322,6 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "reports_dir"):
                 load_config(config_path)
 
-
     def test_loads_explicit_smoke_test_model(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -449,7 +442,6 @@ class ConfigTests(unittest.TestCase):
                 "card_generator.generation_timeout_seconds",
             ):
                 load_config(config_path)
-
 
 if __name__ == "__main__":
     unittest.main()

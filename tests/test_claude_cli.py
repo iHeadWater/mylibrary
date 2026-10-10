@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock
 import pytest
 from test_card_draft import draft_case
+from hydrolitagent.cards._paths import ASSETS_DIR, PACKAGE_DIR
 from hydrolitagent.cards.card_draft import generate_subject_card_draft
 from hydrolitagent.cards.card_generators.claude_cli import ClaudeCliAdapter, read_receipts
 from hydrolitagent.cards.card_generators.single_agent import SingleAgentCardGeneratorAdapter
@@ -316,7 +317,7 @@ def test_model_diagnostic_does_not_relay_commands_or_raw_logs(draft_case, eviden
 def test_shared_prompt_does_not_mandate_findings_fields():
     """finding_id 是单篇流程独有的字段；共用提示词不得要求它，
     否则旧流程会被要求产出其 schema 中不存在的字段。"""
-    shared=Path(__file__).resolve().parents[1]/"prompts/evidence-card-generation-v8.md"
+    shared=ASSETS_DIR/"prompts/evidence-card-generation-v8.md"
     assert "finding_id" not in shared.read_text(encoding="utf-8")
-    single=Path(__file__).resolve().parents[1]/"prompts/subject-card-draft-v1.md"
+    single=ASSETS_DIR/"prompts/subject-card-draft-v1.md"
     assert "finding_id" in single.read_text(encoding="utf-8")

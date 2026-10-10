@@ -12,8 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
+from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.card_generators.streaming import _status_event, run_streaming_prompt
 from hydrolitagent.cards.cli import main
 from hydrolitagent.cards.config import ConfigError, ProgressConfig, REQUIRED_CARD_WORKFLOW_ROLES, load_config
@@ -237,7 +236,7 @@ class ProgressConfigTests(unittest.TestCase):
         self.assertEqual(config.card_generator.progress, ProgressConfig(True, 60))
 
     def test_shipped_generation_and_idle_limits_are_twenty_five_minutes(self):
-        root = Path(__file__).resolve().parents[2]
+        root = ASSETS_DIR
         for name in ("config.json", "config.example.json"):
             with self.subTest(config=name):
                 config = load_config(root / "config" / name, group_id=42)

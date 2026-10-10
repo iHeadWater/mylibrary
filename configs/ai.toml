@@ -1,5 +1,5 @@
 # 提交公开默认值；个人用参数、环境变量或 .env 覆盖。不要写 API key。
-# python -m hydro_platform ai-config --json
+# uv run hydrolitagent cards ai-config --json
 [ai]
 provider = "codex"
 model = "" # 空值沿用所选 CLI 的默认模型

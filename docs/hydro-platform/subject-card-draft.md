@@ -8,10 +8,10 @@
 
 ```powershell
 uv sync --all-packages --locked
-.\.venv\Scripts\python.exe -m hydro_platform ai-config --json
-.\.venv\Scripts\python.exe -m hydro_platform evidence-generate --paper-input paper-input.json --ai-provider codex --json
+.\.venv\Scripts\python.exe -m hydrolitagent.cards ai-config --json
+.\.venv\Scripts\python.exe -m hydrolitagent.cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
 # 或使用 Claude；无需同时安装 Codex
-.\.venv\Scripts\python.exe -m hydro_platform evidence-generate --paper-input paper-input.json --ai-provider claude --json
+.\.venv\Scripts\python.exe -m hydrolitagent.cards evidence-generate --paper-input paper-input.json --ai-provider claude --json
 ```
 
 macOS/Linux 使用 `.venv/bin/python`。`paper-input.json` 是 #40 确认单篇后返回的 READY 记录，不能传搜索候选列表或批处理外层结果。支持 `--paper-input -` 从 stdin 读取。无需配置群组、计划任务或复制作者的 `config.local.json`。
@@ -65,7 +65,7 @@ Claude 运行采用隔离的只读模式，不加载项目插件或命令。若�
 ## 验证
 
 ```powershell
-uv run pytest hydro-platform/automation/tests/test_card_draft.py hydro-platform/automation/tests/test_ai_config.py hydro-platform/automation/tests/test_claude_cli.py
+uv run pytest tests/test_card_draft.py tests/test_ai_config.py tests/test_claude_cli.py
 ```
 
 包含配置覆盖、两种后端的同一草稿契约、页数/身份绑定和 Claude 只读工具回执负向测试。真实论文测试结果与模型账号、服务状态有关；不把仅模拟接口的测试称为真实模型验证。

@@ -9,7 +9,6 @@ name = "hydrolitagent"
 version = "0.1.0"
 description = "Literature knowledge base toolkit for hydrology research."
 readme = "README.md"
-# 下限由 workspace 成员 hydro-platform 决定（它要求 >=3.12,<3.15）。
 # docker/Dockerfile 使用 python:3.12-slim，满足此范围。
 requires-python = ">=3.12,<3.15"
 dependencies = [
@@ -22,6 +21,9 @@ dependencies = [
   "markdown>=3.5",
   "requests>=2.31",
   "pillow>=10.0",
+  # 原 hydro-platform workspace 成员的依赖，随包合并并入根包。
+  # 固定版本是刻意的：PDF 直读路径依赖它解析页数/文本。
+  "pypdf==6.18.0",
 ]
 
 [project.optional-dependencies]
@@ -41,19 +43,21 @@ dev = [
 [project.scripts]
 hydrolitagent = "hydrolitagent.cli:main"
 
-[tool.uv.workspace]
-# hydro-platform 作为 workspace 成员：与 hydrolitagent 共享仓库根的 .venv 和 uv.lock。
-# 平台代码与资产在 hydro-platform/，其 pyproject 用 package-dir = automation/src。
-# 注意：uv sync 是精确同步，uv 是仓库根 .venv 的唯一管理者。
-members = ["hydro-platform"]
-
 [tool.setuptools.packages.find]
 include = ["hydrolitagent*"]
 
+[tool.setuptools.package-data]
+# 文献卡与主题卡的资产（模板/prompt/schema/默认配置/示例）随包分发。
+"hydrolitagent.cards" = [
+  "assets/templates/**/*",
+  "assets/prompts/*.md",
+  "assets/schemas/*.json",
+  "assets/examples/**/*",
+  "assets/config/*.json",
+]
+
 [tool.pytest.ini_options]
-# 一次 pytest 同时收集两套测试：仓库根 tests/（hydrolitagent）与
-# hydro-platform/automation/tests/（平台，unittest 风格，由 pytest 原生收集）。
-# 两侧无同名测试模块，可直接并存，无需 __init__.py 或 conftest。
-testpaths = ["tests", "hydro-platform/automation/tests"]
+# 两套测试已并为一套：hydrolitagent 的与平台的一起放在仓库根 tests/。
+testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"

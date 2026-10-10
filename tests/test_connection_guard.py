@@ -12,8 +12,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
+from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.card_generators.connection_guard import ConnectionGuard
 from hydrolitagent.cards.card_generators.codex_cli import CodexCliAdapter, _safe_exec_diagnostic, _terminal_failure_events
 from hydrolitagent.cards.card_generators.streaming import ExecutionStopped, run_streaming_prompt
@@ -267,7 +266,7 @@ class GuardConfigTests(unittest.TestCase):
                 self.assertEqual(config.card_generator.connection_guard, value or ConnectionGuardConfig())
 
     def test_shipped_example_disables_reconnect_stop(self):
-        example = Path(__file__).resolve().parents[2] / "config" / "config.example.json"
+        example = ASSETS_DIR / "config" / "config.example.json"
         guard = json.loads(example.read_text(encoding="utf-8"))["card_generator"]["connection_guard"]
         with tempfile.TemporaryDirectory() as directory:
             config = load_config(config_fixtures.write_config(

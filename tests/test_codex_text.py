@@ -7,12 +7,10 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from hydrolitagent.cards.card_generators.codex_text import CodexTextAdapter
 from hydrolitagent.cards.config import CodexProxyConfig, load_config
 from test_config import write_config
 from test_card_generator import smoke_jsonl
-
 
 class TextAdapterTests(unittest.TestCase):
     def setUp(self):
@@ -77,7 +75,6 @@ class TextAdapterTests(unittest.TestCase):
     def test_timeout_returns_bounded_failure(self):
         self.prompt_runner.side_effect = subprocess.TimeoutExpired("codex", 45)
         self.assertEqual(self.run_adapter()["error"]["code"], "CODEX_GENERATION_TIMEOUT")
-
 
 if __name__ == "__main__":
     unittest.main()

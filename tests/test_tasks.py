@@ -8,10 +8,6 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-sys.path.insert(0, str(SOURCE_ROOT))
-
 from hydrolitagent.cards.config import PdfGateConfig, TaskConfig, ZoteroConfig
 from hydrolitagent.cards.tasks import (
     RuntimeLock,
@@ -24,11 +20,9 @@ from hydrolitagent.cards.tasks import (
 )
 from hydrolitagent.cards.zotero import ApiResponse
 
-
 GROUP_ID = 6618088
 PARENT_KEY = "PARENT01"
 ATTACHMENT_KEY = "PDF00001"
-
 
 def snapshot() -> dict[str, object]:
     return {
@@ -43,7 +37,6 @@ def snapshot() -> dict[str, object]:
         "pdf_attachments": {},
     }
 
-
 def ready_gate(pdf_hash: str = "a" * 64) -> dict[str, object]:
     return {
         "ok": True,
@@ -55,7 +48,6 @@ def ready_gate(pdf_hash: str = "a" * 64) -> dict[str, object]:
             "sha256": pdf_hash,
         },
     }
-
 
 class SyncClient:
     def __init__(self, pdf_path: Path):
@@ -117,7 +109,6 @@ class SyncClient:
         if not path.endswith("/file/view/url"):
             raise AssertionError(f"unexpected text path: {path}")
         return ApiResponse(data=self.pdf_path.as_uri(), headers={})
-
 
 class TaskTests(unittest.TestCase):
     def setUp(self) -> None:

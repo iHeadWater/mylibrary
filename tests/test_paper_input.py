@@ -10,10 +10,6 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-sys.path.insert(0, str(SOURCE_ROOT))
-
 from hydrolitagent.cards.config import PdfGateConfig, ZoteroConfig
 from hydrolitagent.cards.cli import main
 from hydrolitagent.cards.paper_input import (
@@ -24,7 +20,6 @@ from hydrolitagent.cards.paper_input import (
     prepare_paper_input,
 )
 from hydrolitagent.cards.zotero import ApiResponse, ZoteroApiError
-
 
 class FakeClient:
     def __init__(
@@ -54,7 +49,6 @@ class FakeClient:
         if isinstance(value, Exception):
             raise value
         return ApiResponse(data=value, headers={})
-
 
 class PaperInputTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -813,7 +807,6 @@ class PaperInputTests(unittest.TestCase):
         self.assertEqual(exit_code, 3)
         self.assertIn("INVALID_ITEM_KEY", output.getvalue())
 
-
 @unittest.skipUnless(
     os.environ.get("HYDRO_RUN_ZOTERO_DEMO") == "1",
     "set HYDRO_RUN_ZOTERO_DEMO=1 after importing the public demo paper",
@@ -834,10 +827,8 @@ class PaperInputLiveIntegrationTests(unittest.TestCase):
         self.assertEqual(result["item"]["doi"], DEMO_PAPER["doi"])
         self.assertEqual(len(result["pdf"]["sha256"]), 64)
 
-
 if __name__ == "__main__":
     unittest.main()
-
 
 class StandaloneInputConfigTests(unittest.TestCase):
     def test_defaults_do_not_read_model_config(self):

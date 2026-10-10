@@ -10,11 +10,9 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from hydrolitagent.cards.config import load_config
 from hydrolitagent.cards.pdf_sandbox import PROBE_SCRIPT, build_sandbox_probe_command, check_pdf_sandbox
 from test_config import write_config
-
 
 class SandboxPreflightTests(unittest.TestCase):
     def setUp(self):
@@ -81,7 +79,6 @@ class SandboxPreflightTests(unittest.TestCase):
                 self.assertFalse(result["ok"])
                 self.assertNotIn("private-path", json.dumps(result))
                 runner.assert_called_once()
-
 
 if __name__ == "__main__":
     unittest.main()

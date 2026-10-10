@@ -88,7 +88,7 @@ git pull --ff-only origin literature-platform
 ### 先做离线校验，不需要自己的文献或模型账号
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/paper_validate.py --draft hydro-platform/automation/examples/subject-card-validation/draft.json --paper-input hydro-platform/automation/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo
+.\.venv\Scripts\python.exe scripts/paper_validate.py --draft hydrolitagent/cards/assets/examples/subject-card-validation/draft.json --paper-input hydrolitagent/cards/assets/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo
 $LASTEXITCODE
 ```
 
@@ -96,7 +96,7 @@ $LASTEXITCODE
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/paper_input.py --help
-.\.venv\Scripts\python.exe -m hydro_platform evidence-generate --help
+.\.venv\Scripts\python.exe -m hydrolitagent.cards evidence-generate --help
 .\.venv\Scripts\python.exe scripts/paper_validate.py --help
 ```
 
@@ -137,7 +137,7 @@ Get-Command pdftoppm, pdfinfo, pdftotext -ErrorAction Stop
 先回到自己的仓库根目录。每篇、每次运行使用单独目录，避免后一篇的输入覆盖前一篇后无法对照校验。以下变量供后续代码块继续使用，期间不要更换终端。
 
 ```powershell
-# 检查当前位置；应该能看到 scripts、configs、hydro-platform 等目录
+# 检查当前位置；应该能看到 scripts、configs、hydrolitagent 等目录
 Get-Location
 if (-not (Test-Path .\scripts\paper_input.py)) { throw '请先进入 mylibrary 仓库根目录' }
 if (-not (Test-Path .\.venv\Scripts\python.exe)) { throw '请先运行 uv sync --all-packages --locked' }
@@ -277,7 +277,7 @@ CC Switch 的常见 DeepSeek 配置应看到两项 `True`，但这只是“变�
 ```powershell
 $Provider = 'claude'
 $OutputRoot = $RunDir
-& $Python -m hydro_platform ai-config --ai-provider $Provider --output-root $OutputRoot --json
+& $Python -m hydrolitagent.cards ai-config --ai-provider $Provider --output-root $OutputRoot --json
 if ($LASTEXITCODE -ne 0) { throw '模型调用配置无效，请先处理配置错误' }
 ```
 
@@ -293,7 +293,7 @@ $PaperInput = Get-Content -LiteralPath $InputPath -Raw -Encoding UTF8 | ConvertF
 if (-not $PaperInput.ok -or $PaperInput.status -ne 'READY') { throw '输入不是单篇 READY' }
 
 # stdout 接 JSON；进度仍在终端显示。不要加 2>&1，否则会混入进度而无法解析 JSON
-$GenerationJson = & $Python -m hydro_platform evidence-generate --paper-input $InputPath --ai-provider $Provider --output-root $OutputRoot --json
+$GenerationJson = & $Python -m hydrolitagent.cards evidence-generate --paper-input $InputPath --ai-provider $Provider --output-root $OutputRoot --json
 $GenerationExitCode = $LASTEXITCODE
 if ($GenerationExitCode -ne 0) {
     $GenerationJson
@@ -478,9 +478,9 @@ $RunDir = Split-Path -Parent $InputPath
 新开终端请先进入自己的仓库目录，再运行：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest hydro-platform/automation/tests/test_claude_cli.py hydro-platform/automation/tests/test_card_validation.py
+.\.venv\Scripts\python.exe -m pytest tests/test_claude_cli.py tests/test_card_validation.py
 $LASTEXITCODE
-.\.venv\Scripts\python.exe -m pytest hydro-platform/automation/tests
+.\.venv\Scripts\python.exe -m pytest tests
 $LASTEXITCODE
 .\.venv\Scripts\python.exe -m mkdocs build --strict
 $LASTEXITCODE
@@ -493,7 +493,7 @@ $LASTEXITCODE
 ```powershell
 $TestBase = Join-Path $env:TEMP ('hydro-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 if (Test-Path -LiteralPath $TestBase) { throw '请换一个从未使用过的测试临时目录' }
-.\.venv\Scripts\python.exe -m pytest hydro-platform/automation/tests/test_claude_cli.py hydro-platform/automation/tests/test_card_validation.py --basetemp $TestBase -p no:cacheprovider
+.\.venv\Scripts\python.exe -m pytest tests/test_claude_cli.py tests/test_card_validation.py --basetemp $TestBase -p no:cacheprovider
 $LASTEXITCODE
 ```
 
@@ -503,7 +503,7 @@ $LASTEXITCODE
 | --- | --- |
 | 无法识别 `.\.venv\Scripts\python.exe` | `Get-Location` 是否为自己的仓库根；`Test-Path` 是否 True；是否完成 uv 安装 |
 | `Not a git repository` | 当前目录不是仓库，不是代码测试结论 |
-| 找不到 `hydro_platform` | 是否使用本仓库 Python 并安装 `uv sync --all-packages --locked` |
+| 找不到 `hydrolitagent.cards` | 是否使用本仓库 Python 并安装 `uv sync --all-packages --locked` |
 | Zotero 不可连接或本地请求被代理为 502 | Zotero 是否启动、允许通信；必要时为本机地址配置进程级 `NO_PROXY=127.0.0.1,localhost,::1` |
 | 搜不到论文或无 PDF | 自己的文库是否有该条目及本地附件；代码不会自动抓取共享库到个人库 |
 | Claude 立即认证失败 | 隔离进程是否继承自己的认证环境；`ai-config` 不是认证检查 |

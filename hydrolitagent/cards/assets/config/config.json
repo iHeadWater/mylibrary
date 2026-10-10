@@ -82,7 +82,7 @@
       "windows_sandbox": "elevated",
       "shell_executable": "powershell",
       "preflight_timeout_seconds": 120,
-      "python_executable": "../.venv/Scripts/python.exe",
+      "python_executable": ".venv/Scripts/python.exe",
       "text_extractor": "pypdf"
     },
     "connection_guard": {

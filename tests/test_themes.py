@@ -13,7 +13,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.cli import main
 from hydrolitagent.cards.config import ConfigError, load_config
 from hydrolitagent.cards.pdf_delivery import PdfDeliveryError
@@ -23,9 +23,8 @@ from hydrolitagent.cards.themes import ThemeError, _publish, _safe_path, run_the
 from test_card_generation import GenerationFixture, FakeAdapter, PARENT_KEY
 from test_config import write_config
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = ASSETS_DIR
 EID = "EV-" + PARENT_KEY
-
 
 class ThemeTests(unittest.TestCase):
     def setUp(self):
@@ -39,7 +38,7 @@ class ThemeTests(unittest.TestCase):
             assets_dir=ROOT / "templates/themes"), card_generator=replace(config.card_generator,
             pdf_reader=replace(config.card_generator.pdf_reader, adapter="local_path"),
             pdf_direct_trial=replace(config.card_generator.pdf_direct_trial,
-                reading_prompt_file=ROOT / "automation/prompts/pdf-local-reading-v1.md")))
+                reading_prompt_file=ROOT / "prompts/pdf-local-reading-v1.md")))
         # Build a real, validated legacy rough pack without a live provider.
         self.f.generate(FakeAdapter())
         self.pdf = self.root / "source.pdf"
@@ -314,7 +313,6 @@ class ThemeTests(unittest.TestCase):
         with self.assertRaises(ThemeError):
             _publish(path, "two")
 
-
 class ThemeConfigTests(unittest.TestCase):
     def test_config_inheritance_and_invalid_values(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -342,7 +340,6 @@ class ThemeConfigTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(json.loads(stream.getvalue()), output)
             self.assertTrue(operation.call_args.kwargs["dry_run"])
-
 
 if __name__ == "__main__":
     unittest.main()

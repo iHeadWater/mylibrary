@@ -103,7 +103,7 @@ import `_paths.ZOTERO_DIR` —— 后者在 import 期就绑死了。
 
 ### 复用 `hydro-platform` 的 `artifact_root`
 
-它是同类问题最完整的实现，但属于独立 workspace 成员：自己的 JSON schema、自己的
+它是同类问题最完整的实现，但当时属于独立 workspace 成员（该成员已并入 `hydrolitagent`）：自己的 JSON schema、自己的
 `ConfigError` 语义、自己的测试套件。合并会让两个成员互相耦合，并破坏那些测试。
 **本次不碰它。**
 

@@ -23,7 +23,7 @@ Python 支持 3.12–3.14。将 Key 替换为候选中确认的条目；群组�
 
 优先级：参数 → 进程环境变量 → 配置文件 → 内置默认值。输入配置支持 TOML，也兼容旧 JSON 的 `zotero` / `pdf_gate` 字段；AI 字段不会被读取。默认配置从脚本所在仓库解析，显式相对配置路径从命令当前目录解析。输入 PR 不依赖 #27，因此只读进程环境变量，不自动读 `.env`。
 
-PDF 路径由 Zotero 返回；此步骤不生成精读产物。`--output` 是操作者指定的输入记录位置，后续草稿产物根由 #27/#43 管理。已有完整平台环境也可用 `python -m hydro_platform paper-input --user-library --item-key ABCD1234 --json`，同样无需模型配置。
+PDF 路径由 Zotero 返回；此步骤不生成精读产物。`--output` 是操作者指定的输入记录位置，后续草稿产物根由 #27/#43 管理。已有完整平台环境也可用 `python -m hydrolitagent.cards paper-input --user-library --item-key ABCD1234 --json`，同样无需模型配置。
 
 ## 状态与边界
 
@@ -36,7 +36,7 @@ PDF 路径由 Zotero 返回；此步骤不生成精读产物。`--output` 是操
 ## 验证
 
 ```powershell
-uv run pytest hydro-platform/automation/tests/test_paper_input.py
+uv run pytest tests/test_paper_input.py
 ```
 
 覆盖候选选择、个人/群组、父条目/附件、缺失/多个 PDF、未索引全文、批处理及配置覆盖；真实演示记录保留本机，不提交个人文件。

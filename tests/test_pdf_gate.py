@@ -5,14 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-sys.path.insert(0, str(SOURCE_ROOT))
-
 from hydrolitagent.cards.config import PdfGateConfig, ZoteroConfig
 from hydrolitagent.cards.pdf_gate import evaluate_pdf_gate
 from hydrolitagent.cards.zotero import ApiResponse, ZoteroApiError
-
 
 def attachment(key: str, parent_key: str, filename: str = "paper.pdf") -> dict[str, object]:
     return {
@@ -26,7 +21,6 @@ def attachment(key: str, parent_key: str, filename: str = "paper.pdf") -> dict[s
             "linkMode": "imported_file",
         },
     }
-
 
 class FakeClient:
     def __init__(
@@ -59,7 +53,6 @@ class FakeClient:
         if self.file_url is None:
             raise ZoteroApiError("GROUP_NOT_AVAILABLE", "not found", 404)
         return ApiResponse(data=self.file_url, headers={})
-
 
 class PdfGateTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -190,7 +183,6 @@ class PdfGateTests(unittest.TestCase):
 
         self.assertEqual(result["gate_status"], "BLOCKED")
         self.assertEqual(result["reason_code"], "PDF_STRUCTURE_INVALID")
-
 
 if __name__ == "__main__":
     unittest.main()

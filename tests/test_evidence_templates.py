@@ -11,21 +11,17 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from hydrolitagent.cards._paths import ASSETS_DIR
 
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(SOURCE_ROOT))
-
+PROJECT_ROOT = ASSETS_DIR
 from hydrolitagent.cards.cli import main
 from hydrolitagent.cards.evidence_templates import (
     EvidenceTemplateError,
     validate_evidence_templates,
 )
 
-
 SOURCE_COMMIT = "1" * 40
 SOURCE_BLOB = "2" * 40
-
 
 def template_content(
     *,
@@ -53,7 +49,6 @@ updated_at: "{{{{GENERATED_AT}}}}"
 
 # 测试模板：{{{{TITLE}}}}
 '''
-
 
 def write_fixture(
     root: Path,
@@ -92,7 +87,6 @@ def write_fixture(
     catalog_file = templates_dir / "_catalog.json"
     catalog_file.write_text(json.dumps(catalog), encoding="utf-8")
     return templates_dir, catalog_file
-
 
 class EvidenceTemplateValidationTests(unittest.TestCase):
     def test_real_catalog_validates_all_nine_templates(self) -> None:
@@ -237,9 +231,6 @@ class EvidenceTemplateValidationTests(unittest.TestCase):
 
             with self.assertRaisesRegex(EvidenceTemplateError, "至少需要启用"):
                 validate_evidence_templates(templates_dir, catalog_file)
-
-
-
 
 if __name__ == "__main__":
     unittest.main()

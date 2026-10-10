@@ -7,21 +7,15 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-
-SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-sys.path.insert(0, str(SOURCE_ROOT))
-
 from hydrolitagent.cards.config import PdfGateConfig, TaskConfig, ZoteroConfig
 from hydrolitagent.cards.evidence_packages import sync_evidence_packages
 from hydrolitagent.cards.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
 from hydrolitagent.cards.tasks import build_task_id, save_task_registry
 from hydrolitagent.cards.zotero import ApiResponse, ZoteroApiError
 
-
 GROUP_ID = 6618088
 PARENT_KEY = "PARENT01"
 ATTACHMENT_KEY = "PDF00001"
-
 
 def attachment(key: str, parent_key: str) -> dict[str, object]:
     return {
@@ -35,7 +29,6 @@ def attachment(key: str, parent_key: str) -> dict[str, object]:
             "linkMode": "imported_file",
         },
     }
-
 
 class FakeClient:
     def __init__(self, *, attachment_key: str, file_url: str | None):
@@ -61,7 +54,6 @@ class FakeClient:
         if self.file_url is None:
             raise ZoteroApiError("GROUP_NOT_AVAILABLE", "not found", 404)
         return ApiResponse(data=self.file_url, headers={})
-
 
 class PdfDeliveryTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -351,7 +343,6 @@ class PdfDeliveryTests(unittest.TestCase):
                 )
 
         self.assertEqual(raised.exception.code, "PDF_DELIVERY_TASK_NOT_READY")
-
 
 if __name__ == "__main__":
     unittest.main()

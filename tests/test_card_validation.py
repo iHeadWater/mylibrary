@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from hydrolitagent.cards._paths import ASSETS_DIR, PACKAGE_DIR
 from hydrolitagent.cards import card_validation as gate, cli, themes
 from test_card_draft import draft_case, run
 
@@ -410,7 +411,7 @@ def test_assets_root_and_config_are_mutually_exclusive(case, capsys):
 
 
 def test_shipped_example_passes_without_private_config_or_pdf(tmp_path, monkeypatch):
-    root = Path(__file__).resolve().parents[1] / "examples/subject-card-validation"
+    root = ASSETS_DIR / "examples/subject-card-validation"
     draft = gate._read_json(root / "draft.json")
     record = gate._read_json(root / "paper-input.json")
     monkeypatch.chdir(tmp_path)

@@ -9,7 +9,7 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.card_generators.single_agent import SingleAgentCardGeneratorAdapter, validate_attribution
 from hydrolitagent.cards.card_generation import CardGenerationError, _validate_workflow_result
 from hydrolitagent.cards.config import ConfigError, SINGLE_AGENT_PROTOCOL_VERSION, load_config
@@ -17,7 +17,6 @@ from hydrolitagent.cards.evidence_packages import EvidencePackageError, load_evi
 from test_card_generation import GenerationFixture, FakeAdapter, PARENT_KEY
 from test_codex_local_pdf import LocalProviderFixture
 from test_config import write_config
-
 
 BODY = """# 原创研究证据卡：Test paper
 
@@ -37,7 +36,6 @@ BODY = """# 原创研究证据卡：Test paper
 - 【信息边界】：原文未报告其他气候区的外部验证，现有证据不能支持普适性。
 """
 
-
 def configure_template(f):
     path = f.templates / "01_original-research.md"
     front = path.read_text(encoding="utf-8").split("---", 2)[:2]
@@ -46,7 +44,6 @@ def configure_template(f):
     catalog = json.loads(f.catalog.read_text(encoding="utf-8"))
     catalog["templates"][0]["content_sha256"] = hashlib.sha256(content.encode("utf-8")).hexdigest()
     f.catalog.write_text(json.dumps(catalog), encoding="utf-8")
-
 
 class SingleAgentTests(unittest.TestCase):
     def test_one_call_persists_truthful_formal_card_and_skips_existing(self):
@@ -282,7 +279,7 @@ class SingleAgentTests(unittest.TestCase):
             self.assertEqual(result["warnings"][0]["code"], "SCRATCH_CLEANUP_FAILED")
 
     def test_all_nine_adapted_templates_have_attribution_and_no_human_review_fields(self):
-        root = Path(__file__).resolve().parents[2] / "templates" / "evidence-cards"
+        root = ASSETS_DIR / "templates" / "evidence-cards"
         templates = list(root.glob("0*.md"))
         # 2.0.0:正文骨架改用王新宇 V1.7,并新增第 9 类 platform-decision-synthesis。
         # 2.0.1:九类模板正文各补一条数学公式与金额的 LaTeX 转写规则。
@@ -297,7 +294,6 @@ class SingleAgentTests(unittest.TestCase):
             self.assertNotIn("- 本人", body)
             self.assertNotIn("- 独立检查", body)
             self.assertNotIn("原文短摘录", body)
-
 
 if __name__ == "__main__":
     unittest.main()

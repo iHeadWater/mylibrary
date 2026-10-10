@@ -11,12 +11,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from hydrolitagent.cards.card_generation import CardGenerationError, _validate_model_output, _validate_template_structure
 from hydrolitagent.cards.cli import main
 from test_card_generation import FakeAdapter, GenerationFixture, PARENT_KEY, PDF_HASH, VALID_BODY
 from test_single_agent import BODY, configure_template
-
 
 class CardSavingTests(unittest.TestCase):
     def test_extra_heading_and_table_saved_without_content_check(self):

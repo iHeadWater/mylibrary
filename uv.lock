@@ -6,12 +6,6 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 
-[manifest]
-members = [
-    "hydro-platform-automation",
-    "hydrolitagent",
-]
-
 [[package]]
 name = "annotated-types"
 version = "0.7.0"
@@ -559,28 +553,6 @@ wheels = [
 ]
 
 [[package]]
-name = "hydro-platform-automation"
-version = "0.1.0"
-source = { editable = "hydro-platform" }
-dependencies = [
-    { name = "hydrolitagent" },
-    { name = "pypdf" },
-]
-
-[package.optional-dependencies]
-pdf-direct = [
-    { name = "pypdf" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "hydrolitagent", editable = "." },
-    { name = "pypdf", specifier = "==6.18.0" },
-    { name = "pypdf", marker = "extra == 'pdf-direct'", specifier = "==6.18.0" },
-]
-provides-extras = ["pdf-direct"]
-
-[[package]]
 name = "hydrolitagent"
 version = "0.1.0"
 source = { editable = "." }
@@ -591,6 +563,7 @@ dependencies = [
     { name = "mcp" },
     { name = "openai" },
     { name = "pillow" },
+    { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "pyzotero" },
     { name = "requests" },
@@ -619,6 +592,7 @@ requires-dist = [
     { name = "notebooklm-py", extras = ["browser"], marker = "extra == 'notebooklm'", specifier = ">=0.5.0" },
     { name = "openai" },
     { name = "pillow", specifier = ">=10.0" },
+    { name = "pypdf", specifier = "==6.18.0" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "pyzotero", specifier = ">=1.13.0" },
     { name = "requests", specifier = ">=2.31" },
