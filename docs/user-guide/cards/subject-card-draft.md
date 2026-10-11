@@ -26,7 +26,7 @@ uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai
 
 ## 产物
 
-写到**产物根**下的 `<user|group>-<文库ID>-<父条目Key>/drafts/<版本ID>/`，**每次生成新建一个版本**：
+写到**产物根**下的 `zotero/<user|group>-<文库ID>-<父条目Key>/drafts/<版本ID>/`，**每次生成新建一个版本**：
 
 ```text
 draft.json    结构化草稿（下一步校验用）

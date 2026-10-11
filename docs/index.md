@@ -14,8 +14,8 @@
 |---|---|
 | **所有**能力 | Git · Python 3.12–3.14 · [uv](https://docs.astral.sh/uv/) · `git clone` + `uv sync --all-packages` |
 | 读 / 写 Zotero 库 | Zotero **API key**（放 `.env`） |
-| **文献卡与主题卡** | Zotero Desktop **正在运行**且**允许其他应用通信** · 一种**已登录**的模型 CLI · **Poppler** |
-| 论文入库 | GDrive 论文目录 + Zotero 的 Linked Attachment Base Directory |
+| **文献卡与主题卡** | Zotero 桌面版开着，并在设置里**允许其他应用通信** · 一个**已登录**的 AI 命令行工具（Codex 或 Claude） · 读论文 PDF 页面用的小工具 [Poppler](https://poppler.freedesktop.org/) |
+| 论文入库 | 论文 PDF 所在的 GDrive 目录 + Zotero 里对应的「**链接附件根目录**」设置 |
 
 逐条说明与凭据清单见 **[前提与配置](getting-started/installation.md)** —— **配一次就够**。
 各功能页只写「本页额外需要什么」，不再重复。
@@ -39,19 +39,6 @@
 > 的 5 条子命令）。无论哪条 —— **你不需要读那些详情页**，只在想自己动手或排错时才去。
 >
 > 付费墙（SD / Wiley / Nature 等）的下载需要浏览器 + 机构会话，见[论文 PDF 下载](user-guide/download-pdf.md)。
-
-## 两侧能力
-
-| 侧 | 做什么 | 代码 |
-|---|---|---|
-| **入库**（采集） | 只有两件事：论文 PDF **下载**，以及**建 Zotero 条目**（含 `linked_file` 附件） | `scripts/download_paper.py`、`hydrolitagent/zotero/`、`hydrolitagent/literature/download_pdf.py` |
-| **消费** | 其余全部：从 Zotero 库读出 → 精读/分析卡 → 主题分类/知识图谱 → 公众号/播客/B 站；以及文献卡与主题卡 | `hydrolitagent/literature/`、`hydrolitagent/graph/`、`hydrolitagent/cards/`、`skills/` |
-
-- **`hydrolitagent` 横跨两侧** —— 入库的几个命令和消费的绝大部分都在它里面，所以它不是「入库侧」的代名词。
-- 两侧**产出不同**：消费侧其余部分产出**当期内容**（文章、播客、图谱、分析卡）；
-  **文献卡与主题卡**把**你自己 Zotero 的文献**沉淀成**长期可追溯**的资产（确定性校验，**运行时 Windows-only**）。
-
-两者现在是**同一个包 `hydrolitagent`**，共用一个 `.venv` 与一份 `uv.lock`。
 
 ## 能力一览
 

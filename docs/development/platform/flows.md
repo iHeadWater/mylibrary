@@ -51,7 +51,7 @@ flowchart LR
 
 1. 准备 Zotero Desktop、已下载的 PDF，以及一种已登录的 CLI（Codex 或 Claude）和 Poppler。
 2. 克隆仓库并执行 `uv sync --all-packages`。
-3. 按[前提与配置](../../getting-started/installation.md)选一篇自己的论文，依次完成输入、生成与校验。
+3. 按[文献卡与主题卡概述](../../user-guide/cards/index.md)选一篇自己的论文，依次完成输入、生成与校验。
 
 ### 日常研究
 

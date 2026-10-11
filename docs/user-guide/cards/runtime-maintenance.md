@@ -43,6 +43,6 @@
 ## 边界
 
 - 只有 `evidence-generate` 与 `themes-run` 会**调用模型**；`paper-input` / `evidence-validate` / `ai-config` 不调用。
-- 这些命令都**不改动 Zotero**、**不提交或推送 Git**。
+- 这些命令都**不改动 Zotero**、**不提交或推送 Git** —— **本地保存不等于已完成远端备份**。
 - 想自查当前模型选择与产物落点：`uv run hydrolitagent cards ai-config --json`
   —— 它只读配置，**不证明**模型服务连通或 CLI 已登录。
