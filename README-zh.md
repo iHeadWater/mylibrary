@@ -30,7 +30,7 @@ mylibrary 承担**情报汇集之后的深度处理**:
 
 ## 快速开始
 
-**单篇制卡用户：** 请先看[仓库首页的 Windows PowerShell 入口](README.md)和[从零开始的单篇上手说明](docs/user-guide/cards/single-paper-quickstart.md)。支持自己的个人/群组 Zotero 文库、Codex/Claude CLI 和可配置输出目录；不需要作者的本机路径、账号或 `.venv`。以下配置主要服务其他工具链，不是单篇制卡必须照抄的前置条件。
+**单篇制卡用户：** 请先看[仓库首页](README.md)的「开工前先配好这些」和[前提与配置](docs/getting-started/installation.md)；能力清单见[文献卡与主题卡](docs/user-guide/cards/index.md)。支持自己的个人/群组 Zotero 文库、Codex/Claude CLI 和可配置输出目录；不需要作者的本机路径、账号或 `.venv`。以下配置主要服务其他工具链，不是单篇制卡必须照抄的前置条件。
 
 ```bash
 # 克隆并安装

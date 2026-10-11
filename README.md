@@ -6,6 +6,31 @@
 
 > 详细能力表见 [`README-zh.md`](README-zh.md)；完整文档站在 [`docs/`](docs/index.md)。
 
+## 开工前先配好这些
+
+| 你要做的 | 先得有 |
+|---|---|
+| **所有**能力 | Git · Python 3.12–3.14 · [uv](https://docs.astral.sh/uv/) · `uv sync --all-packages` |
+| 读 / 写 Zotero 库 | Zotero **API key**（放 `.env`） |
+| **文献卡与主题卡** | Zotero Desktop **正在运行**且**允许其他应用通信** · 一种**已登录**的模型 CLI · **Poppler** |
+| 论文入库 | GDrive 论文目录 + Zotero 的 Linked Attachment Base Directory |
+
+逐条说明与凭据清单见 **[前提与配置](docs/getting-started/installation.md)** —— **配一次就够**。
+
+## 能让 agent 做什么
+
+配好之后，多数事**直接说人话**就行：
+
+| 你对 agent 说 | 会发生什么 | 详情 |
+|---|---|---|
+| 「把《某某》这篇做成卡」 | 从你的 Zotero 找到它 → 读 PDF → 出主体卡草稿 → 代码校验 | [文献卡与主题卡](docs/user-guide/cards/index.md) |
+| 「这几篇都做一下」 | 同一条链路逐篇跑，一篇失败不拖累其余 | [单篇论文输入](docs/user-guide/cards/paper-input.md) |
+| 「看看能聚出哪些主题」 | 由已有的文献卡生成候选主题、必要时定向精读并回填 | [统一主题池](docs/user-guide/cards/unified-theme-pool.md) |
+| 「主题池现在什么样」 | 报当前候选与历史版本 | [统一主题池](docs/user-guide/cards/unified-theme-pool.md) |
+| 「当前用哪个模型 / 产物放哪」 | 报模型选择与产物落点，不调模型 | [运行维护](docs/user-guide/cards/runtime-maintenance.md) |
+
+> 底层是 `uv run hydrolitagent cards …` 的 5 条子命令 —— **你不需要读那些页**。
+
 ## 三条线
 
 | 线 | 做什么 | 代码 / 数据 | 入口 |
@@ -42,43 +67,39 @@
 
 ## 快速开始
 
-### 只想用自己的论文生成主体卡？从这里开始（Windows PowerShell）
-
-这是可复用的**本地命令行接口**，不是作者电脑上的专用程序，也不是需要开放公网端口的服务。你使用自己的 Zotero 文献、Codex 或 Claude 登录和产物目录；无需作者的账号、目录、`.venv`、Obsidian 或群组库权限。私有仓库仍需获得 GitHub 访问权限。
-
-如果你在终端里使用 **CC Switch 接入 DeepSeek 的 Claude Code**，生成命令仍选 `--ai-provider claude`：Claude Code 是命令行工具，DeepSeek 是它连接的模型服务。[单篇论文完整教程](docs/user-guide/cards/single-paper-quickstart.md)按这套用法展开配置传递、选论文、生成、校验与查看结果，每一步附命令和预期结果。
-
-先安装 Git、Python 3.12–3.14 和 uv。在你自己选择的父目录中执行下面命令；目标 `mylibrary` 应尚不存在。每条成功后再执行下一条：
-
-```powershell
+```bash
 git clone --branch literature-platform https://github.com/iHeadWater/mylibrary.git mylibrary
-if ($LASTEXITCODE -ne 0) { throw '克隆失败，请检查仓库权限及目标目录' }
-Set-Location -LiteralPath .\mylibrary
+cd mylibrary
 uv sync --all-packages --locked
-if ($LASTEXITCODE -ne 0) { throw '依赖安装失败，请先处理上面的错误' }
-Test-Path .\.venv\Scripts\python.exe
+cp .env.example .env      # 按需填 ZOTERO_API_KEY / ZOTERO_LIBRARY_ID / GDRIVE_PAPERS_PATH
 ```
 
-最后应显示 `True`。**所有后续相对路径命令都在这个仓库根目录执行**；不是直接在 `C:\Users\你的用户名` 中执行。新开终端后先进入你自己的仓库目录。
+上面只装了**通用部分**；每条能力额外要什么、凭据放哪，见[前提与配置](docs/getting-started/installation.md)。
 
-先跑不需要 Zotero、原始 PDF、模型账号的合成示例：
+不用自己的论文也能先跑通入口（合成示例，**不调用模型**）：
 
-```powershell
-.\.venv\Scripts\python.exe scripts/paper_validate.py --draft hydrolitagent/cards/assets/examples/subject-card-validation/draft.json --paper-input hydrolitagent/cards/assets/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo
-$LASTEXITCODE
+```bash
+uv run python scripts/paper_validate.py --draft hydrolitagent/cards/assets/examples/subject-card-validation/draft.json --paper-input hydrolitagent/cards/assets/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo
 ```
 
-修复版本应返回 `status: PASS`、退出码 `0`；合成示例的短正文提示不影响通过。**不要把文档中的预期结果或 `# passed` 注释当成实际输出。** PR #46 未合并时，需先按[完整上手说明](docs/user-guide/cards/single-paper-quickstart.md)切到该 PR 分支，才能验证其修复版示例。
+返回 `status: PASS`、退出码 `0` 即入口可用。**不要把文档里的预期结果当成实际输出。**
 
-三个公开入口如下（安装后可运行 `--help` 查看参数）：
+### 文献卡与主题卡（Windows）
 
-| 阶段 | 入口 | 输入与输出 | 是否调用模型 |
-| --- | --- | --- | --- |
-| 取得论文 | `python scripts/paper_input.py` | 自己的题名/DOI 或条目 Key → 候选或单篇 READY JSON | 否 |
-| 生成草稿 | `python -m hydrolitagent.cards evidence-generate` | READY JSON + `--ai-provider` → `draft_path`、`card_path` | 是 |
-| 代码校验 | `python scripts/paper_validate.py` | READY JSON + `draft_path` → PASS/FAIL、报告路径 | 否 |
+配好之后跟 agent 说「把《某某》这篇做成卡」即可。自己敲是这 5 条：
 
-表中 `python` 使用上面安装的 `.\.venv\Scripts\python.exe`。**完整步骤、CLI 认证、Poppler、个人/群组库、模型与输出目录覆盖、自动传递 draft_path、返回码及排错见[单篇流程首次配置](docs/user-guide/cards/single-paper-quickstart.md)。** 单篇本地流程不需要先填工具链的 DeepSeek/Zotero Web API 密钥，不需要启动 MCP Server。
+```bash
+uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json
+uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
+uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
+uv run hydrolitagent cards themes-run --json
+uv run hydrolitagent cards ai-config --json          # 看模型选择与产物落点
+```
+
+用 **CC Switch 接入 DeepSeek** 时**仍选 `--ai-provider claude`** —— 选的是**命令行适配器**，不是模型厂家。
+详见[文献卡与主题卡](docs/user-guide/cards/index.md)（**你通常不需要读它**）。
+
+单篇本地流程**不需要**先填工具链的 Zotero Web API 密钥，也**不需要**启动 MCP Server。
 
 ### 其他工具链与批量自动化
 
@@ -89,7 +110,7 @@ uv sync --all-packages   # 装依赖（workspace 成员已并入 hydrolitagent/c
 cp .env.example .env     # 填入 DEEPSEEK_API_KEY、ZOTERO_API_KEY、ZOTERO_LIBRARY_ID 等
 ```
 
-> 裸 `uv sync` 只装根包依赖，`uv run hydrolitagent cards …` 会不可用。请用 `uv sync --all-packages`。
+> 本仓库只有**一个包** —— `uv sync` 与 `uv sync --all-packages` 等价。
 
 ```bash
 # 工具链：启动 12 个工具的 MCP Server（端口 8002）
