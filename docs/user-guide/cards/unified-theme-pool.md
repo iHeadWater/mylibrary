@@ -30,6 +30,13 @@ themes/
 evidence-packs/…/readings/       独立保存的精读结果（主题只引用，不复制）
 ```
 
+> **怎么看产出**：卡片与主题都是带 `[[双向链接]]` 的 Markdown ——
+> 用 **Obsidian** 把产物目录（`证据卡/`、`主题/`，落点由 `paths.artifact_root` 决定）
+> 当 vault 打开，就能沿链接读、按目录导航。**今天就能这样用。**
+>
+> 另一件**尚未实现**的事：让平台受控地搜索 / 写入你的 Obsidian（Vault 接入选型见
+> [项目级设计](../../development/platform/project-design.md)）。两件事别混。
+
 ## 边界
 
 - **正式主题不能被自动改写**：候选必须**由人确认**才能转正式；`themes-run` 只产出候选，**不自动晋级**。

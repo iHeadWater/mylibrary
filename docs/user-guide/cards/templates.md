@@ -74,6 +74,13 @@ CREATE / UPDATE / MERGE / SPLIT）、`discovery.md`、`focused-reading.md`、`re
 > 承重内容要用 `skills/hydrology-evidence-cards/` 打开原文、拆成**可定位 Claim**；
 > **只有达到 L2 / L3 且完成来源核对的 Claim**，才能支撑正式主题结论。自动化**不做**这一步。
 
+> **怎么看产出**：卡片与主题都是带 `[[双向链接]]` 的 Markdown ——
+> 用 **Obsidian** 把产物目录（`证据卡/`、`主题/`，落点由 `paths.artifact_root` 决定）
+> 当 vault 打开，就能沿链接读、按目录导航。**今天就能这样用。**
+>
+> 另一件**尚未实现**的事：让平台受控地搜索 / 写入你的 Obsidian（Vault 接入选型见
+> [项目级设计](../../development/platform/project-design.md)）。两件事别混。
+
 ## 边界
 
 - 模板只提供**内容结构**。程序校验模板的**数量 / 来源 / 版本 / 路径 / 哈希**，
