@@ -65,7 +65,7 @@
 
 `progress` 在旧配置中整体缺失时使用上述默认值；一旦填写，必须同时提供两个字段。心跳表示本地程序仍在等待，不证明远端模型健康。进度不会写入最终 JSON，也不会回显模型正文、原始工具输出或凭据。
 
-`card_generator.workflow_mode=single_agent` 是当前模式，主提示词 `evidence-card-generation-v8.md`、九类模板 `2.0.1`。模型、强度和超时直接用上表。程序只检验流程，不校验正文标题、表格、标签、编号或措辞。
+`card_generator.workflow_mode=single_agent` 是当前模式，主提示词 `evidence-card-generation-v8.md`、九类模板。模型、强度和超时直接用上表。程序只检验流程，不校验正文标题、表格、标签、编号或措辞。
 
 例如，使用 GPT-5.6 Sol 和高推理强度：
 

@@ -72,16 +72,15 @@ nav:
           - 单篇论文输入: user-guide/cards/paper-input.md
           - 单篇主体卡草稿: user-guide/cards/subject-card-draft.md
           - 主体卡校验门禁: user-guide/cards/subject-card-validation.md
-          - 模板资产: user-guide/cards/templates.md
+          - 模板资产:
+              - 公共模板: user-guide/cards/templates.md
+              - 主题模板:
+                  - 使用说明: user-guide/cards/主题模板/00_主题模板使用说明.md
+                  - 初步主题与人工筛选: user-guide/cards/主题模板/01_初步主题与人工筛选模板.md
+                  - 既定主题深度综合: user-guide/cards/主题模板/02_既定主题深度综合模板.md
+                  - 主题工作流运行账: user-guide/cards/主题模板/03_主题工作流运行账模板.md
           - 统一主题池: user-guide/cards/unified-theme-pool.md
           - 运行维护: user-guide/cards/runtime-maintenance.md
-          - 人读那一支:
-              - 总览: user-guide/cards/human-reading.md
-              - 主题模板:
-                  - 使用说明 V1.3: user-guide/cards/主题模板/00_主题模板使用说明_V1.3.md
-                  - 初步主题与人工筛选 V1.3: user-guide/cards/主题模板/01_初步主题与人工筛选模板_V1.3.md
-                  - 既定主题深度综合 V1.3: user-guide/cards/主题模板/02_既定主题深度综合模板_V1.3.md
-                  - 主题工作流运行账 V1.3: user-guide/cards/主题模板/03_主题工作流运行账模板_V1.3.md
   - 开发:
       - 模块架构: development/architecture.md
       - 贡献指南: development/contributing.md

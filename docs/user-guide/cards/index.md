@@ -67,5 +67,4 @@ uv run python scripts/paper_validate.py \
 | 主题池 | [统一主题池](unified-theme-pool.md) |
 | 模板 | [公共模板](templates.md) |
 | 运行维护 | [运行维护](runtime-maintenance.md) |
-| 人读那一支（证据卡、人工筛选、正式主题） | [人读那一支](human-reading.md) |
 | 技术实现（开发者向） | [项目级设计](../../development/platform/project-design.md) · [技术架构](../../development/platform/architecture.md) |

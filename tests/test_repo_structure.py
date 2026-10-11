@@ -85,7 +85,7 @@ PLATFORM_NOT_IGNORED_PATHS = (
 )
 
 # --------------------------------------------------------------------------------------
-# 人读那一支(原王新宇线)的产物:默认落在仓库根,落点由 paths.artifact_root 决定
+# 证据卡与主题综合(原王新宇线)的产物:默认落在仓库根,落点由 paths.artifact_root 决定
 # --------------------------------------------------------------------------------------
 
 ARTIFACT_ROOT_DIRS = ("证据卡", "主题", "运行记录", "文献链接")
@@ -118,11 +118,12 @@ MIN_PLATFORM_SOURCE_FILES = 20
 # `single-paper-quickstart.md`（623 行分步教程）的公共前提抽到 `getting-started/installation.md`、
 # 其余删除；删的是页不是内容，公共前提那一页还在（只是换到了 getting-started/）。
 # 这是有意的结构调整，不是搬迁丢失 —— 因此改数字，**不减断言**。
+# 20 → 19（同日）：把「人读那一支」总览并进 `user-guide/cards/templates.md`，删掉那一页。
 PLATFORM_DOC_DIRS = (
     DOCS_ROOT / "user-guide" / "cards",
     DOCS_ROOT / "development" / "platform",
 )
-MIN_PLATFORM_DOC_FILES = 20
+MIN_PLATFORM_DOC_FILES = 19
 
 QUOTED_INSTALL_ARG = re.compile(r"""["']install["']""")
 WHEEL_MATERIAL = re.compile(
@@ -560,12 +561,12 @@ def test_platform_output_dirs_are_ignored() -> None:
 
 
 # --------------------------------------------------------------------------------------
-# 10. 人读那一支的产物:默认位置不入库,且规则必须覆盖它
+# 10. 证据卡与主题综合的产物:默认位置不入库,且规则必须覆盖它
 # --------------------------------------------------------------------------------------
 
 
 def test_research_workflow_artifacts_are_ignored_and_untracked() -> None:
-    """要求:人读那一支(原王新宇线)的产物默认不入库,且 ignore 规则必须覆盖默认位置。
+    """要求:证据卡与主题综合(原王新宇线)的产物默认不入库,且 ignore 规则必须覆盖默认位置。
 
     落点本身由 ``paths.artifact_root`` 决定(默认仓库根,可指向共享盘),
     所以这里只守卫**默认位置**:与平台产物同一原则,分两处:
