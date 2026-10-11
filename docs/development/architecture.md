@@ -1,6 +1,8 @@
 # 模块架构
 
-本仓库的能力分**入库**（只有下载 + 入 Zotero）与**消费**（读库 → 精读/主题/内容产出，以及文献卡与主题池）两侧。**`hydrolitagent` 横跨两侧**，[文献卡与主题卡](../user-guide/cards/index.md) 纯属消费。分侧导览见[用户指南总览](../user-guide/index.md)。本节先给整体结构，随后展开 `hydrolitagent` 的模块。
+本页讲**代码怎么组织**：包与目录、模块职责、数据流。它覆盖「收进来 → 读进去 → 组织起来 →
+产出内容 → 沉淀成资产」整条线 —— 那条线的**使用者视图**见[用户指南总览](../user-guide/index.md)。
+本节先给整体结构，随后展开 `hydrolitagent` 的模块。
 
 ## 整体结构（节选）
 
@@ -19,7 +21,7 @@ hydrolitagent/
 ├── graph/                   # graphify 知识图谱
 └── query/                   # 图查询
 
-hydrolitagent/cards/         # 消费侧：文献卡与主题卡（运行时 Windows-only）
+hydrolitagent/cards/         # 文献卡与主题卡（⑤ 沉淀成资产；运行时 Windows-only）
 ├── cli.py                   # 五条核心命令的注册与分发
 ├── paper_input.py           # 单篇 Zotero 论文输入（个人/群组库）
 ├── card_draft.py            # 单篇主体卡草稿生成
@@ -43,7 +45,7 @@ skills/
 ├── figure-skill-v2/         # 配图/封面（迁入）
 ├── bilibili-upload/         # B 站发布（迁入）
 ├── download-pdf/            # 机构访问下载 PDF
-└── literature-cards/        # 消费侧平台 CLI 入口
+└── literature-cards/        # 文献卡与主题卡的 skill 入口
 
 outputs/
 └── weekly-review/{date}/    # 精读产物（cards/article/podcast）

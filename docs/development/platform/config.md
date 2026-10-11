@@ -131,9 +131,14 @@
 
 `theme_pipeline.enabled=true` 已开启主题入口。`research_goal=null` 表示无预设目标；`model`、`reasoning_effort`、`timeout_seconds` 为 null 时继承 `card_generator` 对应设置。`assets_dir` 指定主题模板与 schema 的目录，默认 `hydrolitagent/cards/assets/templates/themes`。结果目录沿用 `paths.themes_dir`，定向精读保存在各论文记录下。模型/目标/模板内容变化产生新的 CHANGE 记录。[现行规则](../../user-guide/cards/unified-theme-pool.md)。
 
-## 兼容遗留节
+## 不要加「假配置」
 
-`config.json` 还保留若干历史配置节（`scan`、`tasks`、`pipeline`、`activity_reporting`、`deployment`、`scheduler`）。当前五条命令不驱动这些能力，节本身只是 schema 兼容数据，不会因为无人读取而出错。**不要在这里添加程序不读取的“假配置”冒充已有能力**；新增配置项必须和对应的解析校验、功能实现、测试及本说明同时交付。
+`config.json` 的**每一个**顶层节都被 `config.py` 解析 —— 当前是 `schema_version`、`paths`、
+`zotero`、`pdf_gate`、`tasks`、`pipeline`、`theme_pipeline`、`card_generator` 八个。
+**没有**只作 schema 兼容、无人读取的遗留节。
+
+**不要添加程序不读取的「假配置」来冒充已有能力**；新增配置项必须和对应的解析校验、功能实现、
+测试及本说明**同时交付**。
 
 Qinjiajun 目标库的群组 ID 保存在可复现的 `hydrolitagent/cards/assets/config/config.json` 中；群组 ID 不是密钥，可以进入 Git。
 
