@@ -123,7 +123,7 @@ bash scripts/run_paper_pipeline.sh "10.1016/j.jhydrol.2023.130249"
 # 文献卡平台：只读自查模型与产物根（Windows）
 uv run hydrolitagent cards ai-config --json
 
-# 科研工作流：先自测，再制卡
+# 人读那一支：先自测，再制卡
 python skills/hydrology-evidence-cards/tests/self_test.py
 python skills/hydrology-theme-synthesis/tests/self_test.py
 ```

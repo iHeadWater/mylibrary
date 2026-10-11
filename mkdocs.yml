@@ -75,13 +75,13 @@ nav:
           - 模板资产: user-guide/cards/templates.md
           - 统一主题池: user-guide/cards/unified-theme-pool.md
           - 运行维护: user-guide/cards/runtime-maintenance.md
-  - 科研工作流:
-      - 总览: research-workflow/index.md
-      - 主题模板:
-          - 使用说明 V1.3: research-workflow/主题模板/00_主题模板使用说明_V1.3.md
-          - 初步主题与人工筛选 V1.3: research-workflow/主题模板/01_初步主题与人工筛选模板_V1.3.md
-          - 既定主题深度综合 V1.3: research-workflow/主题模板/02_既定主题深度综合模板_V1.3.md
-          - 主题工作流运行账 V1.3: research-workflow/主题模板/03_主题工作流运行账模板_V1.3.md
+          - 人读那一支:
+              - 总览: user-guide/cards/human-reading.md
+              - 主题模板:
+                  - 使用说明 V1.3: user-guide/cards/主题模板/00_主题模板使用说明_V1.3.md
+                  - 初步主题与人工筛选 V1.3: user-guide/cards/主题模板/01_初步主题与人工筛选模板_V1.3.md
+                  - 既定主题深度综合 V1.3: user-guide/cards/主题模板/02_既定主题深度综合模板_V1.3.md
+                  - 主题工作流运行账 V1.3: user-guide/cards/主题模板/03_主题工作流运行账模板_V1.3.md
   - 开发:
       - 模块架构: development/architecture.md
       - 贡献指南: development/contributing.md

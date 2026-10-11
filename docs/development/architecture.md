@@ -178,10 +178,10 @@ Skills 是面向 Agent 的封装层，每个 Skill 包含：
 |---|---|---|---|
 | **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/播客/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（12 个技能） | [MCP Server 工具](../user-guide/mcp-tools.md) |
 | **文献卡与主题卡** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题（**运行时 Windows-only**） | `hydrolitagent/cards/`、`skills/literature-cards/` | [文献卡与主题卡](../user-guide/cards/index.md) |
-| **科研工作流** | 人读证据卡与主题综合：来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、[中文规范](../research-workflow/index.md) | [科研工作流](../research-workflow/index.md) |
+| **人读那一支** | 人读证据卡与主题综合：来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、[规范](../user-guide/cards/human-reading.md) | [人读那一支](../user-guide/cards/human-reading.md) |
 
 > **后两支别混用**：文献卡与主题卡是**自动化**链路（给定一篇论文稳定产出可校验的卡与候选主题，
-> 不做科研裁决）；科研工作流是**人工决策**链路（每条科学表述都回链可核对的原文，正式主题必须由人签字）。
+> 不做科研裁决）；人读那一支是**人工决策**链路（每条科学表述都回链可核对的原文，正式主题必须由人签字）。
 
 ## Zotero 有四种读法，用途不同
 

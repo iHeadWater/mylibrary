@@ -5,7 +5,7 @@ These tests encode the TARGET state of the restructure, not the current state:
 * the platform's code and reusable assets live inside ``hydrolitagent/cards/``
   (modules + ``assets/``) -- the top-level ``hydro-platform/`` directory is gone;
 * the platform's documentation is organised by audience under ``docs/``
-  (``user-guide/cards/``、``development/platform/``、``research-workflow/``)
+  (``user-guide/cards/``、``development/platform/``)
   and the platform's own README files are dropped;
 * every generated artefact (evidence packs, themes, reports, activity ledgers,
   member files) stops being tracked by git and is produced into a workspace-local
@@ -85,7 +85,7 @@ PLATFORM_NOT_IGNORED_PATHS = (
 )
 
 # --------------------------------------------------------------------------------------
-# 科研工作流(王新宇线)的产物:默认落在仓库根,落点由 paths.artifact_root 决定
+# 人读那一支(原王新宇线)的产物:默认落在仓库根,落点由 paths.artifact_root 决定
 # --------------------------------------------------------------------------------------
 
 ARTIFACT_ROOT_DIRS = ("证据卡", "主题", "运行记录", "文献链接")
@@ -121,7 +121,6 @@ MIN_PLATFORM_SOURCE_FILES = 20
 PLATFORM_DOC_DIRS = (
     DOCS_ROOT / "user-guide" / "cards",
     DOCS_ROOT / "development" / "platform",
-    DOCS_ROOT / "research-workflow",
 )
 MIN_PLATFORM_DOC_FILES = 20
 
@@ -561,12 +560,12 @@ def test_platform_output_dirs_are_ignored() -> None:
 
 
 # --------------------------------------------------------------------------------------
-# 10. 科研工作流产物:默认位置不入库,且规则必须覆盖它
+# 10. 人读那一支的产物:默认位置不入库,且规则必须覆盖它
 # --------------------------------------------------------------------------------------
 
 
 def test_research_workflow_artifacts_are_ignored_and_untracked() -> None:
-    """要求:科研工作流(王新宇线)的产物默认不入库,且 ignore 规则必须覆盖默认位置。
+    """要求:人读那一支(原王新宇线)的产物默认不入库,且 ignore 规则必须覆盖默认位置。
 
     落点本身由 ``paths.artifact_root`` 决定(默认仓库根,可指向共享盘),
     所以这里只守卫**默认位置**:与平台产物同一原则,分两处:
@@ -605,7 +604,7 @@ def test_research_workflow_artifacts_are_ignored_and_untracked() -> None:
         )
 
     for name in RESEARCH_DOCS_DIRS:
-        rel = f"docs/research-workflow/{name}"
+        rel = f"docs/user-guide/cards/{name}"
         assert (REPO_ROOT / rel).is_dir(), f"缺少随合并搬入的规范目录 {rel}"
         assert not _is_ignored(f"{rel}/示例.md"), (
             f"ignore 规则命中 {rel}/ ——规则过宽,会吞掉随合并搬入的规范文档"
