@@ -81,8 +81,8 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--assets-root", help="选择另一份资产根（templates/prompts/schemas）；与 --config 互斥")
             command.add_argument("--report-dir", default=os.environ.get("HYDROLITAGENT_CARDS_VALIDATION_REPORT_DIR"),
                                  help="校验记录根；默认草稿旁 validations/，支持环境变量 HYDROLITAGENT_CARDS_VALIDATION_REPORT_DIR")
-            command.add_argument("--draft", required=True, help="#30 保存的 draft.json")
-            command.add_argument("--paper-input", required=True, help="对应的 #29 READY JSON 文件")
+            command.add_argument("--draft", required=True, help="待校验的主体卡草稿 draft.json")
+            command.add_argument("--paper-input", required=True, help="对应的单篇 READY JSON（输入记录）文件")
         if name == "paper-input":
             paper_source = command.add_mutually_exclusive_group(required=True)
             paper_source.add_argument(
@@ -119,10 +119,10 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--ai-model", help="所选服务可用的模型名")
             command.add_argument("--ai-executable", help="本机 CLI 可执行文件名或绝对路径")
             command.add_argument("--ai-timeout", type=float)
-            command.add_argument("--output-root", help="本次产物根；沿用 #27 的解析器")
+            command.add_argument("--output-root", help="本次产物根；不传则用默认解析（configs/paths.toml → outputs/）")
             source = command.add_mutually_exclusive_group(required=True)
             source.add_argument("--item-key", help="旧证据包流程的 Zotero 父条目 Key")
-            source.add_argument("--paper-input", help="#29 的单篇 READY JSON 文件，或 - 从 stdin 读取；仅生成待校验草稿")
+            source.add_argument("--paper-input", help="单篇 READY JSON（输入记录）文件，或 - 从 stdin 读取；仅生成待校验草稿")
             command.add_argument(
                 "--retry-quality-failed",
                 action="store_true",
