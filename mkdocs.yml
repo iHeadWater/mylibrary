@@ -69,8 +69,8 @@ nav:
       - Zotero 配置参考: user-guide/config.md
       - 文献卡与主题卡:
           - 概述: user-guide/cards/index.md
+          - 一次性配置: user-guide/cards/setup.md
           - 单篇论文输入: user-guide/cards/paper-input.md
-          - 单篇流程首次配置: user-guide/cards/single-paper-quickstart.md
           - 单篇主体卡草稿: user-guide/cards/subject-card-draft.md
           - 主体卡校验门禁: user-guide/cards/subject-card-validation.md
           - 模板资产: user-guide/cards/templates.md

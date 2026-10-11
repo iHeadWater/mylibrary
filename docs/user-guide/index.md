@@ -37,12 +37,12 @@
 | 页面 | 讲什么 |
 |---|---|
 | [平台概述](cards/index.md) | 平台是什么、五条核心命令、边界与限制 |
-| [单篇论文流程](cards/single-paper-quickstart.md) | 从自己的 Zotero 选一篇论文 → 生成主体卡 → 代码校验的完整命令流程 |
+| [单篇论文流程](cards/index.md) | 从自己的 Zotero 选一篇论文 → 生成主体卡 → 代码校验的完整命令流程 |
 | [项目级设计](../development/platform/project-design.md) | 总体架构、数据流、用户流程、模块边界、配置、运行和模板关系 |
 | [统一主题池](cards/unified-theme-pool.md) | 一个研究问题一个长期主题:候选演化、合并/拆分、正式主题保护 |
 | [配置字段参考](../development/platform/config.md) | 平台总配置的逐字段说明 |
 
-> **适用范围**:平台运行时为 **Windows-only**,代码与文档只在 Windows 上验证过。完整环境准备(CLI 安装、登录与 Poppler)见[单篇论文流程](cards/single-paper-quickstart.md)。详见[平台概述](cards/index.md)。
+> **适用范围**:平台运行时为 **Windows-only**,代码与文档只在 Windows 上验证过。完整环境准备(CLI 安装、登录与 Poppler)见[单篇论文流程](cards/index.md)。详见[平台概述](cards/index.md)。
 
 ## 相关
 

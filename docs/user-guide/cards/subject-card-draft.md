@@ -32,7 +32,7 @@ uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai
 | **Claude** | Windows 上验证过 CLI 2.1.280 的原生 PDF Read，依赖 PATH 里的 `pdftoppm` 渲染页面。缺它时**不能**把「只拿到文本或文件信息」当成完整阅读。CLI 需支持 `--safe-mode`、`--restricted`、`--no-session-persistence` 与结构化输出；旧版本请升级，**不会**退回不受限模式。 |
 
 - `pdf*_executable` 一类配置只管 **Codex** 的读取适配器，**不会**给 Claude 的原生 Read 设置工具位置。
-- 安装与 PATH 检查见[首次配置](single-paper-quickstart.md)。
+- 安装与 PATH 检查见[首次配置](setup.md)。
 
 ## 模型选择与覆盖
 
@@ -59,7 +59,7 @@ Claude 以**隔离的只读模式**运行，不加载项目插件或命令。若
 **终端 Claude Code + CC Switch + DeepSeek**：仍然选 `--ai-provider claude` —— 这里选的是**命令行适配器**，
 不是模型厂家，所以不要写成 `--ai-provider deepseek`。CC Switch 负责给 Claude 配服务地址、认证与模型映射，
 仓库启动的 Claude 子进程再调用该服务。配置导入、直连与代理的区别、逐步命令与结果解读见
-[单篇完整教程](single-paper-quickstart.md)。**「普通聊天能用」不等于当前上游服务满足 PDF 页面读取与
+[一次性配置](setup.md)。**「普通聊天能用」不等于当前上游服务满足 PDF 页面读取与
 结构化输出要求** —— 以真实的生成与校验结果为准。
 
 ## 产物写到哪

@@ -23,7 +23,7 @@ Git 只保存可复现的代码、配置、模板、测试和文档。
 
 | 你想了解什么 | 阅读入口 |
 | --- | --- |
-| 单篇论文从输入到校验的完整命令行流程 | [单篇论文命令行流程](single-paper-quickstart.md) |
+| 装一次就能开工（然后直接跟 agent 说人话） | [一次性配置](setup.md) |
 | 单篇 Zotero 论文输入 | [单篇 Zotero 论文输入](paper-input.md) |
 | 主体卡草稿生成 | [从单篇 PDF 生成主体卡草稿](subject-card-draft.md) |
 | 主体卡代码校验 | [主体卡代码校验门禁](subject-card-validation.md) |
