@@ -15,16 +15,19 @@ Usage (standalone)::
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
+import subprocess
 import sys
+import urllib.request
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from typing import Optional
 
-from hydrolitagent.literature._paths import PAPERS_DIR
+from hydrolitagent.literature._paths import PAPERS_DIR, PROJECT_ROOT
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +411,244 @@ def format_metadata(metadata: PdfMetadata) -> str:
         f"  Size:    {metadata.file_size_bytes:,} bytes ({metadata.file_size_bytes / 1024:.0f} KB)",
     ]
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Download orchestration (merged from scripts/download_paper.py)
+# ---------------------------------------------------------------------------
+#
+# The curl helpers, metadata lookups, Zotero sync and setup check used to live
+# inline in ``scripts/download_paper.py`` (650 lines, no tests). They now live
+# here so the behaviour is importable and testable; the script is a thin shell.
+# The browser flows live in ``download_browser`` (imported lazily by
+# ``download_paper`` to keep this module importable without the automation code).
+
+UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+)
+CROSSREF_UA = "mylibrary-download-paper/1.0 (mailto:test@example.com)"
+DEFAULT_OUT = Path(".playwright-mcp")
+
+
+def crossref_meta(doi: str) -> dict:
+    url = "https://api.crossref.org/works/" + doi
+    req = urllib.request.Request(url, headers={"User-Agent": CROSSREF_UA})
+    with urllib.request.urlopen(req, timeout=40) as r:
+        msg = json.load(r)["message"]
+    alt = msg.get("alternative-id") or []
+    return {
+        "title": (msg.get("title") or [""])[0],
+        "container": (msg.get("container-title") or [""])[0],
+        "type": msg.get("type"),
+        "pii": alt[0] if alt else None,
+        "prefix": doi.split("/")[0],
+        "suffix": doi.split("/", 1)[1],
+    }
+
+
+def unpaywall_is_oa(doi: str) -> str | None:
+    """Return the best OA PDF URL if the paper has one."""
+    url = f"https://api.unpaywall.org/v2/{doi}?email=mylibrary@example.com"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": CROSSREF_UA})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.load(r)
+    except Exception:
+        return None
+    best = data.get("best_oa_location") or {}
+    return best.get("url_for_pdf") or best.get("url")
+
+
+def is_pdf_file(path: Path) -> bool:
+    """Cheap boolean check: does the file start with a ``%PDF-`` header?
+
+    Distinct from :func:`verify_pdf`, which returns rich :class:`PdfMetadata`
+    and raises on malformed input. This one never raises — it is the fast
+    "did the download actually land a PDF?" guard used by the curl/browser flows.
+    """
+    try:
+        return path.read_bytes()[:5] == b"%PDF-"
+    except OSError:
+        return False
+
+
+def curl_download(url: str, dest: Path) -> bool:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["curl", "-sL", "-A", UA, "-o", str(dest), url],
+        check=False,
+        timeout=300,
+    )
+    return is_pdf_file(dest)
+
+
+def copernicus_pdf_url(suffix: str) -> str:
+    """Parse a 10.5194 suffix into a published-article or preprint PDF URL.
+
+    Published:  hess-30-5327-2026 -> .../articles/30/5327/2026/hess-30-5327-2026.pdf
+    Preprint:   essd-2026-528    -> .../preprints/essd-2026-528/essd-2026-528.pdf
+    """
+    m = re.fullmatch(r"([a-z]+)-(\d+)-(\d+)-(\d{4})", suffix)
+    if m:
+        journal, vol, page, year = m.groups()
+        return (
+            f"https://{journal}.copernicus.org/articles/{vol}/{page}/{year}/{suffix}.pdf"
+        )
+    m = re.fullmatch(r"([a-z]+)-(\d{4})-(\d+)", suffix)
+    if m:
+        journal, year = m.group(1), m.group(2)
+        # egusphere requires a year directory segment; essd/hess do not
+        if journal == "egusphere":
+            return (
+                f"https://{journal}.copernicus.org/preprints/{year}/{suffix}/{suffix}.pdf"
+            )
+        return f"https://{journal}.copernicus.org/preprints/{suffix}/{suffix}.pdf"
+    raise ValueError(f"Unrecognized Copernicus suffix: {suffix}")
+
+
+def curl_with_cookies(article_url: str, pdf_url: str, dest: Path) -> bool:
+    """Two-step curl: visit article page to set cookies, then fetch PDF."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    cookie_jar = dest.parent / ".curl-cookies.txt"
+    subprocess.run(
+        ["curl", "-sL", "-A", UA, "-c", str(cookie_jar), "-b", str(cookie_jar), article_url],
+        check=False, timeout=60,
+    )
+    subprocess.run(
+        ["curl", "-sL", "-A", UA, "-c", str(cookie_jar), "-b", str(cookie_jar),
+         "-o", str(dest), pdf_url],
+        check=False, timeout=300,
+    )
+    try:
+        cookie_jar.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return is_pdf_file(dest)
+
+
+def sync_to_zotero(pdf_path: Path, doi: str) -> int:
+    cmd = [
+        "uv", "run", "python", "-m",
+        "hydrolitagent.literature.zotero_sync", str(pdf_path), doi,
+    ]
+    # Windows consoles default to GBK; force UTF-8 so the Chinese GDrive path
+    # and CJK titles printed by zotero_sync don't crash with a UnicodeEncodeError.
+    env = dict(os.environ)
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    return subprocess.run(cmd, env=env).returncode
+
+
+def _load_dotenv() -> None:
+    """Load <repo>/.env (best-effort) so env-var checks match CLI runs."""
+    env_file = PROJECT_ROOT / ".env"
+    if env_file.exists():
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(env_file)
+        except Exception:
+            pass
+
+
+def setup_check() -> int:
+    """Verify a bare-host Zotero/GDrive setup is ready before the first sync."""
+    try:  # Windows consoles default to GBK; emit UTF-8 so captured output is clean
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+    _load_dotenv()
+    ok = True
+    required = ("ZOTERO_API_KEY", "ZOTERO_LIBRARY_ID", "GDRIVE_PAPERS_PATH")
+    missing = [k for k in required if not os.environ.get(k)]
+    print("── Zotero/GDrive setup check ──")
+    if missing:
+        ok = False
+        print(f"  [FAIL] missing in .env: {', '.join(missing)}")
+        print("         → cp .env.example .env and fill them (see comments)")
+    else:
+        print("  [ok]   env keys present")
+
+    gd = os.environ.get("GDRIVE_PAPERS_PATH", "")
+    if gd:
+        p = Path(gd)
+        if p.is_dir():
+            probe = p / ".setup-check-write-test"
+            try:
+                probe.write_text("x", encoding="utf-8")
+                probe.unlink()
+                print(f"  [ok]   GDrive papers dir writable: {p}")
+            except OSError as e:
+                ok = False
+                print(f"  [FAIL] GDrive papers dir not writable: {e}")
+        else:
+            ok = False
+            print(f"  [FAIL] GDRIVE_PAPERS_PATH not a directory: {p}")
+
+    api_key = os.environ.get("ZOTERO_API_KEY", "")
+    lib_id = os.environ.get("ZOTERO_LIBRARY_ID", "")
+    if api_key and lib_id:
+        try:
+            from pyzotero import zotero
+            z = zotero.Zotero(lib_id, "user", api_key)
+            z.items(limit=1)
+            print("  [ok]   Zotero Web API credentials valid")
+        except Exception as e:
+            ok = False
+            print(f"  [FAIL] Zotero Web API error: {e}")
+
+    print()
+    print("One-time Zotero Desktop setup (per machine):")
+    print("  Settings → Advanced → Files and Folders → Linked Attachment Base Directory")
+    print(f"  must point to: {gd}")
+    print("  ('Automatically rename/move attached files' — ZotMoov — should be OFF for that folder)")
+    print("Then just run:  uv run python scripts/download_paper.py --arxiv <id> --sync")
+    return 0 if ok else 1
+
+
+def download_paper(
+    doi: str | None = None,
+    arxiv: str | None = None,
+    out_dir: Path | None = None,
+    *,
+    sync: bool = False,
+    resolve_only: bool = False,
+) -> int:
+    """Download a paper by DOI or arXiv id; return a process exit code.
+
+    Orchestration lifted out of ``scripts/download_paper.py`` so it is
+    importable and testable. Exit codes match the historical CLI: ``0`` on
+    success, ``1`` on download failure / bad metadata. ``ValueError`` from a
+    missing DOI is the caller's responsibility (the CLI's ``argparse`` enforces
+    that one of ``--doi`` / ``--arxiv`` is given).
+    """
+    from hydrolitagent.literature.download_browser import download_with_browser, log
+
+    out = Path(out_dir) if out_dir is not None else DEFAULT_OUT
+
+    if arxiv:
+        dest = out / f"arXiv.{arxiv}.pdf"
+        url = f"https://arxiv.org/pdf/{arxiv}"
+        log(f"arXiv curl: {url}")
+        ok = curl_download(url, dest)
+        if not ok:
+            log("FAILED: no %PDF- header")
+            return 1
+        log(f"SAVED: {dest} ({dest.stat().st_size} bytes)")
+        return sync_to_zotero(dest, f"10.48550/arXiv.{arxiv}") if sync else 0
+
+    meta = crossref_meta(doi)
+    if resolve_only:
+        print(json.dumps(meta, ensure_ascii=False, indent=2))
+        return 0
+    log(f"{meta['title'][:80]}")
+    log(f"  {meta['container']} | {meta['prefix']}")
+
+    dest = asyncio.run(download_with_browser(doi, meta, out))
+    if not dest:
+        log("FAILED: download did not produce a verified PDF")
+        return 1
+    log(f"SAVED: {dest} ({dest.stat().st_size} bytes)")
+    return sync_to_zotero(dest, doi) if sync else 0
 
 
 # ---------------------------------------------------------------------------
