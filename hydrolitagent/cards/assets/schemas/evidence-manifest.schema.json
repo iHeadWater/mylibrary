@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://hydro-platform.local/schemas/evidence-manifest.schema.json",
+  "$id": "https://hydrolitagent.local/schemas/evidence-manifest.schema.json",
   "title": "Hydro Platform Evidence Package Manifest",
   "type": "object",
   "additionalProperties": false,

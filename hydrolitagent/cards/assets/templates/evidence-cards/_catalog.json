@@ -9,7 +9,7 @@
     "authorization_basis": "in_repo_consolidation"
   },
   "adaptation": {
-    "owner": "hydro-platform",
+    "owner": "hydrolitagent/cards",
     "policy": "content_template_only",
     "notes": "2.0.0:qinjiajun 分支与王新宇分支合并后,模板层改为仓库内同源。正文骨架采用王新宇 V1.7 版本(六段式/形成机制 + 可见深度规则),并保留管线契约所需的 15 个 front matter 字段与占位符;1.1.0 引入的「## AI 推理」「## 信息边界」归因分区继续保留(原文陈述/原文转述/AI 推理三分与信息边界声明),它对应王新宇侧的 statement_role 机器字段,在本管线中由正文承载;新增第 9 类 platform-decision-synthesis。source_blob_sha 为对应来源文件在本仓库 commit 上的 git blob。;2.0.1:九类模板正文各补一条「数学公式与金额」LaTeX 转写规则(真实公式写 $...$ / $$...$$、行内不用 \\(...\\)、金额一律转义为 \\$),正文骨架其余不变。"
   },
