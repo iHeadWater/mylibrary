@@ -23,13 +23,19 @@
 
 | 你对 agent 说 | 会发生什么 | 详情 |
 |---|---|---|
+| 「把这篇论文**下载并入库**」 | DOI / arXiv / 标题 → 下载 PDF → 建 Zotero 条目 + `linked_file` 附件 | [论文入库流水线](docs/user-guide/paper-pipeline.md) |
+| 「去我的库里找找 X 相关的文献」 | 搜 / 读 Zotero 库（含全文、附件与批注） | [MCP Server 工具](docs/user-guide/mcp-tools.md) |
+| 「把这批论文精读成分析卡 / 出一期公众号+播客」 | 每周综述：精读全文 → 分析卡 → 主题聚类 → 文章 → 播客 | [文献深度处理](docs/user-guide/literature.md) |
 | 「把《某某》这篇做成卡」 | 从你的 Zotero 找到它 → 读 PDF → 出主体卡草稿 → 代码校验 | [文献卡与主题卡](docs/user-guide/cards/index.md) |
 | 「这几篇都做一下」 | 同一条链路逐篇跑，一篇失败不拖累其余 | [单篇论文输入](docs/user-guide/cards/paper-input.md) |
 | 「看看能聚出哪些主题」 | 由已有的文献卡生成候选主题、必要时定向精读并回填 | [统一主题池](docs/user-guide/cards/unified-theme-pool.md) |
 | 「主题池现在什么样」 | 报当前候选与历史版本 | [统一主题池](docs/user-guide/cards/unified-theme-pool.md) |
 | 「当前用哪个模型 / 产物放哪」 | 报模型选择与产物落点，不调模型 | [运行维护](docs/user-guide/cards/runtime-maintenance.md) |
 
-> 底层是 `uv run hydrolitagent cards …` 的 5 条子命令 —— **你不需要读那些页**。
+> 前三行是**入库与当期内容**线；后四行是**文献卡与主题卡**线（底层是 `uv run hydrolitagent cards …`
+> 的 5 条子命令）。无论哪条 —— **你不需要读那些详情页**，只在想自己动手或排错时才去。
+>
+> 付费墙（SD / Wiley / Nature 等）的下载需要浏览器 + 机构会话，见[论文 PDF 下载](docs/user-guide/download-pdf.md)。
 
 ## 三条线
 
@@ -116,7 +122,12 @@ cp .env.example .env     # 填入 DEEPSEEK_API_KEY、ZOTERO_API_KEY、ZOTERO_LIB
 # 工具链：启动 12 个工具的 MCP Server（端口 8002）
 uv run python -m hydrolitagent.zotero.server
 
-# 工具链：DOI / arXiv / 标题 → PDF → Zotero
+# 工具链：下载论文并入库 —— DOI / arXiv ID / 标题 → 下载 PDF → Zotero 条目 + linked_file 附件
+uv run python scripts/download_paper.py --setup-check                                  # 新机器先自检一次
+uv run python scripts/download_paper.py --doi "10.1016/j.jhydrol.2023.130249" --sync
+uv run python scripts/download_paper.py --arxiv 2501.08086 --sync
+
+# 容器（myopenclaw hermes）里用打包好的流水线；逐条细节见 docs/user-guide/paper-pipeline.md
 bash scripts/run_paper_pipeline.sh "10.1016/j.jhydrol.2023.130249"
 
 # 文献卡平台：只读自查模型与产物根（Windows）
