@@ -37,12 +37,12 @@
 | 「主题池现在什么样」 | 报当前候选与历史版本 | [统一主题池](docs/user-guide/cards/unified-theme-pool.md) |
 | 「当前用哪个模型 / 产物放哪」 | 报模型选择与产物落点，不调模型 | [运行维护](docs/user-guide/cards/runtime-maintenance.md) |
 
-> 前三行是**入库与当期内容**线；后四行是**文献卡与主题卡**线（底层是 `uv run hydrolitagent cards …`
+> 前三行是**入库与当期内容**线；后五行是**文献卡与主题卡**线（底层是 `uv run hydrolitagent cards …`
 > 的 5 条子命令）。无论哪条 —— **你不需要读那些详情页**，只在想自己动手或排错时才去。
 >
 > 付费墙（SD / Wiley / Nature 等）的下载需要浏览器 + 机构会话，见[论文 PDF 下载](docs/user-guide/download-pdf.md)。
 
-## 三条线
+## 代码分三支
 
 | 线 | 做什么 | 代码 / 数据 | 入口 |
 |---|---|---|---|
@@ -50,7 +50,8 @@
 | **文献卡与主题卡平台** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验，**运行时 Windows-only** | `hydrolitagent/cards/`、`skills/literature-cards/` | [平台文档](docs/user-guide/cards/index.md) |
 | **科研工作流** | 人读证据卡与主题综合：来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合。纯标准库脚本，人工决策不可绕过 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、`docs/research-workflow/`（中文规范） | [平台总览](docs/research-workflow/index.md) |
 
-**两条线解决的问题不同**，不要混用：文献卡与主题卡平台追求「给定一篇论文稳定产出可校验的主体卡与候选主题」，科研工作流追求「每一条科学表述都回链可核对的原文，且正式主题必须由人签字」。前者自动化强、不做科研裁决；后者有完整人工决策门，但没有调度器。
+> **后两支别混用**：文献卡与主题卡是**自动化**链路（给定一篇论文，稳定产出可校验的卡与候选主题，不做科研裁决）；
+> 科研工作流是**人工决策**链路（每条科学表述都回链可核对的原文，正式主题必须由人签字）。
 
 ## Zotero 有四种读法，用途不同
 

@@ -30,8 +30,7 @@
 ## 与 `skills/hydrology-evidence-cards/` 的关系
 
 那边是**人读证据卡**的骨架（**源**），这边是**模型生成粗卡**用的（**派生**）：
-9 个同名文件，正文结构沿用，但这边替换/补充了管线契约所需的 **15 个 front matter 字段**
-（`evidence_id` / `card_state` / `zotero_parent_key` / `source_pdf_sha256` …），由校验器强制要求。
+9 个同名文件，正文结构沿用，但这边替换/补充了管线契约所需的 **15 个 front matter 字段**（证据 ID、Zotero 父条目、PDF 指纹…），由校验器强制要求。
 
 两份**内容不同，且刻意不同步** —— 改源目录**不会**自动同步过来。
 

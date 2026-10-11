@@ -44,7 +44,7 @@ cp .env.example .env   # 填入 DEEPSEEK_API_KEY;设置 HYDROLITAGENT_OUTPUT、Z
 
 > 本仓库只有一个包 **`hydrolitagent`** —— 文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包(workspace 成员随之取消)。`.venv` 与 `uv.lock` 仍只有一份;`uv sync --all-packages` 照旧可用。
 
-完整参考(Zotero Desktop / Linked Attachment Base Directory 配置、环境变量、TOML 配置)见[安装配置](docs/getting-started/installation.md)。
+完整参考(Zotero Desktop / Linked Attachment Base Directory 配置、环境变量、TOML 配置)见[前提与配置](docs/getting-started/installation.md)。
 
 ## 常用命令
 

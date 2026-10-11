@@ -21,6 +21,9 @@ uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai
 后端二选一 —— **Codex** 用本地 PDF 适配器（需要 `pypdf` 与 Poppler 的 `pdfinfo` / `pdftoppm`）；
 **Claude** 走原生 PDF Read（需要 PATH 里的 `pdftoppm`；**缺它就不能算「完整读过了」**）。
 
+> Claude CLI 需支持**隔离模式与结构化输出**（本机验证版本 **2.1.280**）；版本过旧会直接失败，
+> **不会**退回不受限模式。
+
 > **`--ai-provider claude` 选的是「命令行适配器」，不是模型厂家。** 用 CC Switch 把 Claude Code
 > 接到 DeepSeek 时仍然填 `claude`，**不要**填 `deepseek` —— 当前命令只接受 `claude` 或 `codex`。
 
