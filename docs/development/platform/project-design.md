@@ -1,6 +1,6 @@
 # 文献研究平台项目级设计
 
-本文面向项目评审、新成员上手和后续开发，说明 `iHeadWater/mylibrary` 仓库 `literature-platform` 分支所承载的文献研究平台。文档以当前分支能够证明的实现为基础，同时给出尚未完成部分的目标设计和验收边界。规划中的能力会明确标注为“目标设计”，不得据此宣称代码、配置或运行链路已经存在。
+本文面向项目评审、新成员上手和后续开发，说明 `iHeadWater/mylibrary` 仓库承载的文献研究平台。文档以**当前代码能证明的**实现为基础，同时给出尚未完成部分的目标设计和验收边界。规划中的能力会明确标注为“目标设计”，不得据此宣称代码、配置或运行链路已经存在。
 
 | 交付边界 | 内容 |
 | --- | --- |
@@ -80,7 +80,7 @@ flowchart LR
 ### 首次配置
 
 1. 安装并启动 Zotero，确认目标文库和 PDF 可以从本机访问。
-2. 克隆 `mylibrary`，切换到 `literature-platform`，使用 uv 安装整个 workspace。
+2. 克隆 `mylibrary`，使用 uv 安装整个 workspace。
 3. 配置模型与产物目录，安装并登录一种 CLI（Codex 或 Claude），并准备 Poppler。
 4. 核对当前产物目录与 `artifact_root` 的实际解析路径。在统一发布实现前，用户可以用 Obsidian 打开相应 Markdown 目录，但不应依赖修改 `artifact_root` 来自动搬运现有文献卡和候选主题。
 
@@ -175,7 +175,7 @@ flowchart LR
 ```powershell
 git clone https://github.com/iHeadWater/mylibrary.git
 Set-Location mylibrary
-git switch literature-platform
+git switch main
 
 uv sync --all-packages
 Copy-Item .env.example .env

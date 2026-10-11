@@ -64,7 +64,7 @@ cd /path/to/mylibrary
 ## 快速开始
 
 ```bash
-git clone --branch literature-platform https://github.com/iHeadWater/mylibrary.git mylibrary
+git clone https://github.com/iHeadWater/mylibrary.git mylibrary
 cd mylibrary
 uv sync --all-packages --locked
 cp .env.example .env      # 按需填 ZOTERO_API_KEY / ZOTERO_LIBRARY_ID / GDRIVE_PAPERS_PATH
