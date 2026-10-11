@@ -23,8 +23,9 @@ dependencies = [
   "requests>=2.31",
   "pillow>=10.0",
   # 原 hydro-platform workspace 成员的依赖，随包合并并入根包。
-  # 固定版本是刻意的：PDF 直读路径依赖它解析页数/文本。
-  "pypdf==6.18.0",
+  # 精确 pin 是继承来的（来自旧 hydro-platform 的 `pdf-direct` extra），不是为合并做的决定：
+  # PDF 直读路径用它解析页数/文本。代价是 Dependabot 对 `==` 只报不修，每次安全公告都得手工 bump。
+  "pypdf==6.20.0",
 ]
 
 [project.optional-dependencies]
