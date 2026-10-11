@@ -30,6 +30,19 @@ uv run hydrolitagent cards ai-config --json          # 看模型选择与产物�
 
 完整清单：`uv run hydrolitagent cards --help`（当前 5 个子命令）。
 
+## 自查（不需要你的论文，也不需要模型）
+
+仓库带一份合成示例，装完就能验证入口通了：
+
+```bash
+uv run python scripts/paper_validate.py \
+  --draft hydrolitagent/cards/assets/examples/subject-card-validation/draft.json \
+  --paper-input hydrolitagent/cards/assets/examples/subject-card-validation/paper-input.json \
+  --report-dir outputs/validation-demo
+```
+
+返回 `status: PASS` 就说明入口可用。它只验证**代码**，**不代表**真实论文能生成。
+
 ## 前提与产物
 
 **前提**：Zotero 里该论文**已附好可读的 PDF**；一种模型 CLI（Codex 或 Claude）**已登录**。
