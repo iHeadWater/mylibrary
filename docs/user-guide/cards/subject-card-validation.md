@@ -34,7 +34,7 @@ uv run hydrolitagent cards evidence-validate \
 ```
 
 示例只验证**程序规则**，不能用于科研。报告落在 `outputs/validation-demo/<validation_id>/validation.json`。
-分阶段安装说明见[单篇流程首次配置](setup.md)。
+安装见[前提与配置](../../getting-started/installation.md)。
 
 ### 各项从哪里取
 

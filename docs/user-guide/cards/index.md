@@ -7,7 +7,7 @@
 
 ## 怎么用
 
-**配一次**（见[一次性配置](setup.md)），之后直接跟 agent 说人话就行：
+**配一次**（见[前提与配置](../../getting-started/installation.md)），之后直接跟 agent 说人话就行：
 
 > 「把《某某》这篇做成卡」 · 「这几篇都做一下」 · 「看看能聚出哪些主题」
 
@@ -49,7 +49,7 @@ uv run hydrolitagent cards ai-config --json          # 看模型选择与产物�
 
 | 想看什么 | 去哪 |
 |---|---|
-| 一次性配置 | [一次性配置](setup.md) |
+| 开工前的公共前提与凭据 | [前提与配置](../../getting-started/installation.md) |
 | 单篇：输入 / 草稿 / 校验 | [单篇论文输入](paper-input.md) · [主体卡草稿](subject-card-draft.md) · [主体卡校验](subject-card-validation.md) |
 | 主题池 | [统一主题池](unified-theme-pool.md) |
 | 模板 | [公共模板](templates.md) |

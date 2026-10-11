@@ -112,13 +112,18 @@ PLATFORM_PACKAGE_PREFIX = "hydrolitagent/cards/"
 MIN_PLATFORM_SOURCE_FILES = 20
 
 # 平台文档已按读者拆到三处（原 docs/hydro-platform/ 随 10-10-docs-restructure 消失）。
-# 三个目录必须都在，且合计篇数不得少于搬迁时的 21 —— 守卫防的是「搬丢了」。
+# 三个目录必须都在，且合计篇数不得少于下界 —— 守卫防的是「搬丢了」。
+#
+# 21 → 20（2026-10-11，任务 10-11-cards-docs-altitude）：本轮**主动**把
+# `single-paper-quickstart.md`（623 行分步教程）的公共前提抽到 `getting-started/installation.md`、
+# 其余删除；删的是页不是内容，公共前提那一页还在（只是换到了 getting-started/）。
+# 这是有意的结构调整，不是搬迁丢失 —— 因此改数字，**不减断言**。
 PLATFORM_DOC_DIRS = (
     DOCS_ROOT / "user-guide" / "cards",
     DOCS_ROOT / "development" / "platform",
     DOCS_ROOT / "research-workflow",
 )
-MIN_PLATFORM_DOC_FILES = 21
+MIN_PLATFORM_DOC_FILES = 20
 
 QUOTED_INSTALL_ARG = re.compile(r"""["']install["']""")
 WHEEL_MATERIAL = re.compile(

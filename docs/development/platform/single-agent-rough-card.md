@@ -30,7 +30,7 @@ Python 核对输入记录、原 PDF 和模板索引 → 一个模型独立会话
 
 ## 操作
 
-单篇生成通过 `evidence-generate` 完成，完整命令与返回值见[单篇论文命令行流程](../../user-guide/cards/setup.md)与[主体卡草稿](../../user-guide/cards/subject-card-draft.md)。生成的草稿一律为待校验状态，须经 `evidence-validate` 通过后才能进入主题流程。
+单篇生成通过 `evidence-generate` 完成，完整命令与返回值见[前提与配置](../../getting-started/installation.md)与[主体卡草稿](../../user-guide/cards/subject-card-draft.md)。生成的草稿一律为待校验状态，须经 `evidence-validate` 通过后才能进入主题流程。
 
 ## 输出保全与故障
 

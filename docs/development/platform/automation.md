@@ -48,4 +48,4 @@
 
 `--demo`在个人库找不到公开演示论文时只返回文章页、PDF 链接和目标集合提示，不会代替用户点击 Zotero Connector；人工抓取完成后需重新执行。
 
-单篇输入的独立命令、默认配置及环境变量覆盖见[单篇论文输入](../../user-guide/cards/paper-input.md)；生成与校验的完整命令流程见[单篇论文命令行流程](../../user-guide/cards/setup.md)。
+单篇输入的独立命令、默认配置及环境变量覆盖见[单篇论文输入](../../user-guide/cards/paper-input.md)；生成与校验的完整命令流程见[前提与配置](../../getting-started/installation.md)。
