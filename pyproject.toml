@@ -9,6 +9,7 @@ name = "hydrolitagent"
 version = "0.1.0"
 description = "Literature knowledge base toolkit for hydrology research."
 readme = "README.md"
+license = { text = "AGPL-3.0" }
 # docker/Dockerfile 使用 python:3.12-slim，满足此范围。
 requires-python = ">=3.12,<3.15"
 dependencies = [

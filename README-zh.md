@@ -210,9 +210,14 @@ uv run mkdocs build --strict
 
 1. Fork 并创建新分支
 2. 将论文、代码或文档添加到相应位置
-3. 确保有分享权限且兼容 [MIT License](LICENSE)
+3. 确保有分享权限、且知道贡献会以 [AGPL-3.0](LICENSE) 授权
 4. 提交 PR 并附上清晰说明
 
 ## 许可证
 
-MIT License。详见 [LICENSE](LICENSE)。
+**GNU Affero General Public License v3.0**（AGPL-3.0）。© 2025 OuyangWenyu。完整正文见 [LICENSE](LICENSE)。
+
+> **这个协议管什么**：你可以自由使用、修改、分发 —— **包括商用**；但只要你**分发**本软件、
+> 或把**修改过的版本作为网络服务提供**给别人用，就必须**同样以 AGPL-3.0 提供完整源码**
+> （含你的修改）。换言之：**不能拿它做闭源产品或闭源 SaaS。**
+> 这是 [Zotero](https://www.zotero.org/) 本身采用的协议。
