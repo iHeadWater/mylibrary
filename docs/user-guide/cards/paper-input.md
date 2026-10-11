@@ -12,14 +12,14 @@ Python 支持 3.12–3.14。将 Key 替换为候选中确认的条目；群组�
 
 ## 公开默认值与覆盖
 
-参照 #27 的文件默认值与环境变量覆盖方式，提交 `configs/paper-input.toml`，不预设作者群组或路径。输入只读取 Zotero/PDF 门禁配置，不再加载或校验平台的模型配置，也不读取 `HYDRO_PLATFORM_CONFIG`。
+参照 #27 的文件默认值与环境变量覆盖方式，提交 `configs/paper-input.toml`，不预设作者群组或路径。输入只读取 Zotero/PDF 门禁配置，不再加载或校验平台的模型配置，也不读取 `HYDROLITAGENT_CARDS_CONFIG`。
 
 | 设置 | 默认 | 参数 / 环境变量 |
 |---|---|---|
-| Zotero 地址 | `http://127.0.0.1:23119` | `--base-url` / `HYDRO_PLATFORM_ZOTERO_BASE_URL` |
-| 群组 | 不预设 | `--group-id` / `HYDRO_PLATFORM_ZOTERO_GROUP_ID` |
-| 超时 | 5 秒 | `--timeout` / `HYDRO_PLATFORM_ZOTERO_TIMEOUT` |
-| 配置文件 | 仓库 `configs/paper-input.toml` | `--config` / `HYDRO_PLATFORM_PAPER_INPUT_CONFIG` |
+| Zotero 地址 | `http://127.0.0.1:23119` | `--base-url` / `HYDROLITAGENT_CARDS_ZOTERO_BASE_URL` |
+| 群组 | 不预设 | `--group-id` / `HYDROLITAGENT_CARDS_ZOTERO_GROUP_ID` |
+| 超时 | 5 秒 | `--timeout` / `HYDROLITAGENT_CARDS_ZOTERO_TIMEOUT` |
+| 配置文件 | 仓库 `configs/paper-input.toml` | `--config` / `HYDROLITAGENT_CARDS_PAPER_INPUT_CONFIG` |
 
 优先级：参数 → 进程环境变量 → 配置文件 → 内置默认值。输入配置支持 TOML，也兼容旧 JSON 的 `zotero` / `pdf_gate` 字段；AI 字段不会被读取。默认配置从脚本所在仓库解析，显式相对配置路径从命令当前目录解析。输入 PR 不依赖 #27，因此只读进程环境变量，不自动读 `.env`。
 

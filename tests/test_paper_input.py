@@ -833,7 +833,7 @@ if __name__ == "__main__":
 class StandaloneInputConfigTests(unittest.TestCase):
     def test_defaults_do_not_read_model_config(self):
         from hydrolitagent.cards.paper_input_config import load_paper_input_config
-        with patch.dict(os.environ, {"HYDRO_PLATFORM_CONFIG": "absent-private-config.json"}):
+        with patch.dict(os.environ, {"HYDROLITAGENT_CARDS_CONFIG": "absent-private-config.json"}):
             config = load_paper_input_config()
         self.assertEqual(config.zotero.base_url, "http://127.0.0.1:23119")
         self.assertIsNone(config.zotero.group_id)
@@ -843,7 +843,7 @@ class StandaloneInputConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             config = Path(temp) / "input.toml"
             config.write_text('[zotero]\ngroup_id = 3\ntimeout_seconds = 4.0\n', encoding="utf-8")
-            with patch.dict(os.environ, {"HYDRO_PLATFORM_ZOTERO_GROUP_ID": "5"}):
+            with patch.dict(os.environ, {"HYDROLITAGENT_CARDS_ZOTERO_GROUP_ID": "5"}):
                 self.assertEqual(load_paper_input_config(config).zotero.group_id, 5)
                 self.assertEqual(load_paper_input_config(config, group_id="7").zotero.group_id, 7)
 

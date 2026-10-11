@@ -339,7 +339,7 @@ def test_missing_reference_identifies_the_result_without_parsing_message(case):
 
 
 def test_cli_default_ignores_machine_config_and_accepts_external_report_dir(case, tmp_path, monkeypatch, capsys):
-    monkeypatch.setenv("HYDRO_PLATFORM_CONFIG", str(tmp_path / "nonexistent-private.json"))
+    monkeypatch.setenv("HYDROLITAGENT_CARDS_CONFIG", str(tmp_path / "nonexistent-private.json"))
     monkeypatch.chdir(tmp_path)
     dest = tmp_path / "selected-reports"
     with patch.object(cli, "load_config", side_effect=AssertionError("must not load machine config")):
@@ -353,7 +353,7 @@ def test_cli_default_ignores_machine_config_and_accepts_external_report_dir(case
 
 def test_report_environment_and_command_line_priority(case, tmp_path, monkeypatch, capsys):
     env_dir, explicit = tmp_path / "environment", tmp_path / "explicit"
-    monkeypatch.setenv("HYDRO_PLATFORM_VALIDATION_REPORT_DIR", str(env_dir))
+    monkeypatch.setenv("HYDROLITAGENT_CARDS_VALIDATION_REPORT_DIR", str(env_dir))
     args = ["evidence-validate", "--draft", str(case[3]), "--paper-input", str(case[4]), "--json"]
     assert cli.main(args) == 0
     assert Path(json.loads(capsys.readouterr().out)["validation_path"]).is_relative_to(env_dir)

@@ -7,9 +7,9 @@ from hydrolitagent.cards import ai_config as config, cli
 def test_file_dotenv_environment_and_argument_priority(tmp_path, monkeypatch):
     path = tmp_path / "ai.toml"
     path.write_text('[ai]\nprovider="claude"\nmodel="file-model"\n',encoding="utf-8")
-    monkeypatch.setattr(config, "read_dotenv_values", lambda: {"HYDRO_PLATFORM_AI_MODEL":"dotenv-model"})
+    monkeypatch.setattr(config, "read_dotenv_values", lambda: {"HYDROLITAGENT_CARDS_AI_MODEL":"dotenv-model"})
     assert config.resolve_ai_config(path)["model"] == "dotenv-model"
-    monkeypatch.setenv("HYDRO_PLATFORM_AI_MODEL", "env-model")
+    monkeypatch.setenv("HYDROLITAGENT_CARDS_AI_MODEL", "env-model")
     assert config.resolve_ai_config(path)["model"] == "env-model"
     assert config.resolve_ai_config(path, model="cli-model")["model"] == "cli-model"
 
@@ -21,7 +21,7 @@ def test_invalid_configuration_rejected(change):
 
 
 def test_selection_never_requires_private_platform_config(monkeypatch, capsys):
-    monkeypatch.setenv("HYDRO_PLATFORM_CONFIG", "missing.json")
+    monkeypatch.setenv("HYDROLITAGENT_CARDS_CONFIG", "missing.json")
     monkeypatch.setattr(cli, "load_config", lambda *a,**k: (_ for _ in ()).throw(AssertionError("no machine config")))
     assert cli.main(["ai-config","--ai-provider","claude","--json"]) == 0
     result=json.loads(capsys.readouterr().out)

@@ -24,13 +24,13 @@ Codex 沿用现有本地 PDF 阅读适配器，需要 pypdf（项目安装已含
 
 | 选择 | 命令行 | 环境变量 |
 |---|---|---|
-| 后端 | `--ai-provider codex或claude` | `HYDRO_PLATFORM_AI_PROVIDER` |
-| 模型 | `--ai-model 模型名` | `HYDRO_PLATFORM_AI_MODEL` |
-| CLI 程序 | `--ai-executable 本机路径` | `HYDRO_PLATFORM_AI_EXECUTABLE` |
-| 超时 | `--ai-timeout 秒数` | `HYDRO_PLATFORM_AI_TIMEOUT_SECONDS` |
-| 配置文件 | `--ai-config 本机TOML` | `HYDRO_PLATFORM_AI_CONFIG` |
+| 后端 | `--ai-provider codex或claude` | `HYDROLITAGENT_CARDS_AI_PROVIDER` |
+| 模型 | `--ai-model 模型名` | `HYDROLITAGENT_CARDS_AI_MODEL` |
+| CLI 程序 | `--ai-executable 本机路径` | `HYDROLITAGENT_CARDS_AI_EXECUTABLE` |
+| 超时 | `--ai-timeout 秒数` | `HYDROLITAGENT_CARDS_AI_TIMEOUT_SECONDS` |
+| 配置文件 | `--ai-config 本机TOML` | `HYDROLITAGENT_CARDS_AI_CONFIG` |
 
-`reasoning_effort`、`python_executable`、`pdfinfo_executable`、`pdftotext_executable`、`pdftoppm_executable` 也可在 TOML 或对应 `HYDRO_PLATFORM_AI_` 大写环境变量中设置。模型可用性由使用者的服务决定，程序不假设所有账号拥有同一模型。Windows npm 安装会优先识别同一安装目录里的原生 exe，避免长参数经过 cmd 包装器失败；仍可显式指定路径。
+`reasoning_effort`、`python_executable`、`pdfinfo_executable`、`pdftotext_executable`、`pdftoppm_executable` 也可在 TOML 或对应 `HYDROLITAGENT_CARDS_AI_` 大写环境变量中设置。模型可用性由使用者的服务决定，程序不假设所有账号拥有同一模型。Windows npm 安装会优先识别同一安装目录里的原生 exe，避免长参数经过 cmd 包装器失败；仍可显式指定路径。
 
 Claude 运行采用隔离的只读模式，不加载项目插件或命令。若自己的认证仅写在 Claude 用户 settings 的 `env` 中，请在启动本命令的终端导出相应认证环境变量；程序不会复制或打印该文件。普通 CLI 账号登录由 CLI 自己管理。
 
@@ -44,7 +44,7 @@ Claude 运行采用隔离的只读模式，不加载项目插件或命令。若�
 └── draft.json
 ```
 
-每次新建草稿版本。`--config` 仅用于显式复用旧平台的 PDF/模板路径；新用户使用上述小配置即可。新入口不会自动读取 `HYDRO_PLATFORM_CONFIG`。
+每次新建草稿版本。`--config` 仅用于显式复用旧平台的 PDF/模板路径；新用户使用上述小配置即可。新入口不会自动读取 `HYDROLITAGENT_CARDS_CONFIG`。
 
 ## 复用什么、检查什么
 

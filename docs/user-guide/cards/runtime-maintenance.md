@@ -34,7 +34,7 @@ uv run hydrolitagent cards ai-config --json
 
 ## 配置选择
 
-所有保留命令默认读取 `hydrolitagent/cards/assets/config/config.json`；本机覆盖使用被 Git 忽略的完整 `config.local.json`，并通过 `--config` 或 `HYDRO_PLATFORM_CONFIG` 显式选择；系统不进行隐式配置合并。
+所有保留命令默认读取 `hydrolitagent/cards/assets/config/config.json`；本机覆盖使用被 Git 忽略的完整 `config.local.json`，并通过 `--config` 或 `HYDROLITAGENT_CARDS_CONFIG` 显式选择；系统不进行隐式配置合并。
 
 ```powershell
 uv run hydrolitagent cards themes-run --config hydrolitagent/cards/assets/config/config.local.json --json

@@ -116,7 +116,7 @@ flowchart LR
 
 ## 5. 配置
 
-当前团队级总配置为 `hydrolitagent/cards/assets/config/config.json`，完整示例为 `hydrolitagent/cards/assets/config/config.example.json`。个人机器覆盖使用被 Git 忽略的完整 `config.local.json`，并通过 `--config` 或 `HYDRO_PLATFORM_CONFIG` 显式选择；系统不进行隐式配置合并。
+当前团队级总配置为 `hydrolitagent/cards/assets/config/config.json`，完整示例为 `hydrolitagent/cards/assets/config/config.example.json`。个人机器覆盖使用被 Git 忽略的完整 `config.local.json`，并通过 `--config` 或 `HYDROLITAGENT_CARDS_CONFIG` 显式选择；系统不进行隐式配置合并。
 
 | 配置组 | 当前用途 |
 | --- | --- |

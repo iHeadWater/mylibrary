@@ -13,7 +13,7 @@
 
 ## 路径解析规则
 
-本机配置需用 `--config hydrolitagent/cards/assets/config/config.local.json`（或 HYDRO_PLATFORM_CONFIG）显式选择，并填写完整配置；当前没有自动覆盖/合并机制。
+本机配置需用 `--config hydrolitagent/cards/assets/config/config.local.json`（或 HYDROLITAGENT_CARDS_CONFIG）显式选择，并填写完整配置；当前没有自动覆盖/合并机制。
 
 1. `paths.project_root` 相对于总配置文件所在目录解析，也可以填写绝对路径；
 2. 其余项目路径相对于 `project_root` 解析，也可以填写位于项目根目录内的绝对路径；

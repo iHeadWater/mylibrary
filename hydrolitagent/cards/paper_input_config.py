@@ -17,7 +17,7 @@ DEFAULT = ROOT / "configs/paper-input.toml"
 
 
 def load_paper_input_config(config_file=None, *, base_url=None, group_id=None, timeout_seconds=None, require_group=False):
-    selected = config_file or os.environ.get("HYDRO_PLATFORM_PAPER_INPUT_CONFIG")
+    selected = config_file or os.environ.get("HYDROLITAGENT_CARDS_PAPER_INPUT_CONFIG")
     path = Path(selected).expanduser().resolve() if selected else DEFAULT
     values = {}
     if selected or path.exists():
@@ -31,9 +31,9 @@ def load_paper_input_config(config_file=None, *, base_url=None, group_id=None, t
     z, g = values.get("zotero", {}), values.get("pdf_gate", {})
     if not isinstance(z, dict) or not isinstance(g, dict):
         raise ConfigError("zotero 和 pdf_gate 必须是配置表")
-    base = base_url if base_url is not None else os.environ.get("HYDRO_PLATFORM_ZOTERO_BASE_URL", z.get("base_url", "http://127.0.0.1:23119"))
-    group = group_id if group_id is not None else os.environ.get("HYDRO_PLATFORM_ZOTERO_GROUP_ID", z.get("group_id"))
-    timeout = timeout_seconds if timeout_seconds is not None else os.environ.get("HYDRO_PLATFORM_ZOTERO_TIMEOUT", z.get("timeout_seconds", 5.0))
+    base = base_url if base_url is not None else os.environ.get("HYDROLITAGENT_CARDS_ZOTERO_BASE_URL", z.get("base_url", "http://127.0.0.1:23119"))
+    group = group_id if group_id is not None else os.environ.get("HYDROLITAGENT_CARDS_ZOTERO_GROUP_ID", z.get("group_id"))
+    timeout = timeout_seconds if timeout_seconds is not None else os.environ.get("HYDROLITAGENT_CARDS_ZOTERO_TIMEOUT", z.get("timeout_seconds", 5.0))
     try:
         if not isinstance(base, str):
             raise ValueError("Zotero 地址必须是字符串")

@@ -11,7 +11,7 @@ uv sync --all-packages --locked
 .\.venv\Scripts\python.exe -m hydrolitagent.cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 ~~~
 
-默认直接使用当前检出代码对应的模板、所选后端的阅读提示词和 schema，不读取 config.json 或 HYDRO_PLATFORM_CONFIG。无需 Zotero、PDF 文件、群组 ID、Poppler 或 Codex 登录。输入中原始 PDF 的绝对路径只作为生成时的历史信息，支持 Windows 盘符/UNC 和 POSIX 路径，不按校验电脑的当前目录重新解析。退出码 0 表示 PASS，3 表示校验或记录保存失败，配置错误为 2。人类可读输出也会列出错误码、字段路径和原因。
+默认直接使用当前检出代码对应的模板、所选后端的阅读提示词和 schema，不读取 config.json 或 HYDROLITAGENT_CARDS_CONFIG。无需 Zotero、PDF 文件、群组 ID、Poppler 或 Codex 登录。输入中原始 PDF 的绝对路径只作为生成时的历史信息，支持 Windows 盘符/UNC 和 POSIX 路径，不按校验电脑的当前目录重新解析。退出码 0 表示 PASS，3 表示校验或记录保存失败，配置错误为 2。人类可读输出也会列出错误码、字段路径和原因。
 
 ### 首次使用与路径选择
 
@@ -28,7 +28,7 @@ uv sync --all-packages --locked
 | 模板、提示词、schema | 包内的 hydrolitagent/cards/assets；--assets-root 可选择另一份完整资产目录 |
 | 各个资产文件 | Python 公共接口 ValidationAssets 可逐个指定；from_root(root) 按仓库布局构造 |
 | 兼容已有配置 | 显式 --config 路径；与 --assets-root 互斥；完整配置仍须有效，个人库 group_id 设 null |
-| 报告位置 | --report-dir > HYDRO_PLATFORM_VALIDATION_REPORT_DIR > 草稿旁 validations/ |
+| 报告位置 | --report-dir > HYDROLITAGENT_CARDS_VALIDATION_REPORT_DIR > 草稿旁 validations/ |
 | 输入与 CLI 相对路径 | 相对于当前工作目录；也可传绝对路径 |
 
 JSON 命令结果返回 asset_paths 及 validation_path，便于确认实际使用的位置。自选报告目录适用于只读共享输入；每次运行创建唯一子目录。换资产后仍严格比较版本指纹，不能靠换路径跳过校验。

@@ -41,7 +41,7 @@ from hydrolitagent.cards._paths import DEFAULT_CONFIG_PATH
 
 
 def _default_config_path() -> str:
-    return os.environ.get("HYDRO_PLATFORM_CONFIG", str(DEFAULT_CONFIG_PATH))
+    return os.environ.get("HYDROLITAGENT_CARDS_CONFIG", str(DEFAULT_CONFIG_PATH))
 
 
 def _configure_stdio() -> None:
@@ -79,8 +79,8 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--group-id", help="覆盖目标 Zotero 群组 ID")
         if name == "evidence-validate":
             command.add_argument("--assets-root", help="选择另一份资产根（templates/prompts/schemas）；与 --config 互斥")
-            command.add_argument("--report-dir", default=os.environ.get("HYDRO_PLATFORM_VALIDATION_REPORT_DIR"),
-                                 help="校验记录根；默认草稿旁 validations/，支持环境变量 HYDRO_PLATFORM_VALIDATION_REPORT_DIR")
+            command.add_argument("--report-dir", default=os.environ.get("HYDROLITAGENT_CARDS_VALIDATION_REPORT_DIR"),
+                                 help="校验记录根；默认草稿旁 validations/，支持环境变量 HYDROLITAGENT_CARDS_VALIDATION_REPORT_DIR")
             command.add_argument("--draft", required=True, help="#30 保存的 draft.json")
             command.add_argument("--paper-input", required=True, help="对应的 #29 READY JSON 文件")
         if name == "paper-input":

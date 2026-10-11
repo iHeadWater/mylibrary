@@ -27,7 +27,7 @@ class AIConfigError(ValueError):
 
 def resolve_ai_config(config_file=None, **overrides):
     env = {**read_dotenv_values(), **os.environ}
-    selected = config_file or env.get("HYDRO_PLATFORM_AI_CONFIG")
+    selected = config_file or env.get("HYDROLITAGENT_CARDS_AI_CONFIG")
     path = Path(selected).expanduser().resolve() if selected else DEFAULT_FILE
     values = dict(DEFAULTS)
     if selected or path.exists():
@@ -39,7 +39,7 @@ def resolve_ai_config(config_file=None, **overrides):
         except (OSError, ValueError) as exc:
             raise AIConfigError(f"无法读取 AI 选择配置：{path}（{type(exc).__name__}）") from exc
     for key in DEFAULTS:
-        name = "HYDRO_PLATFORM_AI_" + key.upper()
+        name = "HYDROLITAGENT_CARDS_AI_" + key.upper()
         if name in env:
             values[key] = env[name]
     for key, value in overrides.items():

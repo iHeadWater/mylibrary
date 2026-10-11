@@ -1,10 +1,10 @@
 # 总配置字段说明
 
-日常只编辑完整总配置，不改源码。默认使用 `hydrolitagent/cards/assets/config/config.json`；`hydrolitagent/cards/assets/config/config.example.json` 是可复制的完整示例。私人配置必须显式用 --config 或 HYDRO_PLATFORM_CONFIG 选择，不自动合并。字段与数据的边界划分（哪些属于配置、哪些属于运行状态、证据事实或密钥）见 [配置与密钥边界](variables.md)；目录与存储概览回到[文档入口](../../user-guide/cards/index.md)。
+日常只编辑完整总配置，不改源码。默认使用 `hydrolitagent/cards/assets/config/config.json`；`hydrolitagent/cards/assets/config/config.example.json` 是可复制的完整示例。私人配置必须显式用 --config 或 HYDROLITAGENT_CARDS_CONFIG 选择，不自动合并。字段与数据的边界划分（哪些属于配置、哪些属于运行状态、证据事实或密钥）见 [配置与密钥边界](variables.md)；目录与存储概览回到[文档入口](../../user-guide/cards/index.md)。
 
 `config.json` 是自动化唯一的团队级总配置入口。需要迁移目录、更换 Zotero 本地接口或调整制卡参数时，只修改这个文件，不修改程序源码。所有路径字段必须显式填写；缺失时程序直接报配置错误，不使用源码中的隐含目录默认值。
 
-`paper-input` 是例外：它只按 `configs/paper-input.toml` 读取 `zotero` + `pdf_gate` 两表，不加载模型配置，也不读取 `HYDRO_PLATFORM_CONFIG`。详见[单篇论文输入](../../user-guide/cards/paper-input.md)。
+`paper-input` 是例外：它只按 `configs/paper-input.toml` 读取 `zotero` + `pdf_gate` 两表，不加载模型配置，也不读取 `HYDROLITAGENT_CARDS_CONFIG`。详见[单篇论文输入](../../user-guide/cards/paper-input.md)。
 
 ## 路径
 
@@ -137,7 +137,7 @@
 
 Qinjiajun 目标库的群组 ID 保存在可复现的 `hydrolitagent/cards/assets/config/config.json` 中；群组 ID 不是密钥，可以进入 Git。
 
-`hydrolitagent/cards/assets/config/config.example.json` 用于解释配置结构。只有本机需要覆盖团队配置时，才复制为被 Git 忽略的 `hydrolitagent/cards/assets/config/config.local.json`。`config.local.json` 是完整的另一份配置，不会被自动发现，也不会与 `config.json` 合并；使用时显式传入 `--config hydrolitagent/cards/assets/config/config.local.json`，或令 `HYDRO_PLATFORM_CONFIG` 指向该文件。
+`hydrolitagent/cards/assets/config/config.example.json` 用于解释配置结构。只有本机需要覆盖团队配置时，才复制为被 Git 忽略的 `hydrolitagent/cards/assets/config/config.local.json`。`config.local.json` 是完整的另一份配置，不会被自动发现，也不会与 `config.json` 合并；使用时显式传入 `--config hydrolitagent/cards/assets/config/config.local.json`，或令 `HYDROLITAGENT_CARDS_CONFIG` 指向该文件。
 
 ## 密钥与配置验收边界
 

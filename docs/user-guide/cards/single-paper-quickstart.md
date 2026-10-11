@@ -183,7 +183,7 @@ Test-Path -LiteralPath $PaperInput.pdf.local_path
 
 检查题名是否选对、PDF 路径是否存在，最后一条应显示 `True`。`fulltext_indexed=false` 只表示 Zotero 没有可用全文索引；已有可读的本地 PDF 时仍可 READY，后续直接读取 PDF。输入 JSON 记录身份、路径和指纹，不是论文全文，更不是主体卡。用脚本自己的 `--output` 保存 UTF-8 文件，不用 PowerShell 的 `>` 随意改变编码。
 
-此脚本只用标准库，无需安装模型客户端。输入默认值在 `configs/paper-input.toml`，可用参数或 `HYDRO_PLATFORM_ZOTERO_*` 环境变量覆盖，不读模型总配置。PDF 路径由 Zotero 返回，不要手动把作者路径改成另一个 PDF 来冒充同一篇。
+此脚本只用标准库，无需安装模型客户端。输入默认值在 `configs/paper-input.toml`，可用参数或 `HYDROLITAGENT_CARDS_ZOTERO_*` 环境变量覆盖，不读模型总配置。PDF 路径由 Zotero 返回，不要手动把作者路径改成另一个 PDF 来冒充同一篇。
 
 ### 1.5 群组库和输入异常怎么处理
 
@@ -320,7 +320,7 @@ Get-Content -LiteralPath $CardPath -Encoding UTF8 | Select-Object -First 60
 
 兼容 API 不等于完整能力相同：具体 DeepSeek 模型/中转服务还必须满足工具调用、页面图像读取和结构化输出要求。不能仅凭终端普通问答成功保证 PDF 制卡成功。生成失败时区分程序确定的原因与“模型自报（未经独立验证）”；不要通过跳过页覆盖或放宽校验来制造 PASS。[DeepSeek 兼容字段与限制](https://api-docs.deepseek.com/guides/anthropic_api/)会随服务变化，真实能力以该服务说明及本次运行证据为准。
 
-`configs/ai.toml` 是公开默认值。后端、模型、程序位置、超时和 PDF 工具均可覆盖；默认模型留空，使用所选 CLI 默认值。优先级：命令行 → 进程环境变量 → `.env` → TOML → 内置默认值。常用变量为 `HYDRO_PLATFORM_AI_PROVIDER` / `_MODEL` / `_EXECUTABLE` / `_TIMEOUT_SECONDS`（均以 `HYDRO_PLATFORM_AI` 开头）。凭据交由所选 CLI 管理，不放入该 TOML。[详细配置](subject-card-draft.md)。
+`configs/ai.toml` 是公开默认值。后端、模型、程序位置、超时和 PDF 工具均可覆盖；默认模型留空，使用所选 CLI 默认值。优先级：命令行 → 进程环境变量 → `.env` → TOML → 内置默认值。常用变量为 `HYDROLITAGENT_CARDS_AI_PROVIDER` / `_MODEL` / `_EXECUTABLE` / `_TIMEOUT_SECONDS`（均以 `HYDROLITAGENT_CARDS_AI` 开头）。凭据交由所选 CLI 管理，不放入该 TOML。[详细配置](subject-card-draft.md)。
 
 产物根调用 #27 的同一解析器：`--output-root` → `HYDROLITAGENT_LITERATURE_ROOT`（支持 `.env`）→ `configs/paths.toml` → 仓库 `outputs/`。用 `ai-config --json` 查实际落点；不写死作者路径、不清理外部云盘目录。
 
@@ -359,7 +359,7 @@ if ($Validation.validation_path) {
 }
 ```
 
-不需要模型客户端登录、Zotero 在线或原 PDF 可访问。校验代码检查字段、身份、引用编号、物理页范围及版本指纹；识别 Codex 和 Claude 的不同读取记录，不重新调用模型。报告追加到草稿旁 `validations/<ID>/validation.json`。用 `--report-dir` 或 `HYDRO_PLATFORM_VALIDATION_REPORT_DIR` 改位置。
+不需要模型客户端登录、Zotero 在线或原 PDF 可访问。校验代码检查字段、身份、引用编号、物理页范围及版本指纹；识别 Codex 和 Claude 的不同读取记录，不重新调用模型。报告追加到草稿旁 `validations/<ID>/validation.json`。用 `--report-dir` 或 `HYDROLITAGENT_CARDS_VALIDATION_REPORT_DIR` 改位置。
 
 独立校验脚本只依赖项目源码（可从完整环境运行），不需要 AI SDK 或 CLI。成功退出码 0，校验/保存失败 3。PASS 表示已实现的确定性规则通过，不证明科学结论正确。错误应由后续修正工作处理，不能为了让示例通过而伪造内容。
 
