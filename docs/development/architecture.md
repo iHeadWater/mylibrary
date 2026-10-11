@@ -169,3 +169,42 @@ Skills 是面向 Agent 的封装层，每个 Skill 包含：
 | `zotero-query` | MCP 工具 | 查询文献库 |
 | `run-paper-to-zotero` | Docker 命令 | 一键入库（最简） |
 | `paper-to-zotero` | Shell 脚本 | 论文入库 + 手动回退 |
+
+## 代码分三支
+
+| 线 | 做什么 | 代码 / 数据 | 用户入口 |
+|---|---|---|---|
+| **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/播客/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（12 个技能） | [MCP Server 工具](../user-guide/mcp-tools.md) |
+| **文献卡与主题卡** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题（**运行时 Windows-only**） | `hydrolitagent/cards/`、`skills/literature-cards/` | [文献卡与主题卡](../user-guide/cards/index.md) |
+| **科研工作流** | 人读证据卡与主题综合：来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、[中文规范](../research-workflow/index.md) | [科研工作流](../research-workflow/index.md) |
+
+> **后两支别混用**：文献卡与主题卡是**自动化**链路（给定一篇论文稳定产出可校验的卡与候选主题，
+> 不做科研裁决）；科研工作流是**人工决策**链路（每条科学表述都回链可核对的原文，正式主题必须由人签字）。
+
+## Zotero 有四种读法，用途不同
+
+它们读的是**同一台 Zotero Desktop 的本地 HTTP 服务**（`127.0.0.1:23119`），但库、前缀与用途不同：
+
+| 读法 | 位置 | 目标 | 用途 |
+|---|---|---|---|
+| MCP Server（12 工具，端口 8002） | `hydrolitagent/zotero/server.py` | 元数据走 Web API，全文/附件走本地 API | 容器内或跨机调用 |
+| 裸机脚本直连 | `hydrolitagent/literature/` | 本地 API `…/api/users/0/` | 裸 host 上的入库与简报 |
+| 共享群组客户端 | `hydrolitagent/cards/zotero.py` | 共享群组（`/api/groups/<id>/`） | 文献卡平台的 Zotero 读取与 PDF 门禁 |
+| 只读阅读器 | `skills/hydrology-evidence-cards/scripts/zotero_reader.py` | 个人库 `…/api/users/0/` | 证据卡取材，只读、不改库、不读 SQLite |
+
+**分工而非二选一**：容器里走 8002 的 MCP，裸 host 直连 `23119`。
+本地 API 基址的环境变量首选名是 `ZOTERO_LOCAL_BASE_URL`（`ZOTERO_API_URL` 是旧名）。
+为什么不统一见 [ADR-0002](../adr/0002-zotero-two-clients-boundary.md)。
+
+## 仓库目录地图
+
+| 位置 | 存什么 |
+|---|---|
+| `hydrolitagent/` | Python 包：Zotero MCP Server、下载/入库、文献处理、知识图谱 |
+| `hydrolitagent/cards/` | 文献卡与主题卡：代码 `*.py` 与只读资产 `assets/`（模板 / 提示词 / schema / 示例 / 默认配置），运行产物落仓库根 |
+| `skills/` | 12 个技能：9 个工具链技能 + `literature-cards` + 两个水利科研技能 |
+| `docs/` | 文档站源码（mkdocs） |
+| `scripts/`、`configs/`、`docker/` | 入口脚本、提示词与路径配置、MCP Server 镜像 |
+| `tests/` | pytest 测试（原平台测试已并入这一套） |
+| `证据卡/`、`主题/`、`运行记录/`、`文献链接/` | 科研产物（**路径可配**，默认在此，不入 Git） |
+| `_legacy/`、`equation_from_data/`、`google_floodhub/` | 历史代码与论文复现 |

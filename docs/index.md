@@ -56,29 +56,7 @@
 
 ## 项目结构
 
-```
-hydrolitagent/
-├── cli.py               # CLI 入口：prepare, extract, graph, merge, query, cards
-├── zotero/              # Zotero 集成
-│   ├── server.py         # 12 工具 MCP Server（FastMCP，端口 8002）
-│   ├── paper_to_zotero.py # DOI/arXiv/标题 → Zotero 条目
-│   └── zot_link_gdrive.py # Google Drive → linked_file 附件
-├── literature/          # Literature CLI（入库后的深度处理）
-├── graph/               # 知识图谱构建 + 合并（graphify）
-├── query/               # 确定性图查询（不走 LLM）
-└── cards/               # 文献卡与主题卡
-    ├── *.py              #   5 条子命令的实现
-    └── assets/           #   只读资产：模板 / 提示词 / schema / 示例 / 默认配置
-
-configs/                 # 配置：graph_prompts.toml · paths.toml · paper-input.toml · ai.toml
-scripts/                 # download_paper.py、run_paper_pipeline.sh、paper_input.py、…
-skills/                  # Agent 可用 Skill（12 个）
-docs/                    # 文档站点（mkdocs-material）
-outputs/                 # 精读产物（默认落点，可配置）
-papers/                  # 按主题组织的文献库（10 个主题）
-```
-
-> 文献卡与主题卡的**生成产物**（文献卡、主题池、运行记录）不入库，由运行时落到仓库根自建。
+包与目录的完整地图、代码分三支、Zotero 的几种读法见[模块架构](development/architecture.md)。
 
 ## 文档导航
 

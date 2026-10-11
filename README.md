@@ -42,40 +42,8 @@
 >
 > 付费墙（SD / Wiley / Nature 等）的下载需要浏览器 + 机构会话，见[论文 PDF 下载](docs/user-guide/download-pdf.md)。
 
-## 代码分三支
-
-| 线 | 做什么 | 代码 / 数据 | 入口 |
-|---|---|---|---|
-| **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/播客/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（12 个技能） | [文档](docs/user-guide/mcp-tools.md) |
-| **文献卡与主题卡平台** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验，**运行时 Windows-only** | `hydrolitagent/cards/`、`skills/literature-cards/` | [平台文档](docs/user-guide/cards/index.md) |
-| **科研工作流** | 人读证据卡与主题综合：来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合。纯标准库脚本，人工决策不可绕过 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、`docs/research-workflow/`（中文规范） | [平台总览](docs/research-workflow/index.md) |
-
-> **后两支别混用**：文献卡与主题卡是**自动化**链路（给定一篇论文，稳定产出可校验的卡与候选主题，不做科研裁决）；
-> 科研工作流是**人工决策**链路（每条科学表述都回链可核对的原文，正式主题必须由人签字）。
-
-## Zotero 有四种读法，用途不同
-
-这是最容易搞混的地方。它们读的是**同一台 Zotero Desktop 的本地 HTTP 服务**（`127.0.0.1:23119`），但库、前缀与用途不同：
-
-| 读法 | 位置 | 目标 | 用途 |
-|---|---|---|---|
-| MCP Server（12 工具，端口 8002） | `hydrolitagent/zotero/server.py` | 元数据走 Web API，全文/附件走本地 API | 容器内或跨机调用 |
-| 裸机脚本直连 | `hydrolitagent/literature/` | 本地 API `…/api/users/0/` | 裸 host 上的入库与简报 |
-| 共享群组客户端 | `hydrolitagent/cards/zotero.py` | 共享群组（`/api/groups/<id>/`） | 文献卡平台的 Zotero 读取与 PDF 门禁 |
-| 只读阅读器 | `skills/hydrology-evidence-cards/scripts/zotero_reader.py` | 个人库 `…/api/users/0/` | 证据卡取材，只读、不改库、不读 SQLite |
-
-**分工而非二选一**：容器里走 8002 的 MCP，裸 host 直连 `23119`。本地 API 基址的环境变量首选名是 `ZOTERO_LOCAL_BASE_URL`（`ZOTERO_API_URL` 是旧名）。
-
-## 科研产物路径与当前边界
-
-合并后的配置同时保留了两组产物路径：
-
-- 单篇流程写入 `--output-root`（默认仓库 `outputs/`），主题池写入 `paths.themes_dir`。
-- `paths.artifact_root` 及其下的 `证据卡/`、`主题/`、`运行记录/`、`文献链接/` 已能解析和校验，可指向仓库根或显式允许的外部共享位置，但自动化发布尚未接入这四个目录。
-
-所有实际科研产物、原始 PDF、Zotero 数据库、`.runtime` 和本机路径均不进入 Git。目标是在两组目录之间建立明确的准入与发布边界，再将 `artifact_root` 作为 Obsidian 阅读层；不应把当前的配置字段理解为两套工作流已经打通。
-
-字段、现状和目标设计见[总配置字段说明](docs/development/platform/config.md)、[自动化边界](docs/development/platform/automation.md)和[项目级设计](docs/development/platform/project-design.md)。
+> **代码怎么组织**（分三支 / Zotero 四种读法 / 目录地图 / 产物路径边界）见
+> [模块架构](docs/development/architecture.md) 与 [配置字段说明](docs/development/platform/config.md)。
 
 ## 快速开始
 
@@ -143,20 +111,6 @@ uv run hydrolitagent cards ai-config --json
 python skills/hydrology-evidence-cards/tests/self_test.py
 python skills/hydrology-theme-synthesis/tests/self_test.py
 ```
-
-## 目录地图
-
-| 位置 | 存什么 |
-|---|---|
-| `hydrolitagent/` | Python 包：Zotero MCP Server、下载/入库、文献处理、知识图谱 |
-| `hydrolitagent/cards/` | 自动化平台：代码 `*.py` 与只读资产 `assets/`（模板 / 提示词 / schema / 示例 / 默认配置），运行产物落仓库根 |
-| `skills/` | 12 个技能：9 个工具链技能 + `literature-cards` + 两个水利科研技能 |
-| `docs/` | 文档站源码（mkdocs）：英文技术文档 + 平台文档（`user-guide/cards/`、`development/platform/`）与科研规范（`research-workflow/`） |
-| `scripts/`、`configs/`、`docker/` | 入库脚本、图谱提示词、MCP Server 镜像 |
-| `tests/` | pytest 测试（原平台测试已并入这一套） |
-| `证据卡/`、`主题/`、`运行记录/`、`文献链接/` | 科研产物（**路径可配**，默认在此，不入 Git） |
-| `_legacy/`、`equation_from_data/`、`google_floodhub/` | 历史代码与论文复现 |
-| `docs/research-workflow/index.md` | 科研工作流层的完整说明（原王新宇线 README） |
 
 ## 文档与测试
 
