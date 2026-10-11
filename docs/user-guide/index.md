@@ -8,11 +8,11 @@
 | **② 读进去** | 按题名 / 全文 / 标签检索库；读全文、附件与批注 | [MCP Server 工具](mcp-tools.md) |
 | **③ 组织起来** | 精读成分析卡；主题聚类与知识图谱 | [文献深度处理](literature.md) |
 | **④ 产出内容** | 公众号文章 / 播客 / B 站 | [文献深度处理](literature.md) |
-| **⑤ 沉淀成资产** | 文献卡 → 主题卡（长期可追溯） | 见下一节 |
+| **⑤ 沉淀成资产** | 文献卡 → 主题卡（长期可追溯） | [文献卡与主题卡](cards/index.md)（细分页见下） |
 | 另外 | 新增论文 → NotebookLM 中文简报 / 音频 / 视频 | [Zotero → NotebookLM](zotero-notebooklm.md) |
 | 配置 | 环境变量、TOML、Linked Attachment Base Directory | [Zotero 配置参考](config.md) |
 
-## ⑤ 沉淀成资产：文献卡与主题卡
+## 文献卡与主题卡：细分页
 
 从**你自己的** Zotero 文献出发：文献卡 → 代码校验 → 候选主题。**运行时 Windows-only。**
 配好之后多数事直接跟 agent 说人话即可，见[概述](cards/index.md)。
