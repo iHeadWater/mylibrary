@@ -7,7 +7,7 @@
 **打开本项目文件夹，用一个编码 agent 让它替你干活。**
 
 「本项目文件夹」就是你 `git clone` 下来的 `mylibrary` 目录。在**这个目录里**开一个编码 agent ——
-**Claude Code · Codex · workbuddy · CC Switch 接的 Claude Code**，你顺手哪个都行 —— 然后**说人话**：
+**Claude Code · Codex · workbuddy**，你顺手哪个都行 —— 然后**说人话**：
 
 > 「把 10.1038/s41586-024-07145-1 下载并入库」 · 「把《某某》这篇做成卡」 · 「看看能聚出哪些主题」
 

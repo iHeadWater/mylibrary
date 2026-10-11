@@ -24,8 +24,8 @@ uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai
 > Claude CLI 需支持**隔离模式与结构化输出**（本机验证版本 **2.1.280**）；版本过旧会直接失败，
 > **不会**退回不受限模式。
 
-> **`--ai-provider claude` 选的是「命令行适配器」，不是模型厂家。** 用 CC Switch 把 Claude Code
-> 接到 DeepSeek 时仍然填 `claude`，**不要**填 `deepseek` —— 当前命令只接受 `claude` 或 `codex`。
+> **`--ai-provider` 选的是「命令行适配器」，不是模型厂家。** 当前命令**只接受 `claude` 或 `codex`** ——
+> 不要填某个模型厂家的名字。用哪家模型由那个 CLI 自己的配置决定。
 
 ## 产物
 

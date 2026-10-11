@@ -16,7 +16,7 @@
 **打开本项目文件夹，用一个编码 agent 让它替你干活。**
 
 「本项目文件夹」就是你 `git clone` 下来的 `mylibrary` 目录。在**这个目录里**开一个编码 agent ——
-**Claude Code · Codex · workbuddy · CC Switch 接的 Claude Code**，你顺手哪个都行 —— 然后**说人话**：
+**Claude Code · Codex · workbuddy**，你顺手哪个都行 —— 然后**说人话**：
 
 > 「把 10.1038/s41586-024-07145-1 下载并入库」 · 「把《某某》这篇做成卡」 · 「看看能聚出哪些主题」
 
@@ -92,8 +92,8 @@ uv run hydrolitagent cards themes-run --json
 uv run hydrolitagent cards ai-config --json          # 看模型选择与产物落点
 ```
 
-用 **CC Switch 接入 DeepSeek** 时**仍选 `--ai-provider claude`** —— 选的是**命令行适配器**，不是模型厂家。
-详见[文献卡与主题卡](docs/user-guide/cards/index.md)（**你通常不需要读它**）。
+`--ai-provider` **只接受 `claude` 或 `codex`** —— 它选的是**命令行适配器**，不是模型厂家；
+用哪种模型由那个 CLI 自己的配置决定。详见[文献卡与主题卡](docs/user-guide/cards/index.md)（**你通常不需要读它**）。
 
 单篇本地流程**不需要**先填工具链的 Zotero Web API 密钥，也**不需要**启动 MCP Server。
 
