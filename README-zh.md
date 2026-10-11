@@ -1,6 +1,6 @@
 # Hydro AI Papers (mylibrary)
 
-[仓库顶层说明](README.md)
+[仓库顶层说明](README.md) · [在线文档](https://iheadwater.github.io/mylibrary/)
 
 AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:精读、主题分类、公众号文章、播客、知识图谱,以 **Zotero 文献库**为根基。
 

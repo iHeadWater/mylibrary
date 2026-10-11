@@ -9,7 +9,7 @@
 入口是 **Zotero 文献库**；进入 Zotero **之前**的情报采集由上游兄弟仓库 **dailyinfo** 负责。
 现在是**单个包 `hydrolitagent`**，共用一份 `.venv` 与 `uv.lock`。
 
-> 详细能力表见 [`README-zh.md`](README-zh.md)；完整文档站在 [`docs/`](docs/index.md)。
+> **[在线文档](https://iheadwater.github.io/mylibrary/)** · 详细能力表见 [`README-zh.md`](README-zh.md)；文档源码在 [`docs/`](docs/index.md)。
 
 ## 怎么用
 

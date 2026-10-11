@@ -141,3 +141,37 @@ uv run mkdocs build
 # 严格模式（检查 broken links）
 uv run mkdocs build --strict
 ```
+
+## 发布在线文档
+
+在线文档地址：[Hydro AI Papers](https://iheadwater.github.io/mylibrary/)。
+它只展示 `docs/` 构建出的静态网页，不运行 Zotero 或 AI 制卡服务。
+
+### 日常更新
+
+1. 修改 `docs/` 中的 Markdown；增加页面时，在根目录 `mkdocs.yml` 的 `nav` 中补上导航。
+2. 在仓库根目录运行 `uv sync --locked`，再运行 `uv run mkdocs build --strict`。
+3. 用 `uv run mkdocs serve` 本地检查排版、链接与流程图；检查完成后按 `Ctrl+C` 停止预览。
+4. 按课题组约定提交修改。PR 会运行文档构建检查，但不会发布；文档相关修改进入 `main` 后自动发布。
+5. 在仓库 **Actions → Documentation** 查看构建和部署结果，再打开在线文档确认新内容。
+
+工作流监听 `docs/`、`mkdocs.yml`、依赖与自身配置的变更；其他代码变更不会触发文档发布。
+如需主动重新发布，可在 **Actions → Documentation → Run workflow** 选择 `main`。
+手动运行其他分支只构建、不部署。
+
+### 仓库首次设置
+
+- 在 **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**。
+- 发布工作流使用 `github-pages` 环境；如果设置环境保护规则，允许 `main` 部署。
+- 在仓库右侧 **About → Website** 填写 `https://iheadwater.github.io/mylibrary/`。
+- `mkdocs.yml` 的 `site_url` 必须与实际站点地址一致，包括末尾 `/`。
+
+工作流使用仓库 `uv.lock` 安装依赖，只上传 `site/` 目录；不需要添加 Zotero、DeepSeek 等业务密钥。
+不要把 `site/` 或 `.venv/` 提交到 Git，它们已被忽略。
+
+### 出错与回退
+
+严格构建失败时，先看 **Build documentation** 的日志，修复问题后再提交；构建失败不会发布新版本。
+构建通过但部署失败时，检查 Pages 发布来源、工作流权限与 `github-pages` 环境是否等待审批。
+如果已发布的文档需要回退，用 `git revert <需要撤销的提交号>` 创建撤销提交并推送 `main`；
+工作流会重新构建和发布。不要用强制推送删除课题组的提交历史。
