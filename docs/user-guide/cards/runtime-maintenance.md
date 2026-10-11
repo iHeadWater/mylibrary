@@ -2,9 +2,12 @@
 
 单篇与主题流程的**环境、状态文件边界与排障入口**。
 
-所有命令读同一份总配置 `hydrolitagent/cards/assets/config/config.json`
-（`paper-input` 只用其中的 Zotero 与 PDF 门禁两段）。这些命令
-**不调用模型、不改动 Zotero、不提交或推送 Git**。
+各命令读的配置**并不相同**：`paper-input` 读 `configs/paper-input.toml`；
+`evidence-validate` 用包内资产、**不读**总配置；其余（`evidence-generate` / `themes-run` / `ai-config`）
+读总配置 `hydrolitagent/cards/assets/config/config.json`。
+
+这些命令都**不改动 Zotero**、**不提交或推送 Git**；其中只有 `evidence-generate` 与 `themes-run`
+会**调用模型**，另外三条不调用。
 
 ## 运行前置条件
 
@@ -41,7 +44,8 @@ uv run hydrolitagent cards ai-config --json
 
 ## 换一份配置
 
-所有命令默认读 `hydrolitagent/cards/assets/config/config.json`。本机要覆盖时，
+需要总配置的那几个命令（`evidence-generate` / `themes-run` / `ai-config`）默认读
+`hydrolitagent/cards/assets/config/config.json`。本机要覆盖时，
 用另一份**完整**配置（被 Git 忽略的 `config.local.json`），并显式指定：
 
 ```bash

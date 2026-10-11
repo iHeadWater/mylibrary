@@ -80,6 +80,9 @@ PASS 记录的 `eligible_for_theme_generation` 为 `true`；
 `content_validation_performed` 表示「做了代码检查」。原草稿仍是 `DRAFT_PENDING_VALIDATION`，
 **正式发布不在本步骤**。记录写入失败时，命令**不会**返回可供下游使用的 PASS。
 
+生成阶段允许把草稿停在 `DRAFT_PENDING_VALIDATION`；但**规则失败的草稿不会被放行到下游** ——
+不会把失败草稿伪装成已通过校验的产物。
+
 ## 规则 v1
 
 ### 最低内容与字段
