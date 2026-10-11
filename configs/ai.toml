@@ -1,0 +1,12 @@
+# 提交公开默认值；个人用参数、环境变量或 .env 覆盖。不要写 API key。
+# uv run hydrolitagent cards ai-config --json
+[ai]
+provider = "codex"
+model = "" # 空值沿用所选 CLI 的默认模型
+executable = "" # 空值在 PATH 中寻找 codex 或 claude；也可指定本机原生程序路径
+reasoning_effort = ""
+timeout_seconds = 1500
+python_executable = "" # 空值使用当前运行本命令的 Python
+pdfinfo_executable = "" # Codex 本地阅读工具；空值先查项目安装，再查 PATH
+pdftotext_executable = ""
+pdftoppm_executable = ""

@@ -2,25 +2,32 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
+import sys
+import types
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from hydrolitagent.literature.download_pdf import (
+    DEFAULT_OUT,
     PdfMetadata,
     Publisher,
     _clean_base64,
     classify_input,
+    copernicus_pdf_url,
     decode_base64_file,
     default_pdf_dir,
     detect_publisher,
     doi_to_url,
+    is_pdf_file,
     normalize_doi,
     output_path_for,
     pii_to_sciencedirect_url,
+    setup_check,
     slug_from_doi,
     verify_pdf,
 )
@@ -413,6 +420,9 @@ def test_default_pdf_dir_respects_env(monkeypatch, tmp_path):
 def test_default_pdf_dir_uses_outputs_when_no_env(monkeypatch):
     """Without MYLIBRARY_PDF_ROOT, uses mylibrary/outputs/papers."""
     monkeypatch.delenv("MYLIBRARY_PDF_ROOT", raising=False)
+    # 产物根也只测"未配置"这一支;开发者 shell 里若设了它,这条断言会随
+    # OUTPUT_ROOT 一起漂移,读起来就不像是在测默认值了。
+    monkeypatch.delenv("HYDROLITAGENT_LITERATURE_ROOT", raising=False)
     from hydrolitagent.literature._paths import OUTPUT_ROOT
 
     assert default_pdf_dir() == OUTPUT_ROOT / "papers"
@@ -436,3 +446,206 @@ def test_output_path_for_with_output_dir(tmp_path):
     path = output_path_for("10.1016/j.jhydrol.2024.132471", output_dir=tmp_path)
     assert path.parent == tmp_path
     assert path.name == "j.jhydrol.2024.132471.pdf"
+
+
+# ---------------------------------------------------------------------------
+# is_pdf_file — the boolean download guard (distinct from verify_pdf)
+# ---------------------------------------------------------------------------
+
+
+def test_is_pdf_file_true(tmp_path):
+    """A file starting with %PDF- is recognized."""
+    p = tmp_path / "ok.pdf"
+    p.write_bytes(b"%PDF-1.7\n1 0 obj\n")
+    assert is_pdf_file(p) is True
+
+
+def test_is_pdf_file_false_for_non_pdf(tmp_path):
+    """Non-PDF content returns False."""
+    p = tmp_path / "nope.txt"
+    p.write_text("security-verification HTML", encoding="utf-8")
+    assert is_pdf_file(p) is False
+
+
+def test_is_pdf_file_false_when_missing(tmp_path):
+    """A missing file returns False instead of raising (unlike verify_pdf)."""
+    assert is_pdf_file(tmp_path / "missing.pdf") is False
+
+
+def test_is_pdf_file_vs_verify_pdf_semantics(tmp_path):
+    """is_pdf_file returns a bool and never raises; verify_pdf returns metadata."""
+    bad = tmp_path / "bad.pdf"
+    bad.write_bytes(b"not a pdf")
+
+    # Same input, two different contracts — the reason the two names must not collide.
+    assert is_pdf_file(bad) is False
+    with pytest.raises(ValueError):
+        verify_pdf(bad)
+
+
+# ---------------------------------------------------------------------------
+# copernicus_pdf_url
+# ---------------------------------------------------------------------------
+
+
+def test_copernicus_published_article_url():
+    """Published 10.5194 suffix maps to the /articles/ URL layout."""
+    assert (
+        copernicus_pdf_url("hess-30-5327-2026")
+        == "https://hess.copernicus.org/articles/30/5327/2026/hess-30-5327-2026.pdf"
+    )
+
+
+def test_copernicus_preprint_url_without_year_dir():
+    """essd preprint suffix maps to /preprints/<suffix>/ (no year segment)."""
+    assert (
+        copernicus_pdf_url("essd-2026-528")
+        == "https://essd.copernicus.org/preprints/essd-2026-528/essd-2026-528.pdf"
+    )
+
+
+def test_copernicus_preprint_egusphere_needs_year_dir():
+    """egusphere preprints require a year directory segment."""
+    assert (
+        copernicus_pdf_url("egusphere-2026-528")
+        == "https://egusphere.copernicus.org/preprints/2026/egusphere-2026-528/egusphere-2026-528.pdf"
+    )
+
+
+def test_copernicus_unrecognized_suffix_raises():
+    """An unrecognized suffix raises ValueError."""
+    with pytest.raises(ValueError, match="Copernicus suffix"):
+        copernicus_pdf_url("not-a-copernicus-suffix")
+
+
+# ---------------------------------------------------------------------------
+# sd_flow reuses the shared PII→URL builder (no second copy of the logic)
+# ---------------------------------------------------------------------------
+
+
+def test_sd_flow_uses_shared_pii_url_builder():
+    """``download_browser`` imports the very same function, not a copy."""
+    from hydrolitagent.literature import download_browser, download_pdf
+
+    assert download_browser.pii_to_sciencedirect_url is download_pdf.pii_to_sciencedirect_url
+
+
+def test_sd_flow_calls_shared_pii_builder(tmp_path, monkeypatch):
+    """sd_flow builds its article URL through the shared builder."""
+    from hydrolitagent.literature import download_browser
+
+    seen: list[str] = []
+
+    def spy(pii: str) -> str:
+        seen.append(pii)
+        return "https://sentinel.example/"
+
+    class FakePage:
+        url = "https://not-signed.example/"
+
+        async def goto(self, *a, **k):
+            raise RuntimeError("stop right after the URL is built")
+
+    async def fake_new_page(ctx):
+        return FakePage()
+
+    monkeypatch.setattr(download_browser, "pii_to_sciencedirect_url", spy)
+    monkeypatch.setattr(download_browser, "new_page", fake_new_page)
+
+    with pytest.raises(RuntimeError):
+        asyncio.run(
+            download_browser.sd_flow(object(), "S0022169423001234", tmp_path / "x.pdf")
+        )
+    assert seen == ["S0022169423001234"]
+
+
+# ---------------------------------------------------------------------------
+# setup_check — check-item construction (no network)
+# ---------------------------------------------------------------------------
+
+
+def test_setup_check_missing_keys_returns_1(monkeypatch, capsys):
+    """Missing .env keys make setup_check fail (rc=1) and say which are missing."""
+    from hydrolitagent.literature import download_pdf
+
+    monkeypatch.setattr(download_pdf, "_load_dotenv", lambda: None)
+    for key in ("ZOTERO_API_KEY", "ZOTERO_LIBRARY_ID", "GDRIVE_PAPERS_PATH"):
+        monkeypatch.delenv(key, raising=False)
+
+    assert setup_check() == 1
+    out = capsys.readouterr().out
+    assert "missing in .env" in out
+
+
+def test_setup_check_gdrive_not_a_directory_returns_1(monkeypatch, tmp_path, capsys):
+    """A non-directory GDRIVE_PAPERS_PATH fails, without touching the Zotero API."""
+    from hydrolitagent.literature import download_pdf
+
+    monkeypatch.setattr(download_pdf, "_load_dotenv", lambda: None)
+    monkeypatch.delenv("ZOTERO_API_KEY", raising=False)
+    monkeypatch.delenv("ZOTERO_LIBRARY_ID", raising=False)
+    monkeypatch.setenv("GDRIVE_PAPERS_PATH", str(tmp_path / "does-not-exist"))
+
+    assert setup_check() == 1
+    assert "not a directory" in capsys.readouterr().out
+
+
+def test_setup_check_success_returns_0(monkeypatch, tmp_path, capsys):
+    """All keys present, GDrive writable, Zotero API stubbed → rc=0."""
+    from hydrolitagent.literature import download_pdf
+
+    monkeypatch.setattr(download_pdf, "_load_dotenv", lambda: None)
+    gdrive = tmp_path / "papers"
+    gdrive.mkdir()
+    monkeypatch.setenv("ZOTERO_API_KEY", "dummy-key")
+    monkeypatch.setenv("ZOTERO_LIBRARY_ID", "1")
+    monkeypatch.setenv("GDRIVE_PAPERS_PATH", str(gdrive))
+
+    class FakeZotero:
+        def __init__(self, *a, **k):
+            pass
+
+        def items(self, limit=1):
+            return []
+
+    fake = types.ModuleType("pyzotero")
+    fake.zotero = types.SimpleNamespace(Zotero=FakeZotero)
+    monkeypatch.setitem(sys.modules, "pyzotero", fake)
+
+    assert setup_check() == 0
+    out = capsys.readouterr().out
+    assert "env keys present" in out
+    assert "credentials valid" in out
+
+
+# ---------------------------------------------------------------------------
+# download_paper — orchestration exit codes (curl mocked, no network/browser)
+# ---------------------------------------------------------------------------
+
+
+def test_download_paper_default_out_dir():
+    """The default output directory is unchanged (.playwright-mcp)."""
+    assert DEFAULT_OUT == Path(".playwright-mcp")
+
+
+def test_download_paper_arxiv_success_returns_0(tmp_path, monkeypatch):
+    """Successful arXiv curl → exit code 0."""
+    from hydrolitagent.literature import download_pdf
+
+    def fake_curl(url, dest):
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"%PDF-1.7\n")
+        return True
+
+    monkeypatch.setattr(download_pdf, "curl_download", fake_curl)
+    assert download_pdf.download_paper(arxiv="2608.18495", out_dir=tmp_path) == 0
+    assert (tmp_path / "arXiv.2608.18495.pdf").exists()
+
+
+def test_download_paper_arxiv_failure_returns_1(tmp_path, monkeypatch):
+    """A failed arXiv curl → exit code 1."""
+    from hydrolitagent.literature import download_pdf
+
+    monkeypatch.setattr(download_pdf, "curl_download", lambda url, dest: False)
+    assert download_pdf.download_paper(arxiv="2608.18495", out_dir=tmp_path) == 1
+

@@ -1,9 +1,16 @@
+[build-system]
+# 必须显式声明：缺省时 uv 视本工程为"未打包"（virtual），
+# project.scripts 的入口点不会被安装，`uv run hydrolitagent` 将不可用。
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "hydrolitagent"
 version = "0.1.0"
 description = "Literature knowledge base toolkit for hydrology research."
 readme = "README.md"
-requires-python = ">=3.10"
+# docker/Dockerfile 使用 python:3.12-slim，满足此范围。
+requires-python = ">=3.12,<3.15"
 dependencies = [
   "graphifyy",
   "openai",
@@ -14,6 +21,9 @@ dependencies = [
   "markdown>=3.5",
   "requests>=2.31",
   "pillow>=10.0",
+  # 原 hydro-platform workspace 成员的依赖，随包合并并入根包。
+  # 固定版本是刻意的：PDF 直读路径依赖它解析页数/文本。
+  "pypdf==6.18.0",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +37,7 @@ dev = [
   "mkdocs>=1.6",
   "mkdocs-material>=9.5",
   "mkdocstrings[python]>=0.25",
+  "pytest-cov>=7.1.0",
 ]
 
 [project.scripts]
@@ -35,7 +46,18 @@ hydrolitagent = "hydrolitagent.cli:main"
 [tool.setuptools.packages.find]
 include = ["hydrolitagent*"]
 
+[tool.setuptools.package-data]
+# 文献卡与主题卡的资产（模板/prompt/schema/默认配置/示例）随包分发。
+"hydrolitagent.cards" = [
+  "assets/templates/**/*",
+  "assets/prompts/*.md",
+  "assets/schemas/*.json",
+  "assets/examples/**/*",
+  "assets/config/*.json",
+]
+
 [tool.pytest.ini_options]
+# 两套测试已并为一套：hydrolitagent 的与平台的一起放在仓库根 tests/。
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"

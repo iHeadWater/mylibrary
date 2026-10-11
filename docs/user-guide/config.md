@@ -34,7 +34,7 @@ ZOTERO_LOCAL_BASE_URL=http://host.docker.internal:23119
 | `WECHAT_APPID` | wechat/push.py | 公众号 AppID |
 | `WECHAT_APPSECRET` | wechat/push.py | 公众号 AppSecret |
 | `WECHAT_THUMB_MEDIA_ID` | wechat/push.py | 公众号默认封面 media_id |
-| `NOTEBOOKLM_HOME` | zotero_notebooklm.py | NotebookLM CLI 配置目录(默认 `.tmp/notebooklm`) |
+| `NOTEBOOKLM_HOME` | zotero_notebooklm.py | NotebookLM CLI 配置目录(未设置时用 notebooklm-py 默认 `~/.notebooklm`;本仓库 skill 推荐设为 `.tmp/notebooklm`) |
 | `ZOTERO_LOCAL_BASE_URL` | zotero_notebooklm.py | Zotero 本地 API(默认 `http://127.0.0.1:23119`)；旧名 `ZOTERO_LOCAL_API_URL` 仍兼容 |
 
 > ⚠️ 凭据一律从环境变量读取,不要硬编码进源码。参见 [文献深度处理](literature.md)。
@@ -42,6 +42,68 @@ ZOTERO_LOCAL_BASE_URL=http://host.docker.internal:23119
 > **配置读取已统一（TOML 优先、`.env` 回退）**：`paper_to_zotero.py` / `zot_link_gdrive.py` / `zotero_sync.py` /
 > `download_paper.py` 现在都先读 TOML（若存在，容器 myopenclaw 用 `/opt/data/.config/zot/config.toml`），
 > TOML 缺失时才回退到 `.env` 的 `ZOTERO_API_KEY`/`ZOTERO_LIBRARY_ID`。裸 host 无需再手写 TOML。
+
+## 精读产物根 {#reading-output-root}
+
+文献综述/精读的产物(分析卡、文章、播客、PDF、B站上传件)都落在一个**可配置的产物根**下。
+默认是仓库内的 `outputs/`(已被 `.gitignore` 排除)。可以把它指向
+OneDrive / Google Drive / 坚果云等同步目录,让其他人直接打开产物——不需要手工拷贝。
+
+### 优先级
+
+| 顺序 | 来源 | 用途 |
+|------|------|------|
+| 1 | 环境变量 `HYDROLITAGENT_LITERATURE_ROOT` | 每台机器各自指定 |
+| 2 | `configs/paths.toml` 的 `[literature].root` | 仓库级默认值(提交进 Git) |
+| 3 | 内置默认 `<仓库根>/outputs` | 未配置时 |
+
+### 配置文件
+
+`configs/paths.toml`:
+
+```toml
+[literature]
+root = "outputs"     # 相对路径从仓库根解析
+external = false     # root 指向仓库外时必须显式设为 true
+```
+
+**提交进仓库的配置不得指向仓库外** —— 它是所有用户的默认值,指向外部是缺陷不是偏好。
+个人要指到云盘请用自己的环境变量(见下),不要改这个文件。
+
+### 指向同步目录
+
+```bash
+# 写在 .env(不进 Git),或直接 export
+HYDROLITAGENT_LITERATURE_ROOT=D:/OneDrive/mylibrary-products
+```
+
+指向仓库外的路径时,**设这个变量本身就是显式 opt-in**,不需要第二个开关——
+那个开关不可能提交进仓库,再要一个只会自相矛盾。
+
+解析出的根超过 180 字符会有告警:Windows 路径上限是 260,较深的产物子树会写不进去。
+(这正是 `outputs/graph` 不被纳入产物根的原因——它在云盘根下会到 291 字符。)
+
+### 查看实际落点
+
+```bash
+uv run hydrolitagent paths          # 人读
+uv run hydrolitagent paths --json   # 机读(skill 用)
+```
+
+> ⚠️ 必须用 `uv run hydrolitagent`。`python -m hydrolitagent` **不可用** ——
+> 本包没有 `__main__.py`。
+
+### 相关的历史变量
+
+| 变量 | 说明 |
+|------|------|
+| `MYLIBRARY_PDF_ROOT` | **旧名**,只覆盖 PDF 下载目录,优先级高于产物根。新代码请改用产物根 |
+
+> ⚠️ **`.env` 里有已知的静默失效**:`literature/` 下的模块(`download_pdf` /
+> `bilibili_upload` / `zotero_notebooklm`)不调用 `load_dotenv`。产物根解析器会
+> 自己补读 `.env`,所以 `HYDROLITAGENT_LITERATURE_ROOT` 写在 `.env` 里是生效的;
+> 但 `MYLIBRARY_PDF_ROOT` 和 `NOTEBOOKLM_HOME` 的同款问题还没修 —— 它们写在
+> `.env` 里会被静默忽略,只有 export 到 shell 才生效。
 
 ## Zotero 配置文件
 

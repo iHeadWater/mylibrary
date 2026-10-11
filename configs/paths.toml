@@ -1,0 +1,18 @@
+# 精读/综述产物根的配置。
+#
+# 这个文件提交进 Git,给的是**默认值**;每台机器用环境变量覆盖:
+#     HYDROLITAGENT_LITERATURE_ROOT=<你的产物根>
+# 用 `uv run hydrolitagent paths` 查看实际解析结果。
+#
+# ⚠️ 凭据一律不要写在这里 —— 这个文件是公开的。API key / Zotero / 微信
+#    凭据放 `.env`(不进 Git)或 `~/.config/zot/config.toml`。
+
+[literature]
+# 产物根。相对路径从仓库根解析。
+# 默认 outputs,已被 .gitignore 覆盖,不会入库。
+root = "outputs"
+
+# 当 root 指向工作区外(OneDrive / Google Drive / 坚果云 / 网络盘)时必须
+# 显式设为 true。提交的配置是给所有用户用的默认值,指向仓库外是缺陷不是
+# 偏好 —— 所以这里默认 false,个人要改就用自己的环境变量。
+external = false

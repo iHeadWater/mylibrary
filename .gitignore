@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
 
@@ -206,3 +207,60 @@ _docx_extract.md
 # 根目录录音 + 转写稿（MM-DD 标题.mp3 / .txt，仅匹配仓库根，不影响子目录）
 /[0-9][0-9]-[0-9][0-9] *.mp3
 /[0-9][0-9]-[0-9][0-9] *.txt
+
+# ── 文献卡与主题卡平台：运行产物一律不入库 ──
+# 代码与**只读资产**在 hydrolitagent/cards/（assets/ 入库）；
+# **运行产物**一律落仓库根，由运行时自建 —— 包目录里不放任何可变状态。
+# 前导 "/" 是必要的：这些目录名必须只锚定仓库根。去掉 "/" 会让 `themes/`
+# 匹配任意深度的同名目录，静默吞掉只读资产
+# `hydrolitagent/cards/assets/templates/themes/**`（那里是主题提示词与 schema，
+# 必须入库）。回归由 tests/test_repo_structure.py 的负向控制钉住。
+/.runtime/
+/.tools/
+/evidence-packs/
+/themes/
+/reports/
+/activity/
+/members/
+/*.bootstrap.lock
+# 本机配置覆盖（与 assets/config/config.json 同级）
+hydrolitagent/cards/assets/config/config.local.json
+.env.*
+!.env.example
+*.key
+*.pem
+# 编辑器状态与临时文件（*.log 见上方 Django 段）
+.obsidian/
+# 平台产生的临时文件。写成深度限定而非全局 *.tmp/*.temp——
+# 全局会静默吞掉其他目录下未来的同名文件。
+hydrolitagent/**/*.tmp
+hydrolitagent/**/*.temp
+.runtime/**/*.tmp
+.runtime/**/*.temp
+
+# ── 水利科研平台(王新宇线):文献二进制、Zotero 本地缓存与工作包 ──
+# PDF/Office/压缩包一律不入库(只用链接与元数据索引)
+*.pdf
+*.xls
+*.xlsx
+*.zip
+.zotero-cache/
+zotero-packet/
+fulltext_*.txt
+.obsidian/
+
+# ── 产物根(paths.artifact_root)的默认位置 ──
+# 默认在仓库根;若把 artifact_root 配置到仓库外,这些规则无副作用。
+# 证据卡与主题必须同根(见 docs/development/platform/config.md)。
+主题/
+证据卡/
+运行记录/
+文献链接/
+
+# ── 本地工具产物与核验截图（不入库）──
+# firecrawl skill 的抓取缓存（detail-*.md 等中间产物）
+.firecrawl/
+# 文档站渲染核验截图,如 hp-index.png / hp-mermaid.png / hp-projdesign.png。
+# 修 Mermaid 渲染时逐页截图核对用,是本地核验材料而非仓库内容;
+# 若某张确实要进文档,应挪到 docs/assets/ 下再单独提交。
+/hp-*.png

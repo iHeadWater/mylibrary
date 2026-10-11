@@ -1,21 +1,8 @@
 # 文献深度处理（Literature CLI）
 
-从 dailyinfo 迁入的文献深度处理能力。以 **Zotero 库为分界线**:文献进入 Zotero 之前(采集/下载/入库)由 dailyinfo 负责;进入之后(精读/分析卡/主题/公众号/播客/B 站发布)由本仓库负责。
-
-## 模块结构
-
-```
-hydrolitagent/literature/
-├── _paths.py              # 路径助手(PROJECT_ROOT/OUTPUT_ROOT/NOTEBOOKLM_HOME)
-├── download_pdf.py        # 论文 PDF 下载(机构访问)
-├── zotero_sync.py         # Zotero 入库(linked_file)
-├── bilibili_upload.py     # B 站发布(封面 → MP4 → biliup 上传)
-├── zotero_notebooklm.py   # Zotero → NotebookLM 简报/音频/视频
-└── wechat/
-    ├── figure.py          # 配图/封面(从 Zotero PDF 提图,或智谱 CogView 生成)
-    ├── polish.py          # 公众号文章润色
-    └── push.py            # 公众号草稿箱发布
-```
+从 dailyinfo 迁入的文献处理能力：**精读、主题、公众号、播客、B 站发布**。
+它与「文献卡与主题卡」是两条不同的路子 —— 这边产出**当期内容**（文章、播客、分析卡），
+那边把文献沉淀成**长期可追溯**的资产。
 
 ## CLI 用法（统一用 `uv run python -m`）
 
@@ -54,7 +41,7 @@ uv run python -m hydrolitagent.literature.wechat.figure <article.md>
 | `GDRIVE_PAPERS_PATH` | GDrive 论文文件夹(Linked Attachment Base Directory) | zotero_sync.py |
 | `ZHIPUAI_API_KEY` | 智谱 AI(CogView)配图/封面 | wechat/figure.py |
 | `WECHAT_APPID` / `WECHAT_APPSECRET` / `WECHAT_THUMB_MEDIA_ID` | 公众号发布 | wechat/push.py |
-| `NOTEBOOKLM_HOME` | NotebookLM CLI 配置目录(默认 `.tmp/notebooklm`) | zotero_notebooklm.py |
+| `NOTEBOOKLM_HOME` | NotebookLM CLI 配置目录(未设置时用 notebooklm-py 默认 `~/.notebooklm`;本仓库 skill 推荐设为 `.tmp/notebooklm`) | zotero_notebooklm.py |
 | `ZOTERO_LOCAL_BASE_URL` | Zotero 本地 API(默认 `http://127.0.0.1:23119`)；旧名 `ZOTERO_LOCAL_API_URL` 仍兼容 | zotero_notebooklm.py |
 
 > ⚠️ 凭据一律从环境变量读取,**不要把 API 密钥硬编码进源码**。`push.py` 曾硬编码微信凭据,迁移时已修复为 env 读取。
@@ -67,7 +54,11 @@ uv run python -m hydrolitagent.literature.wechat.figure <article.md>
 
 ## 精读产物(知识库)
 
-每周文献综述的产出(分析卡、文章、播客)统一放在 `outputs/weekly-review/{YYYY-MM-DD}/`:
+每周文献综述的产出(分析卡、文章、播客)统一放在 `outputs/weekly-review/{YYYY-MM-DD}/`。
+
+> `outputs/` 只是**默认落点**。产物根可配置——要同步到 OneDrive / Google Drive / 坚果云,
+> 设 `HYDROLITAGENT_LITERATURE_ROOT`,或改 `configs/paths.toml`。见
+> [配置参考](config.md#reading-output-root)。用 `uv run hydrolitagent paths` 查看实际落点。
 
 ```
 outputs/weekly-review/2026-08-04/

@@ -405,6 +405,114 @@ class TestCitationKeyFromStandardFields:
         assert extra.get("citationKey") == "Doe2026_AiS"
 
 
+class TestCrossrefDatePriority:
+    """Crossref's ``created`` is when the *record* was deposited, not when the
+    paper appeared — ranking it above ``issued`` writes the wrong year.
+
+    Every other fixture in this file supplies ``published-print``, which wins
+    first, so the ``created``/``issued`` ordering was never exercised.  These
+    tests cover the fallback chain with the first pick absent.
+    """
+
+    def test_issued_wins_over_created(self):
+        """The regression that motivated this: APS deposited 1914 content in 2002."""
+        mock_cr = {
+            "type": "journal-article",
+            "title": ["On Physically Similar Systems"],
+            "container-title": ["Physical Review"],
+            "author": [{"given": "E.", "family": "Buckingham"}],
+            "created": {"date-parts": [[2002, 7, 27]]},
+            "issued": {"date-parts": [[1914, 10, 1]]},
+            "deposited": {"date-parts": [[2017, 4, 6]]},
+        }
+
+        with patch.object(paper_to_zotero, "fetch_crossref", return_value=mock_cr):
+            item, extra = paper_to_zotero.build_item("10.1103/PhysRev.4.345", {})
+
+        assert item["date"] == "1914-10-01"
+        # citationKey is derived from date[:4], so it has to follow the date.
+        assert extra.get("citationKey") == "Buckingham1914_PR"
+
+    def test_published_print_still_wins_over_issued(self):
+        """Print journals keep their print year — existing behaviour, unchanged."""
+        mock_cr = {
+            "type": "journal-article",
+            "title": ["Test Paper"],
+            "container-title": ["Nature Communications"],
+            "author": [{"given": "John", "family": "Doe"}],
+            "published-print": {"date-parts": [[2024, 3, 1]]},
+            "issued": {"date-parts": [[2023, 12, 1]]},
+            "published-online": {"date-parts": [[2023, 11, 1]]},
+            "created": {"date-parts": [[2023, 10, 1]]},
+        }
+
+        with patch.object(paper_to_zotero, "fetch_crossref", return_value=mock_cr):
+            item, _ = paper_to_zotero.build_item("10.1234/print-wins", {})
+
+        assert item["date"] == "2024-03-01"
+
+    def test_published_online_wins_over_created(self):
+        """Online-first records have no print date; online beats deposit."""
+        mock_cr = {
+            "type": "journal-article",
+            "title": ["Test Paper"],
+            "container-title": ["Some Journal"],
+            "author": [{"given": "John", "family": "Doe"}],
+            "published-online": {"date-parts": [[2021, 5, 20]]},
+            "created": {"date-parts": [[2023, 1, 2]]},
+        }
+
+        with patch.object(paper_to_zotero, "fetch_crossref", return_value=mock_cr):
+            item, _ = paper_to_zotero.build_item("10.1234/online-wins", {})
+
+        assert item["date"] == "2021-05-20"
+
+    def test_created_still_used_when_nothing_better_exists(self):
+        """``created`` remains a fallback — just no longer the first choice."""
+        mock_cr = {
+            "type": "journal-article",
+            "title": ["Test Paper"],
+            "container-title": ["Some Journal"],
+            "author": [{"given": "John", "family": "Doe"}],
+            "created": {"date-parts": [[2020, 2, 3]]},
+        }
+
+        with patch.object(paper_to_zotero, "fetch_crossref", return_value=mock_cr):
+            item, _ = paper_to_zotero.build_item("10.1234/created-only", {})
+
+        assert item["date"] == "2020-02-03"
+
+    def test_deposited_used_as_last_resort(self):
+        mock_cr = {
+            "type": "journal-article",
+            "title": ["Test Paper"],
+            "container-title": ["Some Journal"],
+            "author": [{"given": "John", "family": "Doe"}],
+            "deposited": {"date-parts": [[2019, 8, 9]]},
+        }
+
+        with patch.object(paper_to_zotero, "fetch_crossref", return_value=mock_cr):
+            item, _ = paper_to_zotero.build_item("10.1234/deposited-only", {})
+
+        assert item["date"] == "2019-08-09"
+
+    def test_year_only_date_parts_render_as_bare_year(self):
+        """Old records often carry a year and nothing else."""
+        mock_cr = {
+            "type": "journal-article",
+            "title": ["Test Paper"],
+            "container-title": ["Some Journal"],
+            "author": [{"given": "John", "family": "Doe"}],
+            "issued": {"date-parts": [[1914]]},
+            "created": {"date-parts": [[2002, 7, 27]]},
+        }
+
+        with patch.object(paper_to_zotero, "fetch_crossref", return_value=mock_cr):
+            item, _ = paper_to_zotero.build_item("10.1234/year-only", {})
+
+        assert item["date"] == "1914"
+
+
 class TestArxivUpgrade:
     """arXiv DOI → published DOI metadata upgrade (Issue #15)."""
 

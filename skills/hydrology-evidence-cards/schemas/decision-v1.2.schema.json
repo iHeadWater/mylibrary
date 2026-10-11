@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/hydrology-evidence/decision-v1.2.schema.json",
+  "title": "Platform evidence synthesis and decision v1.2",
+  "type": "object",
+  "required": [
+    "decision_id", "research_question_ids", "included_claims", "excluded_claims",
+    "independence_groups", "version_families", "agreements", "conflicts",
+    "unresolved_conflicts", "coverage", "transferability", "evidence_profile",
+    "current_conclusion", "supported", "unsupported", "decision_effect",
+    "remaining_evidence_gap", "next_update_trigger"
+  ],
+  "properties": {
+    "decision_id": {"type": "string", "minLength": 1},
+    "research_question_ids": {"type": "array", "items": {"type": "string"}},
+    "included_claims": {"type": "array", "items": {"type": "string"}},
+    "excluded_claims": {"type": "array", "items": {"type": "string"}},
+    "decision_effect": {"enum": ["strengthens", "weakens", "limits", "contradicts", "no_change"]},
+    "evidence_profile": {
+      "type": "object",
+      "required": ["directness", "internal_validity", "independence", "precision", "applicability", "reproducibility"]
+    }
+  }
+}
+

@@ -1,23 +1,22 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
 
 
 def _load_dotenv() -> None:
-    """Load .env file from project root into os.environ."""
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    if not env_path.is_file():
-        return
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key, value = key.strip(), value.strip()
-        if key and key not in os.environ:
+    """把仓库根的 .env 载入 os.environ(已存在的键不覆盖)。
+
+    解析本身归 ``_config.read_dotenv_values`` —— 这里曾有第二份手写的
+    dotenv 解析,且不剥离行内注释,``KEY=value  # 注释`` 会把注释一起当值。
+    """
+    from ._config import read_dotenv_values
+
+    for key, value in read_dotenv_values().items():
+        if key not in os.environ:
             os.environ[key] = value
 
 
@@ -166,6 +165,83 @@ def add_query_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser.set_defaults(cmd="query")
 
 
+def add_paths_subparser(subparsers: argparse._SubParsersAction) -> None:
+    parser = subparsers.add_parser(
+        "paths",
+        help="Print the resolved literature product paths",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON (consumed by the skills)",
+    )
+    parser.set_defaults(cmd="paths")
+
+
+def _paths_payload() -> dict[str, object]:
+    """解析出的各产物路径 + 是否在工作区外 + 是否存在。
+
+    由 ``literature._paths`` 提供 —— 那是全仓库唯一知道产物根在哪的地方。
+    """
+    from .literature import _paths
+
+    root = _paths.OUTPUT_ROOT
+    try:
+        external = not root.resolve().is_relative_to(_paths.PROJECT_ROOT.resolve())
+    except (OSError, ValueError):
+        external = True
+
+    payload: dict[str, object] = {
+        "project_root": str(_paths.PROJECT_ROOT),
+        "literature_root": str(root),
+        "external": external,
+    }
+    for key, path in (
+        ("weekly_review", _paths.WEEKLY_REVIEW_DIR),
+        ("papers", _paths.PAPERS_DIR),
+        ("bilibili", _paths.BILIBILI_DIR),
+        ("zotero", _paths.ZOTERO_DIR),
+    ):
+        payload[key] = str(path)
+        payload[f"{key}_exists"] = path.is_dir()
+    return payload
+
+
+def _print_paths(*, as_json: bool) -> None:
+    payload = _paths_payload()
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    suffix = "  (工作区外)" if payload["external"] else ""
+    print(f"仓库根: {payload['project_root']}")
+    print(f"产物根: {payload['literature_root']}{suffix}")
+    for key, label in (
+        ("weekly_review", "周报产物"),
+        ("papers", "PDF"),
+        ("bilibili", "B站上传"),
+        ("zotero", "NotebookLM"),
+    ):
+        mark = "✓" if payload[f"{key}_exists"] else "—"
+        print(f"  {mark} {label:<10} {payload[key]}")
+    if not payload["weekly_review_exists"]:
+        print("\n(带 — 的目录尚未创建;跑对应流程时会自动建)")
+
+
+def add_cards_subparser(subparsers: argparse._SubParsersAction) -> None:
+    """文献卡与主题卡：把参数原样透传给 hydrolitagent.cards.cli 自己的 parser。
+
+    用 ``REMAINDER`` 而不是在这里重写 5 条命令的参数定义——那套 parser 已经写好了
+    （``hydrolitagent/cards/cli.py``），重写一遍只会造成两处定义漂移。
+    ``add_help=False`` 让 ``cards --help`` 落到内层 parser，输出那 5 条命令的说明。
+    """
+    # 只用于让 `hydrolitagent --help` 列出 cards；实际派发在 main() 入口拦截，
+    # 不走 argparse（见那里的注释）。
+    subparsers.add_parser(
+        "cards",
+        help="文献卡与主题卡:自己的 Zotero -> 文献卡 -> 主题卡",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="hydrolitagent",
@@ -177,11 +253,32 @@ def build_parser() -> argparse.ArgumentParser:
     add_graph_subparser(subparsers)
     add_merge_subparser(subparsers)
     add_query_subparser(subparsers)
+    add_paths_subparser(subparsers)
+    add_cards_subparser(subparsers)
     return parser
 
 
 def main() -> None:
+    # 入口统一兜底：默认中文 Windows 控制台（GBK/cp936）打不出 "✓" 等符号，
+    # `paths` 人读分支曾因此抛 UnicodeEncodeError（finding F-R2-003）。
+    # 从源头 reconfigure 而非捕 UnicodeEncodeError——后者会吞掉真正该暴露的
+    # 编码问题；仓库先例见 scripts/download_paper.py 的同款写法。
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, OSError):
+        # 老 Python 无 reconfigure / 流已关闭：不阻断主流程
+        pass
     _load_dotenv()
+
+    # `cards` 是一整套独立子 CLI（自带 parser 与 5 条命令）。这里直接透传 argv，
+    # 不走 argparse 的 REMAINDER —— 后者会把 `cards --help` 里的 `--help` 当成
+    # 外层选项，报 "unrecognized arguments: --help"。
+    argv = sys.argv[1:]
+    if argv and argv[0] == "cards":
+        from hydrolitagent.cards.cli import main as cards_main
+
+        raise SystemExit(cards_main(argv[1:]))
+
     parser = build_parser()
     args = parser.parse_args()
 
@@ -288,6 +385,9 @@ def main() -> None:
                     print(f"  [{n.get('file_type', '?')}] {n['label']}")
                 if len(result["nodes"]) > 15:
                     print(f"  ... and {len(result['nodes']) - 15} more nodes")
+
+    elif args.command == "paths":
+        _print_paths(as_json=args.json)
 
     else:
         parser.print_help()

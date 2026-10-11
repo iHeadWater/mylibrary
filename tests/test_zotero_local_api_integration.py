@@ -27,6 +27,7 @@ Run explicitly::
 from __future__ import annotations
 
 import asyncio
+import http.client
 import json
 import os
 import sys
@@ -87,17 +88,42 @@ def _status_and_location(url: str) -> tuple[int, str]:
         return exc.code, exc.headers.get("Location", "")
 
 
-def _local_api_alive() -> bool:
+def _local_api_readiness() -> str:
+    """Why the Local API is unusable, or ``""`` when it is ready.
+
+    Probing the Connector route is not enough.  ``/connector/ping`` answers
+    whenever Zotero is running, while every ``/api/*`` route stays ``403 Local
+    API is not enabled`` until "Allow other applications on this computer to
+    communicate with Zotero" is switched on.  Gating on the Connector route
+    declared the API ready, then failed test by test on a 403 whose body already
+    named the fix -- a green-looking suite that could not say what was wrong.
+    """
+    url = f"{LOCAL_BASE}{LOCAL_USER}/collections"
     try:
-        with urllib.request.urlopen(f"{LOCAL_BASE}/connector/ping", timeout=3):
-            return True
-    except Exception:
-        return False
+        with urllib.request.urlopen(url, timeout=3):
+            return ""
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace").strip()
+        if exc.code == 403 and "not enabled" in body:
+            return (
+                "Zotero's Local API is disabled -- enable it via Settings -> "
+                'Advanced -> "Allow other applications on this computer to '
+                'communicate with Zotero"'
+            )
+        if exc.code == 400:
+            return (
+                f"Zotero rejected the Host header for {LOCAL_BASE} -- the Local "
+                "API accepts only 127.0.0.1 / localhost as Host"
+            )
+        return f"Local API answered HTTP {exc.code} for {url}: {body[:120]}"
+    except Exception as exc:  # noqa: BLE001 - any failure means "not ready"
+        return f"Zotero Desktop not reachable at {LOCAL_BASE}: {exc}"
 
 
 @pytest.fixture(scope="module", autouse=True)
 def require_zotero_desktop():
-    if not _local_api_alive():
+    reason = _local_api_readiness()
+    if reason:
         hint = ""
         if "host.docker.internal" in LOCAL_BASE:
             hint = (
@@ -105,11 +131,7 @@ def require_zotero_desktop():
                 "container; on a bare host set "
                 "ZOTERO_LOCAL_BASE_URL=http://127.0.0.1:23119"
             )
-        pytest.skip(
-            f"Zotero Desktop Local API not reachable at {LOCAL_BASE} "
-            '(needs Zotero running and "Allow other applications to '
-            f'communicate with Zotero" enabled){hint}'
-        )
+        pytest.skip(reason + hint)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -341,3 +363,42 @@ def test_a_malformed_key_is_rejected_before_any_request():
 
     assert result["error"] is True
     assert "well-formed" in result["message"]
+
+
+# ── The Host rule the container override exists to satisfy ────────────────
+#
+# Asserted against the real server because it is *Zotero's* behaviour we depend
+# on, not ours: if it ever stops being true, the override in
+# ``server._local_api_headers()`` can be reconsidered instead of kept on faith.
+
+
+def _status_with_host(path: str, host: str) -> int:
+    """GET ``path`` on the Local API with an explicit ``Host`` header.
+
+    ``urllib`` overwrites ``Host`` itself, so the request is written by hand.
+    """
+    conn = http.client.HTTPConnection("127.0.0.1", 23119, timeout=TIMEOUT)
+    try:
+        conn.putrequest("GET", path, skip_host=True)
+        conn.putheader("Host", host)
+        conn.endheaders()
+        response = conn.getresponse()
+        response.read()
+        return response.status
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize(
+    ("host", "expected"),
+    [
+        ("127.0.0.1:23119", 200),
+        ("localhost:23119", 200),
+        # Not even other addresses in the loopback /8 are accepted.
+        ("127.0.0.2:23119", 400),
+        # What a container sends unless the header is overridden.
+        ("host.docker.internal:23119", 400),
+    ],
+)
+def test_only_a_loopback_host_header_is_accepted(host, expected):
+    assert _status_with_host("/connector/ping", host) == expected

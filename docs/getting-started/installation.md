@@ -1,96 +1,104 @@
-# 安装配置
+# 前提与配置
 
-## 环境要求
+**先配好这一页，再去用任何一项能力。** 这里是全部**公共前提**的唯一出处 —— 各功能页只写「本页额外需要什么」，不再重复。
 
-- Python 3.10+
-- [uv](https://docs.astral.sh/uv/) 包管理器
-- Zotero 桌面版（至少运行过一次，生成本地数据库）
+## 配好之后怎么用
 
-## 安装项目
+**打开本项目文件夹，用一个编码 agent 让它替你干活。**
+
+「本项目文件夹」就是你 `git clone` 下来的 `mylibrary` 目录。在**这个目录里**开一个编码 agent ——
+**Claude Code · Codex · workbuddy**，你顺手哪个都行 —— 然后**说人话**：
+
+> 「把 10.1038/s41586-024-07145-1 下载并入库」 · 「把《某某》这篇做成卡」 · 「看看能聚出哪些主题」
+
+**⚠️ 所有操作都要在 `mylibrary` 目录里做。** 命令与产物路径都以它为基准；在别处运行会找不到依赖。
+新开终端先回到这里：
 
 ```bash
-git clone git@github.com:OuyangWenyu/mylibrary.git
-cd mylibrary
-uv pip install -e .
+cd /path/to/mylibrary
 ```
 
-## 配置 Zotero
+## 一、通用（每项能力都要）
 
-### 1. 创建 Zotero API Key
+| 需要 | 说明 |
+|---|---|
+| **Git** | |
+| **Python 3.12–3.14** | `requires-python = ">=3.12,<3.15"` |
+| **uv** | [安装指引](https://docs.astral.sh/uv/) |
+| **Zotero 桌面版** | 至少运行过一次（生成本地数据库） |
 
-访问 [zotero.org/settings/keys](https://www.zotero.org/settings/keys)：
+```bash
+git clone git@github.com:iHeadWater/mylibrary.git     # 或 https://github.com/iHeadWater/mylibrary.git
+cd mylibrary
+uv sync --all-packages
+```
 
-1. 点击 **Create New Private Key**
-2. 勾选 **Allow library access** 和 **Allow notes access**
-3. 记录生成的 Key 和页面顶部显示的 **User ID**（数字）
+> 本仓库只有**一个包 `hydrolitagent`**。入口是 `uv run hydrolitagent …`；
+> 文献卡与主题卡走子命令组 `uv run hydrolitagent cards …`（**运行时 Windows-only**）。
 
-### 2. 配置环境变量
+## 二、按能力看还要什么
+
+| 你要做的事 | 额外需要 | 凭据放哪 |
+|---|---|---|
+| **读 Zotero 库**（MCP 12 个工具） | Zotero **Web API key** | `.env`：`ZOTERO_API_KEY` · `ZOTERO_LIBRARY_ID` |
+| **下载 + 入 Zotero**（入库） | 上面那条 + **GDrive 论文目录** + Zotero 里对应的「**链接附件根目录**」设置 | `.env`：`GDRIVE_PAPERS_PATH` |
+| **机构访问下载 PDF** | **Playwright 浏览器** + 学校机构会话 | 见 [论文 PDF 下载](../user-guide/download-pdf.md) |
+| **文献卡与主题卡** | Zotero Desktop **正在运行**且**允许其他应用通信**；一种**已登录**的模型 CLI（Codex 或 Claude）；读 PDF 页面用的 [Poppler](https://poppler.freedesktop.org/)（`pdftoppm` / `pdfinfo` / `pdftotext`）在 PATH 里 | 模型凭据由**那个 CLI 自己**管 —— **不进本仓库** |
+| **深度处理**（精读 / 公众号 / 播客） | 看产出而定：**智谱**（配图）、**微信公众号**（发布）、**NotebookLM** | `.env`：`ZHIPUAI_API_KEY` · `WECHAT_APPID` + `WECHAT_APPSECRET` 等 |
+| **只做离线校验** | **以上额外项都不需要** | — |
+
+逐字段的环境变量清单见[配置参考](../user-guide/config.md)。
+**密钥一律从环境变量读**，不要写进源码或提交。
+
+## 三、凭据：`.env`
 
 ```bash
 cp .env.example .env
 ```
 
-编辑 `.env`，填入以下 Zotero 相关变量：
+`.env` 已被 Git 忽略。**按上表只填你要用的那几条** —— 空着不是错。
 
 ```bash
-# Zotero Web API（必需 — 读写文献库）
+# 读 Zotero 库（必需）
 ZOTERO_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxx
 ZOTERO_LIBRARY_ID=1234567
-ZOTERO_LIBRARY_TYPE=user
+ZOTERO_LIBRARY_TYPE=user          # user（默认）或 group
 
-# Zotero Local API（可选 — PDF 全文检索，需 Zotero Desktop 运行）
-# 只填 host 根；/api/users/0 由 server 自己补。
-#   服务器容器内 -> http://host.docker.internal:23119
-#   裸 host      -> http://127.0.0.1:23119（host.docker.internal 不解析）
-# 旧名 ZOTERO_LOCAL_API_URL 仍兼容。
-ZOTERO_LOCAL_BASE_URL=http://host.docker.internal:23119
+# Zotero 本地全文检索（可选；需 Zotero Desktop 运行）
+# 只填 host 根，/api/users/0 由服务自己补。旧名 ZOTERO_LOCAL_API_URL 仍兼容。
+#   裸 host  -> http://127.0.0.1:23119
+#   容器内   -> http://host.docker.internal:23119
+ZOTERO_LOCAL_BASE_URL=http://127.0.0.1:23119
 
-# GDrive 论文文件夹（论文入库必需 — 见下节）
+# 论文入库（必需，仅入库那条线）
 GDRIVE_PAPERS_PATH=G:\我的云端硬盘\Documents\Papers\Zotero_Papers
 ```
 
-| 变量 | 必需 | 说明 |
-|------|------|------|
-| `ZOTERO_API_KEY` | 是 | Zotero Web API 密钥 |
-| `ZOTERO_LIBRARY_ID` | 是 | Zotero User ID（数字） |
-| `ZOTERO_LIBRARY_TYPE` | 否 | `user`（默认）或 `group` |
-| `ZOTERO_LOCAL_BASE_URL` | 否 | 本地全文检索 API 地址(host 根，如 `http://127.0.0.1:23119`)。旧名 `ZOTERO_LOCAL_API_URL` 仍兼容 |
-| `GDRIVE_PAPERS_PATH` | 论文入库是 | GDrive 论文文件夹（= Linked Attachment Base Directory） |
+**Zotero API key 怎么拿**：[zotero.org/settings/keys](https://www.zotero.org/settings/keys) →
+**Create New Private Key** → 勾选 **Allow library access** 与 **Allow notes access** →
+记下 Key 和页面顶部的 **User ID**（数字）。
 
-### 3. 配置 Zotero 附件路径（用于论文入库）
+**入库还要在 Zotero 里配一次**：Preferences → Advanced → Files and Folders →
+**链接附件根目录**（Zotero 里叫 Linked Attachment Base Directory）设成与 `GDRIVE_PAPERS_PATH` **同一个**路径；
+并确认 ZotMoov / 「自动重命名并移动附件」对该文件夹**关闭**。
 
-论文入库使用 Zotero 的 `attachments:` scheme 解析 PDF 路径。请在 Zotero 桌面版中设置 **Linked Attachment Base Directory** 为与 `GDRIVE_PAPERS_PATH` **相同的路径**：
+> 容器（myopenclaw hermes）可与裸 host 共用一份凭据文件 `~/.config/zot/config.toml`
+> （`[zotero] library_id / api_key`）；可用 `ZOTERO_CONFIG_PATH` 改路径。
+> 裸 host **无需 TOML**，脚本在无 TOML 时自动回退 `.env`。
 
-1. Zotero → Preferences → Advanced → Files and Folders
-2. 设置 **Linked Attachment Base Directory** = `GDRIVE_PAPERS_PATH`
-3. 确保 ZotMoov / 「自动重命名并移动附件」对该文件夹**关闭**
-
-这样 `attachments:paper.pdf` 会自动解析为 `<GDRIVE_PAPERS_PATH>/paper.pdf`，跨系统路径一致。
-
-## 配置论文入库
-
-论文入库（`download_paper.py` / `zotero_sync`）用上面的 `.env` 即可——**裸 host 无需 TOML**。
-（可选）若要与 myopenclaw 容器共用同一套凭据文件，可另建 `~/.config/zot/config.toml`，脚本会优先读它：
-
-```toml
-[zotero]
-library_id = "1234567"
-api_key = "xxxxxxxxxxxxxxxxxxxxxxxx"
-```
-
-无 TOML 时自动回退 `.env`。容器（myopenclaw hermes）路径不变：读 `/opt/data/.config/zot/config.toml`。
-可通过 `ZOTERO_CONFIG_PATH` 环境变量覆盖此路径。
-
-## 验证安装
+## 四、验证
 
 ```bash
-# 确认依赖安装成功
-uv run python -c "import pyzotero; print('pyzotero OK')"
-uv run python -c "from hydrolitagent.zotero import server; print('server OK')"
-
-# 运行测试
-uv run pytest tests/test_zotero_server.py -v
-
-# 论文入库链路自检（验证 .env / Zotero API / GDrive 目录并给出一次性设置提示）
-uv run python scripts/download_paper.py --setup-check
+uv run python -c "import pyzotero; print('pyzotero OK')"    # 依赖装好了吗
+uv run python scripts/download_paper.py --setup-check       # 入库链路自检（.env / API / GDrive）
 ```
+
+文献卡那条线的自检不需要你的论文或模型账号，见[文献卡与主题卡](../user-guide/cards/index.md)。
+
+## 下一步
+
+配好通用部分后，按你要做的事往下走：
+
+- **入库**（下载 PDF → Zotero）：[论文入库流水线](../user-guide/paper-pipeline.md)
+- **读库 / 精读 / 内容产出**：[用户指南总览](../user-guide/index.md)
+- **文献卡与主题卡**：[文献卡与主题卡](../user-guide/cards/index.md)

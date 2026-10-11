@@ -55,14 +55,10 @@
 
 ### 2. 克隆并安装 mylibrary
 
-PowerShell：
+克隆与基础安装见[前提与配置](../getting-started/installation.md)；本页**额外**需要 `notebooklm` extra：
 
-```powershell
-git clone <repo-url> D:\Code\mylibrary
-cd D:\Code\mylibrary
-uv sync --python python3
-uv pip install -e .
-uv pip install -e ".[notebooklm]"
+```bash
+uv sync --all-packages --extra notebooklm
 ```
 
 快速检查：
@@ -97,7 +93,7 @@ http://127.0.0.1:23119/api/users/0
 $env:NOTEBOOKLM_HOME='D:\Code\mylibrary\.tmp\notebooklm'
 ```
 
-默认 `NOTEBOOKLM_HOME` 是 `D:\code\mylibrary\.tmp\notebooklm`（由 `_paths.py` 定义）。登录和后续 agent 运行必须使用同一个 `NOTEBOOKLM_HOME`。`storage_state.json` 包含浏览器授权 cookie，不要提交到 git。
+`NOTEBOOKLM_HOME` 未设置时用 notebooklm-py 自带的默认 `~/.notebooklm`；本仓库 skill **推荐**显式设为仓库内的 `.tmp/notebooklm`（即上例）。登录和后续 agent 运行必须使用同一个 `NOTEBOOKLM_HOME`。`storage_state.json` 包含浏览器授权 cookie，不要提交到 git。
 
 长期使用时，可以把这些环境变量写进 shell profile，也可以让本地 agent 每次运行前设置。
 

@@ -46,7 +46,7 @@ uv run python scripts/download_paper.py --doi 10.5194/hess-... --sync # 期刊 D
 
 - 走 curl/urllib(arXiv、science.org、Copernicus 等 OA 源)无需 playwright;付费墙(SD/Wiley/Nature)才需要浏览器 + 机构会话。
 - 建条目统一由 `paper_to_zotero.build_item()` 生成:arXiv 记录为 `preprint`(真实摘要/日期/`archiveID: arXiv:…`),不再有 Crossref-404 的 PDF 兜底错配。
-- **幂等**:同 DOI 已存在时提示并跳过;强制重建加 `--allow-duplicate`。
+- **幂等/补挂**:同 DOI 已存在时把 PDF **补挂到既有条目**(不再是直接跳过);同槽位同内容则幂等跳过;同槽位内容不同默认不动(`--replace` 才覆盖);`--allow-duplicate` 是强制新建条目(会造重复)。
 - 凭据来自 `.env`(`ZOTERO_API_KEY`/`ZOTERO_LIBRARY_ID`/`GDRIVE_PAPERS_PATH`),不依赖容器 TOML。
 
 ## 用后必查(两种模式都适用)
@@ -169,6 +169,8 @@ This uses pyzotero (`linked_file` attachment mode) which correctly creates entri
 ```
 
 This creates a `linked_file` attachment using the `attachments:` scheme — the SAME mechanism used for arXiv papers, which works reliably. The filename must match the file uploaded to Google Drive.
+
+Credentials resolve from `ZOTERO_LIBRARY_ID` / `ZOTERO_API_KEY` first (i.e. `<repo>/.env`, the bare-host case) and are then overridden per-key by the TOML at `$ZOTERO_CONFIG_PATH` (the container case). A missing TOML no longer aborts the script. Running it twice for the same filename is a no-op rather than a second pointer.
 
 **5c. Combined: metadata entry + attachment in one call:**
 
@@ -364,6 +366,6 @@ Some publisher servers (especially Copernicus) have very slow transfer speeds an
 | Conference paper update fails 400 | `'publicationTitle' is not a valid field for type 'conferencePaper'` | Use `proceedingsTitle` instead of `publicationTitle` for conferencePaper |
 | rclone timeout on `ls` | Command hangs | Use `timeout 10 rclone lsl gdrive:` or just `rclone copy` directly |
 | curl not installed | "command not found" | Use Python urllib instead |
-| **Zotero attachment shows "附件未找到"** | Used `imported_url` linkMode via raw REST API | NEVER use raw REST API for attachments. Use `zot-link-gdrive.py` or `paper-to-zotero.py --pdf-filename` — both use `linked_file` + `attachments:` scheme that works reliably |
+| **Zotero attachment shows "附件未找到"** | Used `imported_url` linkMode via raw REST API | NEVER use raw REST API for attachments. Use `hydrolitagent/zotero/zot_link_gdrive.py` or `hydrolitagent/zotero/paper_to_zotero.py --pdf-filename` — both use `linked_file` + `attachments:` scheme that works reliably |
 | Python SSL `UNEXPECTED_EOF_WHILE_READING` | urllib fails to connect to some servers | Use `ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)` with `check_hostname=False, verify_mode=CERT_NONE`, or `wget -c` (without `--no-check-certificate` unless SSL truly fails) |
 | `wget --no-check-certificate` triggers security scan | User prompted to approve every download | Use Python urllib as primary download method; only use `--no-check-certificate` as last resort |

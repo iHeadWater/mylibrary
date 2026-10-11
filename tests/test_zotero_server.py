@@ -2293,3 +2293,75 @@ class TestLocalApiEnvAliasing:
         monkeypatch.delenv("ZOTERO_LOCAL_BASE_URL", raising=False)
         monkeypatch.setenv("ZOTERO_LOCAL_API_URL", "http://from-legacy:23119")
         assert server._resolve_local_api_base() == "http://from-legacy:23119"
+
+
+# =========================================================================
+# Tests: Local API Host header (container -> host reachability)
+# =========================================================================
+
+
+class TestLocalApiHostHeader:
+    """The Local API client must present a loopback ``Host``.
+
+    Zotero's local server validates ``Host`` as DNS-rebinding protection and
+    answers ``400 Bad request`` to anything that is not the literal
+    ``127.0.0.1``/``localhost``.  Measured against Zotero 9.0.6: not even other
+    loopback addresses are accepted -- ``Host: 127.0.0.2:23119`` is rejected
+    exactly like ``host.docker.internal:23119``.
+
+    The default base is ``host.docker.internal``: the only name that reaches the
+    host from inside a container, and precisely what Zotero refuses.  The
+    loopback form is therefore set explicitly and the port carried over from the
+    base -- the connection still lands on ``LOCAL_API_BASE``, only what Zotero
+    reads as the destination changes.
+
+    Every test in this file otherwise runs on a bare host where the base is
+    already loopback, which is why the container-only breakage was invisible.
+    """
+
+    def test_container_default_is_rewritten_to_loopback(self, monkeypatch):
+        monkeypatch.setattr(
+            server, "LOCAL_API_BASE", "http://host.docker.internal:23119"
+        )
+        assert server._local_api_headers() == {"Host": "127.0.0.1:23119"}
+
+    def test_port_follows_the_base(self, monkeypatch):
+        """A non-default port must be carried over, not assumed."""
+        monkeypatch.setattr(server, "LOCAL_API_BASE", "http://zotero.internal:9999")
+        assert server._local_api_headers() == {"Host": "127.0.0.1:9999"}
+
+    @pytest.mark.parametrize(
+        "base", ["http://127.0.0.1:23119", "http://localhost:23119"]
+    )
+    def test_loopback_base_is_already_correct(self, monkeypatch, base):
+        """Host-side runs keep sending exactly what they sent before."""
+        monkeypatch.setattr(server, "LOCAL_API_BASE", base)
+        assert server._local_api_headers() == {}
+
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda: server.zotero_get_fulltext(item_key="ABC12345"),
+            lambda: server.zotero_get_file_info(item_key="ABC12345"),
+        ],
+        ids=["get_fulltext", "get_file_info"],
+    )
+    def test_both_local_tools_build_their_client_with_it(self, monkeypatch, call):
+        """A helper nothing calls is not a fix -- pin the call sites."""
+        monkeypatch.setattr(
+            server, "LOCAL_API_BASE", "http://host.docker.internal:23119"
+        )
+        seen = {}
+
+        def fake_client(*args, **kwargs):
+            seen.update(kwargs)
+            mock_client = AsyncMock()
+            mock_client.get.return_value = _make_response({"content": "x"})
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            return mock_client
+
+        with patch.object(server.httpx, "AsyncClient", fake_client):
+            asyncio.run(call())
+
+        assert seen.get("headers") == {"Host": "127.0.0.1:23119"}

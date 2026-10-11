@@ -1,56 +1,56 @@
 # 5 分钟上手
 
-## 场景 1：查文献
+## 先做两件事
 
-通过 MCP Server 搜索你的 Zotero 文献库。
+**1. 配好前置** —— [前提与配置](installation.md)：装依赖、开 Zotero、登录一个模型 CLI。**配一次就够。**
 
-### 启动 MCP Server
-
-```bash
-uv run python -m hydrolitagent.zotero.server
-# 启动在 http://0.0.0.0:8002/mcp
-```
-
-### 调用工具搜索
-
-```python
-# 关键词搜索
-zotero_search(query="flood forecasting", limit=10)
-# → 返回标题、作者、日期、DOI、摘要片段
-
-# 全文搜索（需要 Zotero 桌面版运行）
-zotero_fulltext_search(query="LSTM streamflow", limit=20)
-
-# 按标签搜索
-zotero_search_by_tag(tag="deep learning")
-
-# 查看最近添加
-zotero_get_recent(limit=10)
-```
-
-MCP Server 提供 12 个工具，详见 [MCP Server 工具参考](../user-guide/mcp-tools.md)。
-
-## 场景 2：加论文
-
-从 DOI 或 arXiv ID 一键将论文加入 Zotero。
+**2. 在你的项目文件夹里操作** —— 就是 clone 下来的 `mylibrary` 目录（仓库根）。
+所有命令与产物路径都以它为基准；在别处跑会找不到依赖、产物也会散到别处去。
+**新开终端后先回到这里**：
 
 ```bash
-# 通过 DOI 添加（仅元数据，无 PDF）
-uv run python -m hydrolitagent.zotero.paper_to_zotero \
-  --metadata-only "10.1038/s41586-024-07145-1"
-
-# 通过 arXiv ID 添加
-uv run python -m hydrolitagent.zotero.paper_to_zotero \
-  --metadata-only "10.48550/arXiv.2501.08086"
-
-# 预览模式（不实际写入）
-uv run python -m hydrolitagent.zotero.paper_to_zotero \
-  --dry-run --metadata-only "10.1038/s41586-024-07145-1"
+cd /path/to/mylibrary        # 换成你 clone 下来的位置
 ```
 
-## 场景 3：完整流水线（下载 PDF → GDrive → Zotero 入库）
+> 下面每个场景先给「**你可以这么说**」—— 直接跟 agent 说人话就行；
+> 后面的命令是等价做法，agent 不方便用时自己敲也一样。
 
-**裸 host / 本仓库直跑（推荐）**——新机器先自检一次，之后一条命令：
+## 场景 1：找文献
+
+**你可以这么说**：
+
+> 「我库里有哪些关于城市洪涝的论文？」
+
+它会读你的 Zotero 库（题名 / 全文 / 标签），返回候选与元数据。
+这套读取能力由 12 个 MCP 工具提供，详见 [MCP Server 工具](../user-guide/mcp-tools.md)。
+
+## 场景 2：把论文加进 Zotero（只建条目）
+
+**你可以这么说**：
+
+> 「把 10.1038/s41586-024-07145-1 加进我的 Zotero」
+
+只建条目，**不下载 PDF**：
+
+```bash
+uv run python -m hydrolitagent.zotero.paper_to_zotero --metadata-only "10.1038/s41586-024-07145-1"
+uv run python -m hydrolitagent.zotero.paper_to_zotero --metadata-only "10.48550/arXiv.2501.08086"
+uv run python -m hydrolitagent.zotero.paper_to_zotero --dry-run --metadata-only "10.1038/s41586-024-07145-1"   # 预览，不写入
+```
+
+## 场景 3：下载 PDF 并入库
+
+**你可以这么说**：
+
+> 「把 10.1038/s41586-024-07145-1 下载并入库」
+
+它会解析 DOI → 下载 PDF → 建 Zotero 条目 + `linked_file` 附件。
+
+- **arXiv 与开放获取**（science.org / Copernicus 等）走 curl，**秒级**。
+- **付费墙**（ScienceDirect / Wiley / Nature 等）会**打开一个浏览器窗口** ——
+  你按提示走完机构会话，剩下的它接着做。
+
+新机器先自检一次，之后一条命令：
 
 ```bash
 uv run python scripts/download_paper.py --setup-check
@@ -58,43 +58,54 @@ uv run python scripts/download_paper.py --doi "10.1038/s41586-024-07145-1" --syn
 uv run python scripts/download_paper.py --arxiv 2501.08086 --sync
 ```
 
-arXiv 与 OA DOI（science.org / Copernicus 等）走 curl，秒级；付费墙（SD/Wiley/Nature）需浏览器 + 机构会话。
-重跑同 DOI 幂等跳过（`--allow-duplicate` 强制重建）。
+同一个 DOI 重跑，会把 PDF **补挂到已有条目**（条目在、缺 PDF 的常见情形）；
+已经挂过同一份内容则**幂等跳过**。
 
-**myopenclaw / hermes 容器（爱码士）**——用打包进容器的 pipeline（需要 paper-fetch）：
+**在容器里跑**（myopenclaw / hermes）：
 
 ```bash
 docker compose exec hermes-coder /opt/hermes/scripts/run-paper-pipeline.sh "10.1038/s41586-024-07145-1"
-docker compose exec hermes-coder /opt/hermes/scripts/run-paper-pipeline.sh --dry-run "10.xxx"
+docker compose exec hermes-coder /opt/hermes/scripts/run-paper-pipeline.sh --dry-run "10.1038/xxx"
 ```
 
-## 场景 4：链接 Google Drive PDF
+## 场景 4：给已有条目补一个 GDrive 里的 PDF
 
-已有 Zotero 条目，只缺 PDF 附件。
+**你可以这么说**：
+
+> 「这条 Zotero 记录缺 PDF，文件在 GDrive 里，帮我挂上」
 
 ```bash
-# 需要先配置 rclone 和 Google Drive
 uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>
 ```
 
-## 场景 5：文献深度处理
+## 场景 5：精读成分析卡 / 公众号 / 播客
 
-对已入库的 Zotero 文献做精读、主题分析、公众号/播客产出(该能力从 dailyinfo 迁入)。
+**你可以这么说**：
+
+> 「把这批论文精读成分析卡」 · 「出一期公众号 + 播客」
+
+精读由 `skills/weekly-review/` 驱动：每篇论文一个子代理读全文 → 8 段分析卡 → 主题聚类 →
+公众号文章 → 播客，产物落在 `outputs/weekly-review/{日期}/`。
 
 ```bash
-# 每周文献综述:精读 → 8 段分析卡 → 主题聚类 → 文章 → 播客
-# (由 skills/weekly-review/ 驱动,产物在 outputs/weekly-review/{date}/)
-
-# B 站发布 podcast
-uv run python -m hydrolitagent.literature.bilibili_upload audio.mp3 --title "标题" --dry-run
-
-# Zotero → NotebookLM 音频
 uv run python -m hydrolitagent.literature.zotero_notebooklm --collection water --artifact audio
+uv run python -m hydrolitagent.literature.bilibili_upload audio.mp3 --title "标题" --dry-run
 ```
+
+## 场景 6：把论文做成文献卡与主题卡（Windows）
+
+**你可以这么说**：
+
+> 「把《某某》这篇做成卡」 · 「看看能聚出哪些主题」
+
+一条链路：文献卡 → 代码校验 → 候选主题。**运行时 Windows-only**，前置见[前提与配置](installation.md)。
+详见[文献卡与主题卡](../user-guide/cards/index.md)。
 
 ## 下一步
 
-- [MCP Server 工具详解](../user-guide/mcp-tools.md) — 每个工具的用途、参数和返回格式
-- [论文入库流水线详解](../user-guide/paper-pipeline.md) — 完整流程和故障排查
-- [文献深度处理详解](../user-guide/literature.md) — literature CLI 和知识库
-- [Zotero 配置参考](../user-guide/config.md) — 环境变量和配置文件
+- [前提与配置](installation.md) — 通用前提 + 按能力看额外要什么 + 凭据放哪
+- [论文入库流水线](../user-guide/paper-pipeline.md) — 下载与入库的完整流程和故障排查
+- [MCP Server 工具](../user-guide/mcp-tools.md) — 12 个工具的用途、参数与返回格式
+- [文献深度处理](../user-guide/literature.md) — 精读、公众号、播客的 CLI
+- [文献卡与主题卡](../user-guide/cards/index.md) — 自己 Zotero 的论文 → 文献卡 → 主题卡（Windows-only）
+- [Zotero 配置参考](../user-guide/config.md) — 环境变量与配置文件

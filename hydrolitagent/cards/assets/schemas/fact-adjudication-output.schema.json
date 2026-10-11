@@ -1,0 +1,116 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_read_status",
+    "source_page_count",
+    "visual_content_status",
+    "source_read_evidence",
+    "template_id",
+    "classification_confidence",
+    "classification_reason",
+    "verified_facts",
+    "disagreements",
+    "coverage_gaps"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "enum": [1] },
+    "source_read_status": { "enum": ["FULL_PDF_REVIEWED", "UNREADABLE"] },
+    "source_page_count": { "type": "integer" },
+    "visual_content_status": { "enum": ["REVIEWED", "NOT_PRESENT", "UNREADABLE"] },
+    "source_read_evidence": { "type": "string" },
+    "template_id": { "type": "string" },
+    "classification_confidence": { "type": "number" },
+    "classification_reason": { "type": "string" },
+    "verified_facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fact_id",
+          "category",
+          "statement",
+          "source_fact_ids",
+          "resolution_basis",
+          "support_status",
+          "confidence",
+          "evidence"
+        ],
+        "properties": {
+          "fact_id": { "type": "string" },
+          "category": { "type": "string" },
+          "statement": { "type": "string" },
+          "source_fact_ids": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "resolution_basis": { "enum": ["AGREEMENT", "SOURCE_ADJUDICATION"] },
+          "support_status": { "type": "string", "enum": ["SUPPORTED"] },
+          "confidence": { "type": "number" },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/evidence" }
+          }
+        }
+      }
+    },
+    "disagreements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "disagreement_id",
+          "severity",
+          "description",
+          "extractor_a_fact_ids",
+          "extractor_b_fact_ids",
+          "resolution_status",
+          "resolution",
+          "evidence"
+        ],
+        "properties": {
+          "disagreement_id": { "type": "string" },
+          "severity": { "enum": ["LOW", "MEDIUM", "HIGH"] },
+          "description": { "type": "string" },
+          "extractor_a_fact_ids": { "type": "array", "items": { "type": "string" } },
+          "extractor_b_fact_ids": { "type": "array", "items": { "type": "string" } },
+          "resolution_status": { "enum": ["RESOLVED", "UNRESOLVED"] },
+          "resolution": { "type": "string" },
+          "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+        }
+      }
+    },
+    "coverage_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gap_id", "severity", "description", "status", "resolution", "evidence"],
+        "properties": {
+          "gap_id": { "type": "string" },
+          "severity": { "enum": ["LOW", "MEDIUM", "HIGH"] },
+          "description": { "type": "string" },
+          "status": { "enum": ["RESOLVED", "UNRESOLVED"] },
+          "resolution": { "type": "string" },
+          "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "locator", "evidence_text", "visual"],
+      "properties": {
+        "page": { "type": "integer" },
+        "locator": { "type": "string" },
+        "evidence_text": { "type": "string" },
+        "visual": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -186,9 +186,14 @@ def build_item(doi: str, pf_meta: dict) -> tuple[dict, dict]:
         if abstract:
             item["abstractNote"] = abstract
 
-        # Date
-        date_parts = (cr.get("published-print") or cr.get("created") or
-                      cr.get("issued") or cr.get("deposited"))
+        # Date — rank real publication dates above Crossref's "created",
+        # which records when the *deposit* was made, not when the paper
+        # appeared.  Back-digitised journals make the two differ by decades
+        # (APS deposited its 1914 back-content in 2002), so ranking
+        # "created" above "issued" silently writes the wrong year.
+        date_parts = (cr.get("published-print") or cr.get("issued") or
+                      cr.get("published-online") or cr.get("created") or
+                      cr.get("deposited"))
         if date_parts and "date-parts" in date_parts:
             dp = date_parts["date-parts"][0]
             if len(dp) == 3:

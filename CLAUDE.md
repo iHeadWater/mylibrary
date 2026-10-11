@@ -12,6 +12,8 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 本仓库的 Zotero MCP server(`hydrolitagent/zotero/server.py`,streamable HTTP 端口 8002,端点路径 `/mcp`)是唯一的 Zotero 访问入口。**不要改动它的技术架构**——已有其他服务依赖。
 
+> ⚠️ **上句的作用域是容器部署,不是全部场景。** 读取 Zotero 按运行环境分工:**裸 host**(本机、制卡机)走直连——元数据用 pyzotero、全文用 Zotero Desktop Local API `127.0.0.1:23119`;**容器**里才走这个 8002 MCP 服务(它的 Local API 默认 `host.docker.internal:23119`,正是为访问宿主 Zotero 而设)。`hydrolitagent cards` 跑在裸 host,所以走直连,与此处并不冲突。详见 [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md)。
+
 工具分两类(见 `server.py` 头部注释):
 - **元数据类**(pyzotero Web API,api.zotero.org):`zotero_search`、`zotero_get_item`、`zotero_get_recent`、`zotero_get_collection_items`、`zotero_get_collections`、`zotero_get_tags`、`zotero_search_by_tag`、`zotero_fulltext_search`、`zotero_get_attachments`、`zotero_get_annotations`
 - **PDF 原文类**(Zotero Desktop **Local API**,`http://host.docker.internal:23119`):`zotero_get_fulltext`、`zotero_get_file_info`。**需要 Zotero Desktop 运行且勾选 "Allow other applications to communicate with Zotero"**。Zotero PDF 存在 Google Drive,只能本地访问——Local API 就是从 GDrive 同步存储取文件的方式。
@@ -31,6 +33,9 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 | `bilibili-upload` | podcast 音频 → MP4 → B 站上传 | 无 |
 | `download-pdf` | 论文 PDF 下载(机构访问) | 无 |
 | `zotero-query` | 文献库查询 | 读库 |
+| `literature-cards` | 文献卡与主题卡平台 CLI 入口:自己的 Zotero 文献 → 文献卡 → 主题卡。**运行时 Windows-only**,详见该 skill | 直连 Local API |
+| `hydrology-evidence-cards` | 科研工作流:Zotero 源论文 → 人读证据卡(含机器审计字段,默认折叠) | 读库 |
+| `hydrology-theme-synthesis` | 科研工作流:文献 → 初步主题 → **人工筛选门** → 正式主题 → Claim 准入 → 深度主题卷宗 | 读库 |
 
 > `ai-news-weekly-polish` 留在 dailyinfo(它是 dailyinfo pipeline 产物)。`paper-to-zotero`/`run-paper-to-zotero` 属入库端,保留在本仓库作采集入口。
 
@@ -66,14 +71,14 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 ### Zotero
 - Start MCP Server: `uv run python -m hydrolitagent.zotero.server` (port 8002, 12 tools)
 - **下载+入库 canonical（裸 host / 本仓库直跑）**:`uv run python scripts/download_paper.py --arxiv <id> --sync` / `--doi <doi> --sync`;新机器先 `uv run python scripts/download_paper.py --setup-check`
-  - 建条目统一由 `paper_to_zotero.build_item()` 生成（arXiv → preprint + 摘要 + `archiveID`）;同 DOI 重跑幂等跳过
+  - 建条目统一由 `paper_to_zotero.build_item()` 生成（arXiv → preprint + 摘要 + `archiveID`）;同 DOI 重跑会**补挂**到既有条目（条目在、缺 PDF 的常见情形），已挂同内容才幂等跳过
   - arXiv 与 OA DOI 走 curl 无需 playwright;付费墙（SD/Wiley/Nature）需浏览器 + 机构会话
 - **下载+入库 canonical（myopenclaw hermes 容器 / 爱码士）**:`docker compose exec hermes-coder /opt/hermes/scripts/run-paper-pipeline.sh "<DOI|arXiv|title>"`（该脚本在 build 时从本仓库 `scripts/` 拷入镜像;详见 `skills/paper-to-zotero` 双模式说明）
 - Add paper by DOI (仅元数据):`uv run python -m hydrolitagent.zotero.paper_to_zotero --metadata-only "<DOI>"`
 - Paper pipeline (旧,需 paper-fetch):`bash scripts/run_paper_pipeline.sh "<DOI|arXiv|title>"`
-- Link GDrive PDF: `uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>`
+- Link GDrive PDF（挂到**已有**条目）: `uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>`
 
-> 凭据:裸 host 用 `.env` 的 `ZOTERO_API_KEY/ZOTERO_LIBRARY_ID/GDRIVE_PAPERS_PATH`(`paper_to_zotero` 在无 TOML 时回退读它);容器/旧环境用 `~/.config/zot/config.toml`(或 `ZOTERO_CONFIG_PATH`)。`skills/paper-to-zotero` 的「双模式」节与 `scripts/download_paper.py --setup-check` 会解释所需一次性设置。
+> 凭据:裸 host 用 `.env` 的 `ZOTERO_API_KEY/ZOTERO_LIBRARY_ID/GDRIVE_PAPERS_PATH`(`paper_to_zotero` 与 `zot_link_gdrive` 都在无 TOML 时回退读它);容器/旧环境用 `~/.config/zot/config.toml`(或 `ZOTERO_CONFIG_PATH`)。`skills/paper-to-zotero` 的「双模式」节与 `scripts/download_paper.py --setup-check` 会解释所需一次性设置。
 
 ### Literature CLI (hydrolitagent/literature — 从 dailyinfo 迁入)
 用 `uv run python -m` 调用(与全仓库一致,不依赖 console_scripts):
@@ -82,6 +87,20 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 - 公众号发布:`uv run python -m hydrolitagent.literature.wechat.push <md_file> [--thumb <media_id>]`
 - 公众号润色:`uv run python -m hydrolitagent.literature.wechat.polish <md_file>`
 - 配图/封面:`uv run python -m hydrolitagent.literature.wechat.figure <md_file>` (需 ZHIPUAI_API_KEY)
+
+### 文献卡与主题卡 (hydrolitagent cards)
+
+**用你自己的 Zotero 文献生成文献卡与主题卡**的最小核心:从一篇指定论文出发生成主体卡草稿、用代码校验,再由若干文献卡形成候选主题。不是交互式问答,也不做批量扫描或无人值守。运行时 **Windows-only**。命令一律从**仓库根**执行,共 5 条:
+
+- 单篇输入(选一篇自己的论文):`uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json`
+- 生成主体卡草稿:`uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json`
+- 离线校验主体卡:`uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json`
+- 生成候选主题:`uv run hydrolitagent cards themes-run --json`(`--dry-run` 只读预览)
+- 只读自查模型与产物根:`uv run hydrolitagent cards ai-config --json`
+
+全部 5 个子命令:`uv run hydrolitagent cards --help`。
+
+不要直接读写平台的状态文件与主题池注册表(`themes/_registry.json`),也不要手工编辑生成的文献卡/主题文件——平台原子写入并校验哈希,手改会被判为漂移。完整说明在 `docs/user-guide/cards/`,实现细节在 `docs/development/platform/`。
 
 ### Docs
 - Serve docs: `uv run mkdocs serve`
@@ -96,7 +115,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 ```
 hydrolitagent/       # Knowledge graph toolkit (graphify integration)
 ├── cli.py           # CLI entry point (argparse subcommands)
-├── _config.py       # Shared TOML loader
+├── _config.py       # Shared TOML loader + 精读产物根解析(resolve_literature_root)
 ├── graph/           # Knowledge graph construction + merging
 │   ├── build.py     # Single-topic graph build pipeline
 │   └── merge.py     # Multi-topic merge + D3.js HTML viz
@@ -106,12 +125,14 @@ hydrolitagent/       # Knowledge graph toolkit (graphify integration)
     ├── paper_to_zotero.py # DOI → Zotero (Crossref/arXiv/S2 metadata)
     └── zot_link_gdrive.py # Google Drive → linked_file attachment
 
-configs/             # Prompt and extraction configuration
+configs/             # 配置:graph_prompts.toml · paths.toml(精读产物根的默认值)
 scripts/             # run_paper_pipeline.sh, chunk_fulltext.py (weekly-review 辅助)
 skills/              # Agent skills (zotero-query, paper-to-zotero, 及迁入的 weekly-review 等 6 个)
-outputs/             # 精读产物: outputs/weekly-review/{date}/{cards,article,podcast}
-papers/              # 按主题组织的文献库(10 主题, 6173 篇);知识库核心资产
+outputs/             # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
+papers/              # 按主题组织的文献库(10 主题, 约 4000 篇);知识库核心资产
 docs/                # Documentation site (mkdocs-material)
+hydrolitagent/cards/ # 文献卡与主题卡(消费侧:自己的 Zotero → 文献卡 → 主题卡)
+                     #   代码(5 条核心命令) · assets/ 只读资产(模板 / prompt / schema / 示例 / 配置);生成产物落仓库根自建
 tests/               # pytest (test_zotero_server.py, test_paper_to_zotero.py)
 
 equation_from_data/  # Paper reproduction: equation discovery from data

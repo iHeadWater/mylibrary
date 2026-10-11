@@ -1,0 +1,10 @@
+# 每台机器用参数或环境变量覆盖；无需填写任何 AI 配置。
+[zotero]
+base_url = "http://127.0.0.1:23119"
+timeout_seconds = 5.0
+# group_id 不给假值：群组用户显式选择，个人用户用 --user-library。
+
+[pdf_gate]
+min_file_size_bytes = 1024
+min_text_characters = 1000
+hash_chunk_size_bytes = 1048576

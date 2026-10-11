@@ -38,12 +38,8 @@ npx playwright install chromium
 
 ### 3. 安装项目依赖
 
-```bash
-uv sync --python python3
-uv pip install -e .
-```
-
-（pyzotero 已是基础依赖，无需单独安装）
+通用安装见[前提与配置](../getting-started/installation.md)。本页只需要那份安装里已包含的
+`pyzotero`，**无需额外安装**。
 
 ### 4. 配置环境
 
@@ -67,8 +63,8 @@ uv run python scripts/download_paper.py --arxiv 2608.18495 --sync
 uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元数据
 ```
 
-`--sync` 走 `zotero_sync` → `paper_to_zotero.build_item()`：arXiv 记录为 `preprint`（摘要/日期/`archiveID`），
-重跑同 DOI 幂等跳过（强制 `--allow-duplicate`）。
+`--sync` 走 `zotero_sync` → `paper_to_zotero.build_item()`：arXiv 记录为 `preprint`（摘要/日期/`archiveID`）。
+同 DOI 重跑会**补挂**到既有条目（不再只是跳过）；已挂同内容则幂等跳过。
 
 脚本按 DOI 前缀自动路由到对应出版商流程，内置 **stealth Chrome 启动器**
 （真实 Chrome 内核 + 剥离自动化标记），Cloudflare / AMS 人机验证**自动通过**，
@@ -176,7 +172,7 @@ SSRN 预印本免费下载。Cloudflare 挑战在 MCP 浏览器 profile 下自�
 | `browser_evaluate` + `fetch()` + `readAsDataURL()` | Base64 超 MCP 传输限制 → 崩溃 |
 | `browser_run_code` + `require('fs')` | MCP 运行时未定义 `require` |
 | `mcp__plugin_ecc_playwright__*` | 需要 Chrome 扩展桥，非独立 |
-| `python scripts/zotero_sync.py` | 用 `uv run python`——conda Python 缺依赖 |
+| `python -m hydrolitagent.literature.zotero_sync` | 用 `uv run python`——conda Python 缺依赖 |
 | 裸 Playwright Chromium 反复被 Cloudflare 拦 | `navigator.webdriver` 指纹暴露；用 stealth 启动器（`channel="chrome"` + 去 automation 标记） |
 | `context.request` 拉 ScienceDirect 签名 PDF | assets CDN 对非浏览器 TLS 指纹返回 403（AMS 可用，SD 不可用） |
 | main.pdf URL 一出现就注入锚点 | 二次重定向会摧毁执行上下文——先等 URL 稳定 |

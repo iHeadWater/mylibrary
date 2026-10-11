@@ -1,11 +1,8 @@
 """Filter hydrology papers from a large corpus and categorize by topic."""
+import argparse
 import json
 import re
 from pathlib import Path
-
-SOURCE = Path(r"G:/我的云端硬盘/Documents/Papers/Markdown")
-TARGET = Path(r"D:/code/hydrolitagent/papers")
-STATE_FILE = TARGET / ".filter_state.json"
 
 HYDRO_KEYWORDS = [
     (3, r"\bhydrolog(y|ical|ic)\b"),
@@ -178,16 +175,56 @@ def safe_copy(src: Path, dst_dir: Path, max_len: int = 240) -> Path:
     return dst
 
 
-def main():
-    print(f"Source: {SOURCE}")
-    print(f"Target: {TARGET}")
+def _existing_dir(value: str) -> Path:
+    """argparse 类型：必须是已存在的目录，否则走标准报错 rc=2（而非深扫时裸抛）。"""
+    path = Path(value)
+    if not path.is_dir():
+        raise argparse.ArgumentTypeError(f"not an existing directory: {value}")
+    return path
 
-    md_files = sorted(f for f in SOURCE.iterdir() if f.suffix == ".md" and f.is_file())
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="filter_hydrology.py",
+        description="Filter hydrology papers from a large corpus and categorize by topic.",
+        epilog=(
+            "example: uv run python scripts/filter_hydrology.py "
+            '--source "G:/我的云端硬盘/Documents/Papers/Markdown" --target papers'
+        ),
+    )
+    parser.add_argument(
+        "--source",
+        type=_existing_dir,
+        required=True,
+        help="Directory of source .md files to scan (read-only)",
+    )
+    parser.add_argument(
+        "--target",
+        type=Path,
+        required=True,
+        help="Directory to copy matched papers into, grouped by topic",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="List files that would be processed; write nothing",
+    )
+    return parser
+
+
+def main(source: Path, target: Path, *, dry_run: bool = False) -> None:
+    print(f"Source: {source}")
+    print(f"Target: {target}")
+    if dry_run:
+        print("Dry run: no files will be written")
+
+    md_files = sorted(f for f in source.iterdir() if f.suffix == ".md" and f.is_file())
     print(f"Found {len(md_files)} markdown files")
 
+    state_file = target / ".filter_state.json"
     processed = set()
-    if STATE_FILE.exists():
-        state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    if state_file.exists():
+        state = json.loads(state_file.read_text(encoding="utf-8"))
         processed = set(state.get("processed", []))
 
     results = {topic: [] for topic, _ in TOPIC_RULES}
@@ -212,11 +249,14 @@ def main():
         if effective >= 3:
             topic = classify_topic(snippet)
             results[topic].append(fname)
-            dst_dir = TARGET / topic
-            dst_dir.mkdir(parents=True, exist_ok=True)
-            dst = dst_dir / fname
-            if not dst.exists():
-                safe_copy(fpath, dst_dir)
+            if dry_run:
+                print(f"  [dry-run] would copy {fname} -> {topic}/")
+            else:
+                dst_dir = target / topic
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                dst = dst_dir / fname
+                if not dst.exists():
+                    safe_copy(fpath, dst_dir)
             hydro_count += 1
         else:
             not_hydro_count += 1
@@ -227,10 +267,11 @@ def main():
             pct = (i + 1) / len(md_files) * 100
             print(f"  {i+1}/{len(md_files)} ({pct:.0f}%) | hydro={hydro_count}, not={not_hydro_count}")
 
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(json.dumps({
-        "processed": sorted(processed), "total": len(md_files),
-    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    if not dry_run:
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text(json.dumps({
+            "processed": sorted(processed), "total": len(md_files),
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"\n{'='*60}")
     print(f"FILTER COMPLETE — {len(md_files)} files scanned")
@@ -248,11 +289,15 @@ def main():
         "hydro_papers": hydro_count,
         "topics": {t: len(results[t]) for t in results if results[t]},
     }
-    (TARGET / "manifest.json").write_text(
+    if dry_run:
+        print(f"\nDry run complete — nothing written under {target}/")
+        return
+    (target / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    print(f"\nPapers copied to {TARGET}/")
+    print(f"\nPapers copied to {target}/")
 
 
 if __name__ == "__main__":
-    main()
+    args = build_parser().parse_args()
+    main(args.source, args.target, dry_run=args.dry_run)

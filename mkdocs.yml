@@ -1,6 +1,6 @@
 site_name: Hydro AI Papers
-site_description: Zotero literature tools for AI-driven hydrology research
-repo_url: https://github.com/OuyangWenyu/mylibrary
+site_description: 水利科研的入库与消费两侧 —— 论文下载与 Zotero 入库；读库、精读、主题、知识图谱、公众号/播客；以及长期知识资产（证据包、主题池）
+repo_url: https://github.com/iHeadWater/mylibrary
 theme:
   name: material
   language: zh
@@ -37,10 +37,19 @@ plugins:
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.inlinehilite
   - admonition
   - footnotes
+  # attr_list 必须早于 toc 生效（attr_list treeprocessor 优先级 8，toc 为 5），
+  # 否则 toc 先按 slugify 生成 id，显式 {#id} 会被忽略。
+  # 用途：让中文标题能带 ASCII 锚点（如 `## 精读产物根 {#reading-output-root}`），
+  # 因为默认 slugify 丢弃非 ASCII，会把中文标题编成 id="_2"。
+  - attr_list
   - toc:
       permalink: true
 
@@ -50,6 +59,7 @@ nav:
       - 安装配置: getting-started/installation.md
       - 5 分钟上手: getting-started/quickstart.md
   - 用户指南:
+      - 总览: user-guide/index.md
       - MCP Server 工具: user-guide/mcp-tools.md
       - 论文入库流水线: user-guide/paper-pipeline.md
       - 论文 PDF 下载: user-guide/download-pdf.md
@@ -57,7 +67,34 @@ nav:
       - Zotero → NotebookLM 简报: user-guide/zotero-notebooklm.md
       - 文献深度处理: user-guide/literature.md
       - Zotero 配置参考: user-guide/config.md
+      - 文献卡与主题卡:
+          - 概述: user-guide/cards/index.md
+          - 单篇论文输入: user-guide/cards/paper-input.md
+          - 单篇主体卡草稿: user-guide/cards/subject-card-draft.md
+          - 主体卡校验门禁: user-guide/cards/subject-card-validation.md
+          - 模板资产:
+              - 公共模板: user-guide/cards/templates.md
+              - 主题模板:
+                  - 使用说明: user-guide/cards/主题模板/00_主题模板使用说明.md
+                  - 初步主题与人工筛选: user-guide/cards/主题模板/01_初步主题与人工筛选模板.md
+                  - 既定主题深度综合: user-guide/cards/主题模板/02_既定主题深度综合模板.md
+                  - 主题工作流运行账: user-guide/cards/主题模板/03_主题工作流运行账模板.md
+          - 统一主题池: user-guide/cards/unified-theme-pool.md
+          - 运行维护: user-guide/cards/runtime-maintenance.md
   - 开发:
       - 模块架构: development/architecture.md
       - 贡献指南: development/contributing.md
-      - 决策记录: adr/0001-zotero-linked-file-sync.md
+      - 平台实现:
+          - 项目级设计: development/platform/project-design.md
+          - 技术架构: development/platform/architecture.md
+          - 数据流与用户流程: development/platform/flows.md
+          - 自动化代码地图: development/platform/automation.md
+          - 单 Agent 粗卡: development/platform/single-agent-rough-card.md
+          - 字段参考: development/platform/config.md
+          - 边界与路径规则: development/platform/variables.md
+          - 验证地图: development/platform/tests.md
+      - 决策记录:
+          - Zotero 入库使用 linked_file: adr/0001-zotero-linked-file-sync.md
+          - 不统一两套 Zotero 客户端: adr/0002-zotero-two-clients-boundary.md
+          - 精读产物根可配置: adr/0003-configurable-literature-output-root.md
+          - 下载逻辑收进包: adr/0004-download-entry-into-package.md

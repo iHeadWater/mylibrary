@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["read_status", "source_page_count", "claimed_text_pages", "claimed_visual_pages", "visual_findings", "limitations"],
+  "properties": {
+    "read_status": {"type": "string", "enum": ["COMPLETE", "PARTIAL", "UNREADABLE"]},
+    "source_page_count": {"type": "integer", "minimum": 0},
+    "claimed_text_pages": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+    "claimed_visual_pages": {"type": "array", "items": {"type": "integer", "minimum": 1}},
+    "visual_findings": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["page", "label", "observation"],
+        "properties": {
+          "page": {"type": "integer", "minimum": 1},
+          "label": {"type": "string"},
+          "observation": {"type": "string"}
+        }
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  }
+}

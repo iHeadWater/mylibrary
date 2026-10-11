@@ -1,171 +1,138 @@
-# Hydro AI Papers (mylibrary)
+# mylibrary — 水文水资源研究知识平台
 
-[中文](README-zh.md)
+**围绕文献的一条线** —— 从收到用，一路都在这个仓库里：
 
-AI-driven hydrology and water resources research — the **deep-processing layer** of a literature pipeline: close reading, topic organization, WeChat articles, podcasts, and a knowledge graph, rooted in your **Zotero library**.
+| ① 收进来 | ② 读进去 | ③ 组织起来 | ④ 产出内容 | ⑤ 沉淀成资产 |
+|---|---|---|---|---|
+| 下载 PDF · 建 Zotero 条目 | 检索 · 精读 · 分析卡 | 主题分类 · 知识图谱 | 公众号 · 播客 · B 站 | 证据卡 · 主题池 |
 
-## What this repo is
+入口是 **Zotero 文献库**；进入 Zotero **之前**的情报采集由上游兄弟仓库 **dailyinfo** 负责。
+现在是**单个包 `hydrolitagent`**，共用一份 `.venv` 与 `uv.lock`。
 
-mylibrary owns everything **after intelligence collection**:
+> 详细能力表见 [`README-zh.md`](README-zh.md)；完整文档站在 [`docs/`](docs/index.md)。
 
-- **Zotero is the starting point** of the literature pipeline — deep processing typically begins by reading from your Zotero library through the MCP server.
-- **Ingestion into Zotero is also part of this repo** — the DOI / arXiv / title → PDF → Zotero-entry pipeline (`run_paper_pipeline.sh`) lives here.
-- Upstream, a sibling collector repo (dailyinfo) handles **pre-Zotero intelligence gathering** (news feeds, raw downloads); mylibrary does not read its outputs.
+## 怎么用
 
-The result accumulates into a **literature knowledge base**: `papers/` organized by hydrology topic (10 topics, 6,000+ papers), plus deep-reading analysis cards, WeChat articles, and podcasts under `outputs/`.
+**打开本项目文件夹，用一个编码 agent 让它替你干活。**
 
-## Capabilities
+「本项目文件夹」就是你 `git clone` 下来的 `mylibrary` 目录。在**这个目录里**开一个编码 agent ——
+**Claude Code · Codex · workbuddy**，你顺手哪个都行 —— 然后**说人话**：
 
-| Capability | Command | Docs |
-|---|---|---|
-| **Zotero library query** — 12-tool MCP server (streamable HTTP, port 8002, endpoint `/mcp`): search, browse, read full text, attachments, annotations | `uv run python -m hydrolitagent.zotero.server` | [MCP tools](docs/user-guide/mcp-tools.md) |
-| **Paper ingestion** — DOI / arXiv ID / title → PDF → Zotero entry + `linked_file` attachment | `bash scripts/run_paper_pipeline.sh "<DOI|arXiv|title>"` | [paper pipeline](docs/user-guide/paper-pipeline.md) |
-| **Paper PDF download** — institutional-access download (DUT SSO) via Claude Code + Playwright | `uv run python -m hydrolitagent.literature.download_pdf doi <doi>` | [download PDF](docs/user-guide/download-pdf.md) |
-| **Zotero linked_file sync** — sync a downloaded PDF into Zotero as a `linked_file` (zero cloud quota) | `uv run python -m hydrolitagent.literature.zotero_sync <pdf> <doi>` | [Zotero sync](docs/user-guide/zotero-sync.md) |
-| **Zotero → NotebookLM** — turn newly added papers into a Chinese briefing / audio / video overview | `uv run python -m hydrolitagent.literature.zotero_notebooklm --collection <name> --artifact audio` | [NotebookLM](docs/user-guide/zotero-notebooklm.md) |
-| **Deep literature processing** — Literature CLI: weekly review, WeChat publish / polish / figures, Bilibili upload | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [literature](docs/user-guide/literature.md) |
-| **Knowledge graph** — build a structured, queryable knowledge base via [graphify](https://github.com/graphify) (entity extraction, community detection, Obsidian export) | `uv run hydrolitagent graph papers/your-topic/` | [architecture](docs/development/architecture.md) |
-| **Paper reproduction** — reproduce key papers in AI-driven hydrology | — | `equation_from_data/`, `google_floodhub/` |
+> 「把 10.1038/s41586-024-07145-1 下载并入库」 · 「把《某某》这篇做成卡」 · 「看看能聚出哪些主题」
 
-## Quick Start
+**⚠️ 一定要在 `mylibrary` 目录里操作。** 所有命令与产物路径都以它为基准；在别处（比如用户主目录）
+运行会找不到依赖，产物也会落到错误的位置。新开终端先回到这里：
 
 ```bash
-# Clone and install
-git clone git@github.com:OuyangWenyu/mylibrary.git
-cd mylibrary
-uv pip install -e .
-
-# Configure
-cp .env.example .env   # add DEEPSEEK_API_KEY; set HYDROLITAGENT_OUTPUT, ZOTERO_API_KEY, ZOTERO_LIBRARY_ID
+cd /path/to/mylibrary
 ```
 
-For the full reference (Zotero Desktop / Linked Attachment Base Directory setup, env vars, TOML config), see the [installation guide](docs/getting-started/installation.md).
+## 开工前先配好这些
 
-## Common Commands
+| 你要做的 | 先得有 |
+|---|---|
+| **所有**能力 | Git · Python 3.12–3.14 · [uv](https://docs.astral.sh/uv/) · `uv sync --all-packages` |
+| 读 / 写 Zotero 库 | Zotero **API key**（放 `.env`） |
+| **文献卡与主题卡** | Zotero 桌面版开着，并在设置里**允许其他应用通信** · 一个**已登录**的 AI 命令行工具（Codex 或 Claude） · 读论文 PDF 页面用的小工具 [Poppler](https://poppler.freedesktop.org/) |
+| 论文入库 | 论文 PDF 所在的 GDrive 目录 + Zotero 里对应的「**链接附件根目录**」设置 |
 
-### Zotero tools
+逐条说明与凭据清单见 **[前提与配置](docs/getting-started/installation.md)** —— **配一次就够**。
+
+## 能让 agent 做什么
+
+配好之后，多数事**直接说人话**就行：
+
+| 你对 agent 说 | 会发生什么 | 详情 |
+|---|---|---|
+| 「把这篇论文**下载并入库**」 | DOI / arXiv / 标题 → 下载 PDF → 建 Zotero 条目 + `linked_file` 附件 | [论文入库流水线](docs/user-guide/paper-pipeline.md) |
+| 「去我的库里找找 X 相关的文献」 | 搜 / 读 Zotero 库（含全文、附件与批注） | [MCP Server 工具](docs/user-guide/mcp-tools.md) |
+| 「把这批论文精读成分析卡 / 出一期公众号+播客」 | 每周综述：精读全文 → 分析卡 → 主题聚类 → 文章 → 播客 | [文献深度处理](docs/user-guide/literature.md) |
+| 「把《某某》这篇做成卡」 | 从你的 Zotero 找到它 → 读 PDF → 出主体卡草稿 → 代码校验 | [文献卡与主题卡](docs/user-guide/cards/index.md) |
+| 「这几篇都做一下」 | 同一条链路逐篇跑，一篇失败不拖累其余 | [单篇论文输入](docs/user-guide/cards/paper-input.md) |
+| 「看看能聚出哪些主题」 | 由已有的文献卡生成候选主题、必要时定向精读并回填 | [统一主题池](docs/user-guide/cards/unified-theme-pool.md) |
+| 「主题池现在什么样」 | 报当前候选与历史版本 | [统一主题池](docs/user-guide/cards/unified-theme-pool.md) |
+| 「当前用哪个模型 / 产物放哪」 | 报模型选择与产物落点，不调模型 | [运行维护](docs/user-guide/cards/runtime-maintenance.md) |
+
+> 前三行是**入库与当期内容**线；后五行是**文献卡与主题卡**线（底层是 `uv run hydrolitagent cards …`
+> 的 5 条子命令）。无论哪条 —— **你不需要读那些详情页**，只在想自己动手或排错时才去。
+>
+> 付费墙（SD / Wiley / Nature 等）的下载需要浏览器 + 机构会话，见[论文 PDF 下载](docs/user-guide/download-pdf.md)。
+
+> **代码怎么组织**（分三支 / Zotero 四种读法 / 目录地图 / 产物路径边界）见
+> [模块架构](docs/development/architecture.md) 与 [配置字段说明](docs/development/platform/config.md)。
+
+## 快速开始
 
 ```bash
-# Start the 12-tool MCP server (port 8002)
+git clone https://github.com/iHeadWater/mylibrary.git mylibrary
+cd mylibrary
+uv sync --all-packages --locked
+cp .env.example .env      # 按需填 ZOTERO_API_KEY / ZOTERO_LIBRARY_ID / GDRIVE_PAPERS_PATH
+```
+
+上面只装了**通用部分**；每条能力额外要什么、凭据放哪，见[前提与配置](docs/getting-started/installation.md)。
+
+不用自己的论文也能先跑通入口（合成示例，**不调用模型**）：
+
+```bash
+uv run python scripts/paper_validate.py --draft hydrolitagent/cards/assets/examples/subject-card-validation/draft.json --paper-input hydrolitagent/cards/assets/examples/subject-card-validation/paper-input.json --report-dir outputs/validation-demo
+```
+
+返回 `status: PASS`、退出码 `0` 即入口可用。**不要把文档里的预期结果当成实际输出。**
+
+### 文献卡与主题卡（Windows）
+
+配好之后跟 agent 说「把《某某》这篇做成卡」即可。自己敲是这 5 条：
+
+```bash
+uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json
+uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
+uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
+uv run hydrolitagent cards themes-run --json
+uv run hydrolitagent cards ai-config --json          # 看模型选择与产物落点
+```
+
+`--ai-provider` **只接受 `claude` 或 `codex`** —— 它选的是**命令行适配器**，不是模型厂家；
+用哪种模型由那个 CLI 自己的配置决定。详见[文献卡与主题卡](docs/user-guide/cards/index.md)（**你通常不需要读它**）。
+
+单篇本地流程**不需要**先填工具链的 Zotero Web API 密钥，也**不需要**启动 MCP Server。
+
+### 其他工具链与批量自动化
+
+```bash
+git clone git@github.com:iHeadWater/mylibrary.git
+cd mylibrary
+uv sync --all-packages   # 装依赖（workspace 成员已并入 hydrolitagent/cards）
+cp .env.example .env     # 填入 DEEPSEEK_API_KEY、ZOTERO_API_KEY、ZOTERO_LIBRARY_ID 等
+```
+
+> 本仓库只有**一个包** —— `uv sync` 与 `uv sync --all-packages` 等价。
+
+```bash
+# 工具链：启动 12 个工具的 MCP Server（端口 8002）
 uv run python -m hydrolitagent.zotero.server
 
-# Add a paper to Zotero by DOI (metadata only)
-uv run python -m hydrolitagent.zotero.paper_to_zotero --metadata-only "10.1038/s41586-024-07145-1"
+# 工具链：下载论文并入库 —— DOI / arXiv ID / 标题 → 下载 PDF → Zotero 条目 + linked_file 附件
+uv run python scripts/download_paper.py --setup-check                                  # 新机器先自检一次
+uv run python scripts/download_paper.py --doi "10.1016/j.jhydrol.2023.130249" --sync
+uv run python scripts/download_paper.py --arxiv 2501.08086 --sync
 
-# One-shot pipeline: download PDF + create Zotero entry + linked_file
-bash scripts/run_paper_pipeline.sh "10.1038/s41586-024-07145-1"
+# 容器（myopenclaw hermes）里用打包好的流水线；逐条细节见 docs/user-guide/paper-pipeline.md
+bash scripts/run_paper_pipeline.sh "10.1016/j.jhydrol.2023.130249"
 
-# Link an existing GDrive PDF as a Zotero linked_file
-uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>
+# 文献卡平台：只读自查模型与产物根（Windows）
+uv run hydrolitagent cards ai-config --json
+
+# 证据卡与主题综合：先自测，再制卡
+python skills/hydrology-evidence-cards/tests/self_test.py
+python skills/hydrology-theme-synthesis/tests/self_test.py
 ```
 
-### Literature CLI (post-ingestion deep processing)
+## 文档与测试
 
 ```bash
-# One-command download + Zotero sync (stealth Chrome; auto publisher routing)
-uv run python scripts/download_paper.py --doi <doi> --sync
-uv run python scripts/download_paper.py --arxiv <id> --sync
-
-# Institutional-access PDF download
-uv run python -m hydrolitagent.literature.download_pdf doi <doi>
-
-# Sync a downloaded PDF into Zotero as linked_file
-uv run python -m hydrolitagent.literature.zotero_sync <pdf_path> <doi> --json
-
-# Zotero → NotebookLM briefing / audio / video (requires the [notebooklm] extra)
-uv run --extra notebooklm python -m hydrolitagent.literature.zotero_notebooklm --collection <name> --artifact audio
-
-# WeChat public-account workflow
-uv run python -m hydrolitagent.literature.wechat.polish <draft.md>
-uv run python -m hydrolitagent.literature.wechat.figure <article.md>
-uv run python -m hydrolitagent.literature.wechat.push <polished.md> [--thumb <media_id>]
-
-# Upload podcast audio to Bilibili
-uv run python -m hydrolitagent.literature.bilibili_upload <audio.mp3> --title "标题" --tags "AI,水文,科研" [--dry-run]
+uv run mkdocs serve     # 本地预览文档站
+uv run pytest           # 一套测试：tests/（原平台测试已并入）
 ```
 
-### Knowledge graph
-
-```bash
-# 3-step pipeline on a directory of markdown papers
-uv run hydrolitagent prepare papers/your-topic/    # step 1: detect + split
-uv run hydrolitagent extract papers/your-topic/     # step 2: LLM extraction
-uv run hydrolitagent graph papers/your-topic/       # step 3: build + cluster + export
-
-# Merge multiple topic graphs into a unified graph
-uv run hydrolitagent merge --graphs-dir outputs/graph/ --output outputs/graph/unified/
-
-# Query the graph (deterministic, no LLM)
-uv run hydrolitagent query outputs/graph/graph.json --search "LSTM"
-```
-
-Each graph build writes `graph.json`, `graph.html` (D3.js), `GRAPH_REPORT.md`, and `obsidian/` (Obsidian vault with `[[wikilinks]]`) to `HYDROLITAGENT_OUTPUT` or `--output`.
-
-## Agent Skills
-
-| Skill | Purpose |
-|---|---|
-| `zotero-query` | Query the Zotero library via MCP tools |
-| `paper-to-zotero` | Download a paper and add it to Zotero (DOI / arXiv / title) |
-| `run-paper-to-zotero` | One-command paper-fetch → GDrive → Zotero linked_file pipeline |
-| `download-pdf` | Institutional-access PDF download via Playwright (+ `scripts/download_paper.py` stealth one-command mode) |
-| `zotero-notebooklm` | Zotero papers → NotebookLM Chinese briefing / audio / video |
-| `weekly-review` | Weekly literature review: deep-read → analysis cards → WeChat article → NotebookLM podcast |
-| `weekly-report-skill` | NotebookLM output → WeChat weekly-report MD |
-| `figure-skill-v2` | Per-paper figures + issue cover (extract from PDF, else ZhipuAI CogView) |
-| `bilibili-upload` | Podcast audio → MP4 → Bilibili upload |
-
-## Project Structure
-
-```
-hydrolitagent/
-├── cli.py               # CLI entry: prepare, extract, graph, merge, query
-├── zotero/              # Zotero integration
-│   ├── server.py         # 12-tool MCP Server (FastMCP, port 8002)
-│   ├── paper_to_zotero.py # DOI/arXiv/title → Zotero entry (Crossref/arXiv metadata)
-│   └── zot_link_gdrive.py # Google Drive → linked_file attachment
-├── literature/          # Literature CLI (post-ingestion deep processing)
-│   ├── download_pdf.py      # Institutional-access PDF download
-│   ├── zotero_sync.py       # PDF → Zotero linked_file
-│   ├── zotero_notebooklm.py # Zotero → NotebookLM briefing/audio/video
-│   ├── bilibili_upload.py   # Podcast → MP4 → Bilibili
-│   └── wechat/              # figure.py, polish.py, push.py
-├── graph/               # Knowledge graph build + merge (graphify)
-│   ├── build.py          # prepare / extract / graph
-│   └── merge.py          # multi-topic merge + D3.js HTML viz
-└── query/               # Deterministic graph queries (no LLM)
-    └── search.py
-
-configs/                 # Prompt / extraction configuration
-scripts/                 # run_paper_pipeline.sh, download_paper.py (stealth one-command PDF downloader), chunk_fulltext.py
-skills/                  # 9 agent skills
-docs/                    # Documentation site (mkdocs-material)
-outputs/                 # Deep-reading artifacts: outputs/weekly-review/{date}/{cards,article,podcast}
-papers/                  # Topic-organized literature knowledge base (10 topics)
-
-equation_from_data/      # Paper reproduction: equation discovery from data
-google_floodhub/         # Paper reproduction: Google flood forecasting
-definitions.py           # Shared definitions/constants
-```
-
-## Documentation
-
-The documentation site is built with [mkdocs-material](https://squidfunk.github.io/mkdocs-material/). Sources live in [`docs/`](docs/):
-
-```bash
-uv run mkdocs serve    # http://127.0.0.1:8000
-uv run mkdocs build --strict
-```
-
-## Contributing
-
-We welcome contributions:
-
-1. Fork and create a new branch
-2. Add papers, code, or docs to the appropriate section
-3. Ensure rights to share and compatibility with the [MIT License](LICENSE)
-4. Submit a PR with a clear description
-
-## License
-
-MIT License. See [LICENSE](LICENSE).
+`tests/test_zotero_local_api_integration.py` 是依赖本机 Zotero 在线及特定文献样本的集成测试，不是所有新用户都能复现同一结果。本次环境有一项因指定样本只有一篇 PDF、测试要求至少两篇而失败。只验证平台代码可运行 `uv run pytest`；完整测试出现失败时应看具体原因，不把排除测试后的结果称为完整全绿。

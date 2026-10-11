@@ -1,0 +1,608 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_read_status",
+    "source_page_count",
+    "visual_content_status",
+    "source_read_evidence",
+    "template_id",
+    "classification_confidence",
+    "classification_reason",
+    "card_body_markdown",
+    "machine_fields"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        2
+      ]
+    },
+    "source_read_status": {
+      "type": "string",
+      "enum": [
+        "FULL_PDF_REVIEWED",
+        "UNREADABLE"
+      ]
+    },
+    "source_page_count": {
+      "type": "integer"
+    },
+    "visual_content_status": {
+      "type": "string",
+      "enum": [
+        "REVIEWED",
+        "NOT_PRESENT",
+        "UNREADABLE"
+      ]
+    },
+    "source_read_evidence": {
+      "type": "string"
+    },
+    "template_id": {
+      "type": "string"
+    },
+    "classification_confidence": {
+      "type": "number"
+    },
+    "classification_reason": {
+      "type": "string"
+    },
+    "card_body_markdown": {
+      "type": "string"
+    },
+    "machine_fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "research_questions",
+        "study_objects_and_scales",
+        "data_and_methods",
+        "comparison_baselines",
+        "findings",
+        "boundaries",
+        "missing_information"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "enum": [
+            1
+          ]
+        },
+        "research_questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "statement",
+              "statement_role",
+              "information_status",
+              "source_locations"
+            ],
+            "properties": {
+              "statement": {
+                "type": "string"
+              },
+              "statement_role": {
+                "type": "string",
+                "enum": [
+                  "original_statement",
+                  "original_paraphrase",
+                  "ai_inference",
+                  "information_boundary"
+                ]
+              },
+              "information_status": {
+                "type": "string",
+                "enum": [
+                  "reported",
+                  "not_reported",
+                  "not_applicable",
+                  "unavailable"
+                ]
+              },
+              "source_locations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "pdf_page",
+                    "section",
+                    "figure",
+                    "table"
+                  ],
+                  "properties": {
+                    "pdf_page": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "section": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "figure": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "table": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "study_objects_and_scales": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "statement",
+              "statement_role",
+              "information_status",
+              "source_locations"
+            ],
+            "properties": {
+              "statement": {
+                "type": "string"
+              },
+              "statement_role": {
+                "type": "string",
+                "enum": [
+                  "original_statement",
+                  "original_paraphrase",
+                  "ai_inference",
+                  "information_boundary"
+                ]
+              },
+              "information_status": {
+                "type": "string",
+                "enum": [
+                  "reported",
+                  "not_reported",
+                  "not_applicable",
+                  "unavailable"
+                ]
+              },
+              "source_locations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "pdf_page",
+                    "section",
+                    "figure",
+                    "table"
+                  ],
+                  "properties": {
+                    "pdf_page": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "section": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "figure": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "table": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "data_and_methods": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "statement",
+              "statement_role",
+              "information_status",
+              "source_locations"
+            ],
+            "properties": {
+              "statement": {
+                "type": "string"
+              },
+              "statement_role": {
+                "type": "string",
+                "enum": [
+                  "original_statement",
+                  "original_paraphrase",
+                  "ai_inference",
+                  "information_boundary"
+                ]
+              },
+              "information_status": {
+                "type": "string",
+                "enum": [
+                  "reported",
+                  "not_reported",
+                  "not_applicable",
+                  "unavailable"
+                ]
+              },
+              "source_locations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "pdf_page",
+                    "section",
+                    "figure",
+                    "table"
+                  ],
+                  "properties": {
+                    "pdf_page": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "section": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "figure": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "table": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "comparison_baselines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "statement",
+              "statement_role",
+              "information_status",
+              "source_locations"
+            ],
+            "properties": {
+              "statement": {
+                "type": "string"
+              },
+              "statement_role": {
+                "type": "string",
+                "enum": [
+                  "original_statement",
+                  "original_paraphrase",
+                  "ai_inference",
+                  "information_boundary"
+                ]
+              },
+              "information_status": {
+                "type": "string",
+                "enum": [
+                  "reported",
+                  "not_reported",
+                  "not_applicable",
+                  "unavailable"
+                ]
+              },
+              "source_locations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "pdf_page",
+                    "section",
+                    "figure",
+                    "table"
+                  ],
+                  "properties": {
+                    "pdf_page": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "section": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "figure": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "table": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "finding_id",
+              "statement",
+              "statement_role",
+              "information_status",
+              "source_locations"
+            ],
+            "properties": {
+              "finding_id": {
+                "type": "string"
+              },
+              "statement": {
+                "type": "string"
+              },
+              "statement_role": {
+                "type": "string",
+                "enum": [
+                  "original_statement",
+                  "original_paraphrase",
+                  "ai_inference",
+                  "information_boundary"
+                ]
+              },
+              "information_status": {
+                "type": "string",
+                "enum": [
+                  "reported",
+                  "not_reported",
+                  "not_applicable",
+                  "unavailable"
+                ]
+              },
+              "source_locations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "pdf_page",
+                    "section",
+                    "figure",
+                    "table"
+                  ],
+                  "properties": {
+                    "pdf_page": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "section": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "figure": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "table": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "boundaries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "statement",
+              "statement_role",
+              "information_status",
+              "source_locations"
+            ],
+            "properties": {
+              "statement": {
+                "type": "string"
+              },
+              "statement_role": {
+                "type": "string",
+                "enum": [
+                  "original_statement",
+                  "original_paraphrase",
+                  "ai_inference",
+                  "information_boundary"
+                ]
+              },
+              "information_status": {
+                "type": "string",
+                "enum": [
+                  "reported",
+                  "not_reported",
+                  "not_applicable",
+                  "unavailable"
+                ]
+              },
+              "source_locations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "pdf_page",
+                    "section",
+                    "figure",
+                    "table"
+                  ],
+                  "properties": {
+                    "pdf_page": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "section": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "figure": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "table": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "missing_information": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "statement",
+              "statement_role",
+              "information_status",
+              "source_locations"
+            ],
+            "properties": {
+              "statement": {
+                "type": "string"
+              },
+              "statement_role": {
+                "type": "string",
+                "enum": [
+                  "original_statement",
+                  "original_paraphrase",
+                  "ai_inference",
+                  "information_boundary"
+                ]
+              },
+              "information_status": {
+                "type": "string",
+                "enum": [
+                  "reported",
+                  "not_reported",
+                  "not_applicable",
+                  "unavailable"
+                ]
+              },
+              "source_locations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "pdf_page",
+                    "section",
+                    "figure",
+                    "table"
+                  ],
+                  "properties": {
+                    "pdf_page": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "section": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "figure": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "table": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
