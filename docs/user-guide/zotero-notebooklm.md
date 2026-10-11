@@ -55,11 +55,9 @@
 
 ### 2. 克隆并安装 mylibrary
 
-PowerShell：
+克隆与基础安装见[前提与配置](../getting-started/installation.md)；本页**额外**需要 `notebooklm` extra：
 
-```powershell
-git clone <repo-url> D:\Code\mylibrary
-cd D:\Code\mylibrary
+```bash
 uv sync --all-packages --extra notebooklm
 ```
 

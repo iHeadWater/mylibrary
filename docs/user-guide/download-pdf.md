@@ -38,11 +38,8 @@ npx playwright install chromium
 
 ### 3. 安装项目依赖
 
-```bash
-uv sync --all-packages
-```
-
-（pyzotero 已是基础依赖，无需单独安装）
+通用安装见[前提与配置](../getting-started/installation.md)。本页只需要那份安装里已包含的
+`pyzotero`，**无需额外安装**。
 
 ### 4. 配置环境
 

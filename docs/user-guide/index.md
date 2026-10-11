@@ -46,6 +46,6 @@
 
 ## 相关
 
-- [安装配置](../getting-started/installation.md) —— 本仓库是单包 `hydrolitagent`,用 `uv sync --all-packages` 装依赖
+- [前提与配置](../getting-started/installation.md) —— 先看这个:通用前提 + 按能力看额外要什么 + 凭据放哪
 - [模块架构](../development/architecture.md) —— 代码结构与数据流
 - [ADR-0002](../adr/0002-zotero-two-clients-boundary.md) —— 为什么读 Zotero 保留两套客户端、各自服务哪种运行环境
