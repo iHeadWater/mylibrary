@@ -1,68 +1,48 @@
 # 运行维护
 
-单篇与主题流程的**环境、状态文件边界与排障入口**。
+**状态文件、配置与日志。** 日常不必看这一页 —— 出问题、换机器、想改配置时再来。
 
-各命令读的配置**并不相同**：`paper-input` 读 `configs/paper-input.toml`；
-`evidence-validate` 用包内资产、**不读**总配置；其余（`evidence-generate` / `themes-run` / `ai-config`）
-读总配置 `hydrolitagent/cards/assets/config/config.json`。
+安装与凭据见[前提与配置](../../getting-started/installation.md)。
 
-这些命令都**不改动 Zotero**、**不提交或推送 Git**；其中只有 `evidence-generate` 与 `themes-run`
-会**调用模型**，另外三条不调用。
+## 状态文件在哪
 
-## 运行前置条件
+程序自己维护的状态都在**仓库根**：
 
-在**仓库根**执行：
+| 位置 | 是什么 |
+|---|---|
+| `.runtime/` | 运行区（任务、锁、日志、快照） |
+| `themes/` | 主题池 —— 从 `themes/index.md` 进，那是给人看的总入口 |
 
-```bash
-uv sync --all-packages --locked
-```
+这些文件由程序**原子写入并校验哈希** —— **不要手工编辑**：手改会被判为漂移或冲突，
+程序**保留现场而不覆盖**。`.runtime` 不存在是正常的，下次运行按需重建。
 
-- Zotero Desktop 已启动，并启用「允许此计算机上的其他应用程序与 Zotero 通信」。
-- 用 `paper-input` 时：目标论文及其 PDF 已在本机 Zotero 中可用。
-- 用 `evidence-generate` 时：另需一种**已登录**的 CLI（Codex 或 Claude），以及 Poppler 的
-  `pdfinfo` / `pdftoppm` / `pdftotext`。
+主题池只在一次变更的**全部**新版本就绪后才更新注册表；目录里有半成品**不代表**它已成为当前主题。
 
-**只做离线校验（`evidence-validate`）不需要** Zotero、PDF、群组、Poppler 或 CLI 登录。
+## 谁读哪份配置
 
-自查当前模型选择与产物根：
+| 命令 | 读什么 |
+|---|---|
+| `paper-input` | `configs/paper-input.toml` |
+| `evidence-validate` | 包内资产 —— **不读**总配置 |
+| `evidence-generate` / `themes-run` / `ai-config` | 总配置 `hydrolitagent/cards/assets/config/config.json` |
 
-```bash
-uv run hydrolitagent cards ai-config --json
-```
+本机要覆盖后三者，用 `--config` 指向**另一份完整配置**（被 Git 忽略的 `config.local.json`）。它是**完整配置，不是只填几行的补丁文件**；系统**不做隐式合并**。
 
-它只读配置 —— 不消耗模型额度，也**不证明**模型服务当前连通或 CLI 已登录。
+字段含义见[配置参考](../../development/platform/config.md)与[变量与密钥](../../development/platform/variables.md)。
 
-## 状态文件
+## 日志
 
-程序自己维护的状态都落在**仓库根**：运行区是 `paths.runtime_dir`（默认 `.runtime/`），
-主题池注册表在 `paths.themes_dir`。这些文件由程序**原子写入并校验哈希**，
-**不要手工编辑** —— 手改会被判为漂移或冲突，程序保留现场而不覆盖。
+失败诊断写在 `.runtime/logs`，只含**已脱敏**的公开错误与上下文 ——
+不保存原始事件、提示词或论文全文，且**不入库**。目录不可写时保留原失败结果并给出警告。
 
-- `.runtime` 不存在是正常的，下次运行按需重建。
-- 主题池只在一次变更的**全部**新版本就绪后才更新注册表；目录里有半成品**不代表**它已成为当前主题。
-- 查当前候选与历史版本请看 `themes/index.md`；不要靠移动文件或手改索引来模拟状态变更。
+## 换机器
 
-## 换一份配置
-
-需要总配置的那几个命令（`evidence-generate` / `themes-run` / `ai-config`）默认读
-`hydrolitagent/cards/assets/config/config.json`。本机要覆盖时，
-用另一份**完整**配置（被 Git 忽略的 `config.local.json`），并显式指定：
-
-```bash
-uv run hydrolitagent cards themes-run --config hydrolitagent/cards/assets/config/config.local.json --json
-```
-
-`--config` 或环境变量 `HYDROLITAGENT_CARDS_CONFIG` 二选一，系统**不做隐式合并**。
-`config.local.json` 是**另一份完整总配置，不是只填几行的补丁文件**；
-字段含义见[字段说明](../../development/platform/config.md)与[变量与密钥](../../development/platform/variables.md)。
-
-## 运行日志
-
-失败诊断写在 `paths.logs_dir`（默认 `.runtime/logs`），只含**已脱敏**的公开错误与上下文 ——
-不保存原始事件、提示词或论文全文，日志不入库。日志目录不可写时，保留原失败结果并给出警告。
-
-## 换机器 / 恢复环境
-
-Python 环境是**仓库根 `.venv`**，由 `uv sync --all-packages` 准备。换机后重新
-`uv sync --all-packages --locked`、重新登录所选 CLI、重新配置 Poppler 路径即可。
+重新 `uv sync --all-packages --locked`、重新登录所选模型 CLI、重新配 Poppler 路径即可。
 **不要复制别人的 `.venv`、登录文件或账号凭据。**
+
+## 边界
+
+- 只有 `evidence-generate` 与 `themes-run` 会**调用模型**；`paper-input` / `evidence-validate` / `ai-config` 不调用。
+- 这些命令都**不改动 Zotero**、**不提交或推送 Git**。
+- 想自查当前模型选择与产物落点：`uv run hydrolitagent cards ai-config --json`
+  —— 它只读配置，**不证明**模型服务连通或 CLI 已登录。
