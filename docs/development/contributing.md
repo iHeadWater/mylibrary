@@ -175,3 +175,73 @@ uv run mkdocs build --strict
 构建通过但部署失败时，检查 Pages 发布来源、工作流权限与 `github-pages` 环境是否等待审批。
 如果已发布的文档需要回退，用 `git revert <需要撤销的提交号>` 创建撤销提交并推送 `main`；
 工作流会重新构建和发布。不要用强制推送删除课题组的提交历史。
+
+## 版本管理与 GitHub Release
+
+本项目用 **uv** 管理固定版本：`pyproject.toml` 的 `[project].version` 是唯一版本来源，
+`uv.lock` 与安装环境由 uv 同步。沿用 setuptools 构建方式，不混用基于 Git tag 的动态版本。
+首次 GitHub Release 从 `v0.0.1` 开始；此前文件里的 `0.1.0` 未创建对应 tag 或 Release。
+
+### 开发下一版
+
+先明确下一版要解决的问题、验收条件及升级类型，再实施小步修改。只选择下面的一种：
+
+```powershell
+# 小修复：例如 0.0.1 -> 0.0.2
+uv version --bump patch
+
+# 新能力：例如 0.0.1 -> 0.1.0
+uv version --bump minor
+
+# 不兼容的重大变化：例如 0.0.1 -> 1.0.0
+uv version --bump major
+```
+
+这些是互斥示例，不要连续执行三条。版本选择由维护者判断；uv 负责递增版本、更新锁文件和同步环境，
+不是每提交一次代码就自动升版本。`0.x` 阶段接口仍在演化，发布说明要明确兼容性变化。
+需要设定精确版本时用 `uv version <版本号>`，不要手改 `uv.lock`。
+
+### 发布步骤（在仓库根目录执行）
+
+下面的 `0.0.1` / `v0.0.1` 是首发示例，后续必须替换为实际待发布版本。
+
+```powershell
+# 安装锁定依赖，并验收
+uv sync --locked
+uv run pytest -rs
+uv run hydrolitagent cards --help
+uv run python scripts/paper_validate.py --draft hydrolitagent/cards/assets/examples/subject-card-validation/draft.json --paper-input hydrolitagent/cards/assets/examples/subject-card-validation/paper-input.json --report-dir outputs/release-validation
+uv run mkdocs build --strict
+uv version --short
+
+# 维护者审阅本版变更与发布说明后提交，并推送 main（或按团队约定合并 PR）
+# 注意：git add 只列本次要发布的文件，不使用 git add . 混入其他人的改动。
+# git add -- <本次文件列表>
+# git commit -m "chore: prepare release v0.0.1"
+git push origin main
+```
+
+确认 **Actions → Release checks** 的主线检查成功后，记下已经验收的完整提交 SHA。
+对这个确定的提交打 tag，而不是对可能已被他人推进的远端最新主线盲目打 tag：
+
+```powershell
+# 把 <已验收提交SHA> 替换为该提交的完整 SHA
+git tag -a v0.0.1 <已验收提交SHA> -m "mylibrary v0.0.1"
+git push origin refs/tags/v0.0.1
+```
+
+再次确认该 tag 的 **Release checks** 成功，再创建 GitHub Release。
+首发说明在 [v0.0.1 发布说明](../releases/v0.0.1.md)；后续各版新增自己的说明文件。
+
+```powershell
+gh release create v0.0.1 --repo iHeadWater/mylibrary --verify-tag --title "mylibrary v0.0.1" --notes-file docs/releases/v0.0.1.md
+```
+
+发布说明必须写清本版能力、安装入口、验收结果、跳过项与已知边界；不能把离线示例通过写成真实论文生成通过。
+测试中的跳过项保留原因，不通过排除失败用例来宣称全绿。
+`Release checks` 自动核对项目版本、安装版本与 tag，并运行测试、离线示例和严格文档构建。
+它不替维护者选择版本号，也不自动创建 Release。
+
+本项目目前只发布 **GitHub tag + Release**，不上传 PyPI，不需要 `uv publish`、PyPI 密钥或 Trusted Publishing，
+也不要求制作 wheel/sdist 发布附件。用户通过源码快照与 uv 使用。
+已公开的 tag/Release 不通过删除重建来移动版本；发布错误时说明问题并发布修正版。

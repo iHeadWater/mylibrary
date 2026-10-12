@@ -56,6 +56,8 @@ markdown_extensions:
 
 nav:
   - 首页: index.md
+  - 版本说明:
+      - v0.0.1: releases/v0.0.1.md
   - 快速开始:
       - 安装配置: getting-started/installation.md
       - 5 分钟上手: getting-started/quickstart.md

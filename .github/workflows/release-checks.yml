@@ -1,0 +1,66 @@
+name: Release checks
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-checks-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate version and source
+    # The cards runtime is currently Windows-only.
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: "0.11.21"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Verify project, installed version and tag
+        run: |
+          $projectVersion = uv version --short
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installedVersion = uv run --no-sync python -c "from importlib.metadata import version; print(version('hydrolitagent'))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($projectVersion -cne $installedVersion) {
+            throw "Project version $projectVersion differs from installed version $installedVersion"
+          }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -cne "v$projectVersion") {
+            throw "Tag $env:GITHUB_REF_NAME differs from v$projectVersion"
+          }
+          Write-Output "Verified version: $projectVersion"
+      - name: Run test suite
+        # Zotero integration tests keep their own availability/sample gates.
+        # A skip is reported by pytest; failures are never filtered out.
+        run: uv run --no-sync pytest -rs
+      - name: Check CLI entry
+        run: uv run --no-sync hydrolitagent cards --help
+      - name: Validate offline example
+        run: uv run --no-sync python scripts/paper_validate.py --draft hydrolitagent/cards/assets/examples/subject-card-validation/draft.json --paper-input hydrolitagent/cards/assets/examples/subject-card-validation/paper-input.json --report-dir outputs/release-validation
+      - name: Build documentation in strict mode
+        run: uv run --no-sync mkdocs build --strict
+
+# This workflow validates source releases only. It does not upload to PyPI,
+# create release tags, or publish a GitHub Release without a maintainer.
