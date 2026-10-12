@@ -207,6 +207,7 @@ uv version --bump major
 
 ```powershell
 # 安装锁定依赖，并验收
+$env:PYTHONUTF8 = "1"
 uv sync --locked
 uv run pytest -rs
 uv run hydrolitagent cards --help
@@ -241,6 +242,9 @@ gh release create v0.0.1 --repo iHeadWater/mylibrary --verify-tag --title "mylib
 测试中的跳过项保留原因，不通过排除失败用例来宣称全绿。
 `Release checks` 自动核对项目版本、安装版本与 tag，并运行测试、离线示例和严格文档构建。
 它不替维护者选择版本号，也不自动创建 Release。
+
+Windows 验收使用 UTF-8 模式（`PYTHONUTF8=1`）；CI 的 `TEMP` / `TMP` 指向 runner 标准临时目录，
+避免托管用户的短路径别名与解析后的完整路径在断言中混用。原测试及业务代码不因 CI 失败而被排除或削弱。
 
 本项目目前只发布 **GitHub tag + Release**，不上传 PyPI，不需要 `uv publish`、PyPI 密钥或 Trusted Publishing，
 也不要求制作 wheel/sdist 发布附件。用户通过源码快照与 uv 使用。

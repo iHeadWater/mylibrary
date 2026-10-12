@@ -21,6 +21,12 @@ jobs:
     # The cards runtime is currently Windows-only.
     runs-on: windows-latest
     timeout-minutes: 20
+    env:
+      # Match the documented UTF-8 terminal contract, including child processes.
+      PYTHONUTF8: "1"
+      # Avoid the hosted user's RUNNER~1 temp alias in path comparisons.
+      TEMP: ${{ runner.temp }}
+      TMP: ${{ runner.temp }}
     defaults:
       run:
         shell: pwsh
