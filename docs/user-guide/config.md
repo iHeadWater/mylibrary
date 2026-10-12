@@ -81,7 +81,6 @@ HYDROLITAGENT_LITERATURE_ROOT=D:/OneDrive/mylibrary-products
 那个开关不可能提交进仓库,再要一个只会自相矛盾。
 
 解析出的根超过 180 字符会有告警:Windows 路径上限是 260,较深的产物子树会写不进去。
-(这正是 `outputs/graph` 不被纳入产物根的原因——它在云盘根下会到 291 字符。)
 
 ### 查看实际落点
 

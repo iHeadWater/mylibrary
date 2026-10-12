@@ -4,7 +4,7 @@
 
 | ① 收进来 | ② 读进去 | ③ 组织起来 | ④ 产出内容 | ⑤ 沉淀成资产 |
 |---|---|---|---|---|
-| 下载 PDF · 建 Zotero 条目 | 检索 · 精读 · 分析卡 | 主题分类 · 知识图谱 | 公众号 · 播客 · B 站 | 证据卡 · 主题池 |
+| 下载 PDF · 建 Zotero 条目 | 检索 · 精读 · 分析卡 | 主题分类 | 公众号 · 播客 · B 站 | 证据卡 · 主题池 |
 
 入口是 **Zotero 文献库**。进入 Zotero **之前**的情报采集由上游兄弟仓库 **dailyinfo** 负责 —— 本仓库从那里接手。
 
@@ -66,7 +66,6 @@ cd /path/to/mylibrary
 | Zotero 入库（linked_file） | 已下载 PDF 同步进 Zotero，零云端配额 | [Zotero 入库](user-guide/zotero-sync.md) |
 | Zotero → NotebookLM | 新增论文整理成中文简报 / 音频 / 视频概览 | [Zotero → NotebookLM](user-guide/zotero-notebooklm.md) |
 | 文献深度处理 | Literature CLI：每周综述、公众号发布/润色/配图、B 站上传 | [文献深度处理](user-guide/literature.md) |
-| 知识图谱 | 用 graphify 构建结构化、可查询的知识库 | [模块架构](development/architecture.md) |
 | **文献卡与主题卡** | 自己的 Zotero 论文 → 文献卡 → 候选主题（**Windows-only**） | [文献卡与主题卡](user-guide/cards/index.md) |
 | 论文复现 | 复现 AI 驱动水文学关键论文 | `equation_from_data/`、`google_floodhub/` |
 

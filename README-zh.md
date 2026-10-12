@@ -2,7 +2,7 @@
 
 [仓库顶层说明](README.md) · [在线文档](https://iheadwater.github.io/mylibrary/)
 
-AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:精读、主题分类、公众号文章、播客、知识图谱,以 **Zotero 文献库**为根基。
+AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:精读、主题分类、公众号文章、播客,以 **Zotero 文献库**为根基。
 
 ## 定位
 
@@ -24,7 +24,6 @@ mylibrary 承担**情报汇集之后的深度处理**:
 | **Zotero 入库 linked_file** — 已下载 PDF 同步进 Zotero 作为 `linked_file`(零云端配额) | `uv run python -m hydrolitagent.literature.zotero_sync <pdf> <doi>` | [Zotero 入库](docs/user-guide/zotero-sync.md) |
 | **Zotero → NotebookLM** — 新增论文整理成中文简报 / 音频 / 视频概览 | `uv run python -m hydrolitagent.literature.zotero_notebooklm --collection <name> --artifact audio` | [NotebookLM](docs/user-guide/zotero-notebooklm.md) |
 | **文献深度处理** — Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [文献深度处理](docs/user-guide/literature.md) |
-| **知识图谱** — 用 [graphify](https://github.com/graphify) 构建结构化、可查询的知识库(实体提取、社区发现、Obsidian 导出) | `uv run hydrolitagent graph papers/your-topic/` | [模块架构](docs/development/architecture.md) |
 | **论文复现** — 复现 AI 驱动水文学关键论文 | — | `equation_from_data/`、`google_floodhub/` |
 | **文献卡与主题卡平台** — 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验。**运行时为 Windows-only。** | `uv run hydrolitagent cards ai-config --json` | [平台文档](docs/user-guide/cards/index.md) |
 
@@ -39,7 +38,7 @@ cd mylibrary
 uv sync --all-packages   # 装依赖(原 workspace 成员已并入 hydrolitagent/cards)
 
 # 配置
-cp .env.example .env   # 填入 DEEPSEEK_API_KEY;设置 HYDROLITAGENT_OUTPUT、ZOTERO_API_KEY、ZOTERO_LIBRARY_ID
+cp .env.example .env   # 按需填 DEEPSEEK_API_KEY、ZOTERO_API_KEY、ZOTERO_LIBRARY_ID 等
 ```
 
 > 本仓库只有一个包 **`hydrolitagent`** —— 文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包(workspace 成员随之取消)。`.venv` 与 `uv.lock` 仍只有一份;`uv sync --all-packages` 照旧可用。
@@ -89,26 +88,9 @@ uv run python -m hydrolitagent.literature.wechat.push <polished.md> [--thumb <me
 uv run python -m hydrolitagent.literature.bilibili_upload <audio.mp3> --title "标题" --tags "AI,水文,科研" [--dry-run]
 ```
 
-### 知识图谱
-
-```bash
-# 对目录下的 Markdown 论文执行三步 pipeline
-uv run hydrolitagent prepare papers/your-topic/    # 第一步:检测 + 分批
-uv run hydrolitagent extract papers/your-topic/     # 第二步:LLM 提取
-uv run hydrolitagent graph papers/your-topic/       # 第三步:建图 + 聚类 + 导出
-
-# 合并多个 topic 图谱为统一图谱
-uv run hydrolitagent merge --graphs-dir outputs/graph/ --output outputs/graph/unified/
-
-# 查询图谱(确定性查询,不走 LLM)
-uv run hydrolitagent query outputs/graph/graph.json --search "LSTM"
-```
-
-每次建图会把 `graph.json`、`graph.html`(D3.js)、`GRAPH_REPORT.md`、`obsidian/`(带 `[[wikilinks]]` 的 Obsidian 知识库)写入 `HYDROLITAGENT_OUTPUT` 或 `--output`。
-
 ### 文献卡与主题卡平台
 
-**入库只有两件事 —— 下载 PDF,和建 Zotero 条目。** 本仓库其余的都属于**消费**:读库、精读、主题、知识图谱、公众号、播客。这个平台是消费侧里的一支独立支线 —— 别人产出当期内容,它把**你自己的 Zotero 文献**沉淀成**长期可追溯的文献卡与主题卡**。命令一律从仓库根执行。
+**入库只有两件事 —— 下载 PDF,和建 Zotero 条目。** 本仓库其余的都属于**消费**:读库、精读、主题、公众号、播客。这个平台是消费侧里的一支独立支线 —— 别人产出当期内容,它把**你自己的 Zotero 文献**沉淀成**长期可追溯的文献卡与主题卡**。命令一律从仓库根执行。
 
 > 注意“两侧”不等于“两个包”：本仓库**只有一个包** `hydrolitagent`；文献卡与主题卡是它内部的 `hydrolitagent/cards/`，纯属消费侧。
 
@@ -152,11 +134,13 @@ uv run hydrolitagent cards ai-config --json
 | `hydrology-evidence-cards` | Zotero 源论文 → 人读证据卡(科研工作流,含机器审计字段) |
 | `hydrology-theme-synthesis` | 文献 → 初步主题 → 人工筛选门 → 正式主题(科研工作流) |
 
-## 项目结构
+## 项目结构（用户入口节选）
+
+完整目录与模块职责见[模块架构](docs/development/architecture.md)。以下只列用户需要的入口。
 
 ```
 hydrolitagent/
-├── cli.py               # CLI 入口:prepare, extract, graph, merge, query
+├── cli.py               # CLI 分发:文献卡、主题卡与产物路径查询
 ├── zotero/              # Zotero 集成
 │   ├── server.py         # 12 工具 MCP Server(FastMCP,端口 8002)
 │   ├── paper_to_zotero.py # DOI/arXiv/标题 → Zotero 条目(Crossref/arXiv 元数据)
@@ -167,11 +151,9 @@ hydrolitagent/
 │   ├── zotero_notebooklm.py # Zotero → NotebookLM 简报/音频/视频
 │   ├── bilibili_upload.py   # 播客 → MP4 → B 站
 │   └── wechat/              # figure.py, polish.py, push.py
-├── graph/               # 知识图谱构建 + 合并(graphify)
-│   ├── build.py          # prepare / extract / graph
-│   └── merge.py          # 多 topic 合并 + D3.js HTML 可视化
-└── query/               # 确定性图查询(不走 LLM)
-    └── search.py
+└── cards/               # 文献卡与主题卡
+    ├── cli.py           # 单篇输入、生成、校验、主题池与配置查询
+    └── assets/          # 模板、提示词、schema、示例与默认配置
 
 configs/                 # Prompt / 提取配置
 scripts/                 # run_paper_pipeline.sh, download_paper.py(隐身一键 PDF 下载), chunk_fulltext.py
@@ -179,14 +161,6 @@ skills/                  # 12 个 Agent skill
 docs/                    # 文档站点(mkdocs-material)
 outputs/                 # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
 papers/                  # 按主题组织的文献库(10 个主题)
-
-hydrolitagent/cards/     # 文献卡与主题卡(自己的 Zotero → 文献卡 → 主题卡)
-├── automation/          #   Python:单篇输入 → PDF 门禁 → 制卡 → 校验 → 主题池
-├── templates/           #   可复用资产:九类证据卡模板、主题提示词、JSON schema
-├── config/              #   非敏感配置与完整示例
-└── pyproject.toml       #   入口:`uv run hydrolitagent cards`
-                         #   生成产物(文献卡、主题池、运行记录)不入库,
-                         #   由运行时自建。
 
 equation_from_data/      # 论文复现:从数据发现方程
 google_floodhub/         # 论文复现:Google 洪水预测

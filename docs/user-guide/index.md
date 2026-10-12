@@ -6,7 +6,7 @@
 |---|---|---|
 | **① 收进来** | 下载 PDF · 建 Zotero 条目（含 `linked_file` 附件） | [论文入库流水线](paper-pipeline.md) · [论文 PDF 下载（机构访问）](download-pdf.md) · [Zotero 入库](zotero-sync.md) |
 | **② 读进去** | 按题名 / 全文 / 标签检索库；读全文、附件与批注 | [MCP Server 工具](mcp-tools.md) |
-| **③ 组织起来** | 精读成分析卡；主题聚类与知识图谱 | [文献深度处理](literature.md) |
+| **③ 组织起来** | 精读成分析卡；主题聚类 | [文献深度处理](literature.md) |
 | **④ 产出内容** | 公众号文章 / 播客 / B 站 | [文献深度处理](literature.md) |
 | **⑤ 沉淀成资产** | 文献卡 → 主题卡（长期可追溯） | [文献卡与主题卡](cards/index.md)（细分页见下） |
 | 另外 | 新增论文 → NotebookLM 中文简报 / 音频 / 视频 | [Zotero → NotebookLM](zotero-notebooklm.md) |
