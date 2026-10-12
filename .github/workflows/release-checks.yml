@@ -24,9 +24,6 @@ jobs:
     env:
       # Match the documented UTF-8 terminal contract, including child processes.
       PYTHONUTF8: "1"
-      # Avoid the hosted user's RUNNER~1 temp alias in path comparisons.
-      TEMP: ${{ runner.temp }}
-      TMP: ${{ runner.temp }}
     defaults:
       run:
         shell: pwsh
@@ -58,6 +55,11 @@ jobs:
           }
           Write-Output "Verified version: $projectVersion"
       - name: Run test suite
+        env:
+          # Runner context is available here, not in job-level env.
+          # Avoid RUNNER~1 aliases in temporary path assertions.
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
         # Zotero integration tests keep their own availability/sample gates.
         # A skip is reported by pytest; failures are never filtered out.
         run: uv run --no-sync pytest -rs
