@@ -26,6 +26,11 @@ dependencies = [
   # 精确 pin 是继承来的（来自旧 hydro-platform 的 `pdf-direct` extra），不是为合并做的决定：
   # PDF 直读路径用它解析页数/文本。代价是 Dependabot 对 `==` 只报不修，每次安全公告都得手工 bump。
   "pypdf==6.20.0",
+  # 付费墙出版商（ScienceDirect / Wiley / AGU / Nature / Springer）的下载路径靠它。
+  # 必须是核心依赖而非 extra：它是幽灵依赖过一次——只经 notebooklm[browser] 间接进入 lock，
+  # 默认不装，任何一次 `uv sync` 都会把手装的那份剪掉，download_paper.py 的浏览器分支随之静默失效。
+  # 浏览器二进制不在 uv 管理范围内，换机器后仍需跑一次 `uv run playwright install chromium`。
+  "playwright>=1.62",
 ]
 
 [project.optional-dependencies]

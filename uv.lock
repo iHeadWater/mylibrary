@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12, <3.15"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -573,6 +573,7 @@ dependencies = [
     { name = "mcp" },
     { name = "openai" },
     { name = "pillow" },
+    { name = "playwright" },
     { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "pyzotero" },
@@ -602,6 +603,7 @@ requires-dist = [
     { name = "notebooklm-py", extras = ["browser"], marker = "extra == 'notebooklm'", specifier = ">=0.5.0" },
     { name = "openai" },
     { name = "pillow", specifier = ">=10.0" },
+    { name = "playwright", specifier = ">=1.62" },
     { name = "pypdf", specifier = "==6.20.0" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "pyzotero", specifier = ">=1.13.0" },
