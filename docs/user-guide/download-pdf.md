@@ -67,8 +67,18 @@ uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元
 同 DOI 重跑会**补挂**到既有条目（不再只是跳过）；已挂同内容则幂等跳过。
 
 脚本按 DOI 前缀自动路由到对应出版商流程，内置 **stealth Chrome 启动器**
-（真实 Chrome 内核 + 剥离自动化标记），Cloudflare / AMS 人机验证**自动通过**，
-全程无需手动干预。首次使用需 `uv run playwright install chromium`。
+（真实 Chrome 内核 + 剥离自动化标记）。首次使用需 `uv run playwright install chromium`。
+
+**无头优先**：第一次尝试不弹窗，脚本以 headless 模式静默运行。进入任何流程前会先做一次
+验证检查：若 15 秒内（`HEADLESS_CHALLENGE_GRACE_S`）没能通过，就关闭无头上下文、以有头模式
+重开一个窗口并提示一次。流程中途若再次弹出验证，会继续等你通过，不会直接判定失败：
+
+```
+⚠ 请在浏览器中完成人机验证（点几次都行）。完成后无需回到终端，程序会自动继续。
+```
+
+你**只需点验证**：出现几次就点几次，点完不用回终端，脚本会自动续上下载。
+没有验证的出版社（Elsevier、大部分 OA 源）全程无窗口。
 
 **方式二：agent + Playwright MCP 浏览器**（脚本无法覆盖的出版商或需人工登录时）
 
@@ -91,8 +101,9 @@ agent 打开 Chromium 窗口。你只需在以下情况交互：
 | **AMS** | 机构/IP | aop→published redirect → `context.request` 取 PDF 字节 |
 | **Elsevier (ScienceDirect)** | SSO 自动识别 | 导航 → "View PDF" → 新标签页(可能经安全校验)→ 同源 `<a download>` 锚点 → 原生下载 |
 | **Copernicus (ESSD 等)** | 开放获取 | 直链 `curl -L` 下载(静态 PDF 锚点无效) |
-| **science.org** | 开放获取 | curl 两步法：先文章页设 cookie，再带 cookie 拉 PDF |
-| **SSRN** | 免费下载 | 浏览器访问摘要页 → Cloudflare 自动通过 → 点击下载 |
+| **science.org** | 开放获取 | curl 两步法优先；被 Cloudflare 拦截时回退浏览器（无头优先） |
+| **SSRN** | 免费下载 | 浏览器访问摘要页 → 无头优先，必要时弹窗过一次验证 → 点击下载 |
+| **其他（未列出的前缀）** | 视出版社 | 通用 flow：读 `citation_pdf_url` / PDF 锚点 → 导航触发下载 |
 
 ## 工作原理
 
@@ -141,7 +152,8 @@ Copernicus 偶有慢速/超时——curl 中断用 `wget -c` 续传，或 Python
 - `--disable-blink-features=AutomationControlled` + init-script 掩蔽 `webdriver`
 - persistent profile（临时目录下），验证 cookie 跨次运行复用
 
-效果：AMS "Human Verification" 与 ScienceDirect Cloudflare 全部自动通过。
+效果：AMS "Human Verification" 与 ScienceDirect Cloudflare 多数情况下自动通过；
+过不去时按上面的无头→有头流程升级，由人点一次验证。
 
 ### AMS
 
@@ -149,7 +161,8 @@ stealth 指纹过掉验证页后，用 `page.context.request.get(downloadpdf_url
 
 ### science.org
 
-开放获取，但对自动化浏览器有 bot 检测（无限重定向）。用 **curl 两步法**绕过：
+开放获取，但站点现已接入 Cloudflare：curl 两步法**经常直接拿到挑战页而不是 PDF**，
+此时脚本自动回退到浏览器。curl 仍是最快路径，优先保留：
 
 ```bash
 # 第一步：访文章页设 cookie
@@ -158,6 +171,19 @@ curl -sL -A "Mozilla/5.0" -c cookies.txt -b cookies.txt "https://www.science.org
 curl -sL -A "Mozilla/5.0" -c cookies.txt -b cookies.txt -o paper.pdf "https://www.science.org/doi/pdf/<DOI>?download=true"
 rm cookies.txt
 ```
+
+curl 失败后脚本走 `generic_flow`（2026-10-18 用 `10.1126/sciadv.aeb1692` 实测通过）：
+
+1. 真实 Chrome 打开文章页，Cloudflare 约 2 秒自动放行；
+2. **页内 `fetch()` / `context.request` 取不到字节**（仍 403），不要走这条路；
+3. 让**页面导航**到 `/doi/pdf/<DOI>?download=true`，Playwright 会以
+   `Error: Download is starting` 的形式报告下载开始，用 `expect_download()` 包住即可保存。
+
+### 未写专用 flow 的出版社
+
+以前遇到未知 DOI 前缀会直接 `SystemExit("no scripted flow yet")`，现在改走通用 flow：
+读页面上的 `citation_pdf_url` / PDF 锚点，逐个尝试「导航即下载」，最后兜底注入同源
+`<a download>`。遇到验证同样是无头优先、失败弹窗、点完自动继续。
 
 ### SSRN
 
@@ -177,7 +203,7 @@ SSRN 预印本免费下载。Cloudflare 挑战在 MCP 浏览器 profile 下自�
 | `context.request` 拉 ScienceDirect 签名 PDF | assets CDN 对非浏览器 TLS 指纹返回 403（AMS 可用，SD 不可用） |
 | main.pdf URL 一出现就注入锚点 | 二次重定向会摧毁执行上下文——先等 URL 稳定 |
 | 浏览器上下文长时间运行后崩溃 | 约 8 次导航后 stealth temp profile 不稳定；用 MCP profile（脚本已自动优先） |
-| science.org 浏览器无限重定向 | bot 检测；改用 curl 两步法（先文章页设 cookie） |
+| science.org 浏览器报 `ERR_TOO_MANY_REDIRECTS` | 旧版无头浏览器被 bot 检测拦下；curl 两步法优先，失败时脚本回退到**真实 Chrome**（导航到 `/doi/pdf/` 触发下载），已实测可用 |
 
 ## 命令参考
 
@@ -206,7 +232,7 @@ uv run python -m hydrolitagent.literature.download_pdf verify <pdf>
 
 | 症状 | 原因 | 修复 |
 |------|------|------|
-| 页面标题 "请稍候…" / 403 | Cloudflare Turnstile 拦截 | 用户在浏览器中通过挑战 |
+| 页面标题 "请稍候…" / 403 | Cloudflare Turnstile 拦截 | 无头阶段 15 秒内过不去会自动弹窗；在弹出的窗口里点一次验证即可，程序会自行续跑 |
 | "Access through your institution" | 未登录 / 会话过期 | 走 WAYF → DUT SSO 流程 |
 | "Buy or subscribe" / 无 PDF 链接 | 期刊不在 DUT 订阅中 | 跳过——从其他来源下载 |
 | 大 PDF 时 MCP 崩溃 | base64 编码溢出 | 用 Chrome 原生下载，不用 evaluate |

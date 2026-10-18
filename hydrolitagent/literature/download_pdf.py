@@ -511,8 +511,11 @@ def curl_with_cookies(article_url: str, pdf_url: str, dest: Path) -> bool:
     """Two-step curl: visit article page to set cookies, then fetch PDF."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     cookie_jar = dest.parent / ".curl-cookies.txt"
+    # Only the cookies matter here; without -o the body (often a Cloudflare
+    # challenge page) would be dumped into the middle of our output.
     subprocess.run(
-        ["curl", "-sL", "-A", UA, "-c", str(cookie_jar), "-b", str(cookie_jar), article_url],
+        ["curl", "-sL", "-A", UA, "-c", str(cookie_jar), "-b", str(cookie_jar),
+         "-o", os.devnull, article_url],
         check=False, timeout=60,
     )
     subprocess.run(
@@ -536,7 +539,13 @@ def sync_to_zotero(pdf_path: Path, doi: str) -> int:
     # and CJK titles printed by zotero_sync don't crash with a UnicodeEncodeError.
     env = dict(os.environ)
     env.setdefault("PYTHONIOENCODING", "utf-8")
-    return subprocess.run(cmd, env=env).returncode
+    try:
+        # Budget covers the one-time index rebuild; steady state is seconds.
+        return subprocess.run(cmd, env=env, timeout=ZOTERO_SYNC_TIMEOUT).returncode
+    except subprocess.TimeoutExpired:
+        print("FAILED: Zotero sync timed out after 900s; the PDF is already saved.",
+              file=sys.stderr)
+        return 1
 
 
 def _load_dotenv() -> None:
@@ -550,12 +559,22 @@ def _load_dotenv() -> None:
             pass
 
 
+# Budget covers the one-time DOI-index rebuild; steady state is seconds.
+ZOTERO_SYNC_TIMEOUT = 900
+
+
+def _ensure_utf8_stdio() -> None:
+    """Emit UTF-8 so unicode log lines cannot crash a GBK Windows console."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def setup_check() -> int:
     """Verify a bare-host Zotero/GDrive setup is ready before the first sync."""
-    try:  # Windows consoles default to GBK; emit UTF-8 so captured output is clean
-        sys.stdout.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+    _ensure_utf8_stdio()
     _load_dotenv()
     ok = True
     required = ("ZOTERO_API_KEY", "ZOTERO_LIBRARY_ID", "GDRIVE_PAPERS_PATH")
@@ -623,6 +642,7 @@ def download_paper(
     """
     from hydrolitagent.literature.download_browser import download_with_browser, log
 
+    _ensure_utf8_stdio()
     out = Path(out_dir) if out_dir is not None else DEFAULT_OUT
 
     if arxiv:
@@ -643,7 +663,11 @@ def download_paper(
     log(f"{meta['title'][:80]}")
     log(f"  {meta['container']} | {meta['prefix']}")
 
-    dest = asyncio.run(download_with_browser(doi, meta, out))
+    try:
+        dest = asyncio.run(download_with_browser(doi, meta, out))
+    except Exception as e:  # a crashed flow is a download failure, not a traceback
+        log(f"FAILED: browser flow crashed ({type(e).__name__}: {e})")
+        return 1
     if not dest:
         log("FAILED: download did not produce a verified PDF")
         return 1

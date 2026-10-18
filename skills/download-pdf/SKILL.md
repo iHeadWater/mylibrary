@@ -64,9 +64,13 @@ uv run python scripts/download_paper.py --arxiv <id> --sync
 - **post-sync 核验**:Zotero 条目标题/作者与论文一致、`itemType=preprint`、child 为
   `linked_file → attachments:<file>.pdf`、PDF 已在 `GDRIVE_PAPERS_PATH`(= Zotero Desktop 的 Linked Attachment Base Directory)。
 
-Routing: `10.5194` Copernicus → curl · `10.1126` science.org → curl two-step ·
+Routing: `10.5194` Copernicus → curl · `10.1126` science.org → curl two-step，失败回退浏览器 ·
 `10.1016` → SD flow · `10.1029`/`10.1002` → Wiley pdfdirect · `10.1175` → AMS ·
-`10.1038` → Nature · `10.2139` → SSRN · else → manual phases.
+`10.1038` → Nature · `10.2139` → SSRN · else → 通用 flow（`citation_pdf_url` / PDF 锚点 → 导航下载）。
+
+脚本优先用**无头**浏览器；只有在无头无法通过人机验证时才弹出窗口，人点完**不需要回到终端**，
+程序会自动继续。进入流程前有一次验证检查：`HEADLESS_CHALLENGE_GRACE_S`（默认 15s）过不去就升级；
+流程中途再次出现的验证会继续等待，最多到该流程自身的超时。
 First run needs: `uv run playwright install chromium` (real Chrome via `channel="chrome"` if installed).
 
 **Why stealth matters:** a plain Playwright Chromium carries `navigator.webdriver=true` and the
@@ -85,7 +89,7 @@ launcher verbatim — it is the part that was re-derived painfully across sessio
 browser = await p.chromium.launch_persistent_context(
     user_data_dir=str(PROFILE_DIR),          # persistent dir -> cookies survive runs
     channel="chrome",                        # real Chrome, not bundled Chromium
-    headless=False,
+    headless=True,                           # 脚本默认无头；过不了验证再用 False 重开
     ignore_default_args=["--enable-automation"],
     downloads_path=str(DEST_DIR),
     viewport={"width": 1280, "height": 900},
@@ -320,13 +324,13 @@ d. Verify: `head -c 8 <file>` → should print `%PDF-`.
 
 **Slow/stalling note:** Copernicus can be slow (see `skills/paper-to-zotero`). If curl stalls, resume with `wget -c`, or use Python urllib with a long 120s timeout.
 
-### Phase 4b: science.org (curl two-step)
+### Phase 4b: science.org (curl first, browser fallback)
 
-Detect: DOI prefix `10.1126`. science.org papers are open access but have bot detection
-that blocks browser automation (even stealth Chrome). A two-step curl with a shared
-cookie jar bypasses it entirely.
+Detect: DOI prefix `10.1126`. science.org papers are open access, but the site now sits
+behind Cloudflare: the two-step curl often returns the "Just a moment..." challenge page
+instead of a PDF.
 
-**Flow:**
+**Preferred (still fastest when it works)** — two-step curl with a shared cookie jar:
 ```bash
 # Step 1: visit article page (sets cookies)
 curl -sL -A "<UA>" -c cookies.txt -b cookies.txt "https://www.science.org/doi/<DOI>"
@@ -335,8 +339,21 @@ curl -sL -A "<UA>" -c cookies.txt -b cookies.txt -o paper.pdf "https://www.scien
 rm cookies.txt
 ```
 
-The script's `curl_with_cookies()` function automates this. Do NOT use browser
-automation for science.org — it triggers infinite redirect loops or bot challenges.
+**Fallback — browser (verified on `10.1126/sciadv.aeb1692`, 2026-10-18).**
+An earlier version of this skill said "do NOT use browser automation for science.org";
+that is no longer true. What actually works:
+
+- The article page renders fine in real Chrome — Cloudflare clears in ~2s with the MCP profile.
+- Fetching the PDF from **inside** the page (`fetch()` / `context.request`) still returns 403.
+- Letting the **page navigate** to `/doi/pdf/<DOI>?download=true` starts a download;
+  Playwright surfaces it as `goto()` raising `Error: Download is starting`, so wrap the
+  navigation in `page.expect_download()` and `save_as()`.
+
+The script does this automatically via `generic_flow` after the curl attempt fails.
+
+In **script mode** no reply is needed after the human passes verification — the program
+waits and continues. In **manual MCP mode** (you driving `browser_*` tools), still ask the
+user to confirm they finished before you continue.
 
 ### Phase 5: Sync to Zotero (linked_file)
 
@@ -434,7 +451,7 @@ The script uses Zotero's portable `attachments:<filename>` scheme. Zotero resolv
 | **arXiv 多作者条目作者被拆错** | `zotero_sync` Crossref 回退按 `;` 拆分会把逗号分隔的多作者列表拆坏。用 `paper_to_zotero.fetch_arxiv`（注意其 `authors` 是 `"First Last"` 字符串列表，非 dict）拼 creators 后走 `_create_zotero_item`。 |
 | **stealth profile 长时间运行后浏览器上下文崩溃** | 约 8 次以上导航后 stealth temp profile 不稳定（TargetClosedError 级联）。改用 MCP profile（`%LOCALAPPDATA%/ms-playwright-mcp/mcp-chrome-*`）；脚本已自动优先选 MCP。 |
 | **AMS aop URL 返回 403** | 文章已发表，aop 不再可用。重定向到 published URL（如 `aies/5/4/...`），从中提取 vol/issue 构造 downloadpdf 路径。脚本 `ams_flow()` 已处理。 |
-| **science.org 浏览器无限重定向** | science.org 对自动化浏览器返回 ERR_TOO_MANY_REDIRECTS。改用 curl 两步法（先文章页设 cookie，再带 cookie 拉 PDF）。脚本已自动处理。 |
+| **science.org 浏览器无限重定向** | 旧的裸 Chromium 会被 bot 检测拦成 ERR_TOO_MANY_REDIRECTS。curl 两步法仍是首选；失败时脚本回退到真实 Chrome + `expect_download`（2026-10-18 实测于 `10.1126/sciadv.aeb1692`）。 |
 
 ## Deterministic Patterns (for agents)
 

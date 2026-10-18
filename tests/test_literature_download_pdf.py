@@ -649,3 +649,833 @@ def test_download_paper_arxiv_failure_returns_1(tmp_path, monkeypatch):
     monkeypatch.setattr(download_pdf, "curl_download", lambda url, dest: False)
     assert download_pdf.download_paper(arxiv="2608.18495", out_dir=tmp_path) == 1
 
+
+# ---------------------------------------------------------------------------
+# Browser fallback: challenge detection, generic flow, headless-first routing
+# (fake page/context only — no Playwright, no network)
+# ---------------------------------------------------------------------------
+
+
+class _FakeDownload:
+    """Stand-in for a Playwright Download; ``save_as`` writes the payload."""
+
+    def __init__(self, payload: bytes):
+        self.payload = payload
+
+    async def save_as(self, dest):
+        Path(dest).parent.mkdir(parents=True, exist_ok=True)
+        Path(dest).write_bytes(self.payload)
+
+
+class _FakeDownloadInfo:
+    """``await info.value`` resolves the next scripted outcome (or times out)."""
+
+    def __init__(self, page):
+        self._page = page
+
+    @property
+    def value(self):
+        async def _resolve():
+            outcome = self._page.pop_outcome()
+            if outcome is None:
+                raise TimeoutError("no download started")
+            return _FakeDownload(outcome["payload"])
+
+        return _resolve()
+
+
+class _FakeExpectDownload:
+    def __init__(self, page):
+        self._page = page
+
+    async def __aenter__(self):
+        self._page.expecting = True
+        return _FakeDownloadInfo(self._page)
+
+    async def __aexit__(self, *exc):
+        self._page.expecting = False
+        return False
+
+
+class FakePage:
+    """Minimal Playwright Page: scripted outcomes, no I/O."""
+
+    def __init__(self, outcomes=None, *, title="Article", challenge=False, url="https://doi.org/x",
+                 pdf_candidates=None):
+        self.outcomes = list(outcomes or [])
+        self.title_text = title
+        self.challenge = challenge
+        self.pdf_candidates = pdf_candidates
+        self.url = url
+        self.expecting = False
+        self.goto_calls: list[str] = []
+        self.evaluate_calls: list[str] = []
+
+    def pop_outcome(self):
+        return self.outcomes.pop(0) if self.outcomes else None
+
+    def peek_outcome(self):
+        return self.outcomes[0] if self.outcomes else None
+
+    def expect_download(self, timeout=None):
+        return _FakeExpectDownload(self)
+
+    async def goto(self, url, **kwargs):
+        self.goto_calls.append(url)
+        self.url = url
+        outcome = self.peek_outcome()
+        if outcome and outcome.get("goto_raises"):
+            raise RuntimeError("Download is starting")
+        return None
+
+    async def title(self):
+        return self.title_text
+
+    async def evaluate(self, script, *args):
+        self.evaluate_calls.append(script)
+        if "citation_pdf_url" in script:
+            return self.pdf_candidates or []
+        if isinstance(self.challenge, list):
+            return self.challenge.pop(0) if self.challenge else False
+        return self.challenge
+
+
+class FakeContext:
+    def __init__(self, page=None):
+        self._page = page or FakePage()
+        self.closed = 0
+
+    @property
+    def pages(self):
+        return [self._page]
+
+    async def new_page(self):
+        return self._page
+
+    async def close(self):
+        self.closed += 1
+
+
+def _pdf_payload() -> bytes:
+    return b"%PDF-1.7\nfake\n"
+
+
+def test_challenge_pending_detects_cloudflare_iframe():
+    """A visible Cloudflare challenge node counts as pending."""
+    from hydrolitagent.literature import download_browser
+
+    page = FakePage(title="Article", challenge=True)
+    assert asyncio.run(download_browser.challenge_pending(page)) is True
+
+
+def test_challenge_pending_detects_verification_title():
+    """A 'Just a moment' title counts as pending even without DOM nodes."""
+    from hydrolitagent.literature import download_browser
+
+    page = FakePage(title="Just a moment...", challenge=False)
+    assert asyncio.run(download_browser.challenge_pending(page)) is True
+
+
+def test_challenge_pending_ignores_normal_page():
+    """An ordinary article page is not a challenge."""
+    from hydrolitagent.literature import download_browser
+
+    page = FakePage(title="A paper", challenge=False)
+    assert asyncio.run(download_browser.challenge_pending(page)) is False
+
+
+def test_wait_challenge_clear_returns_true_when_clear():
+    """wait_challenge_clear reports success instead of returning None."""
+    from hydrolitagent.literature import download_browser
+
+    page = FakePage(title="A paper", challenge=False)
+    assert asyncio.run(download_browser.wait_challenge_clear(page, timeout_s=1)) is True
+
+
+def test_wait_challenge_clear_returns_false_on_timeout():
+    """A timeout is distinguishable from success (the old code returned None)."""
+    from hydrolitagent.literature import download_browser
+
+    page = FakePage(title="请稍候...", challenge=True)
+    assert asyncio.run(download_browser.wait_challenge_clear(page, timeout_s=0)) is False
+
+
+def test_generic_pdf_flow_uses_citation_pdf_url(tmp_path, monkeypatch):
+    """The first candidate that yields a PDF wins."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    page = FakePage([{"payload": _pdf_payload()}])
+    ctx = FakeContext(page)
+
+    async def candidates(p, doi):
+        return ["https://example.org/citation.pdf", "https://example.org/other.pdf"]
+
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    assert asyncio.run(download_browser.generic_flow(ctx, "10.1/x", {}, dest)) is True
+    assert dest.read_bytes() == _pdf_payload()
+    assert page.goto_calls[-1] == "https://example.org/citation.pdf"
+
+
+def test_generic_pdf_flow_falls_back_to_doi_pdf_url(tmp_path, monkeypatch):
+    """When the first candidate never downloads, the next one is tried."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    page = FakePage([None, {"payload": _pdf_payload()}])
+    ctx = FakeContext(page)
+
+    async def candidates(p, doi):
+        return ["https://example.org/a.pdf", "https://example.org/b.pdf"]
+
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    assert asyncio.run(download_browser.generic_flow(ctx, "10.1/x", {}, dest)) is True
+    assert dest.read_bytes() == _pdf_payload()
+
+
+def test_generic_pdf_flow_tolerates_download_started_goto_error(tmp_path, monkeypatch):
+    """Navigation raising 'Download is starting' still yields the file."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    page = FakePage([{"payload": _pdf_payload(), "goto_raises": True}])
+    ctx = FakeContext(page)
+
+    async def candidates(p, doi):
+        return ["https://example.org/paper.pdf"]
+
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    assert asyncio.run(download_browser.generic_flow(ctx, "10.1/x", {}, dest)) is True
+    assert dest.read_bytes() == _pdf_payload()
+
+
+def test_generic_pdf_flow_rejects_html_and_removes_dest(tmp_path, monkeypatch):
+    """An HTML page saved as .pdf is rejected and deleted."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    page = FakePage([{"payload": b"<html>not a pdf</html>"}, None])
+    ctx = FakeContext(page)
+
+    async def candidates(p, doi):
+        return ["https://example.org/a.pdf"]
+
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    assert asyncio.run(download_browser.generic_flow(ctx, "10.1/x", {}, dest)) is False
+    assert not dest.exists()
+
+
+def test_launch_mcp_passes_headless(tmp_path, monkeypatch):
+    """launch_mcp forwards the headless flag to Playwright."""
+    from hydrolitagent.literature import download_browser
+
+    seen = {}
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **kwargs):
+            seen.update(kwargs)
+            return object()
+
+    class FakePW:
+        chromium = FakeChromium()
+
+    monkeypatch.setattr(download_browser, "find_mcp_profile", lambda: tmp_path)
+
+    asyncio.run(download_browser.launch_mcp(FakePW(), tmp_path, headless=True))
+    assert seen["headless"] is True
+
+
+def test_wiley_flow_uses_shared_goto_download(tmp_path, monkeypatch):
+    """wiley_flow delegates to the shared primitive instead of duplicating it."""
+    from hydrolitagent.literature import download_browser
+
+    calls = []
+
+    async def spy(page, url, dest, timeout_ms=150_000):
+        calls.append(url)
+        return True
+
+    async def fake_new_page(ctx):
+        return FakePage()
+
+    monkeypatch.setattr(download_browser, "goto_download", spy)
+    monkeypatch.setattr(download_browser, "new_page", fake_new_page)
+
+    ok = asyncio.run(
+        download_browser.wiley_flow(FakeContext(), "10.1029/2025WR042530", tmp_path / "x.pdf")
+    )
+
+    assert ok is True
+    assert calls == [
+        "https://agupubs.onlinelibrary.wiley.com/doi/pdfdirect/10.1029/2025WR042530?download=true"
+    ]
+
+
+def _patch_router(monkeypatch, *, attempts, curl_ok=False):
+    """Wire download_with_browser's seams for routing tests."""
+    from hydrolitagent.literature import download_browser
+
+    recorded = {"headless": []}
+
+    def fake_curl(article, pdf, dest):
+        if curl_ok:
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            Path(dest).write_bytes(_pdf_payload())
+        return curl_ok
+
+    async def fake_attempt(*, headless, out_dir, prefix, doi, meta, dest):
+        recorded["headless"].append(headless)
+        result = attempts.pop(0) if attempts else (False, False)
+        if result[0]:
+            Path(dest).parent.mkdir(parents=True, exist_ok=True)
+            Path(dest).write_bytes(_pdf_payload())
+        return result
+
+    monkeypatch.setattr(download_browser, "curl_with_cookies", fake_curl)
+    monkeypatch.setattr(download_browser, "_attempt", fake_attempt)
+    return recorded
+
+
+def test_download_with_browser_unknown_prefix_uses_generic_flow(tmp_path, monkeypatch):
+    """An unscripted prefix is attempted instead of raising SystemExit."""
+    from hydrolitagent.literature import download_browser
+
+    recorded = _patch_router(monkeypatch, attempts=[(True, False)])
+    meta = {"prefix": "10.1080", "suffix": "x"}
+
+    dest = asyncio.run(download_browser.download_with_browser("10.1080/0000000", meta, tmp_path))
+
+    assert dest is not None and dest.exists()
+    assert recorded["headless"] == [True]
+
+
+def test_download_with_browser_1126_curl_failure_falls_back_to_browser(tmp_path, monkeypatch):
+    """science.org curl failure no longer ends the attempt."""
+    from hydrolitagent.literature import download_browser
+
+    recorded = _patch_router(monkeypatch, attempts=[(True, False)], curl_ok=False)
+    meta = {"prefix": "10.1126", "suffix": "sciadv.aeb1692"}
+
+    dest = asyncio.run(
+        download_browser.download_with_browser("10.1126/sciadv.aeb1692", meta, tmp_path)
+    )
+
+    assert dest is not None and dest.exists()
+    assert recorded["headless"] == [True]
+
+
+def test_download_with_browser_1126_curl_success_skips_browser(tmp_path, monkeypatch):
+    """A working curl path never launches a browser."""
+    from hydrolitagent.literature import download_browser
+
+    recorded = _patch_router(monkeypatch, attempts=[], curl_ok=True)
+    meta = {"prefix": "10.1126", "suffix": "sciadv.aeb1692"}
+
+    dest = asyncio.run(
+        download_browser.download_with_browser("10.1126/sciadv.aeb1692", meta, tmp_path)
+    )
+
+    assert dest is not None and dest.exists()
+    assert recorded["headless"] == []
+
+
+def test_download_with_browser_escalates_to_headed_when_challenge_persists(
+    tmp_path, monkeypatch, capsys
+):
+    """A pending challenge triggers one headed retry and an auto-continue notice."""
+    from hydrolitagent.literature import download_browser
+
+    recorded = _patch_router(monkeypatch, attempts=[(False, True), (True, False)])
+    meta = {"prefix": "10.1080", "suffix": "x"}
+
+    dest = asyncio.run(download_browser.download_with_browser("10.1080/0000000", meta, tmp_path))
+
+    assert dest is not None and dest.exists()
+    assert recorded["headless"] == [True, False]
+    assert "自动继续" in capsys.readouterr().out
+
+
+def test_download_with_browser_does_not_escalate_without_challenge(tmp_path, monkeypatch):
+    """A plain failure with no challenge must not pop a window."""
+    from hydrolitagent.literature import download_browser
+
+    recorded = _patch_router(monkeypatch, attempts=[(False, False)])
+    meta = {"prefix": "10.1080", "suffix": "x"}
+
+    dest = asyncio.run(download_browser.download_with_browser("10.1080/0000000", meta, tmp_path))
+
+    assert dest is None
+    assert recorded["headless"] == [True]
+
+
+def test_download_with_browser_removes_non_pdf_dest_on_failure(tmp_path, monkeypatch):
+    """A leftover non-PDF file is deleted rather than reported as success."""
+    from hydrolitagent.literature import download_browser
+
+    _patch_router(monkeypatch, attempts=[(False, False)])
+    dest = tmp_path / "10.1080.0000000.pdf"
+    dest.write_bytes(b"<html>nope</html>")
+    meta = {"prefix": "10.1080", "suffix": "x"}
+
+    assert (
+        asyncio.run(download_browser.download_with_browser("10.1080/0000000", meta, tmp_path))
+        is None
+    )
+    assert not dest.exists()
+
+
+def test_attempt_headless_uses_short_challenge_grace(tmp_path, monkeypatch):
+    """A headless attempt must not stall on a challenge nobody can solve."""
+    from hydrolitagent.literature import download_browser
+
+    recorded = {}
+
+    class FakePW:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+    async def fake_import():
+        return FakePW
+
+    async def fake_launch(pw, out, *, headless):
+        return FakeContext()
+
+    async def fake_scripted(ctx, prefix, doi, meta, dest):
+        return False
+
+    async def fake_generic(ctx, doi, meta, dest, *, challenge_timeout_s=None):
+        recorded["timeout"] = challenge_timeout_s
+        return False
+
+    async def no_challenge(ctx):
+        return False
+
+    monkeypatch.setattr(download_browser, "_import_playwright", fake_import)
+    monkeypatch.setattr(download_browser, "_launch_context", fake_launch)
+    monkeypatch.setattr(download_browser, "_run_scripted", fake_scripted)
+    monkeypatch.setattr(download_browser, "generic_flow", fake_generic)
+    monkeypatch.setattr(download_browser, "_any_challenge_pending", no_challenge)
+
+    asyncio.run(
+        download_browser._attempt(
+            headless=True,
+            out_dir=tmp_path,
+            prefix="10.1080",
+            doi="10.1080/x",
+            meta={"suffix": "x"},
+            dest=tmp_path / "x.pdf",
+        )
+    )
+
+    assert recorded["timeout"] == download_browser.HEADLESS_CHALLENGE_GRACE_S
+
+
+def test_attempt_falls_back_to_generic_when_scripted_flow_crashes(tmp_path, monkeypatch):
+    """A crashing scripted flow must not skip the generic fallback."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "x.pdf"
+
+    class FakePW:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+    async def fake_import():
+        return FakePW
+
+    async def fake_launch(pw, out, *, headless):
+        return FakeContext()
+
+    async def boom(ctx, prefix, doi, meta, dest):
+        raise RuntimeError("no pdf link")
+
+    async def fake_generic(ctx, doi, meta, d, *, challenge_timeout_s=None):
+        Path(d).write_bytes(_pdf_payload())
+        return True
+
+    async def no_challenge(ctx):
+        return False
+
+    monkeypatch.setattr(download_browser, "_import_playwright", fake_import)
+    monkeypatch.setattr(download_browser, "_launch_context", fake_launch)
+    monkeypatch.setattr(download_browser, "_run_scripted", boom)
+    monkeypatch.setattr(download_browser, "generic_flow", fake_generic)
+    monkeypatch.setattr(download_browser, "_any_challenge_pending", no_challenge)
+
+    ok, challenged = asyncio.run(
+        download_browser._attempt(
+            headless=True,
+            out_dir=tmp_path,
+            prefix="10.1038",
+            doi="10.1038/x",
+            meta={"suffix": "x"},
+            dest=dest,
+        )
+    )
+
+    assert ok is True and challenged is False
+    assert dest.exists()
+
+
+def test_download_paper_browser_crash_returns_1(tmp_path, monkeypatch, capsys):
+    """A crashing browser flow becomes exit code 1, not a traceback."""
+    from hydrolitagent.literature import download_browser, download_pdf
+
+    monkeypatch.setattr(
+        download_pdf,
+        "crossref_meta",
+        lambda doi: {
+            "title": "T",
+            "container": "C",
+            "type": "article",
+            "pii": None,
+            "prefix": "10.1080",
+            "suffix": "x",
+        },
+    )
+
+    async def boom(doi, meta, out_dir):
+        raise RuntimeError("browser exploded")
+
+    monkeypatch.setattr(download_browser, "download_with_browser", boom)
+
+    assert download_pdf.download_paper(doi="10.1080/0000000", out_dir=tmp_path) == 1
+    assert "browser exploded" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Review follow-ups: false positives, repeated challenges, real coverage
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_utf8_stdio_reconfigures_both_streams(monkeypatch):
+    """Windows defaults to GBK; unicode log lines must not crash the run."""
+    from hydrolitagent.literature import download_pdf
+
+    class FakeStream:
+        def __init__(self):
+            self.kwargs = None
+
+        def reconfigure(self, **kwargs):
+            self.kwargs = kwargs
+
+    out, err = FakeStream(), FakeStream()
+    monkeypatch.setattr(download_pdf.sys, "stdout", out)
+    monkeypatch.setattr(download_pdf.sys, "stderr", err)
+
+    download_pdf._ensure_utf8_stdio()
+
+    assert out.kwargs["encoding"] == "utf-8"
+    assert err.kwargs["encoding"] == "utf-8"
+
+
+def test_curl_with_cookies_does_not_print_the_article_body(monkeypatch, tmp_path):
+    """The cookie-setting request must not dump the Cloudflare page to stdout."""
+    import os
+
+    from hydrolitagent.literature import download_pdf
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return None
+
+    monkeypatch.setattr(download_pdf.subprocess, "run", fake_run)
+    download_pdf.curl_with_cookies("https://example.org/a", "https://example.org/a.pdf",
+                                   tmp_path / "x.pdf")
+
+    first = calls[0]
+    assert "-o" in first
+    assert first[first.index("-o") + 1] == os.devnull
+
+
+def test_entry_gate_ignores_weak_markers_that_match_paper_titles():
+    """'Security check of levee systems' must not gate the entry check."""
+    from hydrolitagent.literature import download_browser
+
+    page = FakePage(title="Security check of levee systems", challenge=False)
+
+    # The full marker set still treats it as suspicious once a flow is running…
+    assert asyncio.run(download_browser.challenge_pending(page)) is True
+    # …but the entry gate only trusts interstitial copy, so it proceeds at once.
+    assert asyncio.run(
+        download_browser.wait_challenge_clear(
+            page, timeout_s=1, markers=download_browser.ENTRY_TITLE_MARKERS
+        )
+    ) is True
+
+
+def test_challenge_pending_does_not_flag_paper_titles_with_verification():
+    """'Verification of a streamflow model' is a title, not a challenge."""
+    from hydrolitagent.literature import download_browser
+
+    page = FakePage(title="Verification of a streamflow model", challenge=False)
+    assert asyncio.run(download_browser.challenge_pending(page)) is False
+
+
+def test_generic_flow_waits_again_when_challenge_reappears(tmp_path, monkeypatch):
+    """A challenge on the PDF hop is waited out, not treated as a hard failure."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    page = FakePage([None, {"payload": _pdf_payload()}], challenge=[False, True, False])
+    ctx = FakeContext(page)
+
+    async def candidates(p, doi):
+        return ["https://example.org/a.pdf", "https://example.org/b.pdf"]
+
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    assert asyncio.run(download_browser.generic_flow(ctx, "10.1/x", {}, dest, challenge_timeout_s=1))
+    assert dest.read_bytes() == _pdf_payload()
+
+
+def test_generic_pdf_flow_anchor_fallback(tmp_path, monkeypatch):
+    """When no candidate downloads, the injected anchor is the last resort."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    page = FakePage([None, None, {"payload": _pdf_payload()}])
+    ctx = FakeContext(page)
+
+    async def candidates(p, doi):
+        return ["https://example.org/a.pdf", "https://example.org/b.pdf"]
+
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    assert asyncio.run(download_browser.generic_flow(ctx, "10.1/x", {}, dest)) is True
+    assert dest.read_bytes() == _pdf_payload()
+
+
+def test_pdf_url_candidates_keeps_doi_fallbacks_when_page_is_chatty():
+    """A page full of PDF links must not crowd out the DOI-layout fallbacks."""
+    from hydrolitagent.literature import download_browser
+
+    page = FakePage(
+        url="https://www.science.org/doi/10.1126/x",
+        pdf_candidates=[f"https://example.org/a{i}.pdf" for i in range(6)],
+    )
+
+    urls = asyncio.run(download_browser._pdf_url_candidates(page, "10.1126/x"))
+
+    assert len(urls) == 4
+    assert "https://www.science.org/doi/pdf/10.1126/x?download=true" in urls
+    assert "https://www.science.org/doi/pdfdirect/10.1126/x?download=true" in urls
+
+
+def test_run_scripted_unknown_prefix_returns_false(tmp_path):
+    """An unscripted prefix is a plain miss — never SystemExit."""
+    from hydrolitagent.literature import download_browser
+
+    ok = asyncio.run(
+        download_browser._run_scripted(
+            FakeContext(), "10.1080", "10.1080/x", {"suffix": "x"}, tmp_path / "x.pdf"
+        )
+    )
+    assert ok is False
+
+
+def test_run_scripted_missing_pii_returns_false(tmp_path):
+    """A Crossref record without PII degrades to False instead of exiting."""
+    from hydrolitagent.literature import download_browser
+
+    ok = asyncio.run(
+        download_browser._run_scripted(
+            FakeContext(), "10.1016", "10.1016/x", {"suffix": "x", "pii": None},
+            tmp_path / "x.pdf",
+        )
+    )
+    assert ok is False
+
+
+def test_launch_context_falls_back_to_stealth(monkeypatch, tmp_path):
+    """A locked MCP profile degrades to the stealth profile."""
+    from hydrolitagent.literature import download_browser
+
+    async def locked(pw, out, *, headless):
+        raise RuntimeError("profile is in use")
+
+    async def stealth(pw, out, *, headless):
+        return FakeContext()
+
+    monkeypatch.setattr(download_browser, "launch_mcp", locked)
+    monkeypatch.setattr(download_browser, "launch_stealth", stealth)
+
+    ctx = asyncio.run(download_browser._launch_context(object(), tmp_path, headless=True))
+    assert isinstance(ctx, FakeContext)
+
+
+def test_attempt_closes_context(tmp_path, monkeypatch):
+    """The browser context is closed before any retry can grab the profile."""
+    from hydrolitagent.literature import download_browser
+
+    ctx = FakeContext()
+
+    class FakePW:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+    async def fake_import():
+        return FakePW
+
+    async def fake_launch(pw, out, *, headless):
+        return ctx
+
+    async def fake_scripted(*a):
+        return False
+
+    async def fake_generic(ctx, doi, meta, dest, *, challenge_timeout_s=None):
+        return False
+
+    async def no_challenge(c):
+        return False
+
+    monkeypatch.setattr(download_browser, "_import_playwright", fake_import)
+    monkeypatch.setattr(download_browser, "_launch_context", fake_launch)
+    monkeypatch.setattr(download_browser, "_run_scripted", fake_scripted)
+    monkeypatch.setattr(download_browser, "generic_flow", fake_generic)
+    monkeypatch.setattr(download_browser, "_any_challenge_pending", no_challenge)
+
+    asyncio.run(
+        download_browser._attempt(
+            headless=True, out_dir=tmp_path, prefix="10.1080", doi="10.1080/x",
+            meta={"suffix": "x"}, dest=tmp_path / "x.pdf",
+        )
+    )
+
+    assert ctx.closed == 1
+
+
+def _wire_attempt(monkeypatch, page, ctx, *, scripted=None, generic=None):
+    """Point _attempt at fake plumbing; returns a dict recording what ran."""
+
+    class FakePW:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+    async def fake_import():
+        return FakePW
+
+    async def fake_launch(pw, out, *, headless):
+        return ctx
+
+    record = {"scripted": 0, "generic": 0}
+
+    async def default_scripted(*a):
+        record["scripted"] += 1
+        return False
+
+    async def default_generic(ctx, doi, meta, dest, *, challenge_timeout_s=None):
+        record["generic"] += 1
+        return False
+
+    async def no_challenge(c):
+        return False
+
+    monkeypatch.setattr(download_browser_module(), "_import_playwright", fake_import)
+    monkeypatch.setattr(download_browser_module(), "_launch_context", fake_launch)
+    monkeypatch.setattr(download_browser_module(), "_run_scripted", scripted or default_scripted)
+    monkeypatch.setattr(download_browser_module(), "generic_flow", generic or default_generic)
+    monkeypatch.setattr(download_browser_module(), "_any_challenge_pending", no_challenge)
+    return record
+
+
+def download_browser_module():
+    from hydrolitagent.literature import download_browser
+
+    return download_browser
+
+
+def test_attempt_escalates_without_running_flows_when_headless_challenge_persists(
+    tmp_path, monkeypatch
+):
+    """A headless entry challenge short-circuits straight to escalation."""
+    db = download_browser_module()
+    monkeypatch.setattr(db, "HEADLESS_CHALLENGE_GRACE_S", 0)
+    page = FakePage(title="Just a moment...", challenge=True)
+    record = _wire_attempt(monkeypatch, page, FakeContext(page))
+
+    ok, challenged = asyncio.run(
+        db._attempt(
+            headless=True, out_dir=tmp_path, prefix="10.1080", doi="10.1080/x",
+            meta={"suffix": "x"}, dest=tmp_path / "x.pdf",
+        )
+    )
+
+    assert (ok, challenged) == (False, True)
+    assert record == {"scripted": 0, "generic": 0}
+
+
+def test_attempt_runs_flows_when_headed_challenge_persists(tmp_path, monkeypatch):
+    """Headed never aborts at the entry check — AMS needs its own button press."""
+    db = download_browser_module()
+    monkeypatch.setattr(db, "HEADED_CHALLENGE_TIMEOUT_S", 0)
+    page = FakePage(title="Just a moment...", challenge=True)
+    record = _wire_attempt(monkeypatch, page, FakeContext(page))
+
+    asyncio.run(
+        db._attempt(
+            headless=False, out_dir=tmp_path, prefix="10.1175", doi="10.1175/x",
+            meta={"suffix": "x"}, dest=tmp_path / "x.pdf",
+        )
+    )
+
+    assert record["scripted"] == 1
+    assert record["generic"] == 1
+
+
+def test_attempt_propagates_no_access_without_generic_fallback(tmp_path, monkeypatch):
+    """Nature 'no entitlement' stops the run; no fallback, no second window."""
+    import pytest
+
+    from hydrolitagent.literature import download_browser
+
+    class FakePW:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+    async def fake_import():
+        return FakePW
+
+    async def fake_launch(pw, out, *, headless):
+        return FakeContext()
+
+    async def no_access(*a):
+        raise download_browser._NoAccess("subscription required")
+
+    async def generic_must_not_run(*a, **k):
+        raise AssertionError("generic_flow must not run when there is no access")
+
+    monkeypatch.setattr(download_browser, "_import_playwright", fake_import)
+    monkeypatch.setattr(download_browser, "_launch_context", fake_launch)
+    monkeypatch.setattr(download_browser, "_run_scripted", no_access)
+    monkeypatch.setattr(download_browser, "generic_flow", generic_must_not_run)
+
+    with pytest.raises(download_browser._NoAccess):
+        asyncio.run(
+            download_browser._attempt(
+                headless=True, out_dir=tmp_path, prefix="10.1038", doi="10.1038/x",
+                meta={"suffix": "x"}, dest=tmp_path / "x.pdf",
+            )
+        )
+
