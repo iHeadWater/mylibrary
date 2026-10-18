@@ -101,3 +101,5 @@ nav:
           - 不统一两套 Zotero 客户端: adr/0002-zotero-two-clients-boundary.md
           - 精读产物根可配置: adr/0003-configurable-literature-output-root.md
           - 下载逻辑收进包: adr/0004-download-entry-into-package.md
+          - 查重索引改为增量: adr/0005-zotero-incremental-doi-index.md
+          - 下载增加浏览器兜底: adr/0006-download-browser-fallback.md

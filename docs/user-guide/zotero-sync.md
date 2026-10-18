@@ -76,6 +76,31 @@ uv run python -m hydrolitagent.literature.zotero_sync <pdf_path> <doi> --skip-ex
 4. **创建父条目** 用 pyzotero Web API（仅在查重未命中时）
 5. **创建 linked_file 附件**，路径用可移植的 `attachments:<filename>`
 
+## 查重索引（增量）
+
+`.zotero-sync-index.json` 保存在 `$GDRIVE_PAPERS_PATH` 里，记录 `{DOI → Zotero key}`
+和一条**库水位线** `last_version`。
+
+Zotero Web API 的快速搜索 `q` **不索引 DOI 字段**，所以"这个 DOI 存在吗"没法直接问服务端。
+索引的作用就是把这个问题变成一次本地查表：
+
+| 情况 | 请求数 | 耗时 |
+|------|--------|------|
+| DOI 在索引里（命中） | 0 | 立即 |
+| 未命中，且库水位没动 | 1（只读水位） | ~1 秒 |
+| 未命中，库有改动 | 3（水位 + `since` 增量 + 删除列表） | 1–3 秒 |
+| 首次升级到 v2 / `--refresh-index` | ~60 | 约 5 分钟（一次性） |
+
+**为什么"库水位没动"就能断定不存在：** 全量扫描记录了扫描时刻的水位 V；此后每次增量把
+V→W 之间的新增、修改、删除全部并入；若当前水位仍是 W，说明窗口内没有任何变化，
+因此索引里没有的 DOI 就是真的没有。
+
+> ⚠️ **升级后第一次运行仍会做一次全量扫描**（约 5 分钟）。这是为了建立水位线，
+> 让之后每一次都能秒级判定。只发生一次，之后不会再有。
+
+索引写入是**原子**的（`.tmp` + `os.replace`），Google Drive 同步中断不会留下半个文件。
+重建索引：`--refresh-index`，或直接删掉 `.zotero-sync-index.json`。
+
 ## 为什么用 linked_file
 
 | 附件类型 | 存储 | 配额 |
