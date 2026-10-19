@@ -183,6 +183,18 @@ curl 失败后脚本走 `generic_flow`（2026-10-18 用 `10.1126/sciadv.aeb1692`
 3. 让**页面导航**到 `/doi/pdf/<DOI>?download=true`，Playwright 会以
    `Error: Download is starting` 的形式报告下载开始，用 `expect_download()` 包住即可保存。
 
+### 点按钮才出 PDF 的站点（sciengine / 10.3724）
+
+水利学报等中文期刊落在 **sciengine.com**，和国外出版社机制不同：
+
+- 它是单页应用，纯 HTTP 请求任何路径都只返回一份 3 KB 空壳；
+- 无头浏览器直接 403，所以 `10.3724` 归入**有头专属**；
+- PDF 由页面上的「预览PDF」触发，经两级 302 跳转后由浏览器在新标签页加载一次
+  `application/pdf`，实测约 30 秒才出现。
+
+因此对这类站点**不去猜 URL**，而是：等页面渲染出 PDF 控件 → 点击 → 在浏览器上下文层面
+监听 `application/pdf` 响应并直接存盘。宽限 120 秒，一抓到就立即返回；45 秒没反应会再点一次。
+
 ### 未写专用 flow 的出版社
 
 以前遇到未知 DOI 前缀会直接 `SystemExit("no scripted flow yet")`，现在改走通用 flow：

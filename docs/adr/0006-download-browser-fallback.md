@@ -45,6 +45,19 @@
   Playwright 以 `goto()` 抛 `Error: Download is starting` 的形式报告，
   用 `expect_download()` 包住即可 `save_as()` 保存。
 
+## 补充（2026-10-19）：点按钮才出 PDF 的站点
+
+sciengine（`10.3724`，水利学报等）暴露了第三类站点：PDF **没有可猜的 URL**。
+实测其流程是点页面上的「预览PDF」→ 两级 302 → `files.sciengine.com/...pdf`（`application/pdf`）
+→ 新标签页内联预览，整个过程约 30 秒。
+
+对这类站点，"找 PDF URL 再下载"从原理上就不成立，于是增加 `capture_pdf_response()`：
+在 **context** 层监听 `application/pdf` 响应（这样新标签页里的响应也能收到），
+点击页面自己的控件，把第一个真正的 PDF 存盘。宽限 120 秒、可提前返回、45 秒无响应再点一次。
+
+**为什么不写死 sciengine 的 API 路径**：那依赖对方的内部路由，改版即失效；
+响应捕获只依赖"最终会有一个 PDF 响应"这个稳定事实，对同类 JS 站点同样适用。
+
 ## 后果
 
 - 新出版商不需要再写专用 flow 才能下载；现有五个 flow 的业务逻辑一行未改。

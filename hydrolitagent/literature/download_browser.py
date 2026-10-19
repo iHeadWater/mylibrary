@@ -41,7 +41,32 @@ HEADLESS_FIRST = True
 # Publishers whose flow cannot work without a visible, human-verified session.
 # ScienceDirect answers a headless navigation with ERR_ABORTED and never shows
 # a challenge, so a headless attempt is pure waiting — go straight to headed.
-HEADED_ONLY_PREFIXES = frozenset({"10.1016"})
+HEADED_ONLY_PREFIXES = frozenset({"10.1016", "10.3724"})
+
+# Prefixes known to render their content client-side. Only these pay the
+# toolbar-render wait; every other site must not be slowed down by it.
+SPA_PREFIXES = frozenset({"10.3724"})
+
+# Sites whose PDF only appears after clicking their own control (and may take a
+# while to answer). Capture the application/pdf response instead of guessing URLs.
+PDF_RESPONSE_TIMEOUT_S = 120
+PDF_RESPONSE_PROGRESS_S = 15
+PDF_CONTROL_WAIT_S = 20  # SPA toolbars render a few seconds in
+PDF_CONTROL_SETTLE_S = 2  # click handlers bind after the control renders
+PDF_RESPONSE_RECLICK_S = 45  # re-click once if nothing came back
+
+# Only explicit preview/download controls. A bare "href contains pdf" anchor
+# matches supplementary files and paywalled links on ordinary article pages,
+# which would turn capture into a 120 s blocker with side effects.
+PDF_CONTROL_SELECTORS = (
+    "a:has-text('预览PDF')",
+    "a:has-text('预览 PDF')",
+    "a:has-text('Preview PDF')",
+    "button:has-text('Preview PDF')",
+    "button:has-text('Download PDF')",
+    "[aria-label*='Preview PDF' i]",
+    "[aria-label*='Download PDF' i]",
+)
 
 # Prefixes that have their own flow and navigate the page themselves. They must
 # NOT be pre-navigated: the entry navigation leaves a redirect chain in flight,
@@ -219,6 +244,134 @@ async def goto_download(page, url: str, dest: Path, timeout_ms: int = 150_000) -
     except Exception as e:
         log(f"  goto_download: {type(e).__name__} {str(e)[:80]}")
         return False
+
+
+async def _find_pdf_control(page):
+    """The page's own PDF/preview control, if it exposes one."""
+    for selector in PDF_CONTROL_SELECTORS:
+        try:
+            loc = page.locator(selector).first
+            if await loc.count() and await loc.is_visible():
+                return loc
+        except Exception:
+            continue
+    return None
+
+
+async def capture_pdf_response(ctx, page, dest: Path, *,
+                               timeout_s: float = PDF_RESPONSE_TIMEOUT_S,
+                               control_wait_s: float = 0) -> bool:
+    """Click the page's PDF control and capture the resulting PDF response.
+
+    For single-page-app publishers the PDF is not reachable at a guessable URL:
+    the page itself requests it (often via a redirect chain, sometimes into a new
+    tab) and the browser renders it inline. Watching the context for an
+    `application/pdf` response captures it regardless of the internal routing.
+    """
+    # SPAs render their toolbar a few seconds in; poll briefly before giving up.
+    deadline = time.time() + control_wait_s
+    control = await _find_pdf_control(page)
+    while control is None and time.time() < deadline:
+        await asyncio.sleep(1)
+        control = await _find_pdf_control(page)
+    if control is None:
+        return False
+
+    done = asyncio.Event()
+    tasks: set[asyncio.Task] = set()
+
+    def _content_type(resp) -> str:
+        try:
+            return str((resp.headers or {}).get("content-type", "")).lower()
+        except Exception:
+            return ""
+
+    def on_response(resp):
+        async def grab():
+            try:
+                if "application/pdf" not in _content_type(resp):
+                    return
+                if getattr(resp, "status", 200) != 200:
+                    return  # 206 = range request, would be a partial file
+                body = await resp.body()
+                if not body.startswith(b"%PDF-"):
+                    return
+                if b"%%EOF" not in body[-2048:]:
+                    log("  captured PDF looks truncated (no %%EOF); ignoring")
+                    return
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(body)
+                done.set()
+            except Exception:
+                pass  # a detached/aborted response is not fatal; keep waiting
+
+        task = asyncio.create_task(grab())
+        tasks.add(task)
+        task.add_done_callback(tasks.discard)
+
+    ctx.on("response", on_response)
+    started = time.time()
+    next_log = started + PDF_RESPONSE_PROGRESS_S
+    try:
+        if PDF_CONTROL_SETTLE_S:
+            await asyncio.sleep(PDF_CONTROL_SETTLE_S)
+        log("  clicking the page's own PDF control")
+        await control.click(timeout=10_000)
+        last_click = time.time()
+        while not done.is_set():
+            remaining = started + timeout_s - time.time()
+            if remaining <= 0:
+                log(f"  等待 PDF 响应超时({int(timeout_s)}s)")
+                return False
+            try:
+                await asyncio.wait_for(done.wait(), timeout=min(1.0, remaining))
+            except asyncio.TimeoutError:
+                pass
+            if not done.is_set() and time.time() >= next_log:
+                log(f"  等待 PDF 响应… (已等 {int(time.time() - started)}s)")
+                next_log += PDF_RESPONSE_PROGRESS_S
+            if not done.is_set() and time.time() - last_click >= PDF_RESPONSE_RECLICK_S:
+                # The first click may have landed before the handler was bound.
+                log("  no response yet; clicking again")
+                try:
+                    await control.click(timeout=10_000)
+                except Exception:
+                    pass
+                last_click = time.time()
+        return True
+    except Exception as e:
+        log(f"  capture_pdf_response: {type(e).__name__} {str(e)[:80]}")
+        # A click can fail after the PDF already arrived — keep that capture.
+        return done.is_set() and is_pdf_file(dest)
+    finally:
+        try:
+            ctx.remove_listener("response", on_response)
+        except Exception:
+            pass
+        for task in list(tasks):
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def fetch_pdf_bytes(ctx, url: str, dest: Path, referer: str = "") -> bool:
+    """Fetch the PDF through the browser context (shares cookies).
+
+    Needed when the PDF is served inline: navigating to it opens the viewer
+    instead of firing a download event.
+    """
+    try:
+        headers = {"Referer": referer} if referer else None
+        resp = await ctx.request.get(url, headers=headers, timeout=60_000)
+        body = await resp.body()
+        if body.startswith(b"%PDF"):
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(body)
+            return True
+        log(f"  fetch_pdf_bytes: not a PDF ({resp.status}, {len(body)} bytes)")
+    except Exception as e:
+        log(f"  fetch_pdf_bytes: {type(e).__name__} {str(e)[:60]}")
+    return False
 
 
 async def anchor_download(page, dest: Path, timeout_ms: int = 60_000) -> bool:
@@ -497,13 +650,24 @@ async def _launch_context(pw, downloads_dir: Path, *, headless: bool):
     )
 
 
-async def _pdf_url_candidates(page, doi: str) -> list[str]:
-    """PDF URLs advertised by the article page, plus the common DOI layouts."""
-    try:
-        raw = await page.evaluate(PDF_CANDIDATES_JS) or []
-    except Exception:
-        raw = []
-    page_urls = [u for u in raw if isinstance(u, str) and u.startswith("http")][:2]
+async def _pdf_url_candidates(page, doi: str, *, wait_s: float = 12.0) -> list[str]:
+    """PDF URLs advertised by the article page, plus the common DOI layouts.
+
+    Single-page-app publishers (sciengine) inject ``citation_pdf_url`` only after
+    their JS renders, so poll briefly instead of guessing from a blank shell.
+    """
+    deadline = time.time() + wait_s
+    while True:
+        try:
+            raw = await page.evaluate(PDF_CANDIDATES_JS) or []
+        except Exception:
+            raw = []
+        page_urls = [u for u in raw if isinstance(u, str) and u.startswith("http")]
+        if page_urls or time.time() >= deadline:
+            break
+        await asyncio.sleep(1)
+
+    page_urls = page_urls[:2]
     page_url = getattr(page, "url", "") or ""
     origin = "/".join(page_url.split("/")[:3]) if page_url.startswith("http") else "https://doi.org"
     # Keep the DOI-layout fallbacks in the budget: a page that advertises many
@@ -530,16 +694,33 @@ async def generic_flow(ctx, doi: str, meta: dict, dest: Path, *,
     """
     dest.unlink(missing_ok=True)
     page = await new_page(ctx)
-    try:
-        await page.goto(f"https://doi.org/{doi}", timeout=60_000, wait_until="domcontentloaded")
-    except Exception as e:
-        log(f"  generic: article page unavailable ({type(e).__name__})")
+    # _attempt may already have navigated for the challenge check; navigating
+    # again on the same page aborts the first redirect chain (ERR_ABORTED).
+    if not (getattr(page, "url", "") or "").startswith("http"):
+        try:
+            await page.goto(f"https://doi.org/{doi}", timeout=60_000,
+                            wait_until="domcontentloaded")
+        except Exception as e:
+            log(f"  generic: article page unavailable ({type(e).__name__})")
 
     if not await wait_challenge_clear(page, timeout_s=challenge_timeout_s):
         log("  generic: challenge not cleared")
         return False
 
+    # Sites that only expose a "preview/download PDF" button are authoritative:
+    # their URL candidates are unguessable, so trying them first just burns
+    # timeouts. Non-SPA sites get no render wait, so this costs them nothing.
+    prefix = str(meta.get("prefix") or "")
+    capture_wait = PDF_CONTROL_WAIT_S if prefix in SPA_PREFIXES else 0
+    if await capture_pdf_response(ctx, page, dest, control_wait_s=capture_wait):
+        if is_pdf_file(dest):
+            return True
+        dest.unlink(missing_ok=True)
+
     for url in await _pdf_url_candidates(page, doi):
+        # Bytes first: an inline PDF opens the viewer and never fires a download.
+        if await fetch_pdf_bytes(ctx, url, dest, referer=page.url):
+            return True
         if await goto_download(page, url, dest, GENERIC_DOWNLOAD_TIMEOUT_MS):
             if is_pdf_file(dest):
                 return True

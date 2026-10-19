@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import sys
+import time
 import types
 from pathlib import Path
 from unittest.mock import patch
@@ -734,16 +735,56 @@ class FakePage:
     async def evaluate(self, script, *args):
         self.evaluate_calls.append(script)
         if "citation_pdf_url" in script:
+            if callable(self.pdf_candidates):
+                return self.pdf_candidates()
             return self.pdf_candidates or []
         if isinstance(self.challenge, list):
             return self.challenge.pop(0) if self.challenge else False
         return self.challenge
 
 
+class _FakeResponse:
+    def __init__(self, body: bytes, status: int = 200):
+        self._body = body
+        self.status = status
+        self.url = ""
+
+    async def body(self):
+        return self._body
+
+
+class _FakeRequest:
+    """Stand-in for ``ctx.request`` (shares cookies, returns raw bytes)."""
+
+    def __init__(self, body: bytes | None):
+        self._body = body
+        self.calls: list[str] = []
+
+    async def get(self, url, headers=None, timeout=None):
+        self.calls.append(url)
+        if self._body is None:
+            return _FakeResponse(b"<html>403</html>", status=403)
+        return _FakeResponse(self._body)
+
+
 class FakeContext:
-    def __init__(self, page=None):
+    def __init__(self, page=None, *, pdf_bytes=None):
         self._page = page or FakePage()
         self.closed = 0
+        self.request = _FakeRequest(pdf_bytes)
+        self.response_handlers = []
+
+    def on(self, event, handler):
+        if event == "response":
+            self.response_handlers.append(handler)
+
+    def remove_listener(self, event, handler):
+        if handler in self.response_handlers:
+            self.response_handlers.remove(handler)
+
+    def emit_response(self, resp):
+        for handler in list(self.response_handlers):
+            handler(resp)
 
     @property
     def pages(self):
@@ -757,7 +798,7 @@ class FakeContext:
 
 
 def _pdf_payload() -> bytes:
-    return b"%PDF-1.7\nfake\n"
+    return b"%PDF-1.7\nfake\n%%EOF\n"
 
 
 def test_challenge_pending_detects_cloudflare_iframe():
@@ -1220,6 +1261,361 @@ def test_curl_with_cookies_does_not_print_the_article_body(monkeypatch, tmp_path
     first = calls[0]
     assert "-o" in first
     assert first[first.index("-o") + 1] == os.devnull
+
+
+def test_verify_pdf_decodes_utf16_literal_title(tmp_path):
+    """A UTF-16 /Title inside a literal string must not become 'þÿ E v a l...'."""
+    from hydrolitagent.literature import download_pdf
+
+    text = "Evaluating space-based methane detection"
+    raw = b"\xfe\xff" + text.encode("utf-16-be")
+    pdf = tmp_path / "utf16.pdf"
+    pdf.write_bytes(
+        b"%PDF-1.7\n1 0 obj << /Title (" + raw + b") /Author (\xfe\xff"
+        + "Reuland, Frances E.".encode("utf-16-be") + b") >> endobj\n%%EOF\n"
+    )
+
+    meta = download_pdf.verify_pdf(pdf)
+
+    assert meta.title == text
+    assert meta.authors == ["Reuland, Frances E."]
+
+
+def test_fetch_crossref_retries_once_before_giving_up(monkeypatch):
+    """A transient Crossref hiccup must not silently corrupt the item."""
+    from hydrolitagent.zotero import paper_to_zotero as p2z
+
+    calls = {"n": 0}
+
+    class FakeResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return b'{"message": {"title": ["Recovered"], "author": []}}'
+
+    def flaky(req, timeout=0):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("connection reset")
+        return FakeResp()
+
+    monkeypatch.setattr(p2z.urllib.request, "urlopen", flaky)
+
+    assert p2z.fetch_crossref("10.1038/x") == {"title": ["Recovered"], "author": []}
+    assert calls["n"] == 2
+
+
+class _FakeControl:
+    """Stands in for a Playwright locator for the page's PDF button."""
+
+    def __init__(self, ctx, response=None):
+        self._ctx = ctx
+        self._response = response
+        self.clicked = 0
+
+    async def click(self, timeout=None, **kwargs):
+        self.clicked += 1
+        if self._response is not None:
+            self._ctx.emit_response(self._response)
+
+
+class _FakePlaywrightResponse:
+    def __init__(self, body: bytes, content_type="application/pdf", url="https://x/y.pdf",
+                 status=200):
+        self.headers = {"content-type": content_type}
+        self.url = url
+        self.status = status
+        self._body = body
+
+    async def body(self):
+        return self._body
+
+
+def test_capture_pdf_response_saves_first_pdf_response(tmp_path, monkeypatch):
+    """The PDF arrives as a normal response; capture it as soon as it does."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    ctx = FakeContext()
+    control = _FakeControl(ctx, _FakePlaywrightResponse(_pdf_payload()))
+
+    async def find(p):
+        return control
+
+    monkeypatch.setattr(download_browser, "_find_pdf_control", find)
+
+    assert asyncio.run(
+        download_browser.capture_pdf_response(ctx, FakePage(), dest, timeout_s=10)
+    ) is True
+    assert dest.read_bytes() == _pdf_payload()
+    assert control.clicked == 1
+    assert ctx.response_handlers == []  # listener removed
+
+
+def test_capture_pdf_response_ignores_non_pdf_responses(tmp_path, monkeypatch):
+    """An HTML response must not be written as the PDF."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    ctx = FakeContext()
+    control = _FakeControl(
+        ctx, _FakePlaywrightResponse(b"<html>nope</html>", content_type="text/html")
+    )
+
+    async def find(p):
+        return control
+
+    monkeypatch.setattr(download_browser, "_find_pdf_control", find)
+
+    assert asyncio.run(
+        download_browser.capture_pdf_response(ctx, FakePage(), dest, timeout_s=0.3)
+    ) is False
+    assert not dest.exists()
+
+
+def test_capture_pdf_response_rejects_partial_pdf(tmp_path, monkeypatch):
+    """A 206 range response is a fragment; saving it would corrupt the file."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    ctx = FakeContext()
+    control = _FakeControl(
+        ctx, _FakePlaywrightResponse(_pdf_payload(), status=206)
+    )
+
+    async def find(p):
+        return control
+
+    monkeypatch.setattr(download_browser, "_find_pdf_control", find)
+
+    assert asyncio.run(
+        download_browser.capture_pdf_response(ctx, FakePage(), dest, timeout_s=0.3)
+    ) is False
+    assert not dest.exists()
+
+
+def test_capture_pdf_response_rejects_truncated_pdf(tmp_path, monkeypatch):
+    """Without %%EOF the body is incomplete even though it starts with %PDF-."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    ctx = FakeContext()
+    control = _FakeControl(ctx, _FakePlaywrightResponse(b"%PDF-1.7\nhalf a file\n"))
+
+    async def find(p):
+        return control
+
+    monkeypatch.setattr(download_browser, "_find_pdf_control", find)
+
+    assert asyncio.run(
+        download_browser.capture_pdf_response(ctx, FakePage(), dest, timeout_s=0.3)
+    ) is False
+    assert not dest.exists()
+
+
+def test_generic_flow_only_waits_for_a_control_on_spa_prefixes(tmp_path, monkeypatch):
+    """Non-SPA publishers must not pay the toolbar-render wait."""
+    from hydrolitagent.literature import download_browser
+
+    waits = {}
+
+    async def capture(ctx, page, dest, *, timeout_s=None, control_wait_s=0):
+        waits[page] = control_wait_s
+        return False
+
+    async def candidates(p, doi):
+        return []
+
+    monkeypatch.setattr(download_browser, "capture_pdf_response", capture)
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    asyncio.run(download_browser.generic_flow(
+        FakeContext(), "10.1080/x", {"prefix": "10.1080"}, tmp_path / "a.pdf"))
+    asyncio.run(download_browser.generic_flow(
+        FakeContext(), "10.3724/x", {"prefix": "10.3724"}, tmp_path / "b.pdf"))
+
+    values = list(waits.values())
+    assert values == [0, download_browser.PDF_CONTROL_WAIT_S]
+
+
+def test_capture_pdf_response_returns_false_without_a_control(tmp_path, monkeypatch):
+    """No PDF control on the page → return at once, do not burn the timeout."""
+    from hydrolitagent.literature import download_browser
+
+    async def find(p):
+        return None
+
+    monkeypatch.setattr(download_browser, "_find_pdf_control", find)
+
+    started = time.monotonic()
+    assert asyncio.run(
+        download_browser.capture_pdf_response(
+            FakeContext(), FakePage(), tmp_path / "x.pdf", timeout_s=30
+        )
+    ) is False
+    assert time.monotonic() - started < 2
+
+
+def test_capture_pdf_response_times_out(tmp_path, monkeypatch):
+    """No response within the budget → False, cleanly."""
+    from hydrolitagent.literature import download_browser
+
+    ctx = FakeContext()
+    control = _FakeControl(ctx, None)  # clicks, but no PDF ever arrives
+
+    async def find(p):
+        return control
+
+    monkeypatch.setattr(download_browser, "_find_pdf_control", find)
+
+    assert asyncio.run(
+        download_browser.capture_pdf_response(ctx, FakePage(), tmp_path / "x.pdf",
+                                              timeout_s=0.3)
+    ) is False
+    assert ctx.response_handlers == []
+
+
+def test_capture_pdf_response_early_exit_does_not_wait_for_timeout(tmp_path, monkeypatch):
+    """A PDF that arrives immediately must not wait out the 120s budget."""
+    from hydrolitagent.literature import download_browser
+
+    ctx = FakeContext()
+    control = _FakeControl(ctx, _FakePlaywrightResponse(_pdf_payload()))
+
+    async def find(p):
+        return control
+
+    monkeypatch.setattr(download_browser, "_find_pdf_control", find)
+
+    started = time.monotonic()
+    assert asyncio.run(
+        download_browser.capture_pdf_response(ctx, FakePage(), tmp_path / "x.pdf",
+                                              timeout_s=120)
+    ) is True
+    assert time.monotonic() - started < 5
+
+
+class _RetryControl:
+    """First click does nothing (handler not bound yet), second one works."""
+
+    def __init__(self, ctx, response):
+        self._ctx = ctx
+        self._response = response
+        self.clicked = 0
+
+    async def click(self, timeout=None, **kwargs):
+        self.clicked += 1
+        if self.clicked >= 2:
+            self._ctx.emit_response(self._response)
+
+
+def test_capture_pdf_response_reclicks_when_nothing_arrives(tmp_path, monkeypatch):
+    """A click sent before the SPA bound its handler must not sink the run."""
+    from hydrolitagent.literature import download_browser
+
+    monkeypatch.setattr(download_browser, "PDF_CONTROL_SETTLE_S", 0)
+    monkeypatch.setattr(download_browser, "PDF_RESPONSE_RECLICK_S", 0.2)
+
+    ctx = FakeContext()
+    control = _RetryControl(ctx, _FakePlaywrightResponse(_pdf_payload()))
+
+    async def find(p):
+        return control
+
+    monkeypatch.setattr(download_browser, "_find_pdf_control", find)
+
+    assert asyncio.run(
+        download_browser.capture_pdf_response(ctx, FakePage(), tmp_path / "x.pdf",
+                                              timeout_s=5)
+    ) is True
+    assert control.clicked == 2
+
+
+def test_generic_flow_tries_response_capture_before_url_candidates(tmp_path, monkeypatch):
+    """The control-driven path is authoritative when the page offers it."""
+    from hydrolitagent.literature import download_browser
+
+    order = []
+
+    async def capture(ctx, page, dest, *, timeout_s=None, control_wait_s=0):
+        order.append("capture")
+        Path(dest).write_bytes(_pdf_payload())
+        return True
+
+    async def candidates(p, doi):
+        order.append("candidates")
+        return ["https://example.org/a.pdf"]
+
+    monkeypatch.setattr(download_browser, "capture_pdf_response", capture)
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    dest = tmp_path / "out.pdf"
+    assert asyncio.run(
+        download_browser.generic_flow(FakeContext(), "10.1/x", {}, dest)
+    ) is True
+    assert order == ["capture"]
+
+
+def test_headless_only_prefixes_include_3724():
+    """sciengine answers headless with 403; do not waste an attempt."""
+    from hydrolitagent.literature import download_browser
+
+    assert "10.3724" in download_browser.HEADED_ONLY_PREFIXES
+
+
+def test_generic_pdf_flow_uses_context_request_bytes(tmp_path, monkeypatch):
+    """An inline PDF opens the viewer instead of downloading — fetch bytes."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    page = FakePage(url="https://www.sciengine.com/JHE/doi/x")
+    ctx = FakeContext(page, pdf_bytes=_pdf_payload())
+
+    async def candidates(p, doi):
+        return ["https://www.sciengine.com/0559-9350/x.pdf"]
+
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    assert asyncio.run(download_browser.generic_flow(ctx, "10.3724/x", {}, dest)) is True
+    assert dest.read_bytes() == _pdf_payload()
+    # No navigation to the PDF was needed.
+    assert page.goto_calls == []
+
+
+def test_pdf_url_candidates_polls_until_the_spa_renders():
+    """sciengine injects citation_pdf_url only after its JS runs."""
+    from hydrolitagent.literature import download_browser
+
+    seq = [[], ["https://www.sciengine.com/0559-9350/x.pdf"]]
+    page = FakePage(
+        url="https://www.sciengine.com/JHE/doi/10.3724/x",
+        pdf_candidates=lambda: seq.pop(0) if len(seq) > 1 else seq[0],
+    )
+
+    urls = asyncio.run(download_browser._pdf_url_candidates(page, "10.3724/x", wait_s=5))
+
+    assert urls[0] == "https://www.sciengine.com/0559-9350/x.pdf"
+
+
+def test_generic_flow_skips_navigation_when_page_is_already_loaded(tmp_path, monkeypatch):
+    """A second goto on the same page aborts the first redirect chain."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    page = FakePage([{"payload": _pdf_payload()}], url="https://publisher.example/paper")
+    ctx = FakeContext(page)
+
+    async def candidates(p, doi):
+        return ["https://publisher.example/paper.pdf"]
+
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    assert asyncio.run(download_browser.generic_flow(ctx, "10.1/x", {}, dest)) is True
+    assert page.goto_calls == ["https://publisher.example/paper.pdf"]
 
 
 def test_entry_gate_ignores_weak_markers_that_match_paper_titles():
