@@ -42,15 +42,22 @@ if _ENV_FILE.exists():
     load_dotenv(_ENV_FILE)
 
 
-def fetch_crossref(doi: str) -> dict | None:
-    """Fetch rich metadata from Crossref. Returns None on failure."""
+def fetch_crossref(doi: str, attempts: int = 2) -> dict | None:
+    """Fetch rich metadata from Crossref. Returns None on failure.
+
+    Retries once: a single transient failure used to drop the whole item into
+    the PDF-metadata fallback, which produced garbage titles for some publishers.
+    """
     url = f"https://api.crossref.org/works/{doi}"
     req = urllib.request.Request(url, headers={"User-Agent": CROSSREF_UA})
-    try:
-        resp = urllib.request.urlopen(req, timeout=10)
-        return json.loads(resp.read()).get("message")
-    except Exception:
-        return None
+    for attempt in range(attempts):
+        try:
+            resp = urllib.request.urlopen(req, timeout=10)
+            return json.loads(resp.read()).get("message")
+        except Exception:
+            if attempt + 1 < attempts:
+                time.sleep(1)
+    return None
 
 
 def fetch_arxiv(arxiv_id: str) -> dict | None:

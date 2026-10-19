@@ -327,6 +327,19 @@ def decode_base64_file(input_path: str | Path, output_path: str | Path) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _decode_pdf_string(raw: bytes) -> str:
+    """Decode a PDF text string, honouring a UTF-16 byte-order mark.
+
+    Publishers embed UTF-16 titles inside literal strings; decoding those as
+    latin-1 yields mojibake such as ``'þÿ E v a l u a t i n g'``.
+    """
+    if raw.startswith(b"\xfe\xff"):
+        return raw[2:].decode("utf-16-be", errors="replace")
+    if raw.startswith(b"\xff\xfe"):
+        return raw[2:].decode("utf-16-le", errors="replace")
+    return raw.decode("latin-1", errors="replace")
+
+
 def verify_pdf(pdf_path: str | Path) -> PdfMetadata:
     """Verify a PDF file and extract its metadata.
 
@@ -373,7 +386,7 @@ def verify_pdf(pdf_path: str | Path) -> PdfMetadata:
     if not metadata.title:
         title_match = re.search(rb"/Title\s*\(([^)]*)\)", content)
         if title_match:
-            metadata.title = title_match.group(1).decode("latin-1", errors="replace")
+            metadata.title = _decode_pdf_string(title_match.group(1))
 
     # Author extraction
     author_match = re.search(rb"/Author\s*<([0-9A-Fa-f]+)>", content)
@@ -389,7 +402,7 @@ def verify_pdf(pdf_path: str | Path) -> PdfMetadata:
     if not metadata.authors:
         author_match = re.search(rb"/Author\s*\(([^)]*)\)", content)
         if author_match:
-            author_str = author_match.group(1).decode("latin-1", errors="replace")
+            author_str = _decode_pdf_string(author_match.group(1))
             metadata.authors = [a.strip() for a in author_str.split(";")]
 
     # DOI extraction (from dc:identifier or prism:doi)
