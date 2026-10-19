@@ -229,47 +229,101 @@ def _create_zotero_item(
 # it persists across repo re-clones and carries over to other machines sharing
 # the same GDrive folder.
 #
-# A HIT is authoritative.  A MISS is NOT: items created outside this pipeline
-# (Zotero desktop, the Beaver importer, the container pipeline) never wrote to
-# the index, so absence means "not indexed", not "does not exist".  Scanning on
-# a miss costs one scan per genuinely-new paper, and is what stops an existing
-# record from silently becoming a duplicate one.
+# A HIT is authoritative.  A MISS is authoritative too **once the ledger
+# carries a library watermark**: a full scan records the library version V it
+# corresponds to, every later run replays the changes since V (adds, edits,
+# deletes, trashes), and if the version still equals V then nothing changed —
+# so a DOI absent from the ledger genuinely does not exist.  An index without a
+# watermark (v1, corrupt, another library) cannot prove that and is rebuilt
+# once, which also records the watermark.  See ADR-0005.
 
 INDEX_FILENAME = ".zotero-sync-index.json"
+INDEX_SCHEMA_VERSION = 2
 
 
 def _index_path(gdrive_dir: str | Path) -> Path:
     return Path(gdrive_dir) / INDEX_FILENAME
 
 
-def _load_index(gdrive_dir: str | Path) -> dict[str, str]:
-    """Load {doi: zotero_key} from the cached index (best-effort)."""
+def _load_index_state(gdrive_dir: str | Path) -> dict:
+    """Load {version, last_version, items} from the cached index (best-effort).
+
+    A v1 file has no watermark and is reported as ``last_version = 0``, which
+    forces exactly one rebuild so the watermark can be established.
+    """
     p = _index_path(gdrive_dir)
     if p.exists():
         try:
             payload = json.loads(p.read_text(encoding="utf-8"))
             items = payload.get("items")
             if isinstance(items, dict):
-                return items
+                return {
+                    "version": int(payload.get("version") or 0),
+                    "last_version": int(payload.get("last_version") or 0),
+                    "library_id": str(payload.get("library_id") or ""),
+                    "items": items,
+                }
         except Exception:
             pass
-    return {}
+    return {"version": 0, "last_version": 0, "library_id": "", "items": {}}
 
 
-def _save_index(gdrive_dir: str | Path, items: dict[str, str]) -> None:
-    """Persist {doi: zotero_key}. Best-effort — never fails the sync."""
+def _load_index(gdrive_dir: str | Path) -> dict[str, str]:
+    """Load {doi: zotero_key} from the cached index (best-effort)."""
+    return _load_index_state(gdrive_dir)["items"]
+
+
+def _save_index(
+    gdrive_dir: str | Path,
+    items: dict[str, str],
+    *,
+    last_version: int | None = None,
+    library_id: str | None = None,
+) -> None:
+    """Persist {doi: zotero_key}. Best-effort — never fails the sync.
+
+    ``last_version=None`` / ``library_id=None`` keep the values already on disk:
+    bookkeeping writes after creating an item must not reset the watermark to 0
+    or erase the library identity.  The write is atomic so an interrupted save
+    leaves either the old or the new file, never half.
+    """
     try:
         from datetime import datetime, timezone
+        path = _index_path(gdrive_dir)
+        current = _load_index_state(gdrive_dir)
+        if last_version is None:
+            last_version = current["last_version"]
+        if library_id is None:
+            library_id = current["library_id"]
         payload = {
-            "version": 1,
+            "version": INDEX_SCHEMA_VERSION,
             "updated": datetime.now(timezone.utc).isoformat(),
+            "last_version": last_version,
+            "library_id": library_id,
             "items": items,
         }
-        _index_path(gdrive_dir).write_text(
-            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
-        )
-    except OSError:
-        pass
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError as e:
+        # Never fails the sync, but a persistent failure means the watermark
+        # cannot advance — say so instead of silently re-scanning forever.
+        print(f"Note: could not write DOI index ({e})", file=sys.stderr)
+
+
+def _dois_of_item(d: dict) -> list[str]:
+    """Every DOI an item advertises: the DOI field plus ``extra`` DOI lines."""
+    dois: list[str] = []
+    doi = (d.get("DOI") or "").strip()
+    if doi:
+        dois.append(doi)
+    for line in (d.get("extra") or "").splitlines():
+        line = line.strip()
+        if line.startswith("DOI: "):
+            extra_doi = line[5:].strip()
+            if extra_doi:
+                dois.append(extra_doi)
+    return dois
 
 
 def _scan_server_dois(zot) -> dict[str, str]:
@@ -284,31 +338,122 @@ def _scan_server_dois(zot) -> dict[str, str]:
         d = it.get("data", {}) or {}
         if not key or d.get("itemType") == "attachment":
             continue
-        doi = (d.get("DOI") or "").strip()
-        if doi:
+        for doi in _dois_of_item(d):
             items.setdefault(doi, key)
-        extra = d.get("extra") or ""
-        for line in extra.splitlines():
-            line = line.strip()
-            if line.startswith("DOI: "):
-                items.setdefault(line[5:].strip(), key)
     return items
+
+
+def _deleted_item_keys(payload) -> set[str]:
+    """Keys removed since a version; accepts the payload shapes Zotero returns."""
+    out: set[str] = set()
+    if isinstance(payload, dict):
+        payload = payload.get("items", [])
+    for entry in payload or []:
+        if isinstance(entry, str):
+            out.add(entry)
+        elif isinstance(entry, dict):
+            key = entry.get("key") or (entry.get("data") or {}).get("key")
+            if key:
+                out.add(key)
+    return out
+
+
+def _fetch_delta(zot, since: int) -> tuple[list[dict], set[str], int]:
+    """Items changed since ``since``. The version is read BEFORE fetching.
+
+    Reading it afterwards would let an edit made during the fetch slip between
+    the two: it would be newer than the scan but older than the stored
+    watermark, and therefore never replayed.
+    """
+    new_version = zot.last_modified_version()
+    if new_version <= since:
+        return [], set(), new_version
+    # includeTrashed: moving an item to the trash is delivered as an item
+    # update (data.deleted=1), not through /deleted. Without it the delta can
+    # never see a trashed item and a stale ledger hit would never self-heal.
+    changed = list(
+        zot.everything(zot.top(since=since, limit=100, includeTrashed=1))
+    )
+    deleted = _deleted_item_keys(zot.deleted(since=since))
+    return changed, deleted, new_version
+
+
+def _merge_delta(
+    items: dict[str, str], changed: list[dict], deleted_keys: set[str]
+) -> dict[str, str]:
+    """Apply a delta to the ledger: changed items win, deleted keys disappear."""
+    changed_keys = {it.get("key") for it in changed if it.get("key")}
+    drop = set(deleted_keys) | changed_keys
+    merged = {doi: key for doi, key in items.items() if key not in drop}
+    for it in changed:
+        key = it.get("key")
+        if not key or key in deleted_keys:
+            continue
+        d = it.get("data") or {}
+        if d.get("deleted"):
+            continue  # moved to the trash — already dropped from `merged` above
+        if d.get("itemType") == "attachment":
+            continue
+        for doi in _dois_of_item(d):
+            merged[doi] = key
+    return merged
+
+
+def _rebuild_index(zot) -> tuple[dict[str, str], int]:
+    """Full scan plus the watermark it corresponds to."""
+    version = zot.last_modified_version()
+    return _scan_server_dois(zot), version
 
 
 def _existing_key(zot, doi: str, gdrive_dir: str | Path, refresh: bool) -> str | None:
     """Return an existing Zotero key for ``doi``, or None.
 
-    A hit in the cached index is authoritative and costs nothing.  A miss forces
-    a server scan, because the index only knows about items this pipeline
-    created — see the note above ``INDEX_FILENAME``.  ``refresh=True`` forces a
-    scan even on a hit.
+    A hit costs nothing. A miss is authoritative **only** when it can be proven
+    against the library watermark: if the library version has not moved since
+    the index was last reconciled, nothing was added, changed or deleted, so an
+    absent DOI genuinely does not exist. Without a watermark (a v1 index) the
+    only way to prove that is a full rebuild — done once, which also records the
+    watermark for every later run. ``refresh=True`` forces that rebuild.
     """
-    items = _load_index(gdrive_dir)
-    path = _index_path(gdrive_dir)
-    if refresh or not path.exists() or doi not in items:
-        print("   Scanning library for existing DOI (may take a while)...", flush=True)
-        items = _scan_server_dois(zot)
-        _save_index(gdrive_dir, items)
+    state = _load_index_state(gdrive_dir)
+    current_library = str(getattr(zot, "library_id", "") or "")
+
+    def _rebuild() -> str | None:
+        items, version = _rebuild_index(zot)
+        _save_index(gdrive_dir, items, last_version=version, library_id=current_library)
+        return items.get(doi)
+
+    if not refresh and doi in state["items"]:
+        return state["items"][doi]
+
+    # A different library (or an index from before the field existed) makes
+    # every entry unverifiable — rebuild rather than hand back a foreign key.
+    foreign = bool(state["library_id"]) and state["library_id"] != current_library
+    if refresh or foreign or state["last_version"] <= 0:
+        print("   Rebuilding DOI index (one-time full scan)...", flush=True)
+        return _rebuild()
+
+    try:
+        changed, deleted, new_version = _fetch_delta(zot, state["last_version"])
+    except Exception as e:  # never trust an unverified miss
+        print(f"   DOI index delta failed ({e}); rebuilding", flush=True)
+        return _rebuild()
+
+    if new_version < state["last_version"]:
+        # Library version went backwards (different library / restored backup).
+        return _rebuild()
+
+    if new_version == state["last_version"]:
+        return None
+
+    try:
+        items = _merge_delta(state["items"], changed, deleted)
+    except Exception as e:  # malformed delta — a rebuild is safer than a duplicate
+        print(f"   DOI index merge failed ({e}); rebuilding", flush=True)
+        return _rebuild()
+
+    _save_index(gdrive_dir, items, last_version=new_version, library_id=current_library)
+    print(f"   DOI index: {len(changed)} changed, {len(deleted)} deleted", flush=True)
     return items.get(doi)
 
 
@@ -381,22 +526,26 @@ def main():
         print(f"Error: Invalid PDF: {e}", file=sys.stderr)
         sys.exit(3)
 
-    # -- Enrich metadata ------------------------------------------------
+    # -- Enrich metadata (lazily) ---------------------------------------
     # Single source of truth = paper_to_zotero.build_item() (Crossref →
     # arXiv API → Semantic Scholar). arXiv DOIs (10.48550/arXiv.*) are not
     # registered with Crossref, so the old Crossref-only builder produced
     # sparse/mangled records for preprints; delegating fixes that.
-    # (Lazy import: keeps zotero_sync importable without pyzotero.)
-    from hydrolitagent.zotero.paper_to_zotero import build_item
-
+    # Called only when a record is actually needed: attaching a PDF to an
+    # existing item must not pay metadata latency (or fail on a Crossref outage).
     fallback_meta = {
         "title": pdf_meta.title or "",
         "author": pdf_meta.authors[0] if pdf_meta.authors else "",
     }
-    item_data, extra_fields = build_item(doi, fallback_meta)
+
+    def _build():
+        from hydrolitagent.zotero.paper_to_zotero import build_item
+
+        return build_item(doi, fallback_meta)
 
     # -- Dry-run: preview only --------------------------------------------
     if args.dry_run:
+        item_data, extra_fields = _build()
         print("[dry-run] Would:")
         print(f"  Copy PDF to: {gdrive_dir / dest_filename}")
         print(f"  DOI:         {doi}")
@@ -512,6 +661,9 @@ def main():
                 print(f"  Attachment: {attach_key} (linked_file -> {attach_path})")
                 print(f"  PDF copied: {gdrive_path}")
             return
+
+    # -- New item: only now is metadata enrichment needed ------------------
+    item_data, extra_fields = _build()
 
     # -- Copy PDF to Google Drive folder ----------------------------------
     try:

@@ -42,9 +42,10 @@ uv run python scripts/download_paper.py --setup-check
 ```bash
 uv run python scripts/download_paper.py --arxiv 2605.00850 --sync     # arXiv
 uv run python scripts/download_paper.py --doi 10.5194/hess-... --sync # 期刊 DOI
+uv run python scripts/download_paper.py --title "<标题>" --sync       # 只有标题：检索解析 DOI
 ```
 
-- 走 curl/urllib(arXiv、science.org、Copernicus 等 OA 源)无需 playwright;付费墙(SD/Wiley/Nature)才需要浏览器 + 机构会话。
+- arXiv 与 Copernicus 走 curl,无需 playwright;science.org 先 curl,**失败会回退浏览器**(需要 playwright);付费墙(SD/Wiley/Nature)同样需要浏览器 + 机构会话。
 - 建条目统一由 `paper_to_zotero.build_item()` 生成:arXiv 记录为 `preprint`(真实摘要/日期/`archiveID: arXiv:…`),不再有 Crossref-404 的 PDF 兜底错配。
 - **幂等/补挂**:同 DOI 已存在时把 PDF **补挂到既有条目**(不再是直接跳过);同槽位同内容则幂等跳过;同槽位内容不同默认不动(`--replace` 才覆盖);`--allow-duplicate` 是强制新建条目(会造重复)。
 - 凭据来自 `.env`(`ZOTERO_API_KEY`/`ZOTERO_LIBRARY_ID`/`GDRIVE_PAPERS_PATH`),不依赖容器 TOML。

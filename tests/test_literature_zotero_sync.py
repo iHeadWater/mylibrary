@@ -219,6 +219,8 @@ def _mock_zot_scan(items):
     mock_zot = MagicMock()
     mock_zot.top.return_value = items
     mock_zot.everything.side_effect = lambda it: iter(it)
+    mock_zot.last_modified_version.return_value = 1
+    mock_zot.deleted.return_value = {"items": []}
     return mock_zot
 
 
@@ -271,13 +273,14 @@ def test_existing_key_hit_in_index_costs_no_scan(tmp_path):
     mock_zot.top.assert_not_called()
 
 
-def test_existing_key_miss_forces_scan_even_when_index_is_fresh(tmp_path):
-    """Regression: a freshly-written index that LACKS the DOI must not be trusted.
+def test_existing_key_miss_without_watermark_forces_one_scan(tmp_path):
+    """An index with no watermark cannot vouch for a miss, so it rebuilds once.
 
-    The index only knows about items this pipeline created.  Records added by
-    Zotero desktop, the Beaver importer or the container pipeline are absent
-    from it, so treating a miss as "does not exist" silently created a duplicate
-    Zotero item for a paper that was already in the library.
+    Records added by Zotero desktop, the Beaver importer or the container
+    pipeline are absent from this ledger; treating a miss as "does not exist"
+    without checking would silently create a duplicate Zotero item. With a
+    watermark that check costs one request (see the authoritative-miss test);
+    without one it costs a rebuild — which then writes the watermark.
     """
     _save_index(tmp_path, {"10.9999/unrelated": "ZZZZ9999"})  # exists and is fresh
     mock_zot = _mock_zot_scan([
@@ -423,6 +426,7 @@ def _run_sync_main(
     children=(),
     existing_key=EXISTING_KEY,
     gdrive_seed=None,
+    build_item=None,
 ):
     """Drive ``zotero_sync.main()`` end-to-end with a mocked Zotero client.
 
@@ -446,8 +450,11 @@ def _run_sync_main(
     monkeypatch.setattr(zsync, "verify_pdf", lambda p: _make_pdf_meta(doi=DOI))
     monkeypatch.setattr(zsync, "_existing_key", lambda *a, **k: existing_key)
     monkeypatch.setattr(
-        p2z, "build_item", lambda doi, fallback: ({"itemType": "journalArticle",
-                                                   "title": "T", "creators": []}, {})
+        p2z,
+        "build_item",
+        build_item
+        or (lambda doi, fallback: ({"itemType": "journalArticle",
+                                    "title": "T", "creators": []}, {})),
     )
 
     mock_zot = MagicMock()
@@ -581,3 +588,291 @@ def test_existing_attachments_returns_empty_on_lookup_failure():
     mock_zot = MagicMock()
     mock_zot.children.side_effect = RuntimeError("network down")
     assert _existing_attachments(mock_zot, "EXIST123") == []
+
+
+# ---------------------------------------------------------------------------
+# Incremental index (schema v2 + library watermark)
+# ---------------------------------------------------------------------------
+
+import json as _json  # noqa: E402
+
+from hydrolitagent.literature.zotero_sync import (  # noqa: E402
+    _fetch_delta,
+    _load_index_state,
+    _merge_delta,
+)
+
+
+def _mock_zot_delta(*, version=500, changed=(), deleted=()):
+    """MagicMock wired for the delta path."""
+    z = MagicMock()
+    z.last_modified_version.return_value = version
+    z.top.return_value = list(changed)
+    z.everything.side_effect = lambda it: iter(it)
+    z.deleted.return_value = {"items": list(deleted)}
+    return z
+
+
+def _write_index(tmp_path, payload):
+    (tmp_path / ".zotero-sync-index.json").write_text(
+        _json.dumps(payload), encoding="utf-8"
+    )
+
+
+def test_save_index_writes_version_2_and_last_version(tmp_path):
+    """The on-disk schema carries the watermark so misses can be trusted."""
+    _save_index(tmp_path, {"10.1234/x": "KEY1"}, last_version=123)
+    payload = _json.loads((tmp_path / ".zotero-sync-index.json").read_text(encoding="utf-8"))
+
+    assert payload["version"] == 2
+    assert payload["last_version"] == 123
+    assert payload["items"] == {"10.1234/x": "KEY1"}
+
+
+def test_save_index_preserves_last_version_when_not_given(tmp_path):
+    """Post-create bookkeeping must not silently reset the watermark to 0."""
+    _save_index(tmp_path, {"10.1234/x": "KEY1"}, last_version=123)
+    _save_index(tmp_path, {"10.1234/x": "KEY1", "10.1234/y": "KEY2"})
+
+    state = _load_index_state(tmp_path)
+    assert state["last_version"] == 123
+    assert state["items"]["10.1234/y"] == "KEY2"
+
+
+def test_load_index_state_reads_v1_as_watermark_zero(tmp_path):
+    """A pre-watermark index is readable but cannot vouch for a miss."""
+    _write_index(tmp_path, {"version": 1, "items": {"10.1234/x": "KEY1"}})
+
+    state = _load_index_state(tmp_path)
+
+    assert state["items"] == {"10.1234/x": "KEY1"}
+    assert state["last_version"] == 0
+
+
+def test_load_index_state_corrupt_file_is_treated_as_absent(tmp_path):
+    """A half-written index degrades to a rebuild, never to a crash."""
+    (tmp_path / ".zotero-sync-index.json").write_text("{not json", encoding="utf-8")
+
+    state = _load_index_state(tmp_path)
+
+    assert state == {"version": 0, "last_version": 0, "library_id": "", "items": {}}
+
+
+def test_existing_key_miss_is_authoritative_when_library_unchanged(tmp_path):
+    """The whole point: an unchanged library makes a miss provable in one call."""
+    _save_index(tmp_path, {}, last_version=500)
+    mock_zot = _mock_zot_delta(version=500)
+
+    assert _existing_key(mock_zot, "10.1234/new", tmp_path, refresh=False) is None
+    mock_zot.top.assert_not_called()
+    mock_zot.deleted.assert_not_called()
+    mock_zot.last_modified_version.assert_called_once()
+
+
+def test_existing_key_miss_triggers_delta_when_library_changed(tmp_path):
+    """A moved watermark pulls only the delta, and finds the new item."""
+    _save_index(tmp_path, {"10.1234/old": "OLDKEY"}, last_version=500)
+    mock_zot = _mock_zot_delta(
+        version=510,
+        changed=[{"key": "NEWKEY01", "data": {"itemType": "journalArticle",
+                                              "DOI": "10.1234/new"}}],
+    )
+
+    assert _existing_key(mock_zot, "10.1234/new", tmp_path, refresh=False) == "NEWKEY01"
+    assert mock_zot.top.call_args.kwargs.get("since") == 500
+    assert _load_index_state(tmp_path)["last_version"] == 510
+    # The delta is additive: unrelated entries survive.
+    assert _load_index_state(tmp_path)["items"]["10.1234/old"] == "OLDKEY"
+
+
+def test_existing_key_delta_applies_deletions(tmp_path):
+    """A miss triggers the delta, which must drop deleted items from the ledger."""
+    _save_index(tmp_path, {"10.1234/gone": "GONEKEY1"}, last_version=500)
+    mock_zot = _mock_zot_delta(version=510, deleted=["GONEKEY1"])
+
+    # Querying a different DOI forces the delta to run.
+    assert _existing_key(mock_zot, "10.1234/new", tmp_path, refresh=False) is None
+    assert "10.1234/gone" not in _load_index_state(tmp_path)["items"]
+
+
+def test_existing_key_delta_replaces_changed_doi(tmp_path):
+    """A changed item takes over its new DOI and drops the stale mapping."""
+    _save_index(tmp_path, {"10.1234/old": "KEY1"}, last_version=500)
+    mock_zot = _mock_zot_delta(
+        version=510,
+        changed=[{"key": "KEY1", "data": {"itemType": "journalArticle",
+                                          "DOI": "10.1234/new"}}],
+    )
+
+    assert _existing_key(mock_zot, "10.1234/new", tmp_path, refresh=False) == "KEY1"
+    assert "10.1234/old" not in _load_index_state(tmp_path)["items"]
+
+
+def test_existing_key_delta_failure_falls_back_to_full_scan_once(tmp_path, monkeypatch):
+    """A broken delta degrades to one rebuild, not to a wrong 'not found'."""
+    from hydrolitagent.literature import zotero_sync as zsync
+
+    _save_index(tmp_path, {}, last_version=500)
+    monkeypatch.setattr(zsync, "_fetch_delta", MagicMock(side_effect=RuntimeError("boom")))
+    mock_zot = _mock_zot_scan([
+        {"key": "SCANKEEY", "data": {"itemType": "journalArticle", "DOI": "10.1234/new"}},
+    ])
+
+    assert _existing_key(mock_zot, "10.1234/new", tmp_path, refresh=False) == "SCANKEEY"
+    mock_zot.top.assert_called_once()
+
+
+def test_existing_key_v1_index_migrates_with_exactly_one_full_scan(tmp_path):
+    """Upgrading must cost one scan, not two."""
+    _write_index(tmp_path, {"version": 1, "items": {"10.9999/unrelated": "OTHERKEY"}})
+    mock_zot = _mock_zot_scan([
+        {"key": "TARGETKY", "data": {"itemType": "journalArticle", "DOI": "10.1234/new"}},
+    ])
+    mock_zot.last_modified_version.return_value = 777
+
+    assert _existing_key(mock_zot, "10.1234/new", tmp_path, refresh=False) == "TARGETKY"
+    mock_zot.top.assert_called_once()
+
+    state = _load_index_state(tmp_path)
+    assert state["last_version"] == 777
+    assert state["version"] == 2
+
+
+def test_fetch_delta_reads_the_version_before_fetching():
+    """Reading the watermark after the fetch would skip concurrent edits."""
+    order = []
+    z = MagicMock()
+
+    def _version():
+        order.append("version")
+        return 510
+
+    def _top(**kwargs):
+        order.append("top")
+        return []
+
+    z.last_modified_version.side_effect = _version
+    z.top.side_effect = _top
+    z.everything.side_effect = lambda it: iter(it)
+    z.deleted.return_value = {"items": []}
+
+    _fetch_delta(z, 500)
+
+    assert order[0] == "version"
+
+
+def test_merge_delta_ignores_attachments_and_deleted_keys():
+    """Only top-level, live items may enter the ledger."""
+    merged = _merge_delta(
+        {"10.1/a": "KEEPKEY1"},
+        [
+            {"key": "ATTACHKY", "data": {"itemType": "attachment", "DOI": "10.1/att"}},
+            {"key": "DEADKEY1", "data": {"itemType": "journalArticle", "DOI": "10.1/dead"}},
+        ],
+        {"DEADKEY1"},
+    )
+
+    assert merged == {"10.1/a": "KEEPKEY1"}
+
+
+def test_zotero_sync_does_not_build_item_for_existing_item(monkeypatch, tmp_path):
+    """Attaching a PDF to an existing record must not pay metadata latency."""
+    from hydrolitagent.zotero import paper_to_zotero as p2z
+
+    def boom(*a, **k):
+        raise AssertionError("build_item must not run for an existing item")
+
+    mock_zot, _, _ = _run_sync_main(monkeypatch, tmp_path, children=[], build_item=boom)
+
+    assert mock_zot.create_items.call_count == 1
+
+
+def test_merge_delta_drops_trashed_items():
+    """Trashing is an item update (data.deleted=1); the ledger must drop it."""
+    merged = _merge_delta(
+        {"10.1/a": "TRASHKEY", "10.1/b": "KEEPKEY1"},
+        [{"key": "TRASHKEY", "data": {"itemType": "journalArticle", "deleted": 1,
+                                      "DOI": "10.1/a"}}],
+        set(),
+    )
+
+    assert merged == {"10.1/b": "KEEPKEY1"}
+
+
+def test_fetch_delta_asks_for_trashed_items():
+    """Without includeTrashed the delta can never see a trashed item."""
+    z = _mock_zot_delta(version=510)
+
+    _fetch_delta(z, 500)
+
+    assert z.top.call_args.kwargs.get("includeTrashed") in (1, True)
+
+
+def test_existing_key_rebuilds_when_library_version_goes_backwards(tmp_path):
+    """A lower version means a different library or a restored backup."""
+    _save_index(tmp_path, {"10.9/old": "OLDKEY01"}, last_version=900)
+    z = _mock_zot_delta(
+        version=500,
+        changed=[{"key": "NEWKEY01", "data": {"itemType": "journalArticle",
+                                              "DOI": "10.1234/new"}}],
+    )
+
+    assert _existing_key(z, "10.1234/new", tmp_path, refresh=False) == "NEWKEY01"
+    z.deleted.assert_not_called()  # rebuilt instead of trusting a backwards delta
+
+
+def test_rebuild_index_reads_version_before_scanning():
+    """Same ordering rule as the delta: read first, then scan."""
+    from hydrolitagent.literature.zotero_sync import _rebuild_index
+
+    order = []
+    z = MagicMock()
+
+    def _version():
+        order.append("version")
+        return 500
+
+    def _top(**kwargs):
+        order.append("top")
+        return []
+
+    z.last_modified_version.side_effect = _version
+    z.top.side_effect = _top
+    z.everything.side_effect = lambda it: iter(it)
+
+    _rebuild_index(z)
+
+    assert order[0] == "version"
+
+
+def test_existing_key_rebuilds_when_library_id_changes(tmp_path):
+    """A ledger from another library cannot vouch for anything here."""
+    _save_index(tmp_path, {}, last_version=500, library_id="111")
+    z = _mock_zot_delta(
+        version=510,
+        changed=[{"key": "NEWKEY01", "data": {"itemType": "journalArticle",
+                                              "DOI": "10.1234/new"}}],
+    )
+    z.library_id = "222"
+
+    assert _existing_key(z, "10.1234/new", tmp_path, refresh=False) == "NEWKEY01"
+
+
+def test_sync_to_zotero_timeout_returns_1(tmp_path, monkeypatch):
+    """A hung child process fails fast with a message, not an indefinite wait."""
+    import subprocess as sp
+
+    from hydrolitagent.literature import download_pdf
+
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen.update(kwargs)
+        if "timeout" not in kwargs:
+            raise AssertionError("sync_to_zotero must pass a timeout")
+        raise sp.TimeoutExpired(cmd, kwargs["timeout"])
+
+    monkeypatch.setattr(download_pdf.subprocess, "run", fake_run)
+
+    assert download_pdf.sync_to_zotero(tmp_path / "x.pdf", "10.1234/x") == 1
+    assert seen["timeout"] == 900

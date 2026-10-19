@@ -7,7 +7,10 @@
 ## CLI 用法（统一用 `uv run python -m`）
 
 ```bash
-# 论文 PDF 下载 / 验证(需 Playwright MCP 插件)
+# 论文 PDF 下载（独立 CLI，无需 MCP 插件）
+uv run python scripts/download_paper.py --doi <doi> [--sync]
+
+# PDF 辅助命令(detect/verify，无需浏览器)
 uv run python -m hydrolitagent.literature.download_pdf verify <pdf>
 uv run python -m hydrolitagent.literature.download_pdf detect <url>
 

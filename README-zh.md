@@ -20,7 +20,7 @@ mylibrary 承担**情报汇集之后的深度处理**:
 |---|---|---|
 | **Zotero 文献查询** — 12 个工具的 MCP Server(streamable HTTP,端口 8002,端点 `/mcp`):搜索、浏览、读取全文/附件/批注 | `uv run python -m hydrolitagent.zotero.server` | [MCP 工具](docs/user-guide/mcp-tools.md) |
 | **论文入库** — DOI / arXiv ID / 标题 → PDF → Zotero 条目 + `linked_file` 附件 | `bash scripts/run_paper_pipeline.sh "<DOI|arXiv|title>"` | [入库流水线](docs/user-guide/paper-pipeline.md) |
-| **论文 PDF 下载** — 机构访问(大连理工 SSO)通过 Claude Code + Playwright 下载 | `uv run python -m hydrolitagent.literature.download_pdf doi <doi>` | [PDF 下载](docs/user-guide/download-pdf.md) |
+| **论文 PDF 下载** — 机构访问:独立 CLI,用 Playwright 驱动本机 Chrome(不依赖 Claude Code) | `uv run python scripts/download_paper.py --doi <doi> [--sync]` | [PDF 下载](docs/user-guide/download-pdf.md) |
 | **Zotero 入库 linked_file** — 已下载 PDF 同步进 Zotero 作为 `linked_file`(零云端配额) | `uv run python -m hydrolitagent.literature.zotero_sync <pdf> <doi>` | [Zotero 入库](docs/user-guide/zotero-sync.md) |
 | **Zotero → NotebookLM** — 新增论文整理成中文简报 / 音频 / 视频概览 | `uv run python -m hydrolitagent.literature.zotero_notebooklm --collection <name> --artifact audio` | [NotebookLM](docs/user-guide/zotero-notebooklm.md) |
 | **文献深度处理** — Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [文献深度处理](docs/user-guide/literature.md) |
@@ -69,6 +69,7 @@ uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>
 # 一条命令完成下载 + Zotero 同步(隐身 Chrome;自动按出版商路由)
 uv run python scripts/download_paper.py --doi <doi> --sync
 uv run python scripts/download_paper.py --arxiv <id> --sync
+uv run python scripts/download_paper.py --title "<标题>" --sync     # 只有标题：自动检索解析 DOI
 
 # 机构访问下载 PDF
 uv run python -m hydrolitagent.literature.download_pdf doi <doi>

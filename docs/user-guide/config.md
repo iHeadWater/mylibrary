@@ -96,7 +96,7 @@ uv run hydrolitagent paths --json   # 机读(skill 用)
 
 | 变量 | 说明 |
 |------|------|
-| `MYLIBRARY_PDF_ROOT` | **旧名**,只覆盖 PDF 下载目录,优先级高于产物根。新代码请改用产物根 |
+| `MYLIBRARY_PDF_ROOT` | **旧名**,只影响 `download_pdf output-path` 的计算,优先级高于产物根。`scripts/download_paper.py` 的下载落点用 `--out`(默认 `.playwright-mcp/`),不受它影响 |
 
 > ⚠️ **`.env` 里有已知的静默失效**:`literature/` 下的模块(`download_pdf` /
 > `bilibili_upload` / `zotero_notebooklm`)不调用 `load_dotenv`。产物根解析器会

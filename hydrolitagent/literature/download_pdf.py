@@ -21,6 +21,7 @@ import os
 import re
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -327,6 +328,19 @@ def decode_base64_file(input_path: str | Path, output_path: str | Path) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _decode_pdf_string(raw: bytes) -> str:
+    """Decode a PDF text string, honouring a UTF-16 byte-order mark.
+
+    Publishers embed UTF-16 titles inside literal strings; decoding those as
+    latin-1 yields mojibake such as ``'þÿ E v a l u a t i n g'``.
+    """
+    if raw.startswith(b"\xfe\xff"):
+        return raw[2:].decode("utf-16-be", errors="replace")
+    if raw.startswith(b"\xff\xfe"):
+        return raw[2:].decode("utf-16-le", errors="replace")
+    return raw.decode("latin-1", errors="replace")
+
+
 def verify_pdf(pdf_path: str | Path) -> PdfMetadata:
     """Verify a PDF file and extract its metadata.
 
@@ -373,7 +387,7 @@ def verify_pdf(pdf_path: str | Path) -> PdfMetadata:
     if not metadata.title:
         title_match = re.search(rb"/Title\s*\(([^)]*)\)", content)
         if title_match:
-            metadata.title = title_match.group(1).decode("latin-1", errors="replace")
+            metadata.title = _decode_pdf_string(title_match.group(1))
 
     # Author extraction
     author_match = re.search(rb"/Author\s*<([0-9A-Fa-f]+)>", content)
@@ -389,7 +403,7 @@ def verify_pdf(pdf_path: str | Path) -> PdfMetadata:
     if not metadata.authors:
         author_match = re.search(rb"/Author\s*\(([^)]*)\)", content)
         if author_match:
-            author_str = author_match.group(1).decode("latin-1", errors="replace")
+            author_str = _decode_pdf_string(author_match.group(1))
             metadata.authors = [a.strip() for a in author_str.split(";")]
 
     # DOI extraction (from dc:identifier or prism:doi)
@@ -429,6 +443,82 @@ UA = (
 )
 CROSSREF_UA = "mylibrary-download-paper/1.0 (mailto:test@example.com)"
 DEFAULT_OUT = Path(".playwright-mcp")
+
+
+def _title_key(text: str) -> str:
+    """Normalise a title for comparison: case, punctuation and spacing."""
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
+
+
+def search_crossref_by_title(title: str, rows: int = 8) -> list[dict]:
+    """Crossref bibliographic search; empty list on any failure."""
+    url = "https://api.crossref.org/works?" + urllib.parse.urlencode({
+        "query.bibliographic": title,
+        "rows": rows,
+        "select": "DOI,title,container-title,issued,type",
+    })
+    req = urllib.request.Request(url, headers={"User-Agent": CROSSREF_UA})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r)["message"]["items"]
+    except Exception:
+        return []
+
+
+def pick_doi_by_title(title: str, items: list[dict],
+                      threshold: float = 0.6, margin: float = 0.15
+                      ) -> tuple[str | None, list[dict]]:
+    """Choose a DOI for ``title``, or refuse when the field is ambiguous.
+
+    Copy-pasted titles are usually abbreviated, so exact match is tried first;
+    otherwise a clear token-overlap winner is accepted. Two similar candidates
+    mean "ask the human", never "pick one".
+    """
+    if not items:
+        return None, []
+    target = _title_key(title)
+    target_tokens = set(target.split())
+
+    # The same paper often has both a preprint and a journal DOI with the same
+    # title; the published record is the one worth ingesting.
+    exact = [it for it in items
+             if _title_key((it.get("title") or [""])[0]) == target]
+    if exact:
+        published = [it for it in exact
+                     if str(it.get("type", "")).lower() not in ("posted-content", "preprint")]
+        chosen = (published or exact)[0]
+        return chosen["DOI"], items
+
+    scored: list[tuple[float, str, dict]] = []
+    for it in items:
+        cand_title = (it.get("title") or [""])[0]
+        key = _title_key(cand_title)
+        tokens = set(key.split())
+        # Coverage, not Jaccard: real titles are longer than the label a human
+        # pastes, and a long correct match must not be penalised for that.
+        overlap = len(target_tokens & tokens) / max(1, len(target_tokens))
+        scored.append((overlap, it.get("DOI", ""), it))
+
+    scored.sort(key=lambda s: s[0], reverse=True)
+    best_score = scored[0][0]
+    # Candidates that score the same are usually a paper plus its own preprint:
+    # prefer the published one rather than declaring the field ambiguous.
+    tied = [s[2] for s in scored if abs(s[0] - best_score) <= 0.05]
+    journals = [it for it in tied if str(it.get("type", "")).lower() == "journal-article"]
+    published = [it for it in tied
+                 if str(it.get("type", "")).lower() not in ("posted-content", "preprint")]
+    if len(tied) > 1 and len(journals) == 1:
+        # A journal article plus its preprint/thesis/report copy: take the journal.
+        winner = journals[0]
+    elif len(tied) > 1 and len(published) == 1:
+        winner = published[0]
+    else:
+        winner = scored[0][2]
+        runner_up = scored[1][0] if len(scored) > 1 else 0.0
+        if not (winner.get("DOI") and best_score >= threshold
+                and best_score - runner_up >= margin):
+            return None, [s[2] for s in scored[:5]]
+    return winner["DOI"], items
 
 
 def crossref_meta(doi: str) -> dict:
@@ -511,8 +601,11 @@ def curl_with_cookies(article_url: str, pdf_url: str, dest: Path) -> bool:
     """Two-step curl: visit article page to set cookies, then fetch PDF."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     cookie_jar = dest.parent / ".curl-cookies.txt"
+    # Only the cookies matter here; without -o the body (often a Cloudflare
+    # challenge page) would be dumped into the middle of our output.
     subprocess.run(
-        ["curl", "-sL", "-A", UA, "-c", str(cookie_jar), "-b", str(cookie_jar), article_url],
+        ["curl", "-sL", "-A", UA, "-c", str(cookie_jar), "-b", str(cookie_jar),
+         "-o", os.devnull, article_url],
         check=False, timeout=60,
     )
     subprocess.run(
@@ -536,7 +629,13 @@ def sync_to_zotero(pdf_path: Path, doi: str) -> int:
     # and CJK titles printed by zotero_sync don't crash with a UnicodeEncodeError.
     env = dict(os.environ)
     env.setdefault("PYTHONIOENCODING", "utf-8")
-    return subprocess.run(cmd, env=env).returncode
+    try:
+        # Budget covers the one-time index rebuild; steady state is seconds.
+        return subprocess.run(cmd, env=env, timeout=ZOTERO_SYNC_TIMEOUT).returncode
+    except subprocess.TimeoutExpired:
+        print("FAILED: Zotero sync timed out after 900s; the PDF is already saved.",
+              file=sys.stderr)
+        return 1
 
 
 def _load_dotenv() -> None:
@@ -550,12 +649,22 @@ def _load_dotenv() -> None:
             pass
 
 
+# Budget covers the one-time DOI-index rebuild; steady state is seconds.
+ZOTERO_SYNC_TIMEOUT = 900
+
+
+def _ensure_utf8_stdio() -> None:
+    """Emit UTF-8 so unicode log lines cannot crash a GBK Windows console."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def setup_check() -> int:
     """Verify a bare-host Zotero/GDrive setup is ready before the first sync."""
-    try:  # Windows consoles default to GBK; emit UTF-8 so captured output is clean
-        sys.stdout.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+    _ensure_utf8_stdio()
     _load_dotenv()
     ok = True
     required = ("ZOTERO_API_KEY", "ZOTERO_LIBRARY_ID", "GDRIVE_PAPERS_PATH")
@@ -612,6 +721,7 @@ def download_paper(
     *,
     sync: bool = False,
     resolve_only: bool = False,
+    title: str | None = None,
 ) -> int:
     """Download a paper by DOI or arXiv id; return a process exit code.
 
@@ -623,7 +733,24 @@ def download_paper(
     """
     from hydrolitagent.literature.download_browser import download_with_browser, log
 
+    _ensure_utf8_stdio()
     out = Path(out_dir) if out_dir is not None else DEFAULT_OUT
+
+    if title and not doi and not arxiv:
+        candidates = search_crossref_by_title(title)
+        resolved, options = pick_doi_by_title(title, candidates)
+        if not resolved:
+            log(f"Could not resolve a single DOI for: {title}")
+            if options:
+                log("Candidates (pass one explicitly with --doi):")
+                for opt in options:
+                    guessed = (opt.get("title") or [""])[0][:90]
+                    log(f"  {opt.get('DOI', '?')}  {guessed}")
+            else:
+                log("Crossref returned no results.")
+            return 2
+        log(f"Resolved title → {resolved}")
+        doi = resolved
 
     if arxiv:
         dest = out / f"arXiv.{arxiv}.pdf"
@@ -643,7 +770,11 @@ def download_paper(
     log(f"{meta['title'][:80]}")
     log(f"  {meta['container']} | {meta['prefix']}")
 
-    dest = asyncio.run(download_with_browser(doi, meta, out))
+    try:
+        dest = asyncio.run(download_with_browser(doi, meta, out))
+    except Exception as e:  # a crashed flow is a download failure, not a traceback
+        log(f"FAILED: browser flow crashed ({type(e).__name__}: {e})")
+        return 1
     if not dest:
         log("FAILED: download did not produce a verified PDF")
         return 1

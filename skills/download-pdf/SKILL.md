@@ -11,18 +11,21 @@ description: |
 
 # Download Academic PDFs
 
-Download academic paper PDFs through institutional access (Dalian University of Technology) using Playwright browser automation. The user's browser cookies (WebVPN + Elsevier SSO) enable automatic institutional access — no manual login needed per session.
+Download academic paper PDFs through institutional access (any institution whose subscription covers the journal) using Playwright browser automation. The user's browser cookies (WebVPN + Elsevier SSO) enable automatic institutional access — no manual login needed per session.
 
 ## Contract
 
-- Use Playwright MCP tools (`browser_navigate`, `browser_click`, `browser_evaluate`) for all browser interaction.
+- **脚本模式（首选）**：`uv run python scripts/download_paper.py --doi <doi> [--sync]` 直接用 Python
+  Playwright 驱动本机 Chrome，**不需要** MCP 工具。
+- **手动模式（兜底）**：只有脚本覆盖不到、或需要人工登录时才用 MCP 工具
+  (`browser_navigate`, `browser_click`, `browser_evaluate`)。
 - Delegate PDF decoding to `uv run python -m hydrolitagent.literature.download_pdf decode <input> <output>` — never inline base64 decoding logic.
 - Always verify the downloaded PDF: check size > 0, file header `%PDF-`, and extract metadata.
-- **Default output path**: computed by `uv run python -m hydrolitagent.literature.download_pdf output-path <doi|pii>`.
-
-  - Defaults to `mylibrary/outputs/papers/` (overridable via `MYLIBRARY_PDF_ROOT`).
-  - Filename is auto-generated from the DOI slug (e.g. ``10.1016/j.jhydrol.2024.132471`` → ``j.jhydrol.2024.132471.pdf``).
-  - Use the `-o` flag to override: ``/download-pdf <doi> -o /custom/path/paper.pdf``.
+- **输出路径**：
+  - 脚本模式：`--out DIR`，默认 `.playwright-mcp/`；文件名 `doi.replace('/', '.') + '.pdf'`。
+  - 手动模式：`uv run python -m hydrolitagent.literature.download_pdf output-path <doi|pii>`，
+    默认 `outputs/papers/`（可用 `MYLIBRARY_PDF_ROOT` 覆盖），文件名取自 DOI slug
+    （``10.1016/j.jhydrol.2024.132471`` → ``j.jhydrol.2024.132471.pdf``）。
 
 - If institutional access fails, report the blocker and suggest manual browser login steps.
 
@@ -64,9 +67,18 @@ uv run python scripts/download_paper.py --arxiv <id> --sync
 - **post-sync 核验**:Zotero 条目标题/作者与论文一致、`itemType=preprint`、child 为
   `linked_file → attachments:<file>.pdf`、PDF 已在 `GDRIVE_PAPERS_PATH`(= Zotero Desktop 的 Linked Attachment Base Directory)。
 
-Routing: `10.5194` Copernicus → curl · `10.1126` science.org → curl two-step ·
-`10.1016` → SD flow · `10.1029`/`10.1002` → Wiley pdfdirect · `10.1175` → AMS ·
-`10.1038` → Nature · `10.2139` → SSRN · else → manual phases.
+Routing: `10.5194` Copernicus → curl · `10.1126` science.org → curl two-step，失败回退浏览器 ·
+`10.1016` → SD flow（**直接有头**） · `10.1029`/`10.1002` → Wiley pdfdirect · `10.1175` → AMS ·
+`10.1038` → Nature · `10.2139` → SSRN · `10.3724` → sciengine：**有头**，点页面上的
+「预览PDF」，记录 `application/pdf` 响应的 URL 再用上下文回取（等控件渲染 20s、最多等 300s、
+回取限 180s、45s 无反应再点一次）·
+else → 通用 flow（先试响应捕获，再试 `citation_pdf_url` / PDF 锚点 → 导航下载）。
+
+脚本优先用**无头**浏览器；**无头只要失败就用可见窗口重试一次**（不要求先看到验证，
+ScienceDirect 无头下直接 ERR_ABORTED 且不弹验证）。`10.1016` 与 `10.3724` **直接有头**。
+只有**没有专用 flow** 的前缀才做入口验证检查（`HEADLESS_CHALLENGE_GRACE_S`，默认 15s）；
+有专用 flow 的前缀不做入口预导航——第二次 `goto` 会打断它们的重定向链。
+流程中途再次出现的验证会继续等待，最多到该流程自身的超时。
 First run needs: `uv run playwright install chromium` (real Chrome via `channel="chrome"` if installed).
 
 **Why stealth matters:** a plain Playwright Chromium carries `navigator.webdriver=true` and the
@@ -85,7 +97,7 @@ launcher verbatim — it is the part that was re-derived painfully across sessio
 browser = await p.chromium.launch_persistent_context(
     user_data_dir=str(PROFILE_DIR),          # persistent dir -> cookies survive runs
     channel="chrome",                        # real Chrome, not bundled Chromium
-    headless=False,
+    headless=True,                           # 脚本默认无头；过不了验证再用 False 重开
     ignore_default_args=["--enable-automation"],
     downloads_path=str(DEST_DIR),
     viewport={"width": 1280, "height": 900},
@@ -97,9 +109,9 @@ await browser.add_init_script(
 )
 ```
 
-Per-publisher script flows (all validated end-to-end):
+Per-publisher script flows (all validated end-to-end; `10.1016` 与 `10.3724` 直接有头):
 
-- **ScienceDirect**: `goto article → wait title out of challenge → goto pdfft (commit) →
+- **ScienceDirect**: `goto article → wait 2s 让工具栏加载 → 点文章自带的 "View PDF"（点不动才回退 goto pdfft） →
   poll until 'main.pdf' in URL → STABILIZE URL (poll until unchanged ×2 — secondary
   redirects kill the anchor) → expect_download + inject `<a download>` anchor, retry ×4 →
   save_as`. Details below in Phase 1 / Failure table.
@@ -147,7 +159,7 @@ Per-publisher script flows (all validated end-to-end):
 
 ### Phase 1: ScienceDirect / Elsevier
 
-This is the only publisher tested end-to-end. The flow:
+This is the earliest end-to-end verified flow, with the most gotchas encoded. The flow:
 
 4. Navigate to the article page:
    ```
@@ -163,10 +175,10 @@ This is the only publisher tested end-to-end. The flow:
      return { accessBanners: texts.slice(0, 5), hasPdfLink: !!pdfLink, url: window.location.href };
    }
    ```
-   - Expected: "Dalian University of Technology" or "Full text access" in the banners.
+   - Expected: your institution's name or "Full text access" in the banners.
    - If access banner is MISSING: user's SSO session may have expired. Tell the user to:
      1. Open `https://www.sciencedirect.com/` in the shared browser
-     2. Click "Access through your organization" → select "Dalian University of Technology"
+     2. Click "Access through your organization" → select your institution
      3. Complete SSO login (CAPTCHA/verification code if needed)
      4. Then retry.
 
@@ -241,7 +253,7 @@ The Playwright browser profile persists WAYF/SSO cookies, so once you've logged 
 | Type | Indicator | Action |
 |------|-----------|--------|
 | **Open Access** | Gold OA badge on article page | Click "Download PDF" directly |
-| **Institutional** | Redirects to `wayf.springernature.com` or shows "Access through your institution" | User completes WAYF → DUT SSO login, then click "Download PDF" |
+| **Institutional** | Redirects to `wayf.springernature.com` or shows "Access through your institution" | User completes WAYF → institutional SSO login, then click "Download PDF" |
 | **Subscription only** | "Buy or subscribe" button, no institutional option, `.pdf` URL redirects to article | Skip |
 
 **Deterministic flow:**
@@ -255,8 +267,8 @@ The Playwright browser profile persists WAYF/SSO cookies, so once you've logged 
     - Take a snapshot to find the institution search box
     - Type "Dalian" in the search box (`browser_type`)
     - Press Enter to show results (`browser_press_key key=Enter`)
-    - Click "Dalian University of Technology" from the dropdown
-    - **Pause**: tell user to complete DUT SSO login in the browser window, wait for "done"
+    - Click your institution from the dropdown
+    - **Pause**: tell user to complete the institutional SSO login in the browser window, wait for "done"
     - After user confirms, the page returns to the article
 
 14. **Click "Download PDF"**:
@@ -320,23 +332,36 @@ d. Verify: `head -c 8 <file>` → should print `%PDF-`.
 
 **Slow/stalling note:** Copernicus can be slow (see `skills/paper-to-zotero`). If curl stalls, resume with `wget -c`, or use Python urllib with a long 120s timeout.
 
-### Phase 4b: science.org (curl two-step)
+### Phase 4b: science.org (curl first, browser fallback)
 
-Detect: DOI prefix `10.1126`. science.org papers are open access but have bot detection
-that blocks browser automation (even stealth Chrome). A two-step curl with a shared
-cookie jar bypasses it entirely.
+Detect: DOI prefix `10.1126`. science.org papers are open access, but the site now sits
+behind Cloudflare: the two-step curl often returns the "Just a moment..." challenge page
+instead of a PDF.
 
-**Flow:**
+**Preferred (still fastest when it works)** — two-step curl with a shared cookie jar:
 ```bash
 # Step 1: visit article page (sets cookies)
-curl -sL -A "<UA>" -c cookies.txt -b cookies.txt "https://www.science.org/doi/<DOI>"
+curl -sL -A "<UA>" -c cookies.txt -b cookies.txt -o /dev/null "https://www.science.org/doi/<DOI>"
 # Step 2: fetch PDF with the same cookies
 curl -sL -A "<UA>" -c cookies.txt -b cookies.txt -o paper.pdf "https://www.science.org/doi/pdf/<DOI>?download=true"
 rm cookies.txt
 ```
 
-The script's `curl_with_cookies()` function automates this. Do NOT use browser
-automation for science.org — it triggers infinite redirect loops or bot challenges.
+**Fallback — browser (verified on `10.1126/sciadv.aeb1692`, 2026-10-18).**
+An earlier version of this skill said "do NOT use browser automation for science.org";
+that is no longer true. What actually works:
+
+- The article page renders fine in real Chrome — Cloudflare clears in ~2s with the MCP profile.
+- Fetching the PDF from **inside** the page (`fetch()` / `context.request`) still returns 403.
+- Letting the **page navigate** to `/doi/pdf/<DOI>?download=true` starts a download;
+  Playwright surfaces it as `goto()` raising `Error: Download is starting`, so wrap the
+  navigation in `page.expect_download()` and `save_as()`.
+
+The script does this automatically via `generic_flow` after the curl attempt fails.
+
+In **script mode** no reply is needed after the human passes verification — the program
+waits and continues. In **manual MCP mode** (you driving `browser_*` tools), still ask the
+user to confirm they finished before you continue.
 
 ### Phase 5: Sync to Zotero (linked_file)
 
@@ -396,7 +421,7 @@ The script uses Zotero's portable `attachments:<filename>` scheme. Zotero resolv
 |----------|--------|
 | `ZOTERO_API_KEY` / `ZOTERO_LIBRARY_ID` not set | Report missing env vars; PDF is already saved locally |
 | `GDRIVE_PAPERS_PATH` not set | Report missing env var; PDF is already saved locally |
-| Crossref metadata fetch fails | Script falls back to PDF-embedded metadata (title, author, DOI) |
+| Crossref metadata fetch fails | 回退顺序：arXiv API（arXiv DOI）→ PDF 内嵌元数据（title/author/DOI）。Crossref 本身会先重试一次。 |
 | Zotero API write fails | Report error; PDF is already in GDrive folder — user can manually link |
 | Collection not found | Skip collection filing; item goes to "My Library" root |
 | `attachments:` path not resolving | User needs to configure "Linked Attachment Base Directory" in Zotero preferences |
@@ -418,7 +443,7 @@ The script uses Zotero's portable `attachments:<filename>` scheme. Zotero resolv
 | **Wiley/AGU: "请稍候…" page or 403 errors** | Cloudflare Turnstile blocking. Tell user to pass the challenge manually in the browser window, then retry. |
 | **Nature `.pdf` URL redirects to article page** | Paper requires institutional access. Follow Phase 2 WAYF login flow, then click "Download PDF" on the article page. |
 | **Nature Reviews journals: no "Download PDF" link** | DUT may not subscribe to that Nature-branded journal. Check for "Buy or subscribe" vs "Access via your institution". |
-| `zotero_sync.py` prints `UnicodeEncodeError: 'gbk'` | Windows terminal encoding issue. Sync itself succeeds — the error is only in the print output. |
+| `UnicodeEncodeError: 'gbk'` | 已修：canonical 路径 `download_paper.py --sync` 会强制 UTF-8（`_ensure_utf8_stdio` + `PYTHONIOENCODING`）。只有直接跑 `python -m ...zotero_sync` 时才可能复现。 |
 | Playwright MCP "No such tool available" | Use `mcp__plugin_playwright_playwright__*` (standalone Chromium from official plugin). NOT `plugin_ecc_playwright` (needs Chrome extension). |
 | mylibrary Zotero MCP server is read-only | For writes (create item, attach PDF, file to collection) use `uv run python -m hydrolitagent.literature.zotero_sync` (pyzotero Web API). The MCP server covers reads only. |
 | Institution login needs manual intervention | **Pause and wait for user**. Tell user what to do in the browser, wait for "done" signal, then continue. |
@@ -431,10 +456,10 @@ The script uses Zotero's portable `attachments:<filename>` scheme. Zotero resolv
 | **pdfft goto 后 `expect_download` 超时** | pdfft 不触发下载事件——它进 security-verification → 签名 main.pdf 查看器。等 URL 变 main.pdf 后再注入锚点。 |
 | **脚本启动报 Playwright 浏览器缺失** | `uv run playwright install chromium`。之后仍优先 `channel="chrome"`（本机真 Chrome），失败再回退 bundled Chromium。 |
 | **机构访问在脚本浏览器中失效（显示 preview）** | 机构会话存在 MCP profile（`%LOCALAPPDATA%/ms-playwright-mcp/mcp-chrome-*`）或走 IP。先看 entitlement 文案；"is not available" = 机构不订阅该刊（如 Nature Reviews 系列），查 Unpaywall 后放弃或换 OA 副本，勿反复重试触发风控。 |
-| **arXiv 多作者条目作者被拆错** | `zotero_sync` Crossref 回退按 `;` 拆分会把逗号分隔的多作者列表拆坏。用 `paper_to_zotero.fetch_arxiv`（注意其 `authors` 是 `"First Last"` 字符串列表，非 dict）拼 creators 后走 `_create_zotero_item`。 |
+| **arXiv 多作者条目作者被拆错** | 只有 `verify_pdf` 解析 PDF `/Author` 时才按 `;` 拆分（`build_item` 从 Crossref/arXiv 直接构造 creators，不受影响）。用 `paper_to_zotero.fetch_arxiv`（注意其 `authors` 是 `"First Last"` 字符串列表，非 dict）拼 creators 后走 `_create_zotero_item`。 |
 | **stealth profile 长时间运行后浏览器上下文崩溃** | 约 8 次以上导航后 stealth temp profile 不稳定（TargetClosedError 级联）。改用 MCP profile（`%LOCALAPPDATA%/ms-playwright-mcp/mcp-chrome-*`）；脚本已自动优先选 MCP。 |
 | **AMS aop URL 返回 403** | 文章已发表，aop 不再可用。重定向到 published URL（如 `aies/5/4/...`），从中提取 vol/issue 构造 downloadpdf 路径。脚本 `ams_flow()` 已处理。 |
-| **science.org 浏览器无限重定向** | science.org 对自动化浏览器返回 ERR_TOO_MANY_REDIRECTS。改用 curl 两步法（先文章页设 cookie，再带 cookie 拉 PDF）。脚本已自动处理。 |
+| **science.org 浏览器无限重定向** | 旧的裸 Chromium 会被 bot 检测拦成 ERR_TOO_MANY_REDIRECTS。curl 两步法仍是首选；失败时脚本回退到真实 Chrome + `expect_download`（2026-10-18 实测于 `10.1126/sciadv.aeb1692`）。 |
 
 ## Deterministic Patterns (for agents)
 
@@ -451,8 +476,8 @@ These are the ONLY patterns to use. Do not deviate.
 ### Download: Nature institutional-access paper
 ```
 1. browser_navigate → https://www.nature.com/articles/<id>
-2. If WAYF redirect: type "Dalian" → Enter → click "Dalian University of Technology"
-3. ⚠️ PAUSE: tell user to complete DUT SSO login, wait for "done"
+2. If WAYF redirect: type your institution's name → Enter → click it in the list
+3. ⚠️ PAUSE: tell user to complete the institutional SSO login, wait for "done"
 4. After login: Grep for "Download PDF" ref, click it
 ```
 
@@ -486,14 +511,17 @@ These are the ONLY patterns to use. Do not deviate.
 ### Download: any publisher — script mode (stealth Chrome)
 ```
 1. uv run python scripts/download_paper.py --doi <doi> [--sync]     # auto-routes by prefix
-2. 10.5194/10.1126 → curl; 10.1016 → SD anchor flow; 10.1029/10.1002 → pdfdirect;
-   10.1175 → AMS context.request; 10.1038 → Nature download-pdf click
+2. 10.5194 → curl; 10.1126 → curl 失败回退浏览器; 10.1016 → SD flow（直接有头）;
+   10.1029/10.1002 → pdfdirect; 10.1175 → AMS context.request;
+   10.1038 → Nature download-pdf click; 10.2139 → SSRN;
+   10.3724 → sciengine（直接有头，点「预览PDF」并捕获 application/pdf 响应）;
+   else → 通用 flow（响应捕获 → 候选 URL → anchor）
 3. verify %PDF- header (script does it); --sync runs zotero_sync in the same step
 ```
 
-### Download: science.org (curl two-step, no browser)
+### Download: science.org (curl two-step, browser fallback)
 ```
-1. curl -sL -A "<UA>" -c cookies.txt -b cookies.txt "https://www.science.org/doi/<DOI>"   # set cookies
+1. curl -sL -A "<UA>" -c cookies.txt -b cookies.txt -o /dev/null "https://www.science.org/doi/<DOI>"   # set cookies
 2. curl -sL -A "<UA>" -c cookies.txt -b cookies.txt -o paper.pdf "https://www.science.org/doi/pdf/<DOI>?download=true"
 3. rm cookies.txt; verify %PDF- header
 ```
@@ -508,7 +536,8 @@ These are the ONLY patterns to use. Do not deviate.
 ```
 1. Resolve all titles first: Crossref query.bibliographic (journal version wins over
    preprint) + arXiv all:"<exact title>" when Crossref misses — one uv run python script
-2. Dedup-check ALL DOIs in one pyzotero pass: zot.items(q=doi, qmode='everything')
+2. Dedup-check 用本地 `.zotero-sync-index.json`（带水位线的增量）；**不要**用 `q=doi`，
+   Zotero 快速搜索不索引 DOI 字段。直接跑 `download_paper.py --doi ... --sync` 即可，查重是其中的一步。
 3. Route each DOI through scripts/download_paper.py; group same-publisher papers to
    reuse the warm browser profile (challenge cookies persist)
 ```

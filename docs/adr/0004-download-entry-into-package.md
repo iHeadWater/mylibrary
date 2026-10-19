@@ -52,3 +52,14 @@
   仍需真实 Chrome + 机构会话才能验证。
 - 想统一的读者注意：`download_pdf.py` 的 6 个子命令（`detect` / `doi` / `decode` /
   `verify` / `classify` / `output-path`）仍在原处 —— 那是它的公开 CLI，未迁移。
+
+## 补充（2026-10-19）
+
+上述"参数、help 文本、退出码逐项不变"指的是**重构当时**的基线。此后有一次**有意的扩展**：
+
+- 新增 `--title "<标题>"`：没有 DOI 时先经 Crossref 检索解析；与 `--doi`/`--arxiv` 互斥。
+- 标题歧义（多个候选并列）时**列出候选并返回退出码 2**，而不是猜一个下载。
+
+另外，ADR 中"付费墙浏览器流程行为未验证"一句已过时：2026-10-18/19 已用真实下载验证了
+ScienceDirect（HydroTreeNet）、science.org（sciadv.aeb1692）、sciengine（水利学报两篇）、
+Wiley/AGU、Nature 与 Copernicus 各若干篇。

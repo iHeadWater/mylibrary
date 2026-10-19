@@ -42,7 +42,7 @@ uv sync --all-packages
 |---|---|---|
 | **读 Zotero 库**（MCP 12 个工具） | Zotero **Web API key** | `.env`：`ZOTERO_API_KEY` · `ZOTERO_LIBRARY_ID` |
 | **下载 + 入 Zotero**（入库） | 上面那条 + **GDrive 论文目录** + Zotero 里对应的「**链接附件根目录**」设置 | `.env`：`GDRIVE_PAPERS_PATH` |
-| **机构访问下载 PDF** | **Playwright 浏览器** + 学校机构会话 | 见 [论文 PDF 下载](../user-guide/download-pdf.md) |
+| **机构访问下载 PDF** | **Playwright 浏览器**（首机一次 `uv run playwright install chromium`）+ 任意有订阅的机构会话 | 见 [论文 PDF 下载](../user-guide/download-pdf.md) |
 | **文献卡与主题卡** | Zotero Desktop **正在运行**且**允许其他应用通信**；一种**已登录**的模型 CLI（Codex 或 Claude）；读 PDF 页面用的 [Poppler](https://poppler.freedesktop.org/)（`pdftoppm` / `pdfinfo` / `pdftotext`）在 PATH 里 | 模型凭据由**那个 CLI 自己**管 —— **不进本仓库** |
 | **深度处理**（精读 / 公众号 / 播客） | 看产出而定：**智谱**（配图）、**微信公众号**（发布）、**NotebookLM** | `.env`：`ZHIPUAI_API_KEY` · `WECHAT_APPID` + `WECHAT_APPSECRET` 等 |
 | **只做离线校验** | **以上额外项都不需要** | — |
