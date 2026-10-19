@@ -500,11 +500,25 @@ def pick_doi_by_title(title: str, items: list[dict],
         scored.append((overlap, it.get("DOI", ""), it))
 
     scored.sort(key=lambda s: s[0], reverse=True)
-    best_score, best_doi = scored[0][0], scored[0][1]
-    runner_up = scored[1][0] if len(scored) > 1 else 0.0
-    if best_doi and best_score >= threshold and best_score - runner_up >= margin:
-        return best_doi, items
-    return None, [s[2] for s in scored[:5]]
+    best_score = scored[0][0]
+    # Candidates that score the same are usually a paper plus its own preprint:
+    # prefer the published one rather than declaring the field ambiguous.
+    tied = [s[2] for s in scored if abs(s[0] - best_score) <= 0.05]
+    journals = [it for it in tied if str(it.get("type", "")).lower() == "journal-article"]
+    published = [it for it in tied
+                 if str(it.get("type", "")).lower() not in ("posted-content", "preprint")]
+    if len(tied) > 1 and len(journals) == 1:
+        # A journal article plus its preprint/thesis/report copy: take the journal.
+        winner = journals[0]
+    elif len(tied) > 1 and len(published) == 1:
+        winner = published[0]
+    else:
+        winner = scored[0][2]
+        runner_up = scored[1][0] if len(scored) > 1 else 0.0
+        if not (winner.get("DOI") and best_score >= threshold
+                and best_score - runner_up >= margin):
+            return None, [s[2] for s in scored[:5]]
+    return winner["DOI"], items
 
 
 def crossref_meta(doi: str) -> dict:
