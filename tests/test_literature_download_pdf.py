@@ -1340,7 +1340,7 @@ def test_capture_pdf_response_saves_first_pdf_response(tmp_path, monkeypatch):
     from hydrolitagent.literature import download_browser
 
     dest = tmp_path / "out.pdf"
-    ctx = FakeContext()
+    ctx = FakeContext(pdf_bytes=_pdf_payload())
     control = _FakeControl(ctx, _FakePlaywrightResponse(_pdf_payload()))
 
     async def find(p):
@@ -1403,8 +1403,8 @@ def test_capture_pdf_response_rejects_truncated_pdf(tmp_path, monkeypatch):
     from hydrolitagent.literature import download_browser
 
     dest = tmp_path / "out.pdf"
-    ctx = FakeContext()
-    control = _FakeControl(ctx, _FakePlaywrightResponse(b"%PDF-1.7\nhalf a file\n"))
+    ctx = FakeContext(pdf_bytes=b"%PDF-1.7\nhalf a file\n")
+    control = _FakeControl(ctx, _FakePlaywrightResponse(_pdf_payload()))
 
     async def find(p):
         return control
@@ -1421,10 +1421,10 @@ def test_generic_flow_only_waits_for_a_control_on_spa_prefixes(tmp_path, monkeyp
     """Non-SPA publishers must not pay the toolbar-render wait."""
     from hydrolitagent.literature import download_browser
 
-    waits = {}
+    waits = []
 
-    async def capture(ctx, page, dest, *, timeout_s=None, control_wait_s=0):
-        waits[page] = control_wait_s
+    async def capture(ctx, page, dest, *, timeout_s=None, control_wait_s=0, settle_s=None):
+        waits.append((control_wait_s, timeout_s, settle_s))
         return False
 
     async def candidates(p, doi):
@@ -1438,8 +1438,13 @@ def test_generic_flow_only_waits_for_a_control_on_spa_prefixes(tmp_path, monkeyp
     asyncio.run(download_browser.generic_flow(
         FakeContext(), "10.3724/x", {"prefix": "10.3724"}, tmp_path / "b.pdf"))
 
-    values = list(waits.values())
-    assert values == [0, download_browser.PDF_CONTROL_WAIT_S]
+    assert waits == [
+        (0, download_browser.PDF_RESPONSE_TIMEOUT_S, download_browser.PDF_CONTROL_SETTLE_S),
+        (download_browser.PDF_CONTROL_WAIT_S, download_browser.PDF_RESPONSE_TIMEOUT_SPA_S,
+         download_browser.PDF_SPA_SETTLE_S),
+    ]
+    # A slow SPA (sciengine can take minutes) gets a longer budget than the rest.
+    assert download_browser.PDF_RESPONSE_TIMEOUT_SPA_S > download_browser.PDF_RESPONSE_TIMEOUT_S
 
 
 def test_capture_pdf_response_returns_false_without_a_control(tmp_path, monkeypatch):
@@ -1483,7 +1488,7 @@ def test_capture_pdf_response_early_exit_does_not_wait_for_timeout(tmp_path, mon
     """A PDF that arrives immediately must not wait out the 120s budget."""
     from hydrolitagent.literature import download_browser
 
-    ctx = FakeContext()
+    ctx = FakeContext(pdf_bytes=_pdf_payload())
     control = _FakeControl(ctx, _FakePlaywrightResponse(_pdf_payload()))
 
     async def find(p):
@@ -1520,7 +1525,7 @@ def test_capture_pdf_response_reclicks_when_nothing_arrives(tmp_path, monkeypatc
     monkeypatch.setattr(download_browser, "PDF_CONTROL_SETTLE_S", 0)
     monkeypatch.setattr(download_browser, "PDF_RESPONSE_RECLICK_S", 0.2)
 
-    ctx = FakeContext()
+    ctx = FakeContext(pdf_bytes=_pdf_payload())
     control = _RetryControl(ctx, _FakePlaywrightResponse(_pdf_payload()))
 
     async def find(p):
@@ -1541,7 +1546,7 @@ def test_generic_flow_tries_response_capture_before_url_candidates(tmp_path, mon
 
     order = []
 
-    async def capture(ctx, page, dest, *, timeout_s=None, control_wait_s=0):
+    async def capture(ctx, page, dest, *, timeout_s=None, control_wait_s=0, settle_s=None):
         order.append("capture")
         Path(dest).write_bytes(_pdf_payload())
         return True
@@ -1616,6 +1621,30 @@ def test_generic_flow_skips_navigation_when_page_is_already_loaded(tmp_path, mon
 
     assert asyncio.run(download_browser.generic_flow(ctx, "10.1/x", {}, dest)) is True
     assert page.goto_calls == ["https://publisher.example/paper.pdf"]
+
+
+def test_fetch_crossref_unescapes_double_escaped_entities(monkeypatch):
+    """Crossref sometimes returns &amp;ldquo; — the item title must not show it."""
+    from hydrolitagent.zotero import paper_to_zotero as p2z
+
+    title = "Causation of the &amp;ldquo;8&amp;middot;26&amp;rdquo; chain"
+    payload = json.dumps({"message": {"title": [title], "author": []}}).encode()
+
+    class FakeResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return payload
+
+    monkeypatch.setattr(p2z.urllib.request, "urlopen", lambda *a, **k: FakeResp())
+
+    msg = p2z.fetch_crossref("10.3724/x")
+
+    assert msg["title"] == ["Causation of the “8·26” chain"]
 
 
 def test_entry_gate_ignores_weak_markers_that_match_paper_titles():

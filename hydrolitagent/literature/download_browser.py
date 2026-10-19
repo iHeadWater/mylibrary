@@ -50,9 +50,12 @@ SPA_PREFIXES = frozenset({"10.3724"})
 # Sites whose PDF only appears after clicking their own control (and may take a
 # while to answer). Capture the application/pdf response instead of guessing URLs.
 PDF_RESPONSE_TIMEOUT_S = 120
+# sciengine can take several minutes to produce the PDF on a slow day.
+PDF_RESPONSE_TIMEOUT_SPA_S = 300
 PDF_RESPONSE_PROGRESS_S = 15
 PDF_CONTROL_WAIT_S = 20  # SPA toolbars render a few seconds in
 PDF_CONTROL_SETTLE_S = 2  # click handlers bind after the control renders
+PDF_SPA_SETTLE_S = 10  # SPA toolbars are interactive well after they render
 PDF_RESPONSE_RECLICK_S = 45  # re-click once if nothing came back
 
 # Only explicit preview/download controls. A bare "href contains pdf" anchor
@@ -260,7 +263,8 @@ async def _find_pdf_control(page):
 
 async def capture_pdf_response(ctx, page, dest: Path, *,
                                timeout_s: float = PDF_RESPONSE_TIMEOUT_S,
-                               control_wait_s: float = 0) -> bool:
+                               control_wait_s: float = 0,
+                               settle_s: float | None = None) -> bool:
     """Click the page's PDF control and capture the resulting PDF response.
 
     For single-page-app publishers the PDF is not reachable at a guessable URL:
@@ -278,7 +282,7 @@ async def capture_pdf_response(ctx, page, dest: Path, *,
         return False
 
     done = asyncio.Event()
-    tasks: set[asyncio.Task] = set()
+    found: dict[str, str] = {}
 
     def _content_type(resp) -> str:
         try:
@@ -287,34 +291,27 @@ async def capture_pdf_response(ctx, page, dest: Path, *,
             return ""
 
     def on_response(resp):
-        async def grab():
-            try:
-                if "application/pdf" not in _content_type(resp):
-                    return
-                if getattr(resp, "status", 200) != 200:
-                    return  # 206 = range request, would be a partial file
-                body = await resp.body()
-                if not body.startswith(b"%PDF-"):
-                    return
-                if b"%%EOF" not in body[-2048:]:
-                    log("  captured PDF looks truncated (no %%EOF); ignoring")
-                    return
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(body)
+        # Record only the URL. Playwright cannot reliably hand back the body of
+        # a response that renders an inline PDF navigation, so fetch it below
+        # through the context (which carries the session cookies).
+        try:
+            if "application/pdf" not in _content_type(resp):
+                return
+            if getattr(resp, "status", 200) != 200:
+                return  # 206 = range request, a fragment rather than the file
+            if not found:
+                found["url"] = resp.url
                 done.set()
-            except Exception:
-                pass  # a detached/aborted response is not fatal; keep waiting
-
-        task = asyncio.create_task(grab())
-        tasks.add(task)
-        task.add_done_callback(tasks.discard)
+        except Exception:
+            pass
 
     ctx.on("response", on_response)
     started = time.time()
     next_log = started + PDF_RESPONSE_PROGRESS_S
     try:
-        if PDF_CONTROL_SETTLE_S:
-            await asyncio.sleep(PDF_CONTROL_SETTLE_S)
+        settle = PDF_CONTROL_SETTLE_S if settle_s is None else settle_s
+        if settle:
+            await asyncio.sleep(settle)
         log("  clicking the page's own PDF control")
         await control.click(timeout=10_000)
         last_click = time.time()
@@ -338,23 +335,32 @@ async def capture_pdf_response(ctx, page, dest: Path, *,
                 except Exception:
                     pass
                 last_click = time.time()
-        return True
+
+        url = found.get("url")
+        if not url:
+            return False
+        log(f"  PDF response seen: {url[:100]}")
+        if await fetch_pdf_bytes(ctx, url, dest, referer=page.url,
+                                 timeout_ms=PDF_FETCH_TIMEOUT_MS):
+            return True
+        # Last resort: the response object may still be readable.
+        log("  could not re-fetch the PDF URL; giving up on this route")
+        return False
     except Exception as e:
         log(f"  capture_pdf_response: {type(e).__name__} {str(e)[:80]}")
-        # A click can fail after the PDF already arrived — keep that capture.
-        return done.is_set() and is_pdf_file(dest)
+        return is_pdf_file(dest)
     finally:
         try:
             ctx.remove_listener("response", on_response)
         except Exception:
             pass
-        for task in list(tasks):
-            task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
 
 
-async def fetch_pdf_bytes(ctx, url: str, dest: Path, referer: str = "") -> bool:
+PDF_FETCH_TIMEOUT_MS = 180_000  # large files over a slow link take minutes
+
+
+async def fetch_pdf_bytes(ctx, url: str, dest: Path, referer: str = "",
+                          timeout_ms: int = 60_000) -> bool:
     """Fetch the PDF through the browser context (shares cookies).
 
     Needed when the PDF is served inline: navigating to it opens the viewer
@@ -362,13 +368,13 @@ async def fetch_pdf_bytes(ctx, url: str, dest: Path, referer: str = "") -> bool:
     """
     try:
         headers = {"Referer": referer} if referer else None
-        resp = await ctx.request.get(url, headers=headers, timeout=60_000)
+        resp = await ctx.request.get(url, headers=headers, timeout=timeout_ms)
         body = await resp.body()
-        if body.startswith(b"%PDF"):
+        if body.startswith(b"%PDF") and b"%%EOF" in body[-2048:]:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(body)
             return True
-        log(f"  fetch_pdf_bytes: not a PDF ({resp.status}, {len(body)} bytes)")
+        log(f"  fetch_pdf_bytes: not a complete PDF ({resp.status}, {len(body)} bytes)")
     except Exception as e:
         log(f"  fetch_pdf_bytes: {type(e).__name__} {str(e)[:60]}")
     return False
@@ -711,8 +717,12 @@ async def generic_flow(ctx, doi: str, meta: dict, dest: Path, *,
     # their URL candidates are unguessable, so trying them first just burns
     # timeouts. Non-SPA sites get no render wait, so this costs them nothing.
     prefix = str(meta.get("prefix") or "")
-    capture_wait = PDF_CONTROL_WAIT_S if prefix in SPA_PREFIXES else 0
-    if await capture_pdf_response(ctx, page, dest, control_wait_s=capture_wait):
+    is_spa = prefix in SPA_PREFIXES
+    capture_wait = PDF_CONTROL_WAIT_S if is_spa else 0
+    capture_timeout = PDF_RESPONSE_TIMEOUT_SPA_S if is_spa else PDF_RESPONSE_TIMEOUT_S
+    capture_settle = PDF_SPA_SETTLE_S if is_spa else PDF_CONTROL_SETTLE_S
+    if await capture_pdf_response(ctx, page, dest, timeout_s=capture_timeout,
+                                  control_wait_s=capture_wait, settle_s=capture_settle):
         if is_pdf_file(dest):
             return True
         dest.unlink(missing_ok=True)

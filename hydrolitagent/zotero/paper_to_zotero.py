@@ -17,6 +17,7 @@ Configuration:
 """
 from __future__ import annotations
 
+import html
 import json
 import os
 import sys
@@ -53,11 +54,34 @@ def fetch_crossref(doi: str, attempts: int = 2) -> dict | None:
     for attempt in range(attempts):
         try:
             resp = urllib.request.urlopen(req, timeout=10)
-            return json.loads(resp.read()).get("message")
+            msg = json.loads(resp.read()).get("message")
+            return _unescape_metadata(msg) if isinstance(msg, dict) else msg
         except Exception:
             if attempt + 1 < attempts:
                 time.sleep(1)
     return None
+
+
+def _unescape(value):
+    """Undo HTML entities, repeatedly: Crossref sometimes double-escapes them."""
+    if not isinstance(value, str):
+        return value
+    for _ in range(3):
+        decoded = html.unescape(value)
+        if decoded == value:
+            break
+        value = decoded
+    return value
+
+
+def _unescape_metadata(msg: dict) -> dict:
+    for key in ("title", "container-title", "subtitle", "short-container-title"):
+        if isinstance(msg.get(key), list):
+            msg[key] = [_unescape(v) for v in msg[key]]
+    for key in ("abstract", "publisher"):
+        if isinstance(msg.get(key), str):
+            msg[key] = _unescape(msg[key])
+    return msg
 
 
 def fetch_arxiv(arxiv_id: str) -> dict | None:
