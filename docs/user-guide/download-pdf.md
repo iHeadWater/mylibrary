@@ -78,7 +78,11 @@ uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元
 ```
 
 你**只需点验证**：出现几次就点几次，点完不用回终端，脚本会自动续上下载。
-没有验证的出版社（Elsevier、大部分 OA 源）全程无窗口。
+
+**ScienceDirect / Elsevier 例外**：这家在无头模式下返回 `net::ERR_ABORTED`，且必须由人
+在可见窗口里点验证才能继续，所以 `10.1016` **直接走有头**，不做无头尝试（省掉一段必然失败的等待）。
+
+其他出版社如果无头失败（但没有弹出验证），脚本同样会用可见窗口重试一次，只是不会要求你点验证。
 
 **方式二：agent + Playwright MCP 浏览器**（脚本无法覆盖的出版商或需人工登录时）
 

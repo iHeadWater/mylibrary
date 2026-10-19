@@ -999,17 +999,39 @@ def test_download_with_browser_escalates_to_headed_when_challenge_persists(
     assert "自动继续" in capsys.readouterr().out
 
 
-def test_download_with_browser_does_not_escalate_without_challenge(tmp_path, monkeypatch):
-    """A plain failure with no challenge must not pop a window."""
+def test_download_with_browser_retries_headed_after_headless_failure(tmp_path, monkeypatch, capsys):
+    """A headless failure is not proof the paper is unavailable — retry visible.
+
+    The visible pass may also be needed when no challenge was shown at all, so
+    "no challenge" must not short-circuit the retry.
+    """
     from hydrolitagent.literature import download_browser
 
-    recorded = _patch_router(monkeypatch, attempts=[(False, False)])
+    recorded = _patch_router(monkeypatch, attempts=[(False, False), (True, False)])
     meta = {"prefix": "10.1080", "suffix": "x"}
 
     dest = asyncio.run(download_browser.download_with_browser("10.1080/0000000", meta, tmp_path))
 
-    assert dest is None
-    assert recorded["headless"] == [True]
+    assert dest is not None and dest.exists()
+    assert recorded["headless"] == [True, False]
+    out = capsys.readouterr().out
+    # No challenge was seen, so do not tell the user to pass verification.
+    assert "人机验证" not in out
+
+
+def test_download_with_browser_goes_straight_to_headed_for_sciencedirect(
+    tmp_path, monkeypatch
+):
+    """ScienceDirect always needs a visible session with a human click."""
+    from hydrolitagent.literature import download_browser
+
+    recorded = _patch_router(monkeypatch, attempts=[(True, False)])
+    meta = {"prefix": "10.1016", "suffix": "x", "pii": "S0022169426016069"}
+
+    dest = asyncio.run(download_browser.download_with_browser("10.1016/x", meta, tmp_path))
+
+    assert dest is not None and dest.exists()
+    assert recorded["headless"] == [False]
 
 
 def test_download_with_browser_removes_non_pdf_dest_on_failure(tmp_path, monkeypatch):
@@ -1439,6 +1461,23 @@ def test_attempt_runs_flows_when_headed_challenge_persists(tmp_path, monkeypatch
 
     assert record["scripted"] == 1
     assert record["generic"] == 1
+
+
+def test_attempt_does_not_pre_navigate_scripted_prefixes(tmp_path, monkeypatch):
+    """Pre-navigating would abort the flow's own goto (ERR_ABORTED on Elsevier)."""
+    from hydrolitagent.literature import download_browser
+
+    page = FakePage()
+    _wire_attempt(monkeypatch, page, FakeContext(page))
+
+    asyncio.run(
+        download_browser._attempt(
+            headless=False, out_dir=tmp_path, prefix="10.1016", doi="10.1016/x",
+            meta={"suffix": "x", "pii": "S0022169426016069"}, dest=tmp_path / "x.pdf",
+        )
+    )
+
+    assert page.goto_calls == []
 
 
 def test_attempt_propagates_no_access_without_generic_fallback(tmp_path, monkeypatch):

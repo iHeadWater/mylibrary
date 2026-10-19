@@ -37,6 +37,19 @@ MCP_BASE = Path.home() / "AppData/Local/ms-playwright-mcp"
 # First attempt runs headless (no window); only a challenge that does not clear
 # escalates to a visible window with one instruction for the human.
 HEADLESS_FIRST = True
+
+# Publishers whose flow cannot work without a visible, human-verified session.
+# ScienceDirect answers a headless navigation with ERR_ABORTED and never shows
+# a challenge, so a headless attempt is pure waiting — go straight to headed.
+HEADED_ONLY_PREFIXES = frozenset({"10.1016"})
+
+# Prefixes that have their own flow and navigate the page themselves. They must
+# NOT be pre-navigated: the entry navigation leaves a redirect chain in flight,
+# and the flow's own goto is then aborted (ERR_ABORTED on ScienceDirect).
+SCRIPTED_PREFIXES = frozenset(
+    {"10.1016", "10.1029", "10.1002", "10.1175", "10.1038", "10.2139"}
+)
+
 HEADLESS_CHALLENGE_GRACE_S = 15
 HEADED_CHALLENGE_TIMEOUT_S = 300
 GENERIC_DOWNLOAD_TIMEOUT_MS = 30_000
@@ -238,6 +251,23 @@ def _is_signed_pdf_url(url: str) -> bool:
     )
 
 
+async def _click_view_pdf(page) -> bool:
+    """Click the article's own 'View PDF' control, if it is usable.
+
+    Preferred over navigating to ``pdfft`` directly: the button carries the
+    site's own session/redirect handling. Best-effort — the caller falls back.
+    """
+    try:
+        loc = page.locator("a:has-text('View PDF'), button:has-text('View PDF')").first
+        if await loc.count() == 0 or not await loc.is_visible():
+            return False
+        await loc.click(timeout=10_000)
+        return True
+    except Exception as e:
+        log(f"  View PDF click failed: {type(e).__name__} {str(e)[:60]}")
+        return False
+
+
 async def sd_flow(ctx, pii: str, dest: Path) -> bool:
     """ScienceDirect: article page -> pdfft -> signed main.pdf viewer -> anchor download.
 
@@ -255,15 +285,28 @@ async def sd_flow(ctx, pii: str, dest: Path) -> bool:
     pdfft = art + f"/pdfft?pid=1-s2.0-{pii}-main.pdf"
     await page.goto(art, timeout=60000, wait_until="domcontentloaded")
     await wait_challenge_clear(page)
-    try:
-        await page.goto(pdfft, timeout=60000, wait_until="commit")
-    except Exception:
-        pass  # navigation may be replaced by the redirect chain
+    # Let the article toolbar hydrate before touching it; clicking too early
+    # finds a disabled button (seen on a slow link).
+    await asyncio.sleep(2)
+
+    if not await _click_view_pdf(page):
+        try:
+            await page.goto(pdfft, timeout=60000, wait_until="commit")
+        except Exception:
+            pass  # navigation may be replaced by the redirect chain
+
+    def _signed():
+        for p in ctx.pages:
+            if _is_signed_pdf_url(p.url):
+                return p
+        return None
+
     deadline = time.time() + 120
-    while time.time() < deadline:
-        if _is_signed_pdf_url(page.url):
-            break
+    while time.time() < deadline and _signed() is None:
         await asyncio.sleep(4)
+    signed_page = _signed()
+    if signed_page is not None:
+        page = signed_page  # the viewer may have opened in a new tab
     if not _is_signed_pdf_url(page.url):
         log(f"  never reached main.pdf (url={page.url[:70]})")
         return False
@@ -566,23 +609,27 @@ async def _attempt(*, headless: bool, out_dir: Path, prefix: str, doi: str, meta
     async with apw() as pw:
         ctx = await _launch_context(pw, out_dir, headless=headless)
         try:
-            page = await new_page(ctx)
-            try:
-                await page.goto(f"https://doi.org/{doi}", timeout=60_000,
-                                wait_until="domcontentloaded")
-            except Exception:
-                pass
-            # Entry gate uses interstitial-only markers so a paper titled
-            # "Security check of ..." is not mistaken for a challenge.
-            if not await wait_challenge_clear(page, timeout_s=grace,
-                                              markers=ENTRY_TITLE_MARKERS):
-                if headless:
-                    # Nobody can solve a challenge without a window; escalate.
-                    log("  verification did not clear (headless)")
-                    return False, True
-                # Headed: the flow knows how to handle its own challenge (AMS
-                # needs a button press, others re-wait), so never abort here.
-                log("  verification still showing; letting the flow handle it")
+            if prefix not in SCRIPTED_PREFIXES:
+                # No flow to defer to, so check the challenge here. Scripted
+                # prefixes are skipped: they navigate the page themselves and a
+                # second navigation on the same page aborts (ERR_ABORTED).
+                page = await new_page(ctx)
+                try:
+                    await page.goto(f"https://doi.org/{doi}", timeout=60_000,
+                                    wait_until="domcontentloaded")
+                except Exception:
+                    pass
+                # Interstitial-only markers: a paper titled "Security check of
+                # ..." must not be mistaken for a challenge.
+                if not await wait_challenge_clear(page, timeout_s=grace,
+                                                  markers=ENTRY_TITLE_MARKERS):
+                    if headless:
+                        # Nobody can solve a challenge without a window.
+                        log("  verification did not clear (headless)")
+                        return False, True
+                    # Headed: the flow knows how to handle its own challenge
+                    # (AMS needs a button press, others re-wait).
+                    log("  verification still showing; letting the flow handle it")
 
             try:
                 ok = await _run_scripted(ctx, prefix, doi, meta, dest)
@@ -622,17 +669,22 @@ async def download_with_browser(doi: str, meta: dict, out_dir: Path) -> Path | N
     out_dir.mkdir(parents=True, exist_ok=True)
     kwargs = dict(out_dir=out_dir, prefix=prefix, doi=doi, meta=meta, dest=dest)
 
+    first_headless = HEADLESS_FIRST and prefix not in HEADED_ONLY_PREFIXES
     try:
-        ok, challenged = await _attempt(headless=HEADLESS_FIRST, **kwargs)
+        ok, challenged = await _attempt(headless=first_headless, **kwargs)
         if ok and is_pdf_file(dest):
             return dest
-        if not challenged:
-            log("  FAILED: browser flows did not produce a PDF")
-            dest.unlink(missing_ok=True)
-            return None
 
-        log("⚠ 请在浏览器中完成人机验证(点几次都行)。完成后无需回到终端,程序会自动继续。")
-        ok, _ = await _attempt(headless=False, **kwargs)
+        if first_headless:
+            # A headless failure is not proof the paper is unavailable: some
+            # publishers (ScienceDirect) return ERR_ABORTED headless without
+            # ever showing a challenge. Always give the visible flow one turn.
+            if challenged:
+                log("⚠ 请在浏览器中完成人机验证(点几次都行)。"
+                    "完成后无需回到终端,程序会自动继续。")
+            else:
+                log("  无头模式未能下载;用可见窗口重试一次")
+            ok, _ = await _attempt(headless=False, **kwargs)
     except _NoAccess as e:
         log(f"  no access: {e}")
         dest.unlink(missing_ok=True)
