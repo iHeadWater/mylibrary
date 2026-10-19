@@ -282,7 +282,7 @@ async def capture_pdf_response(ctx, page, dest: Path, *,
         return False
 
     done = asyncio.Event()
-    found: dict[str, str] = {}
+    found: dict[str, object] = {}
 
     def _content_type(resp) -> str:
         try:
@@ -301,6 +301,7 @@ async def capture_pdf_response(ctx, page, dest: Path, *,
                 return  # 206 = range request, a fragment rather than the file
             if not found:
                 found["url"] = resp.url
+                found["resp"] = resp
                 done.set()
         except Exception:
             pass
@@ -336,14 +337,25 @@ async def capture_pdf_response(ctx, page, dest: Path, *,
                     pass
                 last_click = time.time()
 
-        url = found.get("url")
+        url = str(found.get("url") or "")
         if not url:
             return False
         log(f"  PDF response seen: {url[:100]}")
         if await fetch_pdf_bytes(ctx, url, dest, referer=page.url,
                                  timeout_ms=PDF_FETCH_TIMEOUT_MS):
             return True
-        # Last resort: the response object may still be readable.
+        # Some sites sign/consume the URL; the response body may still be readable.
+        resp = found.get("resp")
+        if resp is not None:
+            try:
+                body = await resp.body()
+                if body.startswith(b"%PDF") and b"%%EOF" in body[-8192:]:
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(body)
+                    log("  used the captured response body instead of re-fetching")
+                    return True
+            except Exception:
+                pass
         log("  could not re-fetch the PDF URL; giving up on this route")
         return False
     except Exception as e:
@@ -370,7 +382,7 @@ async def fetch_pdf_bytes(ctx, url: str, dest: Path, referer: str = "",
         headers = {"Referer": referer} if referer else None
         resp = await ctx.request.get(url, headers=headers, timeout=timeout_ms)
         body = await resp.body()
-        if body.startswith(b"%PDF") and b"%%EOF" in body[-2048:]:
+        if body.startswith(b"%PDF") and b"%%EOF" in body[-8192:]:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(body)
             return True

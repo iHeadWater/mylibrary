@@ -1352,6 +1352,8 @@ def test_capture_pdf_response_saves_first_pdf_response(tmp_path, monkeypatch):
         download_browser.capture_pdf_response(ctx, FakePage(), dest, timeout_s=10)
     ) is True
     assert dest.read_bytes() == _pdf_payload()
+    # The bytes come from re-fetching the recorded URL, not from resp.body().
+    assert ctx.request.calls == ["https://x/y.pdf"]
     assert control.clicked == 1
     assert ctx.response_handlers == []  # listener removed
 
@@ -1403,8 +1405,9 @@ def test_capture_pdf_response_rejects_truncated_pdf(tmp_path, monkeypatch):
     from hydrolitagent.literature import download_browser
 
     dest = tmp_path / "out.pdf"
-    ctx = FakeContext(pdf_bytes=b"%PDF-1.7\nhalf a file\n")
-    control = _FakeControl(ctx, _FakePlaywrightResponse(_pdf_payload()))
+    half = b"%PDF-1.7\nhalf a file\n"
+    ctx = FakeContext(pdf_bytes=half)
+    control = _FakeControl(ctx, _FakePlaywrightResponse(half))
 
     async def find(p):
         return control

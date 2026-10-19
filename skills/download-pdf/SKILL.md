@@ -67,7 +67,8 @@ uv run python scripts/download_paper.py --arxiv <id> --sync
 Routing: `10.5194` Copernicus → curl · `10.1126` science.org → curl two-step，失败回退浏览器 ·
 `10.1016` → SD flow · `10.1029`/`10.1002` → Wiley pdfdirect · `10.1175` → AMS ·
 `10.1038` → Nature · `10.2139` → SSRN · `10.3724` → sciengine：**有头**，点页面上的
-「预览PDF」并捕获 `application/pdf` 响应（等控件渲染 20s、最多等 120s、45s 无反应再点一次）·
+「预览PDF」，记录 `application/pdf` 响应的 URL 再用上下文回取（等控件渲染 20s、最多等 300s、
+回取限 180s、45s 无反应再点一次）·
 else → 通用 flow（先试响应捕获，再试 `citation_pdf_url` / PDF 锚点 → 导航下载）。
 
 脚本优先用**无头**浏览器；只有在无头无法通过人机验证时才弹出窗口，人点完**不需要回到终端**，
