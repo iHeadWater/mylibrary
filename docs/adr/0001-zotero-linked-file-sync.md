@@ -10,7 +10,7 @@ Accepted
 
 ## Context
 
-`download-pdf` 能力通过机构访问（大连理工大学 SSO）用 Playwright 浏览器自动化下载学术论文（每篇 5–90 MB）。下载后用户希望把 PDF 同步进 Zotero 文献库。用户使用 ZotMoov 在 Google Drive 目录中管理链接 PDF，完全绕过 Zotero 云存储。
+`download-pdf` 能力通过机构访问（任何有订阅的机构 SSO）用 Playwright 浏览器自动化下载学术论文（每篇 5–90 MB）。下载后用户希望把 PDF 同步进 Zotero 文献库。用户使用 ZotMoov 在 Google Drive 目录中管理链接 PDF，完全绕过 Zotero 云存储。
 
 同步路径考虑过的选项：
 

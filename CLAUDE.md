@@ -70,7 +70,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 ### Zotero
 - Start MCP Server: `uv run python -m hydrolitagent.zotero.server` (port 8002, 12 tools)
-- **下载+入库 canonical（裸 host / 本仓库直跑）**:`uv run python scripts/download_paper.py --arxiv <id> --sync` / `--doi <doi> --sync`;新机器先 `uv run python scripts/download_paper.py --setup-check`
+- **下载+入库 canonical（裸 host / 本仓库直跑）**:`uv run python scripts/download_paper.py --arxiv <id> --sync` / `--doi <doi> --sync` / `--title "<标题>" --sync`(无 DOI 时自动检索;歧义则列候选并退出码 2);新机器先 `uv run python scripts/download_paper.py --setup-check`
   - 建条目统一由 `paper_to_zotero.build_item()` 生成（arXiv → preprint + 摘要 + `archiveID`）;同 DOI 重跑会**补挂**到既有条目（条目在、缺 PDF 的常见情形），已挂同内容才幂等跳过
   - arXiv 与 OA DOI 走 curl 无需 playwright;付费墙（SD/Wiley/Nature）需浏览器 + 机构会话
 - **下载+入库 canonical（myopenclaw hermes 容器 / 爱码士）**:`docker compose exec hermes-coder /opt/hermes/scripts/run-paper-pipeline.sh "<DOI|arXiv|title>"`（该脚本在 build 时从本仓库 `scripts/` 拷入镜像;详见 `skills/paper-to-zotero` 双模式说明）

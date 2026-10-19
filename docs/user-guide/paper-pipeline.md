@@ -161,6 +161,6 @@ uv run python -m hydrolitagent.zotero.zot_link_gdrive --dry-run <ZOTERO_KEY> <fi
 
 ## 相关文档
 
-- [论文 PDF 下载（机构访问）](download-pdf.md) — 需 DUT SSO 的出版商手动下载
+- [论文 PDF 下载（机构访问）](download-pdf.md) — 需机构 SSO 的出版商才需人工点一次
 - [Zotero 入库（linked_file）](zotero-sync.md) — 已下载 PDF 的 linked_file 入库
 - [ADR-0001：linked_file 设计](../adr/0001-zotero-linked-file-sync.md) — 为什么用 linked_file

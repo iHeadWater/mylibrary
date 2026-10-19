@@ -62,7 +62,7 @@ cd /path/to/mylibrary
 |------|------|------|
 | Zotero 文献查询 | 12 个工具的 MCP Server：搜索、浏览、读取全文/附件/批注 | [MCP Server 工具](user-guide/mcp-tools.md) |
 | 论文入库流水线 | DOI / arXiv ID / 标题 → 下载 PDF → Zotero 条目 + linked_file 附件 | [论文入库流水线](user-guide/paper-pipeline.md) |
-| 论文 PDF 下载 | 机构访问通过 Claude Code + Playwright 下载 | [论文 PDF 下载](user-guide/download-pdf.md) |
+| 论文 PDF 下载 | 独立 CLI，用 Playwright 驱动本机 Chrome（不依赖 Claude Code） | [论文 PDF 下载](user-guide/download-pdf.md) |
 | Zotero 入库（linked_file） | 已下载 PDF 同步进 Zotero，零云端配额 | [Zotero 入库](user-guide/zotero-sync.md) |
 | Zotero → NotebookLM | 新增论文整理成中文简报 / 音频 / 视频概览 | [Zotero → NotebookLM](user-guide/zotero-notebooklm.md) |
 | 文献深度处理 | Literature CLI：每周综述、公众号发布/润色/配图、B 站上传 | [文献深度处理](user-guide/literature.md) |

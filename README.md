@@ -116,6 +116,7 @@ uv run python -m hydrolitagent.zotero.server
 uv run python scripts/download_paper.py --setup-check                                  # 新机器先自检一次
 uv run python scripts/download_paper.py --doi "10.1016/j.jhydrol.2023.130249" --sync
 uv run python scripts/download_paper.py --arxiv 2501.08086 --sync
+uv run python scripts/download_paper.py --title "<论文标题>" --sync            # 只有标题时自动解析 DOI
 
 # 容器（myopenclaw hermes）里用打包好的流水线；逐条细节见 docs/user-guide/paper-pipeline.md
 bash scripts/run_paper_pipeline.sh "10.1016/j.jhydrol.2023.130249"

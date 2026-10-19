@@ -47,8 +47,9 @@ uv run python -m hydrolitagent.zotero.paper_to_zotero --dry-run --metadata-only 
 它会解析 DOI → 下载 PDF → 建 Zotero 条目 + `linked_file` 附件。
 
 - **arXiv 与开放获取**（science.org / Copernicus 等）走 curl，**秒级**。
-- **付费墙**（ScienceDirect / Wiley / Nature 等）会**打开一个浏览器窗口** ——
-  你按提示走完机构会话，剩下的它接着做。
+- **付费墙**（Wiley / Nature 等）先做**无头**尝试，失败才打开浏览器窗口；
+  `10.1016`（ScienceDirect）和 `10.3724`（sciengine）**直接开窗口**。
+  你按提示点一次验证，剩下的它接着做。
 
 新机器先自检一次，之后一条命令：
 

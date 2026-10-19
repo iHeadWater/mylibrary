@@ -8,10 +8,10 @@
 PDF 下载并验证
   → zotero_sync <pdf> <doi>
   → 拷贝 PDF 到 GDRIVE_PAPERS_PATH
-  → build_item 拉元数据（Crossref → arXiv API → Semantic Scholar）
-  → 查重：同 DOI 是否已有条目？
-      ├─ 没有 → 用 pyzotero Web API 创建父条目
-      └─ 已有 → 把 PDF 挂到既有条目上
+  → 查重：同 DOI 是否已有条目？（本地索引 + 增量，命中零请求）
+      ├─ 已有 → 把 PDF 挂到既有条目上（不拉元数据）
+      └─ 没有 → build_item 拉元数据（Crossref → arXiv API → Semantic Scholar）
+                → 用 pyzotero Web API 创建父条目
   → 创建 linked_file 附件（attachments:<filename> 方案）
 ```
 
@@ -38,6 +38,7 @@ Zotero → 偏好设置 → 高级 → 文件和文件夹：
 uv run python scripts/download_paper.py --setup-check            # 新机器先自检一次
 uv run python scripts/download_paper.py --arxiv <id> --sync      # arXiv → preprint 记录
 uv run python scripts/download_paper.py --doi <doi> --sync       # 期刊 / 会议 DOI
+uv run python scripts/download_paper.py --title "<标题>" --sync   # 只有标题：先检索成 DOI
 ```
 
 直接调用 `zotero_sync`（本文档，处理已有 PDF）——从 mylibrary 仓库根执行：
@@ -63,8 +64,10 @@ uv run python -m hydrolitagent.literature.zotero_sync <pdf_path> <doi> --skip-ex
 
 ## 它做了什么
 
-1. **拷贝 PDF** 到 `$GDRIVE_PAPERS_PATH/{doi-slug}.pdf`
-2. **拉取元数据** 用 `paper_to_zotero.build_item()`（Crossref → arXiv API → Semantic Scholar）。
+1. **查重** 先看本地索引（带水位线的增量）。命中就直接走补挂，
+   **不再付 Crossref 延迟**，Crossref 故障也不会挡住补挂。
+2. **拷贝 PDF** 到 `$GDRIVE_PAPERS_PATH/{doi-slug}.pdf`
+3. **未命中才拉取元数据** 用 `paper_to_zotero.build_item()`（Crossref → arXiv API → Semantic Scholar）。
    arXiv DOI（`10.48550/arXiv.*`）在 Crossref 是 404，由 arXiv API 给出正确的 `preprint` 记录
    （真实标题/作者/摘要/日期 + `archiveID: arXiv:…`），不再退回 PDF 内嵌元数据。
 3. **查重并决定动作** 同 DOI 已存在时**把 PDF 补挂到既有条目**，而不是跳过：
@@ -78,8 +81,9 @@ uv run python -m hydrolitagent.literature.zotero_sync <pdf_path> <doi> --skip-ex
 
 ## 查重索引（增量）
 
-`.zotero-sync-index.json` 保存在 `$GDRIVE_PAPERS_PATH` 里，记录 `{DOI → Zotero key}`
-和一条**库水位线** `last_version`。
+`.zotero-sync-index.json` 保存在 `$GDRIVE_PAPERS_PATH` 里，字段为
+`{version, updated, last_version, library_id, items}`：`items` 是 `{DOI → Zotero key}`，
+`last_version` 是**库水位线**，`library_id` 记录这份账本属于哪个库。
 
 Zotero Web API 的快速搜索 `q` **不索引 DOI 字段**，所以"这个 DOI 存在吗"没法直接问服务端。
 索引的作用就是把这个问题变成一次本地查表：
@@ -89,14 +93,21 @@ Zotero Web API 的快速搜索 `q` **不索引 DOI 字段**，所以"这个 DOI 
 | DOI 在索引里（命中） | 0 | 立即 |
 | 未命中，且库水位没动 | 1（只读水位） | ~1 秒 |
 | 未命中，库有改动 | 3（水位 + `since` 增量 + 删除列表） | 1–3 秒 |
-| 首次升级到 v2 / `--refresh-index` | ~60 | 约 5 分钟（一次性） |
+| 首次升级到 v2（同库、索引完好） | ~60 | 约 5 分钟，**仅一次** |
+| 每次 `--refresh-index` | ~60 | 约 5 分钟 |
+| 索引损坏 / 换库 / 水位倒退 | ~60 | 约 5 分钟（各自触发一次重建） |
 
 **为什么"库水位没动"就能断定不存在：** 全量扫描记录了扫描时刻的水位 V；此后每次增量把
 V→W 之间的新增、修改、删除全部并入；若当前水位仍是 W，说明窗口内没有任何变化，
 因此索引里没有的 DOI 就是真的没有。
 
 > ⚠️ **升级后第一次运行仍会做一次全量扫描**（约 5 分钟）。这是为了建立水位线，
-> 让之后每一次都能秒级判定。只发生一次，之后不会再有。
+> 让之后每一次都能秒级判定。同一库、索引完好的前提下只发生一次；
+> 但**换库、索引损坏、库版本倒退**都会各自再触发一次全量重建。
+
+增量读取用 `top(since=…, includeTrashed=1)`：移到回收站是一次条目更新（`data.deleted=1`），
+不带这个参数就永远看不到，账本里的陈旧命中也就不自愈。回收站条目会从索引中移除。
+`since` 增量按 100 条分页，所以"3 次请求"是最小值，改动多时会更多。
 
 索引写入是**原子**的（`.tmp` + `os.replace`），Google Drive 同步中断不会留下半个文件。
 重建索引：`--refresh-index`，或直接删掉 `.zotero-sync-index.json`。
