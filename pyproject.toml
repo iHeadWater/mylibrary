@@ -1,12 +1,13 @@
 [build-system]
 # 必须显式声明：缺省时 uv 视本工程为"未打包"（virtual），
 # project.scripts 的入口点不会被安装，`uv run hydrolitagent` 将不可用。
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+# hatch-vcs 让版本跟随 git tag：发版只需打标签，不必手改版本号。
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
 [project]
 name = "hydrolitagent"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Literature knowledge base toolkit for hydrology research."
 readme = "README.md"
 license = { text = "AGPL-3.0" }
@@ -50,18 +51,19 @@ dev = [
 [project.scripts]
 hydrolitagent = "hydrolitagent.cli:main"
 
-[tool.setuptools.packages.find]
-include = ["hydrolitagent*"]
+[tool.hatch.version]
+# 版本来自 git tag（vX.Y.Z）。拿不到任何 tag 时（例如源码 tarball）退回此值。
+source = "vcs"
+fallback-version = "0.0.0"
 
-[tool.setuptools.package-data]
-# 文献卡与主题卡的资产（模板/prompt/schema/默认配置/示例）随包分发。
-"hydrolitagent.cards" = [
-  "assets/templates/**/*",
-  "assets/prompts/*.md",
-  "assets/schemas/*.json",
-  "assets/examples/**/*",
-  "assets/config/*.json",
-]
+[tool.hatch.version.raw-options]
+# 不在版本号后面附 +g<sha>：wheel 文件名要干净，方便对照 tag。
+local_scheme = "no-local-version"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hydrolitagent"]
+# hatch 默认收录包目录下的所有文件，因此文献卡与主题卡的资产
+# （templates / prompts / schemas / examples / config）随包分发，无需额外声明。
 
 [tool.pytest.ini_options]
 # 两套测试已并为一套：hydrolitagent 的与平台的一起放在仓库根 tests/。

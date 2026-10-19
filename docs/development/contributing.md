@@ -129,6 +129,49 @@ class TestZoteroNewTool:
 - 使用 `_format_item()` 统一条目输出格式
 - 日志使用 `logging` 模块（不用 `print()`）
 
+## 版本号与发布
+
+版本号**不写在 `pyproject.toml` 里**。构建后端是 `hatchling` + `hatch-vcs`，
+`version` 是 dynamic 的，由 **git tag** 推导：
+
+| 仓库状态 | 推导出的版本 |
+|---|---|
+| 正好在 `v0.0.1` 标签上 | `0.0.1` |
+| `v0.0.1` 之后第 13 个提交 | `0.0.2.dev13` |
+| 拿不到任何 tag（如源码 tarball） | `fallback-version`（当前 `0.0.0`） |
+
+所以**不需要手工改版本号**。发版三步：
+
+```bash
+git tag v0.0.2                 # 1. 打标签
+git push origin v0.0.2         # 2. 推标签（顺带推 main）
+```
+
+3. 剩下的自动完成：
+
+```text
+push tag
+  → Release checks（.github/workflows/release-checks.yml）
+      校验 tag 与安装版本一致（要求 tag == v<installed version>）
+  → 绿了之后，Release workflow（.github/workflows/release.yml）自动创建 GitHub Release
+      正文由 GitHub 依据 PR/提交生成
+```
+
+两个容易踩的点：
+
+- **标签名必须是 `vX.Y.Z`**，且与推导出的包版本一致，否则 `Release checks` 直接失败。
+- CI 里 checkout 必须 `fetch-depth: 0`。浅克隆看不到 tag，hatch-vcs 会退回
+  `fallback-version`，于是 tag 与版本对不上——这个坑已经踩过并写进 workflow。
+
+本地查看当前推导出的版本：
+
+```bash
+uv run python -c "import importlib.metadata as m; print(m.version('hydrolitagent'))"
+```
+
+> 如果读到的是旧版本号，多半是仓库根残留了 `hydrolitagent.egg-info`（setuptools 时代的产物），
+> 它会盖过 venv 里的 dist-info。删掉即可。
+
 ## 构建文档站点
 
 ```bash

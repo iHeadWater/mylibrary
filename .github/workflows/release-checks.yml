@@ -32,6 +32,8 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+          # hatch-vcs 从 git tag 推导版本；浅克隆看不到 tag，版本会退回 fallback。
+          fetch-depth: 0
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
         with:
@@ -41,19 +43,17 @@ jobs:
           cache-dependency-glob: "uv.lock"
       - name: Install locked dependencies
         run: uv sync --locked
-      - name: Verify project, installed version and tag
+      - name: Verify installed version and tag
+        # 版本由 hatch-vcs 从 git tag 推导，`uv version` 在 dynamic version 下不可用；
+        # 这里以安装后的包版本为准，并校验 tag 与之一致。
         run: |
-          $projectVersion = uv version --short
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $installedVersion = uv run --no-sync python -c "from importlib.metadata import version; print(version('hydrolitagent'))"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if ($projectVersion -cne $installedVersion) {
-            throw "Project version $projectVersion differs from installed version $installedVersion"
+          if (-not $installedVersion) { throw "Could not read the installed version" }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -cne "v$installedVersion") {
+            throw "Tag $env:GITHUB_REF_NAME differs from v$installedVersion"
           }
-          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -cne "v$projectVersion") {
-            throw "Tag $env:GITHUB_REF_NAME differs from v$projectVersion"
-          }
-          Write-Output "Verified version: $projectVersion"
+          Write-Output "Verified version: $installedVersion"
       - name: Run test suite
         env:
           # Runner context is available here, not in job-level env.
