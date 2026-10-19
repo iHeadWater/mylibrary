@@ -1,0 +1,46 @@
+name: Release
+
+# 打一个 vX.Y.Z 标签 → Release checks 跑绿 → 自动创建 GitHub Release。
+#
+# 用 workflow_run 而不是 `on: push: tags` 是有意的：直接监听 tag 的话，
+# 校验失败时 release 已经生成了。这里只在“Release checks 成功”之后才发。
+#
+# 注意：workflow_run 只在本文件存在于默认分支时才触发，所以本文件需要先合入 main。
+#
+# 用 gh CLI 而不是第三方 action：本仓库其余 workflow 都固定了 action 的 SHA，
+# 与其引入一个未固定的第三方 action，不如用 GitHub 自带的 gh。
+
+on:
+  workflow_run:
+    workflows: ["Release checks"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.workflow_run.head_branch }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Create the release
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; nothing to do."
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
+          fi
