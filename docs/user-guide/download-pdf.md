@@ -63,6 +63,9 @@ uv run python scripts/download_paper.py --arxiv 2608.18495 --sync
 uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元数据
 ```
 
+只有标题时用 `--title`：Crossref 检索后解析成 DOI。**它拒绝猜测**——如果多个候选都覆盖了你给的
+全部词，会列出候选并返回退出码 2，让你用 `--doi` 明确指定；只有唯一明显胜出时才自动采用。
+
 `--sync` 走 `zotero_sync` → `paper_to_zotero.build_item()`：arXiv 记录为 `preprint`（摘要/日期/`archiveID`）。
 同 DOI 重跑会**补挂**到既有条目（不再只是跳过）；已挂同内容则幂等跳过。
 
@@ -232,6 +235,9 @@ SSRN 预印本免费下载。Cloudflare 挑战在 MCP 浏览器 profile 下自�
 uv run python scripts/download_paper.py --doi <doi> [--sync] [--out DIR]
 uv run python scripts/download_paper.py --arxiv <id> [--sync]
 uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元数据
+
+# 只有标题、没有 DOI 时：Crossref 检索后解析成 DOI
+uv run python scripts/download_paper.py --title "<标题>" [--sync]
 
 # 解析和分类输入
 uv run python -m hydrolitagent.literature.download_pdf doi <doi>

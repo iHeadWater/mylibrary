@@ -38,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     g = ap.add_mutually_exclusive_group(required=False)
     g.add_argument("--doi", help="Paper DOI, e.g. 10.1029/2026GL125188")
     g.add_argument("--arxiv", help="arXiv id, e.g. 2608.18495")
+    g.add_argument("--title",
+                   help="Paper title; resolved to a DOI via Crossref (refuses "
+                        "ambiguous matches and lists the candidates instead)")
     ap.add_argument("--setup-check", action="store_true",
                     help="Verify .env / Zotero API / GDrive dir, print next steps")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT, help="Output directory")
@@ -52,8 +55,8 @@ def main(argv=None) -> int:
 
     if args.setup_check:
         return setup_check()
-    if not (args.doi or args.arxiv):
-        ap.error("one of --doi / --arxiv / --setup-check is required")
+    if not (args.doi or args.arxiv or args.title):
+        ap.error("one of --doi / --arxiv / --title / --setup-check is required")
 
     return download_paper(
         doi=args.doi,
@@ -61,6 +64,7 @@ def main(argv=None) -> int:
         out_dir=args.out,
         sync=args.sync,
         resolve_only=args.resolve_only,
+        title=args.title,
     )
 
 

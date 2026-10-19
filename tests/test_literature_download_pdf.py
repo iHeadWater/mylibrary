@@ -1650,6 +1650,103 @@ def test_fetch_crossref_unescapes_double_escaped_entities(monkeypatch):
     assert msg["title"] == ["Causation of the “8·26” chain"]
 
 
+def test_pick_doi_by_title_prefers_an_exact_normalized_match():
+    """Punctuation/case differences must not stop an exact title match."""
+    from hydrolitagent.literature import download_pdf
+
+    items = [
+        {"DOI": "10.1/other", "title": ["Something else entirely"]},
+        {"DOI": "10.1/exact", "title": ["Baseflow Separation: Methods & Evaluation"]},
+    ]
+
+    doi, _ = download_pdf.pick_doi_by_title("baseflow separation methods evaluation", items)
+
+    assert doi == "10.1/exact"
+
+
+def test_pick_doi_by_title_refuses_an_ambiguous_field():
+    """Two near-identical candidates → return None rather than guessing."""
+    from hydrolitagent.literature import download_pdf
+
+    # The real Crossref field for this query: two different papers whose titles
+    # both contain every word the user typed.
+    items = [
+        {"DOI": "10.1/a",
+         "title": ["Comprehensive evaluation of baseflow separation methods for India"]},
+        {"DOI": "10.1/b",
+         "title": ["Quantitative evaluation of baseflow separation methods with a model"]},
+    ]
+
+    doi, candidates = download_pdf.pick_doi_by_title(
+        "Baseflow Separation Methods Evaluation", items
+    )
+
+    assert doi is None
+    assert len(candidates) == 2
+
+
+def test_pick_doi_by_title_accepts_a_clear_winner():
+    """One candidate overlaps strongly and leads the runner-up by a margin."""
+    from hydrolitagent.literature import download_pdf
+
+    items = [
+        {"DOI": "10.1/win", "title": ["Baseflow separation methods evaluation for India"]},
+        {"DOI": "10.1/lose", "title": ["Groundwater modelling in Denmark"]},
+    ]
+
+    doi, _ = download_pdf.pick_doi_by_title("Baseflow Separation Methods Evaluation", items)
+
+    assert doi == "10.1/win"
+
+
+def test_pick_doi_by_title_returns_none_without_items():
+    from hydrolitagent.literature import download_pdf
+
+    assert download_pdf.pick_doi_by_title("anything", [])[0] is None
+
+
+def test_download_paper_title_resolves_then_downloads(tmp_path, monkeypatch):
+    """A title is resolved to a DOI and the normal DOI path is used."""
+    from hydrolitagent.literature import download_browser, download_pdf
+
+    monkeypatch.setattr(download_pdf, "search_crossref_by_title",
+                        lambda t: [{"DOI": "10.1/x", "title": ["The Real Title"]}])
+    monkeypatch.setattr(download_pdf, "pick_doi_by_title", lambda t, i: ("10.1/x", i))
+    monkeypatch.setattr(download_pdf, "crossref_meta", lambda doi: {
+        "title": "T", "container": "C", "type": "article", "pii": None,
+        "prefix": "10.1", "suffix": "x",
+    })
+
+    async def fake_dl(doi, meta, out_dir):
+        p = Path(out_dir) / "x.pdf"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(_pdf_payload())
+        return p
+
+    monkeypatch.setattr(download_browser, "download_with_browser", fake_dl)
+
+    assert download_pdf.download_paper(title="The Real Title", out_dir=tmp_path) == 0
+
+
+def test_download_paper_title_ambiguous_returns_2_without_downloading(tmp_path, monkeypatch, capsys):
+    """Never guess: list the candidates and stop."""
+    from hydrolitagent.literature import download_browser, download_pdf
+
+    monkeypatch.setattr(download_pdf, "search_crossref_by_title", lambda t: [{"DOI": "x"}])
+    monkeypatch.setattr(download_pdf, "pick_doi_by_title", lambda t, i: (
+        None, [{"DOI": "10.1/a", "title": ["A"]}, {"DOI": "10.1/b", "title": ["B"]}],
+    ))
+
+    async def must_not_run(*a, **k):
+        raise AssertionError("must not download on an ambiguous title")
+
+    monkeypatch.setattr(download_browser, "download_with_browser", must_not_run)
+
+    assert download_pdf.download_paper(title="Baseflow Evaluation", out_dir=tmp_path) == 2
+    out = capsys.readouterr().out
+    assert "10.1/a" in out and "10.1/b" in out
+
+
 def test_entry_gate_ignores_weak_markers_that_match_paper_titles():
     """'Security check of levee systems' must not gate the entry check."""
     from hydrolitagent.literature import download_browser

@@ -21,6 +21,7 @@ import os
 import re
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -444,6 +445,59 @@ CROSSREF_UA = "mylibrary-download-paper/1.0 (mailto:test@example.com)"
 DEFAULT_OUT = Path(".playwright-mcp")
 
 
+def _title_key(text: str) -> str:
+    """Normalise a title for comparison: case, punctuation and spacing."""
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
+
+
+def search_crossref_by_title(title: str, rows: int = 8) -> list[dict]:
+    """Crossref bibliographic search; empty list on any failure."""
+    url = "https://api.crossref.org/works?" + urllib.parse.urlencode({
+        "query.bibliographic": title,
+        "rows": rows,
+        "select": "DOI,title,container-title,issued,type",
+    })
+    req = urllib.request.Request(url, headers={"User-Agent": CROSSREF_UA})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r)["message"]["items"]
+    except Exception:
+        return []
+
+
+def pick_doi_by_title(title: str, items: list[dict],
+                      threshold: float = 0.6, margin: float = 0.15
+                      ) -> tuple[str | None, list[dict]]:
+    """Choose a DOI for ``title``, or refuse when the field is ambiguous.
+
+    Copy-pasted titles are usually abbreviated, so exact match is tried first;
+    otherwise a clear token-overlap winner is accepted. Two similar candidates
+    mean "ask the human", never "pick one".
+    """
+    if not items:
+        return None, []
+    target = _title_key(title)
+    target_tokens = set(target.split())
+    scored: list[tuple[float, str, dict]] = []
+    for it in items:
+        cand_title = (it.get("title") or [""])[0]
+        key = _title_key(cand_title)
+        if key == target:
+            return it["DOI"], items
+        tokens = set(key.split())
+        # Coverage, not Jaccard: real titles are longer than the label a human
+        # pastes, and a long correct match must not be penalised for that.
+        overlap = len(target_tokens & tokens) / max(1, len(target_tokens))
+        scored.append((overlap, it.get("DOI", ""), it))
+
+    scored.sort(key=lambda s: s[0], reverse=True)
+    best_score, best_doi = scored[0][0], scored[0][1]
+    runner_up = scored[1][0] if len(scored) > 1 else 0.0
+    if best_doi and best_score >= threshold and best_score - runner_up >= margin:
+        return best_doi, items
+    return None, [s[2] for s in scored[:5]]
+
+
 def crossref_meta(doi: str) -> dict:
     url = "https://api.crossref.org/works/" + doi
     req = urllib.request.Request(url, headers={"User-Agent": CROSSREF_UA})
@@ -644,6 +698,7 @@ def download_paper(
     *,
     sync: bool = False,
     resolve_only: bool = False,
+    title: str | None = None,
 ) -> int:
     """Download a paper by DOI or arXiv id; return a process exit code.
 
@@ -657,6 +712,22 @@ def download_paper(
 
     _ensure_utf8_stdio()
     out = Path(out_dir) if out_dir is not None else DEFAULT_OUT
+
+    if title and not doi and not arxiv:
+        candidates = search_crossref_by_title(title)
+        resolved, options = pick_doi_by_title(title, candidates)
+        if not resolved:
+            log(f"Could not resolve a single DOI for: {title}")
+            if options:
+                log("Candidates (pass one explicitly with --doi):")
+                for opt in options:
+                    guessed = (opt.get("title") or [""])[0][:90]
+                    log(f"  {opt.get('DOI', '?')}  {guessed}")
+            else:
+                log("Crossref returned no results.")
+            return 2
+        log(f"Resolved title → {resolved}")
+        doi = resolved
 
     if arxiv:
         dest = out / f"arXiv.{arxiv}.pdf"
