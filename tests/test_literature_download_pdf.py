@@ -1664,6 +1664,24 @@ def test_pick_doi_by_title_prefers_an_exact_normalized_match():
     assert doi == "10.1/exact"
 
 
+def test_pick_doi_by_title_prefers_the_published_version():
+    """Same title in a journal and as a preprint → take the journal one."""
+    from hydrolitagent.literature import download_pdf
+
+    items = [
+        {"DOI": "10.22541/preprint", "type": "posted-content",
+         "title": ["Quantitative Evaluation of Baseflow Separation Methods"]},
+        {"DOI": "10.1029/journal", "type": "journal-article",
+         "title": ["Quantitative evaluation of baseflow separation methods"]},
+    ]
+
+    doi, _ = download_pdf.pick_doi_by_title(
+        "Quantitative Evaluation of Baseflow Separation Methods", items
+    )
+
+    assert doi == "10.1029/journal"
+
+
 def test_pick_doi_by_title_refuses_an_ambiguous_field():
     """Two near-identical candidates → return None rather than guessing."""
     from hydrolitagent.literature import download_pdf

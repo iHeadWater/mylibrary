@@ -478,12 +478,21 @@ def pick_doi_by_title(title: str, items: list[dict],
         return None, []
     target = _title_key(title)
     target_tokens = set(target.split())
+
+    # The same paper often has both a preprint and a journal DOI with the same
+    # title; the published record is the one worth ingesting.
+    exact = [it for it in items
+             if _title_key((it.get("title") or [""])[0]) == target]
+    if exact:
+        published = [it for it in exact
+                     if str(it.get("type", "")).lower() not in ("posted-content", "preprint")]
+        chosen = (published or exact)[0]
+        return chosen["DOI"], items
+
     scored: list[tuple[float, str, dict]] = []
     for it in items:
         cand_title = (it.get("title") or [""])[0]
         key = _title_key(cand_title)
-        if key == target:
-            return it["DOI"], items
         tokens = set(key.split())
         # Coverage, not Jaccard: real titles are longer than the label a human
         # pastes, and a long correct match must not be penalised for that.
