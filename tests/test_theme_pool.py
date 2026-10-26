@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import sys
 import unittest
 from copy import deepcopy
 from dataclasses import replace
@@ -10,24 +9,25 @@ from pathlib import Path
 from unittest.mock import patch
 
 from hydrolitagent.cards import themes, theme_pool as pool
-from hydrolitagent.cards.publication import atomic_text, text_hash
+from hydrolitagent.cards.domain.source_access import LOCAL_PDF_PATH, MARKDOWN_PREPARED
+from hydrolitagent.cards.publication import atomic_text
 import test_themes as fixtures
 
 class ThemePoolTests(unittest.TestCase):
     setUp = fixtures.ThemeTests.setUp
-    text_result = fixtures.ThemeTests.text_result
+    legacy_text_result = fixtures.ThemeTests.legacy_text_result
+    discovery_output = fixtures.ThemeTests.discovery_output
+    reading_output = fixtures.ThemeTests.reading_output
+    answer = fixtures.ThemeTests.answer
     run_theme = fixtures.ThemeTests.run_theme
+    calls = fixtures.ThemeTests.calls
+    changed_goal = fixtures.ThemeTests.changed_goal
 
     def entries(self):
         return pool.load(self.config)["themes"]
 
     def actions(self, actions):
-        def provider(prompt, **kwargs):
-            if kwargs["output_schema_path"].name == "pool-discovery.schema.json":
-                output = {"problem_clusters_markdown": "关联判断与变更理由", "actions": deepcopy(actions)}
-                return {"ok": True, "ephemeral": True, "output": output}
-            return self.text_result(prompt, **kwargs)
-        self.text.generate.side_effect = provider
+        self.discovery_actions = deepcopy(actions)
 
     def child(self, title="更新的主题", focus=None, reuse=None):
         child = deepcopy(self.discovered["themes"][0])
@@ -40,9 +40,6 @@ class ThemePoolTests(unittest.TestCase):
     def reading_id(self, entry):
         return entry["current"]["readings"][0]["reading_id"]
 
-    def changed_goal(self, goal="changed-goal"):
-        self.config = replace(self.config, theme_pipeline=replace(self.config.theme_pipeline, research_goal=goal))
-
     def add_paper(self, key="ITEM0002"):
         other = self.f.package.parent / ("EV-" + key + "-test")
         shutil.copytree(self.f.package, other, ignore=shutil.ignore_patterns("readings"))
@@ -52,12 +49,6 @@ class ThemePoolTests(unittest.TestCase):
         path.write_text(json.dumps(manifest), encoding="utf-8")
         base = self.delivery.return_value
         self.delivery.side_effect = lambda *args, **kw: replace(base, parent_key=args[-1])
-        result = deepcopy(self.pdf_adapter.generate.return_value)
-        def read(prompt, **kw):
-            value = deepcopy(result)
-            value["source_access"]["parent_key"] = kw["zotero_parent_key"]
-            return value
-        self.pdf_adapter.generate.side_effect = read
         return "EV-" + key
 
     def two_themes(self):
@@ -75,17 +66,16 @@ class ThemePoolTests(unittest.TestCase):
         child["paper_tasks"].append({"evidence_id": new_eid, "focus": "补充新证据",
                                     "reuse_reading_id": None, "reuse_reason": None})
         self.actions([{"kind": "UPDATE", "theme_ids": [tid], "reason": "新旧文章共同回答同一问题", "themes": [child]}])
-        self.text.generate.reset_mock()
-        self.pdf_adapter.generate.reset_mock()
+        self.reader.requests.clear()
         result = self.run_theme()
         self.assertTrue(result["ok"], result)
         self.assertEqual(list(self.entries()), [tid])
         updated = self.entries()[tid]
         self.assertEqual(len(updated["history"]), 2)
         self.assertEqual(updated["history"][0], before["current"])
-        self.assertEqual(self.pdf_adapter.generate.call_count, 1)  # only the newly added paper
+        self.assertEqual(len(self.calls("focused_reading")), 1)  # only the newly added paper
         self.assertEqual(result["reused_reading_count"], 1)
-        discovery_prompt = self.text.generate.call_args_list[0].args[0]
+        discovery_prompt = self.calls("theme_discovery")[0].prompt
         self.assertIn(tid, discovery_prompt)
         self.assertIn(fixtures.EID, discovery_prompt)
         self.assertIn(new_eid, discovery_prompt)
@@ -104,7 +94,7 @@ class ThemePoolTests(unittest.TestCase):
         new = next(t for t in entries if t not in parents)
         self.assertEqual(entries[new]["predecessors"], parents)
         self.assertEqual(result["candidate_count"], 1)
-        self.assertEqual(result["model_call_count"], 2)  # planner and refinement, not PDF
+        self.assertEqual(result["model_call_count"], 2)  # planner and refinement, no reading
         for tid in parents:
             self.assertEqual(entries[tid]["status"], pool.RETIRED)
             self.assertEqual(entries[tid]["successors"], [new])
@@ -135,20 +125,17 @@ class ThemePoolTests(unittest.TestCase):
         self.changed_goal()
         self.actions([{"kind": "SPLIT", "theme_ids": [tid], "reason": "拆分",
             "themes": [self.child("甲", reuse=self.reading_id(entry)), self.child("乙", reuse=self.reading_id(entry))]}])
-        provider = self.text.generate.side_effect
-        count = 0
-        def fail_second(prompt, **kwargs):
-            nonlocal count
-            if "refinement" in kwargs["output_schema_path"].name:
-                count += 1
-                if count == 2:
-                    return {"ok": False, "error": {"code": "CODEX_SERVICE_UNAVAILABLE", "message": "test"}}
-            return provider(prompt, **kwargs)
-        self.text.generate.side_effect = fail_second
+        seen = {"count": 0}
+        def fail_second(request):
+            if request.role != "theme_synthesis":
+                return False
+            seen["count"] += 1
+            return seen["count"] == 2
+        self.fail_hooks.append(fail_second)
         failed = self.run_theme()
         self.assertFalse(failed["ok"])
         self.assertEqual(pool.load(self.config), base)
-        self.text.generate.side_effect = provider
+        self.fail_hooks.clear()
         recovered = self.run_theme()
         self.assertTrue(recovered["ok"], recovered)
         self.assertEqual(recovered["model_call_count"], 1)
@@ -160,20 +147,19 @@ class ThemePoolTests(unittest.TestCase):
         self.changed_goal()
         self.actions([{"kind": "UPDATE", "theme_ids": [tid], "reason": "原精读未回答新重点",
                        "themes": [self.child(focus="现在考察另一个机制", reuse=None)]}])
-        self.pdf_adapter.generate.reset_mock()
+        self.reader.requests.clear()
         result = self.run_theme()
         self.assertTrue(result["ok"], result)
-        self.assertEqual(self.pdf_adapter.generate.call_count, 1)
-        self.assertIn("现在考察另一个机制", self.pdf_adapter.generate.call_args.args[0])
+        readings = self.calls("focused_reading")
+        self.assertEqual(len(readings), 1)
+        self.assertIn("现在考察另一个机制", readings[0].prompt)
 
     def test_unchanged_input_does_not_invoke_planner(self):
         first = self.run_theme()
-        self.text.generate.reset_mock()
-        self.pdf_adapter.generate.reset_mock()
+        self.reader.requests.clear()
         again = self.run_theme()
         self.assertTrue(again["ok"], again)
-        self.text.generate.assert_not_called()
-        self.pdf_adapter.generate.assert_not_called()
+        self.assertEqual(self.reader.requests, [])
         self.assertEqual(first["themes"], again["themes"])
 
     def test_no_action_keeps_old_topics_and_records_inputs_as_processed(self):
@@ -202,16 +188,16 @@ class ThemePoolTests(unittest.TestCase):
                 pool.plan_actions(action, modified, sources, "CHANGE-test", catalog)
             self.assertEqual(error.exception.code, "THEME_PARENT_PROTECTED")
 
-    def test_invalid_reuse_is_rejected_without_pdf_calls(self):
+    def test_invalid_reuse_is_rejected_without_reading(self):
         self.run_theme()
         tid = next(iter(self.entries()))
         self.changed_goal()
         self.actions([{"kind": "UPDATE", "theme_ids": [tid], "reason": "change",
                        "themes": [self.child(reuse="RD-invented")]}])
-        self.pdf_adapter.generate.reset_mock()
+        self.reader.requests.clear()
         result = self.run_theme()
         self.assertEqual(result["error"]["code"], "THEME_REUSE_INVALID")
-        self.pdf_adapter.generate.assert_not_called()
+        self.assertEqual(self.calls("focused_reading"), [])
         self.assertEqual(self.run_theme()["model_call_count"], 0)  # invalid output is retained, not regenerated
 
     def test_registry_publish_failure_recovers_initial_commit_without_model(self):
@@ -222,6 +208,7 @@ class ThemePoolTests(unittest.TestCase):
         with patch("hydrolitagent.cards.theme_pool.atomic_text", side_effect=fail):
             first = self.run_theme()
         self.assertFalse(first["ok"])
+        self.reader.requests.clear()
         recovered = self.run_theme()
         self.assertTrue(recovered["ok"], recovered)
         self.assertEqual(recovered["model_call_count"], 0)
@@ -250,7 +237,7 @@ class ThemePoolTests(unittest.TestCase):
 
     def test_legacy_migration_preserves_bytes_and_skips_regeneration(self):
         with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
-            legacy = self.run_theme()
+            legacy = self.run_theme(legacy=True)
         self.assertTrue(legacy["ok"], legacy)
         protected = {p: p.read_bytes() for root in (Path(legacy["batch_path"]), self.f.package)
                      for p in root.rglob("*") if p.is_file()}
@@ -261,34 +248,57 @@ class ThemePoolTests(unittest.TestCase):
         self.assertEqual(result["themes"][0]["theme_id"], legacy["themes"][0]["theme_id"])
         self.assertTrue(all(p.read_bytes() == data for p, data in protected.items()))
 
+    def test_legacy_reading_records_stay_readable_but_are_not_newly_written(self):
+        """A migrated pool keeps its `local_pdf_path` reading record unchanged."""
+
+        with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
+            legacy = self.run_theme(legacy=True)
+        result = self.run_theme()
+        self.assertTrue(result["ok"], result)
+        state = pool.load(self.config)
+        entry = state["themes"][result["themes"][0]["theme_id"]]
+        ref = entry["current"]["readings"][0]
+        record = pool._unwrap(pool.reading_path(self.config, ref) / "result.json")
+        self.assertEqual(record["execution"]["source_access"]["method"], LOCAL_PDF_PATH)
+        self.assertEqual(pool.check_reading(self.config, ref), record["output"]["reading_markdown"])
+        # The same pool, after a real Markdown reading, records the new method.
+        self.changed_goal("markdown-goal")
+        self.actions([{"kind": "UPDATE", "theme_ids": [entry["theme_id"]],
+                       "reason": "用 Markdown 路径重读", "themes": [self.child(reuse=None)]}])
+        upgraded = self.run_theme()
+        self.assertTrue(upgraded["ok"], upgraded)
+        fresh = pool.load(self.config)["themes"][entry["theme_id"]]["current"]["readings"][0]
+        record = pool._unwrap(pool.reading_path(self.config, fresh) / "result.json")
+        self.assertEqual(record["execution"]["source_access"]["method"], MARKDOWN_PREPARED)
+
     def test_multiple_legacy_batches_enter_one_planner_not_isolated_pools(self):
         with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
-            first = self.run_theme()
+            first = self.run_theme(legacy=True)
             self.changed_goal("legacy-second")
-            second = self.run_theme()
+            second = self.run_theme(legacy=True)
         self.actions([])
         result = self.run_theme()
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["imported_theme_count"], 2)
         self.assertEqual(result["model_call_count"], 1)
-        prompt = self.text.generate.call_args.args[0]
+        prompt = self.calls("theme_discovery")[0].prompt
         for old in (first, second):
             self.assertIn(old["themes"][0]["theme_id"], prompt)
         self.assertEqual(len(self.entries()), 2)
 
     def test_migration_only_never_invokes_model_even_if_input_changed(self):
         with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
-            self.run_theme()
+            self.run_theme(legacy=True)
         self.add_paper()
-        self.text.generate.reset_mock()
+        self.reader.requests.clear()
         result = self.run_theme(migration_only=True)
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["model_call_count"], 0)
-        self.text.generate.assert_not_called()
+        self.assertEqual(self.reader.requests, [])
 
     def test_legacy_migration_dry_run_creates_nothing(self):
         with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
-            self.run_theme()
+            self.run_theme(legacy=True)
         before = {str(p): p.read_bytes() for p in self.config.paths.themes_dir.rglob("*") if p.is_file()}
         result = self.run_theme(dry_run=True)
         self.assertTrue(result["ok"], result)
@@ -297,13 +307,12 @@ class ThemePoolTests(unittest.TestCase):
     def test_current_state_conflict_during_model_keeps_original_topics(self):
         self.run_theme()
         self.changed_goal()
-        original = self.text_result
-        def edit(prompt, **kwargs):
+        def edit(request, output):
             state = pool.load(self.config)
             path = pool.root_path(self.config, next(iter(state["themes"].values()))["current"]["directory"]) / "revised.md"
             path.write_text("保留我的修改", encoding="utf-8")
-            return original(prompt, **kwargs)
-        self.text.generate.side_effect = edit
+            return None
+        self.answer_hooks.append(edit)
         result = self.run_theme()
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"]["code"], "THEME_FILE_CONFLICT")

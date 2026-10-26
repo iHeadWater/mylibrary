@@ -42,9 +42,9 @@ from hydrolitagent.cards.adapters.runners.workspace import (
     RESPONSE_FILENAME,
     SCHEMA_FILENAME,
     RunnerFailure,
+    ensure_workspace_unchanged,
     read_workspace_markdown,
     record_output,
-    sha256_text,
     write_schema,
 )
 from hydrolitagent.cards.card_generators.streaming import (
@@ -52,7 +52,6 @@ from hydrolitagent.cards.card_generators.streaming import (
     run_streaming_prompt,
 )
 from hydrolitagent.cards.config import ConnectionGuardConfig
-from hydrolitagent.cards.domain.paper import MARKDOWN_FILENAME
 from hydrolitagent.cards.infrastructure.toml import toml_string
 from hydrolitagent.cards.ports.runner import (
     CardRunError,
@@ -65,7 +64,6 @@ from hydrolitagent.cards.progress import report_progress
 # Kept as module-level aliases so the runner code below reads the same as
 # before the helpers moved to ``workspace.py`` (shared with the HTTP runner).
 _RunnerFailure = RunnerFailure
-_sha256_text = sha256_text
 _workspace_markdown = read_workspace_markdown
 _write_schema = write_schema
 _record_output = record_output
@@ -272,16 +270,11 @@ class ClaudeMarkdownRunner:
                 raise _RunnerFailure(
                     "MARKDOWN_RUNNER_OUTPUT_INVALID", "runner 没有返回所需结构化输出"
                 )
-            if reads == 0:
+            if reads == 0 and request.paper is not None:
                 # A model that never opened a file cannot have quoted it; the
                 # grounding checks will reject it, but say so plainly here.
                 warnings.append("NO_FILE_READ_EVENTS")
-            if _sha256_text(
-                (workspace / MARKDOWN_FILENAME).read_text(encoding="utf-8")
-            ) != _sha256_text(markdown):
-                raise _RunnerFailure(
-                    "MARKDOWN_CHANGED", "运行期间 paper.md 已改变，拒绝接受输出"
-                )
+            ensure_workspace_unchanged(request, markdown)
             saved = _record_output(request, output)
             return CardRunResult(
                 runner_id=self.runner_id,
@@ -498,12 +491,7 @@ class CodexMarkdownRunner:
                 raise _RunnerFailure(
                     "MARKDOWN_RUNNER_OUTPUT_INVALID", "runner 输出必须是 JSON 对象"
                 )
-            if _sha256_text(
-                (workspace / MARKDOWN_FILENAME).read_text(encoding="utf-8")
-            ) != _sha256_text(markdown):
-                raise _RunnerFailure(
-                    "MARKDOWN_CHANGED", "运行期间 paper.md 已改变，拒绝接受输出"
-                )
+            ensure_workspace_unchanged(request, markdown)
             saved = _record_output(request, output)
             return CardRunResult(
                 runner_id=self.runner_id,

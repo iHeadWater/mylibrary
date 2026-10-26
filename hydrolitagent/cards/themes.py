@@ -1,7 +1,13 @@
-"""Rough cards -> candidates -> per-paper focused PDF reading -> revised candidates.
+"""Rough cards -> candidates -> per-paper focused reading -> revised candidates.
 
-Only process contracts are enforced. Markdown remains opaque model output.
-Each model result is durably saved before rendering; reruns resume immutable steps.
+The live pipeline reads prepared Markdown: every source PDF is converted once by
+the configured ``PaperConverter``, and a focused reading is accepted only when
+``domain.grounding`` verifies its quotes and canaries against that conversion.
+Model prose remains opaque output; only the process contract is enforced.
+
+Each model result is durably saved before rendering; reruns resume immutable
+steps. ``_run_legacy`` (historical PDF-reading batches) is retained for migration
+fixtures only and is never selected by a command.
 """
 from __future__ import annotations
 
@@ -27,9 +33,20 @@ from hydrolitagent.cards.zotero import ZoteroApiError
 
 LEGACY_PROTOCOL = "cards-to-refined-candidates-v1"
 PROTOCOL = "unified-theme-pool-v1"
+# Assets the historical PDF-reading batch used. Kept so legacy batches can be
+# replayed and decoded; the live pipeline does not read them.
 LEGACY_ASSETS = ("discovery.md", "discovery.schema.json", "focused-reading.md",
           "focused-reading.schema.json", "refinement.md", "refinement.schema.json")
 ASSETS = LEGACY_ASSETS + ("pool-discovery.md", "pool-discovery.schema.json")
+# Assets the Markdown-first pipeline actually uses. The focused reading prompt
+# and schema differ from v1: the model reads paper.md and must return a reading
+# receipt, so the output can be grounded instead of trusted.
+READING_ASSETS = ("focused-reading-markdown.md", "focused-reading-markdown.schema.json")
+# The v1 assets stay in the binding even though the live pipeline no longer reads
+# them: a legacy batch's recorded asset hashes are compared against this set, so
+# dropping them would make every migrated pool look stale. They are not used to
+# generate anything.
+PIPELINE_ASSETS = (*ASSETS, *READING_ASSETS)
 SOURCE_FIELDS = ("evidence_id", "group_id", "parent_key", "attachment_key", "pdf_sha256")
 
 
@@ -39,26 +56,19 @@ class ThemeError(RuntimeError):
         self.code, self.details = code, details
 
 
-# --- Transitional adapter seam (stage 1.4) -------------------------------------------
-# Theme code must not depend on one provider at module import time. Callers can
-# inject ``text_adapter`` / ``pdf_adapter`` directly (tests and, later, the
-# composition layer) or supply a factory. The defaults below import the legacy
-# Codex adapters only when actually used, so importing this module stays
-# provider-neutral. Stage 5 replaces these defaults with a factory injected by
-# ``composition``; the signature is deliberately the same shape a real factory
-# will have: ``factory(config, *, progress=...) -> adapter``.
+# --- Runner seam (stage 5) ------------------------------------------------------------
+# The live theme workflow receives a ``composition.MarkdownPipeline`` (converter,
+# paper store, runner, options). It never names a provider: the runner id is
+# configuration, and the registry decides how to build it. ``_run_legacy`` is the
+# only path that still asks for the historical Codex adapters, and it imports
+# them from ``legacy.theme_adapters`` so this module stays provider-free.
 
 
-def _default_text_adapter_factory(config, *, progress=None):
-    """Lazily build the legacy Codex text adapter (transitional default)."""
-    from hydrolitagent.cards.card_generators.codex_text import CodexTextAdapter
-    return CodexTextAdapter(config, progress=progress)
+def _default_pipeline(config):
+    """Build the configured Markdown pipeline through the composition root."""
 
-
-def _default_pdf_adapter_factory(config, *, progress=None):
-    """Lazily build the legacy Codex local-PDF adapter (transitional default)."""
-    from hydrolitagent.cards.card_generators.codex_local_pdf import CodexLocalPdfAdapter
-    return CodexLocalPdfAdapter(config, progress=progress)
+    from hydrolitagent.cards.composition import build_theme_pipeline
+    return build_theme_pipeline(config)
 
 
 def _json(value):
@@ -203,7 +213,11 @@ def _result_record(path, binding, invoke, report):
         raise ThemeError("THEME_TRANSPORT_INVALID", "模型没有返回可保存的结果对象")
     record = {"protocol_version": binding.get("protocol_version", PROTOCOL), "binding": binding, "output": result["output"],
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "execution": {**{k: result.get(k) for k in ("cli_version", "ephemeral", "usage", "source_access")},
+        # Only the keys the result actually carries are written: a legacy result
+        # keeps its exact previous on-disk shape instead of gaining null fields.
+        "execution": {**{k: result[k] for k in (
+                "cli_version", "ephemeral", "usage", "source_access",
+                "runner_id", "warnings") if k in result},
             "model": result.get("configured_model", result.get("model")),
             "reasoning_effort": result.get("configured_reasoning_effort", result.get("reasoning_effort"))},
         "scientific_correctness_verified": False}
@@ -233,15 +247,15 @@ def _source_links(tasks, sources, directory, theme_id=None):
 
 
 def _run_legacy(config, report, *, progress, text_adapter, pdf_adapter, delivery_preparer,
-                remaining_seconds, text_adapter_factory=None, pdf_adapter_factory=None):
+                remaining_seconds, text_adapter_factory=None, pdf_adapter_factory=None,
+                pipeline=None):
     """Historical implementation retained for migration regression fixtures only.
 
     No CLI, scheduler or production dispatcher selects this path.
 
-    ``text_adapter_factory`` / ``pdf_adapter_factory`` are the stage 1.4
-    transitional seam: adapters already injected win, otherwise the injected
-    factory builds one, otherwise the lazy Codex default runs. Stage 5 replaces
-    the defaults with factories provided by ``composition``.
+    ``text_adapter_factory`` / ``pdf_adapter_factory`` let a caller supply an
+    adapter; otherwise the historical Codex factories in ``legacy.theme_adapters``
+    build one lazily.
     """
     sources = _sources(config)
     report["source_count"] = len(sources)
@@ -277,10 +291,15 @@ def _run_legacy(config, report, *, progress, text_adapter, pdf_adapter, delivery
             batch_completed=(batch / "completion.json").exists())
         return
     _publish(_safe_path(batch, "inputs.json"), _json(binding))
-    text_adapter = text_adapter or (text_adapter_factory or _default_text_adapter_factory)(
-        cg, progress=progress)
-    pdf_adapter = pdf_adapter or (pdf_adapter_factory or _default_pdf_adapter_factory)(
-        cg, progress=progress)
+    if text_adapter is None or pdf_adapter is None:
+        from hydrolitagent.cards.legacy.theme_adapters import (
+            build_legacy_pdf_adapter,
+            build_legacy_text_adapter,
+        )
+        text_adapter = text_adapter or (text_adapter_factory or build_legacy_text_adapter)(
+            cg, progress=progress)
+        pdf_adapter = pdf_adapter or (pdf_adapter_factory or build_legacy_pdf_adapter)(
+            cg, progress=progress)
 
     def invoke(stage, prompt, schema_name, *, source=None):
         _assert_sources(sources)
@@ -409,18 +428,17 @@ def _run(config, report, **kwargs):
 
 def run_themes(config, *, progress=None, dry_run=False, text_adapter=None, pdf_adapter=None,
                delivery_preparer=None, remaining_seconds=None, migration_only=False,
-               text_adapter_factory=None, pdf_adapter_factory=None):
+               text_adapter_factory=None, pdf_adapter_factory=None, pipeline=None):
     """Run the theme pipeline.
 
-    Adapter selection is injectable (stage 1.4 transitional seam):
+    ``pipeline`` is the ``composition.MarkdownPipeline`` (converter, paper store,
+    runner, options). Without it the configured runner is built through
+    ``composition`` on first use, so ``run_themes(config)`` stays callable.
 
-    * ``text_adapter`` / ``pdf_adapter`` -- already-built adapters win;
-    * ``text_adapter_factory`` / ``pdf_adapter_factory`` -- optional callables
-      ``factory(config, *, progress=...) -> adapter``;
-    * otherwise the legacy Codex adapters are imported lazily inside the run.
-
-    Stage 5 moves the default wiring into ``composition``; until then callers
-    that pass nothing keep the exact previous behaviour.
+    ``text_adapter`` / ``pdf_adapter`` and their factories belong to the
+    historical PDF-reading path (``_run_legacy``, used by migration fixtures).
+    The live pipeline ignores them; when they are passed the report says so
+    instead of silently pretending they took effect.
     """
     started = time.monotonic()
     cap = config.pipeline.max_run_seconds
@@ -434,12 +452,14 @@ def run_themes(config, *, progress=None, dry_run=False, text_adapter=None, pdf_a
         if dry_run:
             _run(config, report, progress=progress, text_adapter=text_adapter, pdf_adapter=pdf_adapter,
                 delivery_preparer=delivery_preparer, remaining_seconds=remaining_seconds,
-                text_adapter_factory=text_adapter_factory, pdf_adapter_factory=pdf_adapter_factory)
+                text_adapter_factory=text_adapter_factory, pdf_adapter_factory=pdf_adapter_factory,
+                pipeline=pipeline)
         else:
             with PipelineRunLock(config.paths.lock_file.with_name(config.paths.lock_file.name + ".themes")):
                 _run(config, report, progress=progress, text_adapter=text_adapter, pdf_adapter=pdf_adapter,
                     delivery_preparer=delivery_preparer or prepare_pdf_delivery, remaining_seconds=remaining_seconds,
-                    text_adapter_factory=text_adapter_factory, pdf_adapter_factory=pdf_adapter_factory)
+                    text_adapter_factory=text_adapter_factory, pdf_adapter_factory=pdf_adapter_factory,
+                    pipeline=pipeline)
     except KeyboardInterrupt:
         report.update(ok=False, status="CANCELLED", error={"code": "CANCELLED", "message": "已中止；保存的候选/精读步骤保留，下次继续"})
     except (ThemeError, EvidencePackageError, PdfDeliveryError, PdfGateError, TaskStoreError, ZoteroApiError) as exc:

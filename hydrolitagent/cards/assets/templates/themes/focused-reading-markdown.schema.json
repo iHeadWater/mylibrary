@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source_read_status", "source_page_count", "visual_content_status", "source_read_evidence", "reading_markdown", "reading_receipt", "source_locations"],
+  "properties": {
+    "source_read_status": {"type": "string", "enum": ["FULL_MARKDOWN_REVIEWED", "UNREADABLE"]},
+    "source_page_count": {"type": "integer"},
+    "visual_content_status": {"type": "string", "enum": ["REVIEWED", "NOT_PRESENT", "UNREADABLE", "NOT_REVIEWED"]},
+    "source_read_evidence": {"type": "string"},
+    "reading_markdown": {"type": "string"},
+    "reading_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["markdown_sha256", "read_mode", "model_claimed_status", "canaries_seen"],
+      "properties": {
+        "markdown_sha256": {"type": "string"},
+        "read_mode": {"type": "string", "enum": ["file", "inline", "chunked"]},
+        "model_claimed_status": {"type": "string"},
+        "model_claimed_pages": {"type": "array", "items": {"type": "integer"}},
+        "canaries_seen": {"type": "array", "items": {"type": "string"}},
+        "self_report": {"type": "string"}
+      }
+    },
+    "source_locations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["quote", "pdf_page"],
+        "properties": {
+          "quote": {"type": "string"},
+          "anchor": {"type": ["string", "null"]},
+          "pdf_page": {"type": "integer"},
+          "section": {"type": ["string", "null"]},
+          "figure": {"type": ["string", "null"]},
+          "table": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

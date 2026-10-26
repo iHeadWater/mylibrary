@@ -5,6 +5,11 @@ assets) and a prompt, and returns structured output. It never receives a PDF
 path: the conversion step already happened, and the runner has no way to read a
 source that the grounding checks did not see.
 
+Synthesis tasks (theme discovery and refinement) have no single source paper, so
+``paper`` is optional. ``None`` means "the prompt *is* the material": no
+``paper.md`` is staged and no reading receipt is expected. It is not a stand-in
+for a paper and carries no source identity of its own.
+
 ``runner_id`` is data written into artifacts, not a branch condition. Any
 executor that can read files and emit JSON can implement this port -- a local
 CLI, an HTTP API or a human-in-the-loop session.
@@ -20,7 +25,9 @@ from hydrolitagent.cards.domain.paper import PreparedPaper
 from hydrolitagent.cards.progress import ProgressCallback
 
 ReadingMode = Literal["inline", "file", "chunked"]
-RunnerRole = Literal["card_writer", "theme_discovery", "focused_reading"]
+RunnerRole = Literal[
+    "card_writer", "theme_discovery", "focused_reading", "theme_synthesis"
+]
 
 
 @dataclass(frozen=True)
@@ -30,11 +37,12 @@ class CardRunRequest:
     ``workspace`` is a directory under the runtime area that holds ``paper.md``,
     ``figures/``, ``request.json`` and ``output.schema.json``. ``paper`` is the
     same preparation the workspace was staged from, so a runner can verify the
-    digest without trusting the stage directory.
+    digest without trusting the stage directory. ``paper`` is ``None`` for a
+    synthesis task whose material is carried by ``prompt`` alone.
     """
 
     run_id: str
-    paper: PreparedPaper
+    paper: PreparedPaper | None
     prompt: str
     output_schema: Mapping[str, Any]
     workspace: Path

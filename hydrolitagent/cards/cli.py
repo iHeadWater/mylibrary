@@ -24,6 +24,7 @@ from hydrolitagent.cards.composition import (
     build_doctor_report,
     build_markdown_pipeline,
     build_session_pipeline,
+    build_theme_pipeline,
 )
 from hydrolitagent.cards.config import ConfigError, load_config, resolve_pipeline_mode
 from hydrolitagent.cards.paper_input_config import load_paper_input_config
@@ -621,11 +622,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             extra = {"migration_only": args.migrate_only}
             if args.dry_run:
+                # A dry run must not require a working runner: it only reports
+                # what the next change would need.
                 result = run_themes(app_config, dry_run=True, **extra)
             else:
+                pipeline = build_theme_pipeline(app_config)
                 with ConsoleProgress(enabled=app_config.card_generator.progress.enabled and not args.no_progress,
                     heartbeat_interval_seconds=app_config.card_generator.progress.heartbeat_interval_seconds) as progress:
-                    result = run_themes(app_config, progress=progress, **extra)
+                    result = run_themes(app_config, progress=progress, pipeline=pipeline, **extra)
                     progress.finish(result)
         except (TaskStoreError, OSError, ValueError) as exc:
             result = {"schema_version": 1, "ok": False, "error": {

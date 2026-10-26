@@ -24,7 +24,6 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-import tempfile
 import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -34,6 +33,12 @@ from typing import Any
 from hydrolitagent._config import PathConfigError, resolve_literature_root
 from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.application.prepare_paper import prepare_paper
+from hydrolitagent.cards.application.workspace import (
+    REQUEST_FILENAME,
+    SCHEMA_FILENAME,
+    runtime_dir,
+    stage_paper_workspace,
+)
 from hydrolitagent.cards.card_draft import (
     SINGLE_SOURCE_TEMPLATES,
     _check_wire as check_wire,
@@ -72,8 +77,6 @@ from hydrolitagent.cards.progress import ProgressCallback, report_progress
 
 READING_PROMPT = ASSETS_DIR / "prompts/markdown-reading-v1.md"
 OUTPUT_SCHEMA = ASSETS_DIR / "schemas/subject-card-draft-output-v3.schema.json"
-REQUEST_FILENAME = "request.json"
-SCHEMA_FILENAME = "output.schema.json"
 DRAFT_SCHEMA_VERSION = 2
 
 
@@ -83,13 +86,6 @@ def _sha256_text(value: str) -> str:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def _runtime_dir(app_config: Any) -> Path:
-    configured = getattr(app_config.card_generator, "runtime_dir", None) or getattr(
-        app_config.paths, "runtime_dir", None
-    )
-    return Path(configured) if configured else Path(tempfile.gettempdir())
 
 
 def _group_id(record: dict[str, Any]) -> int | None:
@@ -264,38 +260,6 @@ def _card_run_request(
         reading_mode="file",
         progress=progress,
     )
-
-
-def _stage_workspace(
-    prepared,
-    *,
-    run_id: str,
-    runtime_dir: Path,
-    context: dict[str, Any],
-    schema_text: str,
-) -> Path:
-    """Create the directory a runner can read, containing no source PDF.
-
-    The Markdown and the figure images are copied rather than referenced so the
-    runner's view is exactly the preparation that grounding will verify against.
-    """
-
-    runtime_dir.mkdir(parents=True, exist_ok=True)
-    workspace = Path(
-        tempfile.mkdtemp(prefix=f"markdown-{run_id[:8]}-", dir=str(runtime_dir))
-    )
-    shutil.copyfile(prepared.markdown_path, workspace / MARKDOWN_FILENAME)
-    for figure in prepared.figures:
-        target = workspace / FIGURES_DIRNAME / figure.path.name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(figure.path, target)
-    (workspace / REQUEST_FILENAME).write_text(
-        json.dumps(context, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-    (workspace / SCHEMA_FILENAME).write_text(schema_text, encoding="utf-8", newline="\n")
-    return workspace
 
 
 # --------------------------------------------------------------------------------------
@@ -566,10 +530,10 @@ def generate_markdown_card_draft(
             stage=stage,
         )
         stage.value = "workspace"
-        workspace = _stage_workspace(
+        workspace = stage_paper_workspace(
             prep.prepared,
             run_id=prep.run_id,
-            runtime_dir=_runtime_dir(app_config),
+            root=runtime_dir(app_config),
             context=prep.context,
             schema_text=prep.schema_text,
         )

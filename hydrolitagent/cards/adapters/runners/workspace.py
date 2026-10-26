@@ -43,8 +43,14 @@ def sha256_text(text: str) -> str:
 
 
 def read_workspace_markdown(request: CardRunRequest) -> str:
-    """Read the staged Markdown and prove it is the paper we prepared."""
+    """Read the staged Markdown and prove it is the paper we prepared.
 
+    A synthesis request (``paper is None``) has no source paper, so there is
+    nothing to read and nothing to verify: the text arrives in the prompt.
+    """
+
+    if request.paper is None:
+        return ""
     target = Path(request.workspace) / MARKDOWN_FILENAME
     if not target.is_file():
         raise RunnerFailure(
@@ -58,6 +64,18 @@ def read_workspace_markdown(request: CardRunRequest) -> str:
             detail={"expected": request.paper.markdown_sha256},
         )
     return markdown
+
+
+def ensure_workspace_unchanged(request: CardRunRequest, markdown: str) -> None:
+    """Refuse an answer if the staged paper changed while the runner was working."""
+
+    if request.paper is None:
+        return
+    target = Path(request.workspace) / MARKDOWN_FILENAME
+    if sha256_text(target.read_text(encoding="utf-8")) != sha256_text(markdown):
+        raise RunnerFailure(
+            "MARKDOWN_CHANGED", "运行期间 paper.md 已改变，拒绝接受输出"
+        )
 
 
 def write_schema(request: CardRunRequest) -> Path:
@@ -83,6 +101,7 @@ __all__ = [
     "RESPONSE_FILENAME",
     "RunnerFailure",
     "SCHEMA_FILENAME",
+    "ensure_workspace_unchanged",
     "read_workspace_markdown",
     "record_output",
     "sha256_text",

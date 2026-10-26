@@ -46,8 +46,12 @@
 ## 二、主题池模板
 
 `…/templates/themes/` 存放统一主题池用的模板：`pool-discovery.md`（规划
-CREATE / UPDATE / MERGE / SPLIT）、`discovery.md`、`focused-reading.md`、`refinement.md`，
+CREATE / UPDATE / MERGE / SPLIT）、`discovery.md`、`focused-reading-markdown.md`、`refinement.md`，
 以及只规范 JSON 传输的 `*.schema.json`。见[统一主题池](unified-theme-pool.md)。
+
+定向精读读的是 Python 转换出的 `paper.md`（含页锚点与 canary），不是 PDF；模型必须回显
+Markdown 摘要与全部 canary，并给出可核对的逐字引文，否则该次精读被拒绝。
+旧的 `focused-reading.md` 只用于重放历史批次，新流程不再读取。
 
 ## 三、人填的主题模板
 

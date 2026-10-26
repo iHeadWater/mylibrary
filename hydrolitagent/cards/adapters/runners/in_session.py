@@ -110,6 +110,9 @@ class InSessionRunner:
                 "IN_SESSION_RUN_DIR_INVALID", "run-dir 已被同名文件占用，无法写入"
             )
 
+        if request.paper is None:
+            return self._prepare_text(request, run_dir)
+
         source = Path(request.paper.markdown_path)
         if not source.is_file():
             raise RunnerFailure(
@@ -223,22 +226,74 @@ class InSessionRunner:
             figures=tuple(figures),
         )
 
+    def _prepare_text(self, request: CardRunRequest, run_dir: Path) -> PreparedRun:
+        """Stage a synthesis task: the prompt is the material, there is no paper."""
+
+        schema_path = run_dir / SCHEMA_FILENAME
+        _write_text(
+            schema_path,
+            json.dumps(request.output_schema, ensure_ascii=False, indent=2) + "\n",
+        )
+        request_path = run_dir / RUN_REQUEST_FILENAME
+        payload = {
+            "schema_version": 1,
+            "runner_id": self.runner_id,
+            "run_id": request.run_id,
+            "role": request.role,
+            "mode": "text_only",
+            "output_schema_file": SCHEMA_FILENAME,
+            "response_file": RESPONSE_FILENAME,
+            "prompt": request.prompt,
+            "model": request.model,
+            "reasoning_effort": request.reasoning_effort,
+            "timeout_seconds": request.timeout_seconds,
+        }
+        _write_text(
+            request_path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+        )
+        instructions_path = run_dir / INSTRUCTIONS_FILENAME
+        _write_text(
+            instructions_path,
+            "# 待处理的文本任务\n\n"
+            "这个目录没有 `paper.md`：材料在 `request.json` 的 `prompt` 中。\n"
+            "按 `output.schema.json` 生成 JSON，写入同目录的 "
+            f"`{RESPONSE_FILENAME}`。平台不会自动调用模型。\n",
+        )
+        return PreparedRun(
+            run_dir=run_dir,
+            # A text task stages no paper: the path is named but not written,
+            # the digest is empty and the counts are zero.
+            markdown_path=run_dir / MARKDOWN_FILENAME,
+            markdown_sha256="",
+            request_path=request_path,
+            schema_path=schema_path,
+            instructions_path=instructions_path,
+            response_path=run_dir / RESPONSE_FILENAME,
+            page_count=0,
+            canaries=(),
+            figures=(),
+        )
+
     # -- phase 2: collect ---------------------------------------------------------
 
-    def finalize(self, run_dir: Path, *, paper: PreparedPaper) -> CardRunResult:
+    def finalize(
+        self, run_dir: Path, *, paper: PreparedPaper | None
+    ) -> CardRunResult:
         started = time.monotonic()
         directory = Path(run_dir)
         try:
-            markdown_path = directory / MARKDOWN_FILENAME
-            if not markdown_path.is_file():
-                raise RunnerFailure(
-                    "IN_SESSION_RUN_DIR_INVALID", "运行目录缺少 paper.md"
-                )
-            markdown = markdown_path.read_text(encoding="utf-8")
-            if sha256_text(markdown) != paper.markdown_sha256:
-                raise RunnerFailure(
-                    "MARKDOWN_CHANGED", "运行目录中的 paper.md 已改变，拒绝接受输出"
-                )
+            markdown = None
+            if paper is not None:
+                markdown_path = directory / MARKDOWN_FILENAME
+                if not markdown_path.is_file():
+                    raise RunnerFailure(
+                        "IN_SESSION_RUN_DIR_INVALID", "运行目录缺少 paper.md"
+                    )
+                markdown = markdown_path.read_text(encoding="utf-8")
+                if sha256_text(markdown) != paper.markdown_sha256:
+                    raise RunnerFailure(
+                        "MARKDOWN_CHANGED", "运行目录中的 paper.md 已改变，拒绝接受输出"
+                    )
 
             response_path = directory / RESPONSE_FILENAME
             if not response_path.is_file():
@@ -255,6 +310,18 @@ class InSessionRunner:
             if not isinstance(payload, Mapping):
                 raise RunnerFailure(
                     "IN_SESSION_RESPONSE_INVALID", f"{RESPONSE_FILENAME} 必须是 JSON 对象"
+                )
+
+            if paper is None:
+                # Text-only task: there is no reading to verify, only a JSON
+                # answer. Grounding belongs to the caller's own checks.
+                return CardRunResult(
+                    runner_id=self.runner_id,
+                    ok=True,
+                    output=dict(payload),
+                    model_invoked=False,
+                    duration_seconds=round(time.monotonic() - started, 2),
+                    unvalidated_output_path=str(response_path),
                 )
 
             receipt = payload.get("reading_receipt")
@@ -276,6 +343,7 @@ class InSessionRunner:
                     detail={"expected": paper.markdown_sha256},
                 )
 
+            # ``paper`` is not None here, so ``markdown`` is the staged text.
             expected = expected_canaries(markdown)
             seen = receipt.get("canaries_seen")
             seen_values = (

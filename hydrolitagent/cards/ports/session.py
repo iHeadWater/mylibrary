@@ -47,7 +47,9 @@ class SessionRunner(CardRunner, Protocol):
 
     def prepare(self, request: CardRunRequest) -> PreparedRun: ...
 
-    def finalize(self, run_dir: Path, *, paper: PreparedPaper) -> CardRunResult: ...
+    def finalize(
+        self, run_dir: Path, *, paper: PreparedPaper | None
+    ) -> CardRunResult: ...
 
 
 __all__ = ["PreparedRun", "SessionRunner"]

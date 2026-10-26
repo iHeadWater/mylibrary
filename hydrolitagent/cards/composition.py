@@ -133,6 +133,17 @@ def build_markdown_pipeline(app_config: Any) -> MarkdownPipeline:
     )
 
 
+def build_theme_pipeline(app_config: Any) -> MarkdownPipeline:
+    """Wire converter, store and runner for a theme run.
+
+    A theme run uses the same three ports as a card run; the difference is which
+    roles the runner is asked to play, not how it is built. Keeping a named
+    entry point makes that contract explicit at the CLI boundary.
+    """
+
+    return build_markdown_pipeline(app_config)
+
+
 def build_session_pipeline(app_config: Any) -> MarkdownPipeline:
     """Wire the file-based, two-phase pipeline (``cards run prepare|finalize``).
 
@@ -316,4 +327,5 @@ __all__ = [
     "build_doctor_report",
     "build_markdown_pipeline",
     "build_session_pipeline",
+    "build_theme_pipeline",
 ]

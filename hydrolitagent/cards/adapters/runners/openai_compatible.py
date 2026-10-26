@@ -27,7 +27,6 @@ import json
 import os
 import time
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -35,12 +34,13 @@ import httpx
 from hydrolitagent.cards.adapters.runners.diagnostics import sanitize_diagnostic_text
 from hydrolitagent.cards.adapters.runners.workspace import (
     RunnerFailure,
+    ensure_workspace_unchanged,
     read_workspace_markdown,
     record_output,
     sha256_text,
 )
 from hydrolitagent.cards.domain.grounding import count_cjk, expected_canaries
-from hydrolitagent.cards.domain.paper import MARKDOWN_FILENAME, PageAnchor
+from hydrolitagent.cards.domain.paper import PageAnchor
 from hydrolitagent.cards.ports.runner import (
     CardRunError,
     CardRunRequest,
@@ -401,8 +401,11 @@ class OpenAICompatibleRunner:
         invoked = False
         try:
             markdown = read_workspace_markdown(request)
-            chunked = request.reading_mode == "chunked" or self._needs_chunking(
-                request, markdown
+            # A synthesis request has no paper to chunk: the whole material is
+            # the prompt, and splitting it would break the task's own structure.
+            chunked = request.paper is not None and (
+                request.reading_mode == "chunked"
+                or self._needs_chunking(request, markdown)
             )
             report_progress(
                 request.progress,
@@ -430,14 +433,7 @@ class OpenAICompatibleRunner:
 
             self._apply_visual_policy(output, warnings)
 
-            workspace = Path(request.workspace).resolve()
-            if (
-                sha256_text((workspace / MARKDOWN_FILENAME).read_text(encoding="utf-8"))
-                != sha256_text(markdown)
-            ):
-                raise RunnerFailure(
-                    "MARKDOWN_CHANGED", "运行期间 paper.md 已改变，拒绝接受输出"
-                )
+            ensure_workspace_unchanged(request, markdown)
             saved = record_output(request, output)
             return CardRunResult(
                 runner_id=self.runner_id,
@@ -559,6 +555,18 @@ class OpenAICompatibleRunner:
     def _single_messages(
         self, request: CardRunRequest, markdown: str
     ) -> list[dict[str, str]]:
+        if request.paper is None:
+            return [
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": (
+                        "## 任务\n"
+                        + request.prompt
+                        + "\n\n只输出一个 JSON 对象，不要代码围栏或额外说明。"
+                    ),
+                },
+            ]
         return [
             {"role": "system", "content": _SYSTEM_PROMPT},
             {
