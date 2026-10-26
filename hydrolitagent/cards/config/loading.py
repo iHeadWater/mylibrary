@@ -1,492 +1,62 @@
+"""Reading the team config file and assembling the frozen ``AppConfig``.
+
+``load_config`` keeps its exact signature, validation order and error messages
+from the pre-split ``config.py``; only its imports changed.
+"""
 from __future__ import annotations
 
 import json
 import math
-import os
-import re
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
-# Protocol identifiers live in the provider-free domain layer.  Re-exported here
-# so existing imports keep working during the decoupling migration.
-from hydrolitagent.cards.domain.protocol import (
-    LEGACY_SINGLE_AGENT_PROTOCOL_VERSION,
+from .executables import _resolve_executable
+from .models import (
+    ARTIFACT_PATH_FIELDS,
     LOCAL_PATH_PROTOCOL_VERSION,
     MULTI_AGENT_PROTOCOL_VERSION,
-    SINGLE_AGENT_PROTOCOL_VERSION,
+    PATH_FIELDS,
+    REQUIRED_CARD_WORKFLOW_ROLES,
     SUPPORTED_REASONING_EFFORTS,
+    AppConfig,
+    CardGeneratorConfig,
+    CardQualityWorkflowConfig,
+    CardWorkflowRoleConfig,
+    ConfigError,
+    ConnectionGuardConfig,
+    PathConfig,
+    PdfDirectTrialConfig,
+    PdfGateConfig,
+    PdfReaderConfig,
+    PipelineConfig,
+    ProgressConfig,
+    TaskConfig,
+    ThemePipelineConfig,
+    ZoteroConfig,
+    ZoteroStartupConfig,
 )
-from hydrolitagent.cards.domain.roles import REQUIRED_CARD_WORKFLOW_ROLES
-
-
-DEFAULT_BASE_URL = "http://127.0.0.1:23119"
-DEFAULT_TIMEOUT_SECONDS = 5.0
-DEFAULT_PROCESS_TIMEOUT_SECONDS = 5.0
-
-
-class ConfigError(ValueError):
-    """Raised when the application configuration is invalid."""
-
-
-@dataclass(frozen=True)
-class ZoteroStartupConfig:
-    enabled: bool = False
-    launch_if_missing: bool = True
-    executable: str | None = None
-    wait_timeout_seconds: float = 120.0
-    poll_interval_seconds: float = 5.0
-
-
-@dataclass(frozen=True)
-class ZoteroConfig:
-    base_url: str = DEFAULT_BASE_URL
-    group_id: int | None = None
-    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
-    process_timeout_seconds: float = DEFAULT_PROCESS_TIMEOUT_SECONDS
-    startup: ZoteroStartupConfig = ZoteroStartupConfig()
-
-
-@dataclass(frozen=True)
-class PdfGateConfig:
-    min_file_size_bytes: int
-    min_text_characters: int
-    hash_chunk_size_bytes: int
-
-
-@dataclass(frozen=True)
-class TaskConfig:
-    lease_seconds: int
-    lock_stale_seconds: int
-    max_history_entries: int
-
-
-@dataclass(frozen=True)
-class PdfReaderConfig:
-    adapter: str
-    server_name: str
-    python_executable: str | None
-    server_file: Path
-    pdfinfo_executable: str
-    pdftotext_executable: str
-    pdftoppm_executable: str
-    render_dpi: int
-    max_pages_per_call: int
-    output_token_limit: int
-    startup_timeout_seconds: float
-    tool_timeout_seconds: float
-
-
-@dataclass(frozen=True)
-class CardWorkflowRoleConfig:
-    model: str | None
-    reasoning_effort: str | None
-    timeout_seconds: float
-
-
-@dataclass(frozen=True)
-class CardQualityWorkflowConfig:
-    protocol_version: str
-    fact_extraction_prompt_file: Path
-    fact_adjudication_prompt_file: Path
-    critical_analysis_prompt_file: Path
-    adversarial_review_prompt_file: Path
-    fact_extraction_schema_file: Path
-    fact_adjudication_schema_file: Path
-    critical_analysis_schema_file: Path
-    adversarial_review_schema_file: Path
-    minimum_verified_facts: int
-    minimum_critical_analyses: int
-    minimum_adversarial_challenges: int
-    maximum_unresolved_high_severity: int
-    roles: dict[str, CardWorkflowRoleConfig]
-
-
-@dataclass(frozen=True)
-class ProgressConfig:
-    enabled: bool = True
-    heartbeat_interval_seconds: float = 60
-
-
-@dataclass(frozen=True)
-class ConnectionGuardConfig:
-    reconnect_event_limit: int = 2
-    recovery_timeout_seconds: float = 60
-    idle_timeout_seconds: float = 300
-    pdf_tool_call_limit: int = 2
-    reconnect_stop_enabled: bool = True
-
-
-@dataclass(frozen=True)
-class CodexProxyConfig:
-    enabled: bool = False
-    url: str | None = None
-    no_proxy: tuple[str, ...] = ("localhost", "127.0.0.1", "::1")
-
-
-@dataclass(frozen=True)
-class PdfDirectTrialConfig:
-    prompt_file: Path
-    schema_file: Path
-    timeout_seconds: float
-    windows_sandbox: str = "elevated"
-    shell_executable: str = "powershell"
-    preflight_timeout_seconds: float = 120
-    python_executable: str | None = None
-    text_extractor: str = "pdftotext"
-    reading_prompt_file: Path | None = None
-
-
-@dataclass(frozen=True)
-class CardGeneratorConfig:
-    adapter: str
-    executable: str
-    auth_mode: str
-    preflight_timeout_seconds: float
-    model: str | None
-    reasoning_effort: str | None
-    smoke_test_timeout_seconds: float
-    generation_timeout_seconds: float
-    pdf_reader: PdfReaderConfig
-    workflow_mode: str = "single_agent"  # 收敛后只剩单 Agent（multi_agent 已移除）
-    multi_agent_workflow: CardQualityWorkflowConfig | None = None
-    progress: ProgressConfig = ProgressConfig()
-    connection_guard: ConnectionGuardConfig = ConnectionGuardConfig()
-    pdf_direct_trial: PdfDirectTrialConfig | None = None
-    runtime_dir: Path | None = None
-    proxy: CodexProxyConfig = CodexProxyConfig()
-
-
-@dataclass(frozen=True)
-class PathConfig:
-    project_root: Path
-    runtime_dir: Path
-    snapshot_file: Path
-    tasks_file: Path
-    lock_file: Path
-    logs_dir: Path
-    card_trials_dir: Path
-    evidence_packs_dir: Path
-    templates_dir: Path
-    evidence_card_templates_dir: Path
-    evidence_card_template_catalog_file: Path
-    evidence_card_generation_prompt_file: Path
-    card_generation_output_schema_file: Path
-    themes_dir: Path
-    members_dir: Path
-    activity_dir: Path
-    reports_dir: Path
-    prompts_dir: Path
-    schemas_dir: Path
-    # 科研产物根：证据卡 / 主题 / 运行记录 / 文献链接的落点。
-    # 默认在工作区根（仓库根），也可指向仓库外的共享位置（见 artifact_root_external）。
-    artifact_root: Path
-    artifact_root_external: bool
-    evidence_cards_dir: Path
-    themes_vault_dir: Path
-    run_records_dir: Path
-    literature_index_dir: Path
-
-
-@dataclass(frozen=True)
-class PipelineConfig:
-    max_items_per_run: int | None = None
-    max_run_seconds: int | None = None
-    max_attempts_per_item: int = 3
-    retry_cooldown_seconds: int = 3600
-
-
-@dataclass(frozen=True)
-class ThemePipelineConfig:
-    enabled: bool = False
-    research_goal: str | None = None
-    model: str | None = None
-    reasoning_effort: str | None = None
-    timeout_seconds: float | None = None
-    assets_dir: Path | None = None
-
-
-@dataclass(frozen=True)
-class AppConfig:
-    source_file: Path | None
-    zotero: ZoteroConfig
-    pdf_gate: PdfGateConfig
-    tasks: TaskConfig
-    card_generator: CardGeneratorConfig
-    paths: PathConfig
-    pipeline: PipelineConfig = PipelineConfig()
-    theme_pipeline: ThemePipelineConfig = ThemePipelineConfig()
-
-
-PATH_FIELDS = (
-    "runtime_dir",
-    "snapshot_file",
-    "tasks_file",
-    "lock_file",
-    "logs_dir",
-    "card_trials_dir",
-    "evidence_packs_dir",
-    "templates_dir",
-    "evidence_card_templates_dir",
-    "evidence_card_template_catalog_file",
-    "evidence_card_generation_prompt_file",
-    "card_generation_output_schema_file",
-    "themes_dir",
-    "members_dir",
-    "activity_dir",
-    "reports_dir",
-    "prompts_dir",
-    "schemas_dir",
+from .paths import (
+    _path_value,
+    _require_inside,
+    _resolve_artifact_path,
+    _resolve_artifact_root,
+    _resolve_project_path,
+    _resolve_project_root,
 )
-
-# 产物根下的子目录。它们相对 paths.artifact_root 解析，且不得离开产物根。
-ARTIFACT_PATH_FIELDS = (
-    "evidence_cards_dir",
-    "themes_vault_dir",
-    "run_records_dir",
-    "literature_index_dir",
+from .validators import (
+    _validate_base_url,
+    _validate_card_generator_choice,
+    _validate_codex_proxy,
+    _validate_group_id,
+    _validate_non_empty_string,
+    _validate_non_negative_int,
+    _validate_optional_card_generator_choice,
+    _validate_optional_non_empty_string,
+    _validate_positive_int,
+    _validate_seconds,
+    _validate_server_name,
 )
-
-
-def _validate_codex_proxy(value: Any) -> CodexProxyConfig:
-    name = "card_generator.proxy"
-    if not isinstance(value, dict) or set(value) - {"enabled", "url", "no_proxy"}:
-        raise ConfigError(f"{name} 必须是对象，且只能包含 enabled、url、no_proxy")
-    enabled = value.get("enabled", False)
-    if not isinstance(enabled, bool):
-        raise ConfigError(f"{name}.enabled 必须是布尔值")
-    url = value.get("url")
-    if url is not None:
-        # Never echo input: a mistakenly pasted URL may contain a password/token.
-        error = f"{name}.url 必须是带端口的 HTTP/HTTPS 代理地址，不得包含账号、密码、路径、查询参数或片段"
-        if not isinstance(url, str) or not url or any(c.isspace() or ord(c) < 32 for c in url):
-            raise ConfigError(error)
-        try:
-            parsed = urlparse(url)
-            valid = (
-                parsed.scheme in {"http", "https"}
-                and parsed.hostname and re.fullmatch(r"[A-Za-z0-9_.:\-]+", parsed.hostname)
-                and parsed.port is not None and 1 <= parsed.port <= 65535
-                and parsed.username is None and parsed.password is None
-                and parsed.path in {"", "/"} and not parsed.params
-                and not parsed.query and not parsed.fragment
-                and "?" not in url and "#" not in url
-            )
-        except ValueError:
-            valid = False
-        if not valid:
-            raise ConfigError(error)
-    if enabled and url is None:
-        raise ConfigError(f"{name}.enabled=true 时必须填写 url")
-    bypass = value.get("no_proxy", list(CodexProxyConfig().no_proxy))
-    if not isinstance(bypass, list) or any(
-        not isinstance(host, str) or not re.fullmatch(r"[A-Za-z0-9_.:\[\]\-]+", host)
-        for host in bypass
-    ):
-        raise ConfigError(f"{name}.no_proxy 必须是主机名/IP 字符串数组，不接受 *、URL 或逗号拼接")
-    return CodexProxyConfig(enabled=enabled, url=url, no_proxy=tuple(bypass))
-
-
-def _validate_base_url(value: Any) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ConfigError("zotero.base_url 必须是非空字符串")
-
-    normalized = value.rstrip("/")
-    parsed = urlparse(normalized)
-    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
-        raise ConfigError("zotero.base_url 必须是本机 HTTP 地址")
-    if parsed.port is None or not 1 <= parsed.port <= 65535:
-        raise ConfigError("zotero.base_url 必须包含有效端口")
-    if parsed.path not in {"", "/"} or parsed.params or parsed.query or parsed.fragment:
-        raise ConfigError("zotero.base_url 不能包含路径、查询参数或片段")
-    return normalized
-
-
-def _validate_group_id(value: Any, *, required: bool) -> int | None:
-    if value is None:
-        if required:
-            raise ConfigError("缺少 zotero.group_id；请先运行 discover-groups")
-        return None
-    if isinstance(value, bool):
-        raise ConfigError("zotero.group_id 必须是正整数")
-    try:
-        group_id = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ConfigError("zotero.group_id 必须是正整数") from exc
-    if group_id <= 0:
-        raise ConfigError("zotero.group_id 必须是正整数")
-    return group_id
-
-
-def _validate_seconds(name: str, value: Any) -> float:
-    if isinstance(value, bool):
-        raise ConfigError(f"{name} 必须是正数")
-    try:
-        seconds = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ConfigError(f"{name} 必须是正数") from exc
-    if seconds <= 0:
-        raise ConfigError(f"{name} 必须是正数")
-    return seconds
-def _validate_positive_int(name: str, value: Any) -> int:
-    if isinstance(value, bool):
-        raise ConfigError(f"{name} 必须是正整数")
-    try:
-        number = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ConfigError(f"{name} 必须是正整数") from exc
-    if number <= 0:
-        raise ConfigError(f"{name} 必须是正整数")
-    return number
-
-
-def _validate_non_negative_int(name: str, value: Any) -> int:
-    if isinstance(value, bool):
-        raise ConfigError(f"{name} 必须是非负整数")
-    try:
-        number = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ConfigError(f"{name} 必须是非负整数") from exc
-    if number < 0:
-        raise ConfigError(f"{name} 必须是非负整数")
-    return number
-
-
-def _validate_non_empty_string(name: str, value: Any) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ConfigError(f"{name} 必须是非空字符串")
-    return value.strip()
-
-
-def _validate_optional_non_empty_string(name: str, value: Any) -> str | None:
-    if value is None:
-        return None
-    return _validate_non_empty_string(name, value)
-
-
-def _validate_card_generator_choice(
-    name: str,
-    value: Any,
-    *,
-    supported: set[str],
-) -> str:
-    normalized = _validate_non_empty_string(name, value)
-    if normalized not in supported:
-        choices = "、".join(sorted(supported))
-        raise ConfigError(f"{name} 当前仅支持：{choices}")
-    return normalized
-
-
-def _validate_optional_card_generator_choice(
-    name: str,
-    value: Any,
-    *,
-    supported: set[str] | frozenset[str],
-) -> str | None:
-    if value is None:
-        return None
-    normalized = _validate_non_empty_string(name, value).casefold()
-    if normalized not in supported:
-        choices = "、".join(sorted(supported))
-        raise ConfigError(f"{name} 当前仅支持：{choices}，或 null")
-    return normalized
-
-
-def _validate_server_name(name: str, value: Any) -> str:
-    normalized = _validate_non_empty_string(name, value)
-    if not all(character.isalnum() or character in {"_", "-"} for character in normalized):
-        raise ConfigError(f"{name} 只能包含字母、数字、下划线和连字符")
-    return normalized
-
-
-def _path_value(value: Any, *, name: str) -> Path:
-    if not isinstance(value, str) or not value.strip():
-        qualified_name = name if "." in name else f"paths.{name}"
-        raise ConfigError(f"{qualified_name} 必须是非空路径字符串")
-    return Path(os.path.expandvars(value)).expanduser()
-
-
-def _resolve_project_root(paths: dict[str, Any], config_file: Path | None) -> Path:
-    if "project_root" not in paths:
-        raise ConfigError("缺少 paths.project_root")
-    base_dir = config_file.parent if config_file is not None else Path.cwd()
-    raw_root = _path_value(paths["project_root"], name="project_root")
-    root = raw_root if raw_root.is_absolute() else base_dir / raw_root
-    return root.resolve()
-
-
-def _resolve_project_path(
-    paths: dict[str, Any], name: str, project_root: Path, *, allow_workspace: bool = False
-) -> Path:
-    if name not in paths:
-        raise ConfigError(f"缺少 paths.{name}")
-    raw_path = _path_value(paths[name], name=name)
-    resolved = (raw_path if raw_path.is_absolute() else project_root / raw_path).resolve()
-    if resolved.is_relative_to(project_root):
-        return resolved
-    # 仅 deployment.environment_dir 允许借用平台所嵌入的 workspace 根的环境
-    # （uv 托管的共享 .venv）。只接受该根下约定位置的 .venv，避免配置把
-    # 环境指向任意外逃路径（如 ../outside 或 ../../../outside）。
-    if allow_workspace and resolved == project_root.parent / ".venv":
-        return resolved
-    raise ConfigError(f"paths.{name} 必须位于 paths.project_root 内")
-
-
-def _require_inside(path: Path, parent: Path, *, name: str, parent_name: str) -> None:
-    if not path.is_relative_to(parent):
-        raise ConfigError(f"paths.{name} 必须位于 paths.{parent_name} 内")
-
-
-def _resolve_artifact_root(
-    paths: dict[str, Any], project_root: Path
-) -> tuple[Path, bool]:
-    """解析科研产物根，返回 (解析后路径, 是否位于项目外)。
-
-    默认解析到工作区根（仓库根），即 ``project_root`` 的上一级，与王新宇分支
-    原有的磁盘布局一致。落在 ``project_root`` 之外必须显式声明
-    ``paths.artifact_root_external = true``——与 ``deployment.environment_dir``
-    借用共享 ``.venv`` 同一思路：外部位置是允许的，但必须是写明的意图，
-    而不是被相对路径（如 ``../outside``）悄悄带出去。
-    """
-    if "artifact_root" not in paths:
-        raise ConfigError("缺少 paths.artifact_root")
-    raw_root = _path_value(paths["artifact_root"], name="artifact_root")
-    resolved = (raw_root if raw_root.is_absolute() else project_root / raw_root).resolve()
-    declared = paths.get("artifact_root_external", False)
-    if not isinstance(declared, bool):
-        raise ConfigError("paths.artifact_root_external 必须是布尔值")
-    external = not resolved.is_relative_to(project_root)
-    if external and not declared:
-        raise ConfigError(
-            "paths.artifact_root 必须位于 paths.project_root 内；"
-            "确需指向项目外（如共享盘）时必须显式设置 "
-            "paths.artifact_root_external = true"
-        )
-    return resolved, external
-
-
-def _resolve_artifact_path(paths: dict[str, Any], name: str, artifact_root: Path) -> Path:
-    if name not in paths:
-        raise ConfigError(f"缺少 paths.{name}")
-    raw_path = _path_value(paths[name], name=name)
-    resolved = (
-        raw_path if raw_path.is_absolute() else artifact_root / raw_path
-    ).resolve()
-    if not resolved.is_relative_to(artifact_root):
-        raise ConfigError(f"paths.{name} 必须位于 paths.artifact_root 内")
-    return resolved
-
-
-def _resolve_executable(value, root):
-    if value is None:
-        return None
-    expanded = os.path.expandvars(value)
-    if "/" in expanded or "\\" in expanded or expanded.startswith("~"):
-        path = Path(expanded).expanduser()
-        # Keep existing absolute spellings compatible; anchor only relative tools.
-        return expanded if path.is_absolute() and not expanded.startswith("~") else str((root / path).resolve())
-    return expanded  # Bare executable names are resolved via PATH, not the current directory.
 
 
 def _read_config_file(config_path: str | Path | None) -> tuple[Path | None, dict[str, Any]]:
@@ -1141,3 +711,6 @@ def load_config(
         pipeline=PipelineConfig(**pipeline_values),
         theme_pipeline=ThemePipelineConfig(**theme_values),
     )
+
+
+__all__ = ["_read_config_file", "load_config"]
