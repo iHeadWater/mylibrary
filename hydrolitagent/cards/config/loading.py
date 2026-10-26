@@ -84,6 +84,11 @@ def _read_config_file(config_path: str | Path | None) -> tuple[Path | None, dict
 
 CARD_PIPELINE_ENV = "CARD_PIPELINE"
 
+# Adapter names the *legacy* PDF-reading pipeline can build. This is an on-disk
+# compatibility key, not the list of selectable runners: the Markdown pipeline
+# resolves its runner through ``adapters/runners/registry.py``.
+LEGACY_CARD_GENERATOR_ADAPTERS = frozenset({"codex_cli"})
+
 _CONVERTER_MODES = frozenset({"layout", "text"})
 _CONVERTER_TABLE_MODES = frozenset({"markdown", "text"})
 
@@ -676,10 +681,15 @@ def load_config(
     )
 
     card_generator_config = CardGeneratorConfig(
+        # Legacy on-disk key. It selects the *legacy* PDF-reading adapter for
+        # ``CARD_PIPELINE=legacy``; the Markdown pipeline picks its runner from
+        # ``adapters/runners/registry.py`` and overrides this field from the AI
+        # selection. The set stays validated so a typo in an existing
+        # config.json fails loudly -- it is not the allowlist for new runners.
         adapter=_validate_card_generator_choice(
             "card_generator.adapter",
             raw_card_generator["adapter"],
-            supported={"codex_cli"},
+            supported=LEGACY_CARD_GENERATOR_ADAPTERS,
         ),
         executable=_validate_non_empty_string(
             "card_generator.executable",

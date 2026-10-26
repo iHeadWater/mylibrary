@@ -22,16 +22,21 @@ uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai
 **前提**：一种**已登录**的模型 CLI（Codex 或 Claude），见[前提与配置](../../getting-started/installation.md)。
 
 **默认走 Python 转换的 Markdown 路径**：程序先用 PyMuPDF 把 PDF 转成 `paper.md`（含页锚点、
-完整性 canary 与图资产），按 PDF 哈希缓存，再把 Markdown 交给所选 CLI 阅读。**不再需要
-Poppler**；`--ai-provider` 只决定用哪个 CLI 执行，两条路径读到的都是同一份 Markdown。
-需要回退到旧的「CLI 自己读 PDF」路径时，设置环境变量 `CARD_PIPELINE=legacy`（该路径仍需要
+完整性 canary 与图资产），按 PDF 哈希缓存，再把 Markdown 交给所选运行器阅读。**不再需要
+Poppler**；`--ai-provider` 只决定由哪个运行器执行，两条路径读到的都是同一份 Markdown。
+需要回退到旧的「运行器自己读 PDF」路径时，设置环境变量 `CARD_PIPELINE=legacy`（该路径仍需要
 `pdfinfo` / `pdftoppm`，只保留一个版本）。
 
 > Claude CLI 需支持**隔离模式与结构化输出**（本机验证版本 **2.1.280**）；版本过旧会直接失败，
 > **不会**退回不受限模式。
 
-> **`--ai-provider` 选的是「命令行适配器」，不是模型厂家。** 当前命令**只接受 `claude` 或 `codex`** ——
-> 不要填某个模型厂家的名字。用哪家模型由那个 CLI 自己的配置决定。
+> **`--ai-provider` 选的是「运行器」，不是模型厂家。** 可用值以 `ai-config --json` 的
+> `runners` 为准：当前为 `claude`、`codex`（本机已登录的 CLI）与 `openai_compatible`
+> （OpenAI 兼容的 `/chat/completions`；需要 `OPENAI_BASE_URL` 与 `OPENAI_API_KEY`，
+> 模型名用 `--ai-model`）。不要填某个模型厂家的名字。
+>
+> `openai_compatible` **不发送图片**。若卡片引用了图，程序会把 `visual_content_status`
+> 记为 `NOT_REVIEWED` 并追加警告：它读到了图注，但没有看过图。
 
 ## 产物
 

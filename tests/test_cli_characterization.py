@@ -38,16 +38,24 @@ AI_CONFIG_AI_KEYS_REQUIRED = {
     "reasoning_effort",
     "timeout_seconds",
 }
-# Upper bound for stage 1. Stage 3 removes the Poppler and PDF-reader fields as a
+# Documented upper bound. Stage 3 removes the Poppler and PDF-reader fields as a
 # direct consequence of R2; dropping them keeps this test green, while any *new*
-# field still fails it.
-AI_CONFIG_AI_KEYS_STAGE1 = AI_CONFIG_AI_KEYS_REQUIRED | {
+# field still fails it until it is registered here.
+AI_CONFIG_AI_KEYS_DOCUMENTED = AI_CONFIG_AI_KEYS_REQUIRED | {
     "python_executable",
     "pdfinfo_executable",
     "pdftotext_executable",
     "pdftoppm_executable",
     # Stage 3b: which single-paper pipeline the next run would take.
     "pipeline",
+    # Stage 4a: runner registry alias, the ids it can build, and the HTTP
+    # runner's token budgets. All additive; nothing above was removed.
+    "runner",
+    "runners",
+    "runner_limits",
+    "base_url",
+    "max_input_tokens",
+    "max_output_tokens",
 }
 
 # Keys every READY ``paper-input`` result carries. Optional keys (``candidates``,
@@ -121,13 +129,21 @@ def test_ai_config_json_contract(capsys, monkeypatch) -> None:
         "ai-config 的 ai 字段减少："
         f"{sorted(AI_CONFIG_AI_KEYS_REQUIRED - ai_keys)}"
     )
-    assert ai_keys <= AI_CONFIG_AI_KEYS_STAGE1, (
+    assert ai_keys <= AI_CONFIG_AI_KEYS_DOCUMENTED, (
         "ai-config 出现未登记的新字段："
-        f"{sorted(ai_keys - AI_CONFIG_AI_KEYS_STAGE1)}"
+        f"{sorted(ai_keys - AI_CONFIG_AI_KEYS_DOCUMENTED)}"
     )
     assert result["ai"]["pipeline"] == DEFAULT_PIPELINE_MODE == "markdown", (
         "ai-config 必须显示下一次单篇制卡实际使用的管线"
     )
+    # Stage 4a: ``runner`` is an alias, ``runners`` comes from the registry and
+    # ``runner_limits`` bounds the HTTP runner. All three are additive.
+    assert result["ai"]["runner"] == result["ai"]["provider"]
+    assert "codex" in result["ai"]["runners"]
+    assert set(result["ai"]["runner_limits"]) == {
+        "max_input_tokens",
+        "max_output_tokens",
+    }
 
 
 def _zotero_local_api_available() -> bool:

@@ -6,7 +6,10 @@ PDF library converts, where prepared papers are cached and which runner executes
 a card task.
 
 Keeping this in one module means "how the pipeline is wired" can be read in one
-screen, and nothing below it can quietly grow a provider branch.
+screen, and nothing below it can quietly grow a provider branch. Runner
+selection itself is a registry lookup (``adapters/runners/registry.py``), so
+adding a runner does not require editing this file: composition hands every
+factory the same bag of dependencies and each one takes what it needs.
 """
 from __future__ import annotations
 
@@ -16,11 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from hydrolitagent.cards.adapters.pdf.pymupdf_converter import PymupdfConverter
-from hydrolitagent.cards.adapters.runners.codex.proxy import codex_proxy_environment
-from hydrolitagent.cards.adapters.runners.markdown import (
-    ClaudeMarkdownRunner,
-    CodexMarkdownRunner,
-)
+from hydrolitagent.cards.adapters.runners.registry import RegistryError, create
 from hydrolitagent.cards.adapters.storage.paper_store import PaperStore
 from hydrolitagent.cards.config import ConfigError
 from hydrolitagent.cards.ports.paper import (
@@ -72,9 +71,9 @@ def _cache_dir(app_config: Any) -> Path:
 def build_markdown_pipeline(app_config: Any) -> MarkdownPipeline:
     """Wire one converter, one store and one runner for a single card run.
 
-    The runner is chosen from the configured adapter name, not from an
-    environment probe: an unknown name fails here instead of silently falling
-    back to a different provider.
+    The runner is chosen from the configured adapter name through the registry,
+    not from an environment probe: an unknown name fails here instead of
+    silently falling back to a different provider.
     """
 
     converter_config = getattr(app_config, "converter", None)
@@ -84,22 +83,23 @@ def build_markdown_pipeline(app_config: Any) -> MarkdownPipeline:
             f"未知的 PDF 转换器：{converter_id!r}；当前支持 {sorted(KNOWN_CONVERTERS)}"
         )
     card_generator = app_config.card_generator
-    adapter = card_generator.adapter
-    if adapter == "claude_cli":
-        runner: CardRunner = ClaudeMarkdownRunner(
-            card_generator.executable,
-            connection_guard=card_generator.connection_guard,
+    # ``runner_options`` comes from the AI selection (base_url and token
+    # budgets). Everything else is the ordinary card-generator configuration;
+    # factories ignore the keys they do not use.
+    runner_options = dict(getattr(app_config, "runner_options", None) or {})
+    try:
+        runner = create(
+            card_generator.adapter,
+            executable=getattr(card_generator, "executable", None),
+            model=getattr(card_generator, "model", None),
+            proxy=getattr(card_generator, "proxy", None),
+            connection_guard=getattr(card_generator, "connection_guard", None),
+            base_url=runner_options.get("base_url"),
+            max_input_tokens=runner_options.get("max_input_tokens"),
+            max_output_tokens=runner_options.get("max_output_tokens"),
         )
-    elif adapter == "codex_cli":
-        runner = CodexMarkdownRunner(
-            card_generator.executable,
-            environment=codex_proxy_environment(card_generator.proxy),
-            connection_guard=card_generator.connection_guard,
-        )
-    else:
-        raise ConfigError(
-            f"未注册的制卡运行器：{adapter!r}；Markdown 流程只支持 claude_cli 或 codex_cli"
-        )
+    except RegistryError as exc:
+        raise ConfigError(f"未注册的制卡运行器：{card_generator.adapter!r}；{exc}") from exc
     return MarkdownPipeline(
         converter=PymupdfConverter(),
         store=PaperStore(_cache_dir(app_config)),

@@ -61,7 +61,13 @@ READING_SCOPE = "FULL_PDF"
 OUTPUT_SCHEMA_VERSION = 2
 QUALITY_AUDIT_FILENAME = "quality-audit.json"
 SOURCE_READ_STATUS = "FULL_PDF_REVIEWED"
-ACCEPTED_VISUAL_CONTENT_STATUSES = frozenset({"REVIEWED", "NOT_PRESENT"})
+# ``NOT_REVIEWED`` is the honest status for a text-only runner: it received the
+# Markdown (and can quote it) but no page images, so it may not claim it looked
+# at a figure. ``UNREADABLE`` stays rejected: it means the source could not be
+# read at all.
+ACCEPTED_VISUAL_CONTENT_STATUSES = frozenset(
+    {"REVIEWED", "NOT_PRESENT", "NOT_REVIEWED"}
+)
 PROMPT_VERSION_PATTERN = re.compile(
     r'^---\s*\r?\nprompt_version:\s*["\']([^"\']+)["\']\s*\r?\n---',
     re.MULTILINE,

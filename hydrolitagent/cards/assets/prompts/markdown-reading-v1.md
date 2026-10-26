@@ -54,7 +54,8 @@ prompt_version: "markdown-reading-v1"
 - `schema_version` 保持 `2`；`source_read_status` 是历史字段名，必须在通读全文后写 `FULL_PDF_REVIEWED`；
   它表示已通读**本次提供的全文**，不代表直接读取了 PDF，也不代表科学结论正确。
 - `source_read_evidence`：客观描述阅读范围（读过哪些页、看过哪些图表），不得写日志或命令输出。
-- `visual_content_status`：查看过图上内容写 `REVIEWED`；论文没有图表写 `NOT_PRESENT`；无法看清写
+- `visual_content_status`：查看过图上内容写 `REVIEWED`；论文没有图表写 `NOT_PRESENT`；
+  本次运行没有图像输入、无法查看图上内容时写 `NOT_REVIEWED`（**不要**声称看过图）；无法看清写
   `UNREADABLE` 并在 `self_report` 说明。
 - `source_page_count`：必须等于运行参数中的 `page_count`。
 

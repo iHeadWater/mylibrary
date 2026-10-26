@@ -47,7 +47,7 @@ flowchart TB
 | Zotero | 来源身份、条目、附件与原始 PDF | 不保存主题判断，不由平台修改数据库文件 |
 | `hydrolitagent` | 文献下载、入库、查询、附件和全文访问 | 不管理主题生命周期 |
 | 单篇输入与 PDF 门禁 | 解析唯一本地 PDF，检查文件大小、文本量和文件指纹 | 元数据或摘要不能替代全文证据 |
-| 制卡适配器 | 调用已登录的 Codex 或 Claude CLI，读取 Python 转换的 `paper.md`（默认）或旧路径下的 PDF，生成主体卡草稿 | 总配置字段 `card_generator.adapter` 目前接受 `codex_cli`；单篇 `evidence-generate` 另经 `configs/ai.toml` 支持 `claude_cli`。流程通过不等于科学正确 |
+| 制卡适配器 | 由 `adapters/runners/registry.py` 按运行器 id 装配：本地 CLI（读 Python 转换的 `paper.md`）或 OpenAI 兼容 HTTP（纯文本，内联或按页锚点分块） | 注册表是唯一选择点，新增运行器只需一个 adapter 文件加一处注册；`in_session` 尚未实现。`openai_compatible` 声明无视觉能力，引用图时把 `visual_content_status` 降为 `NOT_REVIEWED`。流程通过不等于科学正确 |
 | 主体卡校验 | 确定性检查字段形状、来源绑定、页码、引用编号和版本指纹 | 不调用模型，不读取 Zotero，不证明科研内容正确 |
 | 主题池 | 基于全池文献卡、既有候选和适用精读执行 CREATE/UPDATE/MERGE/SPLIT | 只能处理候选主题，不能自动建立正式主题 |
 

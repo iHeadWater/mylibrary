@@ -117,7 +117,12 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--migrate-only", action="store_true", help="仅将已完成旧主题接入统一池；不调用模型、不重新精读")
         if name == "evidence-generate":
             command.add_argument("--ai-config", help="模型选择 TOML；默认 configs/ai.toml")
-            command.add_argument("--ai-provider", choices=["codex", "claude"])
+            # The registry, not argparse, owns the list of runner ids: a new
+            # adapter must not require editing this parser.
+            command.add_argument(
+                "--ai-provider", metavar="RUNNER",
+                help="制卡运行器 id，例如 codex、claude、openai_compatible；可用值见 ai-config --json 的 runners",
+            )
             command.add_argument("--ai-model", help="所选服务可用的模型名")
             command.add_argument("--ai-executable", help="本机 CLI 可执行文件名或绝对路径")
             command.add_argument("--ai-timeout", type=float)
@@ -144,7 +149,10 @@ def _parser() -> argparse.ArgumentParser:
 
     ai = subparsers.add_parser("ai-config", help="查看模型选择与精读产物根，不运行模型")
     ai.add_argument("--ai-config")
-    ai.add_argument("--ai-provider", choices=["codex", "claude"])
+    ai.add_argument(
+        "--ai-provider", metavar="RUNNER",
+        help="制卡运行器 id；可用值见本命令输出的 runners",
+    )
     ai.add_argument("--ai-model")
     ai.add_argument("--ai-executable")
     ai.add_argument("--ai-timeout", type=float)

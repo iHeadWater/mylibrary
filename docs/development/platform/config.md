@@ -53,7 +53,7 @@
 | 字段 | 当前含义 | 允许值或规则 |
 |---|---|---|
 | `workflow_mode` | 制卡编排方式 | 当前 `single_agent`；单 Agent 必须移除 `multi_agent_workflow` |
-| `adapter` | Python 调用哪一种制卡运行时适配器 | 当前只能是 `codex_cli`；单篇 `evidence-generate` 另经 `configs/ai.toml` 支持 `claude` |
+| `adapter` | 旧版 PDF 直读管线用的适配器名（兼容键） | 当前只能是 `codex_cli`；Markdown 管线的运行器由 `configs/ai.toml` 的 `provider`（别名 `runner`）经注册表选择，不看这个字段 |
 | `executable` | 要查找和运行的 Codex CLI 命令名或路径 | 默认为 `codex`；非空字符串 |
 | `auth_mode` | 本阶段能够确认的认证方式 | 当前只能是 `chatgpt_account` |
 | `preflight_timeout_seconds` | 版本和登录状态两项检查各自的最长等待秒数 | 大于 0 |

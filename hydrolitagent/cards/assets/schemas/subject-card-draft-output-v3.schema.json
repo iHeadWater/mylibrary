@@ -37,6 +37,7 @@
       "enum": [
         "REVIEWED",
         "NOT_PRESENT",
+        "NOT_REVIEWED",
         "UNREADABLE"
       ]
     },

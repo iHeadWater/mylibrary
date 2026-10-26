@@ -16,7 +16,6 @@ cannot reach one.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import shutil
@@ -39,6 +38,15 @@ from hydrolitagent.cards.adapters.runners.diagnostics import (
     safe_exec_diagnostic,
     sanitize_diagnostic_text,
 )
+from hydrolitagent.cards.adapters.runners.workspace import (
+    RESPONSE_FILENAME,
+    SCHEMA_FILENAME,
+    RunnerFailure,
+    read_workspace_markdown,
+    record_output,
+    sha256_text,
+    write_schema,
+)
 from hydrolitagent.cards.card_generators.streaming import (
     ExecutionStopped,
     run_streaming_prompt,
@@ -54,66 +62,20 @@ from hydrolitagent.cards.ports.runner import (
 )
 from hydrolitagent.cards.progress import report_progress
 
-SCHEMA_FILENAME = "output.schema.json"
-RESPONSE_FILENAME = "response.json"
+# Kept as module-level aliases so the runner code below reads the same as
+# before the helpers moved to ``workspace.py`` (shared with the HTTP runner).
+_RunnerFailure = RunnerFailure
+_sha256_text = sha256_text
+_workspace_markdown = read_workspace_markdown
+_write_schema = write_schema
+_record_output = record_output
+
 # Item types that mean the runner left the prepared workspace: MCP servers,
 # web search and sub-agent collaboration are all forbidden here.
 FORBIDDEN_ITEM_TYPES = frozenset(
     {"mcp_tool_call", "web_search", "web_search_call", "collab_tool_call"}
 )
 _ALLOWED_CLAUDE_TOOLS = frozenset({"Read", "StructuredOutput"})
-
-
-class _RunnerFailure(RuntimeError):
-    """Internal control-flow exception carrying a structured code."""
-
-    def __init__(
-        self, code: str, message: str, *, detail: Mapping[str, Any] | None = None
-    ) -> None:
-        super().__init__(message)
-        self.code = code
-        self.detail = dict(detail or {})
-
-
-def _sha256_text(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def _workspace_markdown(request: CardRunRequest) -> str:
-    """Read the staged Markdown and prove it is the paper we prepared."""
-
-    target = Path(request.workspace) / MARKDOWN_FILENAME
-    if not target.is_file():
-        raise _RunnerFailure(
-            "MARKDOWN_WORKSPACE_INVALID", f"运行目录缺少 {MARKDOWN_FILENAME}"
-        )
-    markdown = target.read_text(encoding="utf-8")
-    if _sha256_text(markdown) != request.paper.markdown_sha256:
-        raise _RunnerFailure(
-            "MARKDOWN_WORKSPACE_INVALID",
-            "运行目录中的 paper.md 与已转换论文摘要不一致",
-            detail={"expected": request.paper.markdown_sha256},
-        )
-    return markdown
-
-
-def _write_schema(request: CardRunRequest) -> Path:
-    target = Path(request.workspace) / SCHEMA_FILENAME
-    payload = json.dumps(request.output_schema, ensure_ascii=False, indent=2) + "\n"
-    target.write_text(payload, encoding="utf-8", newline="\n")
-    return target
-
-
-def _record_output(request: CardRunRequest, output: Mapping[str, Any]) -> str:
-    """Keep the raw model answer next to the paper for post-mortem inspection."""
-
-    target = Path(request.workspace) / RESPONSE_FILENAME
-    target.write_text(
-        json.dumps(output, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-    return str(target)
 
 
 def _failure(
