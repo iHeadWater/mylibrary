@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import math
+import os
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -14,9 +16,11 @@ from typing import Any
 from .executables import _resolve_executable
 from .models import (
     ARTIFACT_PATH_FIELDS,
+    DEFAULT_PIPELINE_MODE,
     LOCAL_PATH_PROTOCOL_VERSION,
     MULTI_AGENT_PROTOCOL_VERSION,
     PATH_FIELDS,
+    PIPELINE_MODES,
     REQUIRED_CARD_WORKFLOW_ROLES,
     SUPPORTED_REASONING_EFFORTS,
     AppConfig,
@@ -25,6 +29,7 @@ from .models import (
     CardWorkflowRoleConfig,
     ConfigError,
     ConnectionGuardConfig,
+    ConverterConfig,
     PathConfig,
     PdfDirectTrialConfig,
     PdfGateConfig,
@@ -75,6 +80,74 @@ def _read_config_file(config_path: str | Path | None) -> tuple[Path | None, dict
     if data.get("schema_version", 1) != 1:
         raise ConfigError("当前仅支持 schema_version=1")
     return config_file, data
+
+
+CARD_PIPELINE_ENV = "CARD_PIPELINE"
+
+_CONVERTER_MODES = frozenset({"layout", "text"})
+_CONVERTER_TABLE_MODES = frozenset({"markdown", "text"})
+
+
+def resolve_pipeline_mode(environ: Mapping[str, str] | None = None) -> str:
+    """Read ``CARD_PIPELINE``; default stays ``legacy`` until stage 3 flips it."""
+
+    values = os.environ if environ is None else environ
+    value = str(values.get(CARD_PIPELINE_ENV, DEFAULT_PIPELINE_MODE)).strip().casefold()
+    if value not in PIPELINE_MODES:
+        raise ConfigError(
+            f"{CARD_PIPELINE_ENV} 仅支持 legacy 或 markdown，当前为 {value!r}"
+        )
+    return value
+
+
+def _load_converter(raw: Any, path_config: PathConfig) -> ConverterConfig:
+    if not isinstance(raw, dict) or set(raw) - set(ConverterConfig.__dataclass_fields__):
+        raise ConfigError("converter 包含未知字段或不是 JSON 对象")
+
+    converter_id = raw.get("converter_id", "none")
+    if not isinstance(converter_id, str) or not converter_id.strip():
+        raise ConfigError("converter.converter_id 必须是非空字符串")
+    mode = raw.get("mode", "layout")
+    if mode not in _CONVERTER_MODES:
+        raise ConfigError("converter.mode 仅支持 layout 或 text")
+    table_mode = raw.get("table_mode", "markdown")
+    if table_mode not in _CONVERTER_TABLE_MODES:
+        raise ConfigError("converter.table_mode 仅支持 markdown 或 text")
+
+    extract_figures = raw.get("extract_figures", True)
+    if type(extract_figures) is not bool:
+        raise ConfigError("converter.extract_figures 必须是布尔值")
+    ocr = raw.get("ocr", False)
+    if type(ocr) is not bool:
+        raise ConfigError("converter.ocr 必须是布尔值")
+
+    coverage = raw.get("min_text_coverage", 0.60)
+    if isinstance(coverage, bool) or not isinstance(coverage, (int, float)):
+        raise ConfigError("converter.min_text_coverage 必须是 0 到 1 之间的数值")
+    if not math.isfinite(float(coverage)) or not 0.0 <= float(coverage) <= 1.0:
+        raise ConfigError("converter.min_text_coverage 必须是 0 到 1 之间的数值")
+
+    cache_value = raw.get("cache_dir")
+    if cache_value is None:
+        cache_dir = path_config.runtime_dir
+    else:
+        raw_cache = _path_value(cache_value, name="converter.cache_dir")
+        resolved = (
+            raw_cache if raw_cache.is_absolute() else path_config.project_root / raw_cache
+        ).resolve()
+        if not resolved.is_relative_to(path_config.project_root):
+            raise ConfigError("converter.cache_dir 必须位于 paths.project_root 内")
+        cache_dir = resolved
+
+    return ConverterConfig(
+        converter_id=converter_id.strip(),
+        mode=mode,
+        extract_figures=extract_figures,
+        table_mode=table_mode,
+        ocr=ocr,
+        min_text_coverage=float(coverage),
+        cache_dir=cache_dir,
+    )
 
 
 def load_config(
@@ -701,6 +774,8 @@ def load_config(
         pdf_direct_trial=replace(direct_trial_config, **{name: _resolve_executable(getattr(direct_trial_config, name), path_config.project_root)
             for name in ("python_executable", "shell_executable")}))
 
+    converter_config = _load_converter(data.get("converter", {}), path_config)
+
     return AppConfig(
         source_file=config_file,
         zotero=zotero_config,
@@ -710,7 +785,14 @@ def load_config(
         paths=path_config,
         pipeline=PipelineConfig(**pipeline_values),
         theme_pipeline=ThemePipelineConfig(**theme_values),
+        converter=converter_config,
     )
 
 
-__all__ = ["_read_config_file", "load_config"]
+__all__ = [
+    "CARD_PIPELINE_ENV",
+    "_load_converter",
+    "_read_config_file",
+    "load_config",
+    "resolve_pipeline_mode",
+]

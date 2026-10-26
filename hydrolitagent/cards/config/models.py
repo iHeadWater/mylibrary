@@ -207,6 +207,31 @@ class ThemePipelineConfig:
 
 
 @dataclass(frozen=True)
+class ConverterConfig:
+    """PDF→Markdown converter selection and options.
+
+    ``converter_id="none"`` keeps the legacy pipeline (the default). A concrete
+    converter id is only meaningful once the Markdown-first pipeline is enabled;
+    the cache directory is resolved by ``load_config`` and always sits under
+    ``paths.project_root``.
+    """
+
+    converter_id: str = "none"
+    mode: str = "layout"
+    extract_figures: bool = True
+    table_mode: str = "markdown"
+    ocr: bool = False
+    min_text_coverage: float = 0.60
+    cache_dir: Path | None = None
+
+
+# ``CARD_PIPELINE`` selects the conversion pipeline for a run. Stage 2 ships the
+# converter but keeps the legacy path as the default.
+PIPELINE_MODES = ("legacy", "markdown")
+DEFAULT_PIPELINE_MODE = "legacy"
+
+
+@dataclass(frozen=True)
 class AppConfig:
     source_file: Path | None
     zotero: ZoteroConfig
@@ -216,6 +241,7 @@ class AppConfig:
     paths: PathConfig
     pipeline: PipelineConfig = PipelineConfig()
     theme_pipeline: ThemePipelineConfig = ThemePipelineConfig()
+    converter: ConverterConfig = ConverterConfig()
 
 
 PATH_FIELDS = (
@@ -257,7 +283,9 @@ __all__ = [
     "CodexProxyConfig",
     "ConfigError",
     "ConnectionGuardConfig",
+    "ConverterConfig",
     "DEFAULT_BASE_URL",
+    "DEFAULT_PIPELINE_MODE",
     "DEFAULT_PROCESS_TIMEOUT_SECONDS",
     "DEFAULT_TIMEOUT_SECONDS",
     "LEGACY_SINGLE_AGENT_PROTOCOL_VERSION",
@@ -268,6 +296,7 @@ __all__ = [
     "PdfGateConfig",
     "PdfReaderConfig",
     "PathConfig",
+    "PIPELINE_MODES",
     "PipelineConfig",
     "ProgressConfig",
     "REQUIRED_CARD_WORKFLOW_ROLES",

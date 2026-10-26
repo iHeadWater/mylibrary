@@ -15,12 +15,20 @@ re-exported from the provider-free domain layer via ``models``.
 from __future__ import annotations
 
 from .executables import _resolve_executable
-from .loading import _read_config_file, load_config
+from .loading import (
+    CARD_PIPELINE_ENV,
+    _load_converter,
+    _read_config_file,
+    load_config,
+    resolve_pipeline_mode,
+)
 from .models import (
     ARTIFACT_PATH_FIELDS,
     DEFAULT_BASE_URL,
+    DEFAULT_PIPELINE_MODE,
     DEFAULT_PROCESS_TIMEOUT_SECONDS,
     DEFAULT_TIMEOUT_SECONDS,
+    PIPELINE_MODES,
     LEGACY_SINGLE_AGENT_PROTOCOL_VERSION,
     LOCAL_PATH_PROTOCOL_VERSION,
     MULTI_AGENT_PROTOCOL_VERSION,
@@ -35,6 +43,7 @@ from .models import (
     CodexProxyConfig,
     ConfigError,
     ConnectionGuardConfig,
+    ConverterConfig,
     PathConfig,
     PdfDirectTrialConfig,
     PdfGateConfig,
@@ -78,10 +87,13 @@ __all__ = [
     "CodexProxyConfig",
     "ConfigError",
     "ConnectionGuardConfig",
+    "ConverterConfig",
     "DEFAULT_BASE_URL",
+    "DEFAULT_PIPELINE_MODE",
     "DEFAULT_PROCESS_TIMEOUT_SECONDS",
     "DEFAULT_TIMEOUT_SECONDS",
     "PATH_FIELDS",
+    "PIPELINE_MODES",
     "PathConfig",
     "PdfDirectTrialConfig",
     "PdfGateConfig",
@@ -100,5 +112,8 @@ __all__ = [
     "SINGLE_AGENT_PROTOCOL_VERSION",
     "SUPPORTED_REASONING_EFFORTS",
     # Loading entry point
+    "CARD_PIPELINE_ENV",
+    "_load_converter",
     "load_config",
+    "resolve_pipeline_mode",
 ]

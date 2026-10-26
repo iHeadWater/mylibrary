@@ -14,6 +14,15 @@
     "max_attempts_per_item": 3,
     "retry_cooldown_seconds": 3600
   },
+  "converter": {
+    "converter_id": "none",
+    "mode": "layout",
+    "extract_figures": true,
+    "table_mode": "markdown",
+    "ocr": false,
+    "min_text_coverage": 0.6,
+    "cache_dir": null
+  },
   "paths": {
     "project_root": "../../../..",
     "artifact_root": ".",
