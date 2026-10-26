@@ -7,12 +7,10 @@ Created on Mon Sep  9 10:52:11 2024
 
 import os
 from pathlib import Path
-import sys
+
 import numpy as np
 
-sys.path.append(os.path.dirname(Path(os.path.abspath(__file__)).parent))
-
-from definitions import PROJECT_DIR
+PROJECT_DIR = Path(__file__).resolve().parent.parent
 
 
 class FD:

@@ -1,11 +1,11 @@
 """
 Read data for the Google FloodHub paper reproduction.
 
-Override paths in definitions_private.py if needed.
+Paths default to <repo>/datasets and <repo>/results; override with
+HYDRO_DATASET_DIR / HYDRO_RESULT_DIR if needed.
 """
 
 import os
-import sys
 import tarfile
 from pathlib import Path
 
@@ -15,8 +15,9 @@ import pandas as pd
 from hydrodataset.grdc_caravan import GrdcCaravan
 from hydrodatasource.reader.grdc import Grdc
 
-sys.path.append(os.path.dirname(Path(os.path.abspath(__file__)).parent))
-from definitions import DATASET_DIR, RESULT_DIR
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+DATASET_DIR = Path(os.environ.get("HYDRO_DATASET_DIR", PROJECT_DIR / "datasets"))
+RESULT_DIR = Path(os.environ.get("HYDRO_RESULT_DIR", PROJECT_DIR / "results"))
 
 
 # First, please download paper zip files as follows:
