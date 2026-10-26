@@ -227,6 +227,18 @@ def _print_paths(*, as_json: bool) -> None:
         print("\n(带 — 的目录尚未创建;跑对应流程时会自动建)")
 
 
+def add_scholars_subparser(subparsers: argparse._SubParsersAction) -> None:
+    """学者论文统计：按人检索 OpenAlex 并生成自查表数据。
+
+    与 ``cards`` 一样是独立子 CLI；这里只放占位，实际 parser 在
+    ``hydrolitagent/scholars/cli.py``。
+    """
+    subparsers.add_parser(
+        "scholars",
+        help="按人检索 OpenAlex 论文并生成学院自查统计",
+    )
+
+
 def add_cards_subparser(subparsers: argparse._SubParsersAction) -> None:
     """文献卡与主题卡：把参数原样透传给 hydrolitagent.cards.cli 自己的 parser。
 
@@ -255,6 +267,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_query_subparser(subparsers)
     add_paths_subparser(subparsers)
     add_cards_subparser(subparsers)
+    add_scholars_subparser(subparsers)
     return parser
 
 
@@ -278,6 +291,10 @@ def main() -> None:
         from hydrolitagent.cards.cli import main as cards_main
 
         raise SystemExit(cards_main(argv[1:]))
+    if argv and argv[0] == "scholars":
+        from hydrolitagent.scholars.cli import main as scholars_main
+
+        raise SystemExit(scholars_main(argv[1:]))
 
     parser = build_parser()
     args = parser.parse_args()

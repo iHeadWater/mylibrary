@@ -1,0 +1,47 @@
+# 学者论文统计默认配置。
+# API key 不要写在这里：放到 .env 的 OPENALEX_API_KEY。
+# 也支持 HYDROLITAGENT_SCHOLARS_CONFIG 指向其他配置文件。
+
+[identity]
+# 用于同名消歧的单位；默认大连理工大学。置空表示不按单位过滤。
+institution_id = "I27357992"
+institution_name = "大连理工大学"
+# 是否回退查询历史单位（affiliations.institution.id）。
+include_past_affiliations = true
+# 作品数超过此值视为 OpenAlex 过度合并，禁止自动选择。
+max_author_works_count = 3000
+# 唯一候选才自动采用，并打 single_candidate_confirm 标记。
+auto_resolve_single_candidate = true
+max_candidates = 20
+
+[query]
+from_date = "2021-01-01"
+# 空字符串表示今天。
+to_date = ""
+# 期刊 + 会议；预印本、数据集、软件默认不计。
+work_types = ["article", "review", "conference-paper"]
+# 撤稿仍计入总数，同时另出“不含撤稿”数。
+include_retracted_in_total = true
+# 单人最多抓取的作品数，防止错误作者 ID 导致巨量请求。
+max_works = 5000
+
+[openalex]
+base_url = "https://api.openalex.org"
+api_key_env = "OPENALEX_API_KEY"
+# 可选；OpenAlex 目前 mailto 不再提高额度。
+mailto = ""
+timeout_seconds = 30
+max_retries = 5
+backoff_base_seconds = 1.0
+request_interval_ms = 100
+# 官方上限 100；不要用已弃用的 200。
+per_page = 100
+
+[web_search]
+enabled = false
+# none | manual | firecrawl
+provider = "none"
+max_results_per_person = 20
+
+[output]
+root = "outputs/scholars"

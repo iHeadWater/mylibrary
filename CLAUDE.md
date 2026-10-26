@@ -102,6 +102,16 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 不要直接读写平台的状态文件与主题池注册表(`themes/_registry.json`),也不要手工编辑生成的文献卡/主题文件——平台原子写入并校验哈希,手改会被判为漂移。完整说明在 `docs/user-guide/cards/`,实现细节在 `docs/development/platform/`。
 
+### 学者论文统计 (hydrolitagent scholars)
+
+按人检索 OpenAlex 论文，生成学院学术论文自查表所需的结构化数据。口径：2021 年起；第一作者**或**通讯作者任一计入；同名不猜；自查列不自动填写（程序只检测撤稿）。
+
+- 确认身份：`uv run hydrolitagent scholars resolve --name "张三" --name-en "Zhang San" --json`
+- 单人统计：`uv run hydrolitagent scholars stats --name "张三" --name-en "Zhang San" --institute "研究所" --output-dir outputs/scholars/YYYY-MM-DD --json`
+- 批量名单：`uv run hydrolitagent scholars batch --roster configs/scholars_roster.example.csv --output-dir outputs/scholars/YYYY-MM-DD --json`
+- 中文补充：`--web-search firecrawl` 只产候选；人工确认后 `--supplement confirmed.csv` 才计入。
+- 配置：`configs/scholars.toml`；名单示例：`configs/scholars_roster.example.csv`；文档：`docs/user-guide/scholars/`。
+
 ### Docs
 - Serve docs: `uv run mkdocs serve`
 - Build docs: `uv run mkdocs build --strict`

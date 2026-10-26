@@ -184,6 +184,10 @@ results/*
 *.doc
 *.docx
 outputs/
+
+# legacy 真实配置（含本机路径/人名）；仓库只提交 .example
+_legacy/configs/platform.toml
+_legacy/configs/manual_records.toml
 .graph_state.toml
 cache/
 graphify-out/

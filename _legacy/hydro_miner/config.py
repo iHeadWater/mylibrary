@@ -45,14 +45,6 @@ class TrackConfig:
 
 
 @dataclass
-class EnrichmentConfig:
-    enabled: bool
-    cache_dir: Path
-    timeout_seconds: int
-    providers: list[str]
-
-
-@dataclass
 class AppConfig:
     repo_root: Path
     config_path: Path
@@ -64,7 +56,6 @@ class AppConfig:
     people_allowlist: dict[str, list[str]]
     record_types: dict[str, RecordTypeConfig]
     tracks: dict[str, TrackConfig]
-    enrichment: EnrichmentConfig
 
 
 def _as_str_list(value: Any, field_name: str) -> list[str]:
@@ -251,14 +242,6 @@ def load_config(path: str | Path = "configs/platform.toml") -> AppConfig:
         if isinstance(value, dict)
     }
 
-    enrichment_raw = raw.get("enrichment", {})
-    enrichment = EnrichmentConfig(
-        enabled=bool(enrichment_raw.get("enabled", False)),
-        cache_dir=_resolve_path(repo_root, str(enrichment_raw.get("cache_dir", "cache/enrichment"))),
-        timeout_seconds=int(enrichment_raw.get("timeout_seconds", 10)),
-        providers=_as_str_list(enrichment_raw.get("providers", []), "enrichment.providers"),
-    )
-
     return AppConfig(
         repo_root=repo_root,
         config_path=config_path,
@@ -270,5 +253,4 @@ def load_config(path: str | Path = "configs/platform.toml") -> AppConfig:
         people_allowlist=people_allowlist,
         record_types=record_types,
         tracks=tracks,
-        enrichment=enrichment,
     )
