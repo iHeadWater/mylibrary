@@ -9,25 +9,21 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+# Protocol identifiers live in the provider-free domain layer.  Re-exported here
+# so existing imports keep working during the decoupling migration.
+from hydrolitagent.cards.domain.protocol import (
+    LEGACY_SINGLE_AGENT_PROTOCOL_VERSION,
+    LOCAL_PATH_PROTOCOL_VERSION,
+    MULTI_AGENT_PROTOCOL_VERSION,
+    SINGLE_AGENT_PROTOCOL_VERSION,
+    SUPPORTED_REASONING_EFFORTS,
+)
+from hydrolitagent.cards.domain.roles import REQUIRED_CARD_WORKFLOW_ROLES
+
 
 DEFAULT_BASE_URL = "http://127.0.0.1:23119"
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_PROCESS_TIMEOUT_SECONDS = 5.0
-SUPPORTED_REASONING_EFFORTS = frozenset(
-    {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
-)
-MULTI_AGENT_PROTOCOL_VERSION = "rough-card-multi-agent-v1"
-LOCAL_PATH_PROTOCOL_VERSION = "rough-card-multi-agent-v2"
-LEGACY_SINGLE_AGENT_PROTOCOL_VERSION = "rough-card-single-agent-v1"
-SINGLE_AGENT_PROTOCOL_VERSION = "rough-card-single-agent-v2"
-REQUIRED_CARD_WORKFLOW_ROLES = (
-    "fact_extractor_a",
-    "fact_extractor_b",
-    "fact_adjudicator",
-    "critical_analyst",
-    "card_synthesizer",
-    "adversarial_reviewer",
-)
 
 
 class ConfigError(ValueError):

@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import Any
 
 from hydrolitagent.cards.config import MULTI_AGENT_PROTOCOL_VERSION, LOCAL_PATH_PROTOCOL_VERSION, SINGLE_AGENT_PROTOCOL_VERSION, LEGACY_SINGLE_AGENT_PROTOCOL_VERSION, TaskConfig
-from hydrolitagent.cards.source_access import source_access_acceptable
+from hydrolitagent.cards.domain.source_access import (
+    BOUND_LOCAL_PDF_MCP,
+    LOCAL_PDF_PATH,
+    source_access_acceptable,
+)
 from hydrolitagent.cards.tasks import RuntimeLock, build_task_id, load_task_registry
 
 
@@ -204,7 +208,7 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
         source_page_count = generation.get("source_page_count")
         source_pages_served = generation.get("source_pages_served")
         source_visual_pages_served = generation.get("source_visual_pages_served")
-        direct = generation.get("source_access_method") == "local_pdf_path"
+        direct = generation.get("source_access_method") == LOCAL_PDF_PATH
         protocol = generation.get("workflow_protocol_version")
         single = protocol in {SINGLE_AGENT_PROTOCOL_VERSION, LEGACY_SINGLE_AGENT_PROTOCOL_VERSION}
         expected_quality_status = ("PROCESS_VALIDATED" if protocol == SINGLE_AGENT_PROTOCOL_VERSION
@@ -213,7 +217,7 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
             access = generation.get("source_access")
             source_ok = (source_access_acceptable(access, expected_sha256=data["pdf_sha256"],
                                                   expected_parent_key=data["parent_key"])
-                         and access.get("method") == "local_pdf_path" and access.get("page_count") == source_page_count
+                         and access.get("method") == LOCAL_PDF_PATH and access.get("page_count") == source_page_count
                          and generation.get("source_access_verified") is False
                          and generation.get("source_access_server") is None
                          and generation.get("source_access_receipt_schema_version") is None
@@ -221,7 +225,7 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
                          and generation.get("quality_status") == expected_quality_status
                          and protocol in {LOCAL_PATH_PROTOCOL_VERSION, SINGLE_AGENT_PROTOCOL_VERSION, LEGACY_SINGLE_AGENT_PROTOCOL_VERSION})
         else:
-            source_ok = (generation.get("source_access_method") == "bound_local_pdf_mcp"
+            source_ok = (generation.get("source_access_method") == BOUND_LOCAL_PDF_MCP
                          and generation.get("source_access_verified") is True
                          and isinstance(generation.get("source_access_server"), str) and bool(generation["source_access_server"])
                          and generation.get("source_access_receipt_schema_version") == 1

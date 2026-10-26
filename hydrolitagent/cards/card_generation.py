@@ -12,8 +12,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from hydrolitagent.cards.card_generators.base import CardGeneratorAdapter
-from hydrolitagent.cards.card_generators.codex_cli import GENERATION_PROTOCOL_VERSION
-from hydrolitagent.cards.source_access import source_access_acceptable
+from hydrolitagent.cards.domain.protocol import GENERATION_PROTOCOL_VERSION
+from hydrolitagent.cards.domain.source_access import (
+    CURRENT_METHODS,
+    LOCAL_PDF_PATH,
+    source_access_acceptable,
+)
 from hydrolitagent.cards.config import (
     REQUIRED_CARD_WORKFLOW_ROLES,
     LOCAL_PATH_PROTOCOL_VERSION,
@@ -555,7 +559,7 @@ def _validate_workflow_result(
             or (process_only and gates.get("content_validation_performed") is not False)
             or gates.get("independent_review") is not False
             or gates.get("scientific_correctness_verified") is not False
-            or not source_access_acceptable(access) or access.get("method") not in {"local_pdf_path", "claude_pdf_read"}
+            or not source_access_acceptable(access) or access.get("method") not in CURRENT_METHODS
             or not isinstance(quality_audit, dict) or quality_audit.get("quality_report") != workflow_report
             or not isinstance(roles, dict) or set(roles) != {"card_writer"} or not isinstance(writer, dict)
             or not isinstance(writer.get("execution"), dict)
@@ -605,7 +609,7 @@ def _validate_workflow_result(
     if direct:
         roles = quality_audit.get("roles")
         source_access = generator_result.get("source_access")
-        if (not source_access_acceptable(source_access) or source_access.get("method") != "local_pdf_path"
+        if (not source_access_acceptable(source_access) or source_access.get("method") != LOCAL_PDF_PATH
             or reported_gates.get("full_pdf_access_each_role") is not False
             or not isinstance(roles, dict) or set(roles) != set(REQUIRED_CARD_WORKFLOW_ROLES)
             or quality_audit.get("source_pdf_sha256") != source_access["source_sha256"]):
@@ -616,9 +620,9 @@ def _validate_workflow_result(
             if (execution.get("isolated") is not True
                 or not source_access_acceptable(access, expected_sha256=source_access["source_sha256"],
                                                  expected_parent_key=source_access["parent_key"])
-                or access.get("method") != "local_pdf_path" or access.get("page_count") != source_access["page_count"]):
+                or access.get("method") != LOCAL_PDF_PATH or access.get("page_count") != source_access["page_count"]):
                 raise CardGenerationError("CARD_QUALITY_UNVERIFIED", "六角色来源或独立会话审计不一致")
-    elif isinstance(generator_result.get("source_access"), dict) and generator_result["source_access"].get("method") == "local_pdf_path":
+    elif isinstance(generator_result.get("source_access"), dict) and generator_result["source_access"].get("method") == LOCAL_PDF_PATH:
         raise CardGenerationError("CARD_QUALITY_UNVERIFIED", "路径读取结果必须使用 v2 六角色协议，不得伪装成旧 MCP 质量记录")
     quality_audit_content = (
         json.dumps(
@@ -1301,7 +1305,7 @@ def generate_evidence_card(
             "quality_audit_sha256": quality_audit_sha256,
             "usage": generator_result.get("usage"),
         }
-        if source_access["method"] == "local_pdf_path":
+        if source_access["method"] == LOCAL_PDF_PATH:
             generated_manifest["generation"]["source_access"] = source_access
         _write_generated_package(
             target,

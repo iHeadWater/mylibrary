@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from hydrolitagent.cards.card_generators.codex_local_pdf import CodexLocalPdfAdapter
 from hydrolitagent.cards.card_generators.codex_text import CodexTextAdapter
+from hydrolitagent.cards.domain.source_access import LOCAL_PDF_PATH
 from hydrolitagent.cards.evidence_packages import EvidencePackageError, load_evidence_manifest
 from hydrolitagent.cards.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
 from hydrolitagent.cards.pdf_gate import PdfGateError
@@ -320,7 +321,7 @@ def _run_legacy(config, report, *, progress, text_adapter, pdf_adapter, delivery
                 if (reading["execution"].get("ephemeral") is not True
                     or access.get("source_sha256") != source["record"]["pdf_sha256"]
                     or access.get("parent_key") != source["record"]["parent_key"]
-                    or access.get("method") != "local_pdf_path"
+                    or access.get("method") != LOCAL_PDF_PATH
                     or access.get("source_identity_verified") is not True
                     or access.get("source_unchanged") is not True
                     or access.get("model_reading_report_accepted") is not True):

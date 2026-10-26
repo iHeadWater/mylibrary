@@ -17,6 +17,9 @@
 | 任务与保存完整性 | 完成必须以内容与来源记录为准，不得只凭目录或任务标记；已有卡不得被覆盖 | `test_tasks.py`、`test_completion_records.py`、`test_evidence_packages.py` | 已有自动测试 |
 | 模型预检与进度 | Zotero/模型预检失败可定位，进度心跳不泄漏凭据 | `test_preflight.py`、`test_progress.py` | 已有自动测试 |
 | 仓库结构 | 代码、模板、文档和忽略的科研产物保持预期边界 | `tests/test_repo_structure.py` | 已有自动测试 |
+| 分层边界 | `domain` 不得反向 import `adapters`/`application`/`card_generators` 或 `subprocess`；共享层不得出现 provider 名称或 Poppler 工具名（历史 method 字符串按单字面量白名单豁免） | `tests/test_import_boundaries.py` | 已有自动测试 |
+| CLI 契约快照 | `ai-config` / `paper-input` 的 JSON 字段只增不减、退出码为 0；本机 Zotero 不可用时显式 skip | `tests/test_cli_characterization.py` | 已有自动测试 |
+| 阅读方法策略 | 新产物只接受当前 method，历史 method 只读可校验；保留的 `markdown_prepared` 尚未启用 | `tests/test_source_access_methods.py` | 已有自动测试 |
 
 这些测试主要使用模拟供应者、临时目录和隔离配置。它们证明工程边界和失败保护，不证明模型理解论文正确或主题具有科学价值。
 

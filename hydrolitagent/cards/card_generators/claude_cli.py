@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
+from hydrolitagent.cards.domain.source_access import CLAUDE_PDF_READ
 from hydrolitagent.cards.card_generators.streaming import run_streaming_prompt
 from hydrolitagent.cards.progress import report_progress
 from hydrolitagent.cards._paths import PROMPTS_DIR
@@ -229,7 +230,7 @@ class ClaudeCliAdapter:
                 or output.get("visual_content_status") not in {"REVIEWED", "NOT_PRESENT"}
                 or not isinstance(output.get("source_read_evidence"), str) or not output["source_read_evidence"].strip()):
                 raise ClaudePdfProtocolError("Claude 阅读声明不完整或页数不一致")
-            access = {"method": "claude_pdf_read", "source_sha256": digest, "parent_key": zotero_parent_key,
+            access = {"method": CLAUDE_PDF_READ, "source_sha256": digest, "parent_key": zotero_parent_key,
                       "page_count": count, "source_identity_verified": True, "source_unchanged": True,
                       "model_reading_report_accepted": True, "model_claim_full_text": True, "model_claim_visuals": True,
                       "read_only_tools": True, "pages_requested_successfully": pages,

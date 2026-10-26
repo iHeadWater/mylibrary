@@ -18,6 +18,7 @@ from hydrolitagent.cards.card_generators.codex_cli import (
     _timeout_text, _toml_string, _usage,
 )
 from hydrolitagent.cards.card_generators.streaming import ExecutionStopped
+from hydrolitagent.cards.domain.source_access import LOCAL_PDF_PATH
 from hydrolitagent.cards.pdf_sandbox import check_pdf_sandbox
 from hydrolitagent.cards.progress import report_progress
 from hydrolitagent.cards.publication import atomic_text
@@ -92,7 +93,7 @@ class CodexLocalPdfAdapter(CodexCliAdapter):
             return {**ready, "ok": False, "error": {"code": exc.code, "message": str(exc)}}
         return {**ready, "pdf_reader": {"adapter": "local_path", "resolved_tools": resolved,
                 "reading_prompt_sha256": hashlib.sha256(instructions.encode("utf-8")).hexdigest()},
-                "source_reading_method": "local_pdf_path"}
+                "source_reading_method": LOCAL_PDF_PATH}
 
     def generate(self, prompt, *, working_directory, source_pdf_path, zotero_parent_key,
                  output_schema_path, model=None, reasoning_effort=None, timeout_seconds=None, run_label=None):
@@ -231,7 +232,7 @@ class CodexLocalPdfAdapter(CodexCliAdapter):
                 raise _LocalReadError("PDF_DIRECT_READING_INCOMPLETE", "本角色未声明完成全文和页面图像阅读")
             if type(output.get("source_page_count")) is not int or output["source_page_count"] != count:
                 raise _LocalReadError("CODEX_PDF_PAGE_COUNT_MISMATCH", "角色报告页数与本机 PDF 页数不一致")
-            access = {"method": "local_pdf_path", "verified": False,
+            access = {"method": LOCAL_PDF_PATH, "verified": False,
                       "source_identity_verified": True, "source_sha256": digest, "parent_key": zotero_parent_key,
                       "page_count": count, "source_unchanged": True, "sandbox_preflight_passed": True,
                       "model_reading_report_accepted": True, "model_claim_full_text": True, "model_claim_visuals": True,

@@ -7,7 +7,11 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from hydrolitagent.cards.card_generators.codex_cli import _safe_exec_diagnostic, _sanitize_diagnostic_text, _toml_string
+from hydrolitagent.cards.adapters.runners.diagnostics import (
+    safe_exec_diagnostic,
+    sanitize_diagnostic_text,
+)
+from hydrolitagent.cards.infrastructure.toml import toml_string
 from hydrolitagent.cards.card_generators.streaming import run_streaming_prompt
 from hydrolitagent.cards.config import AppConfig, CardGeneratorConfig
 from hydrolitagent.cards.progress import report_progress
@@ -95,7 +99,7 @@ def build_sandbox_probe_command(
     # This installed native Windows CLI uses `sandbox COMMAND`, not `sandbox windows COMMAND`.
     # Explicit built-in profile prevents inheriting personal full-access permissions.
     return [executable, "sandbox", "-P", ":workspace", "-C", str(workspace),
-            "--include-managed-config", "-c", "windows.sandbox=" + _toml_string(trial.windows_sandbox),
+            "--include-managed-config", "-c", "windows.sandbox=" + toml_string(trial.windows_sandbox),
             "-c", "windows.sandbox_private_desktop=true",
             "--", shell, "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]
 
@@ -130,10 +134,10 @@ def check_pdf_sandbox(
                    and [c.get("name") for c in checks] == ["source_read", "pdfinfo", "text_extract", "page_render"]
                    and all(c.get("status") == "pass" for c in checks))
         if not success:
-            diagnostic = _safe_exec_diagnostic(result, "PDF_DIRECT_SANDBOX_PREFLIGHT_FAILED", stage="local_sandbox_preflight")
+            diagnostic = safe_exec_diagnostic(result, "PDF_DIRECT_SANDBOX_PREFLIGHT_FAILED", stage="local_sandbox_preflight")
             if isinstance(payload, dict):
                 diagnostic["probe_failure"] = {
-                    k: _sanitize_diagnostic_text(payload[k]) if isinstance(payload[k], str) else payload[k]
+                    k: sanitize_diagnostic_text(payload[k]) if isinstance(payload[k], str) else payload[k]
                     for k in ("failure_type", "failure_reason", "errno", "winerror")
                     if k in payload and (payload[k] is None or type(payload[k]) in (str, int))
                 }

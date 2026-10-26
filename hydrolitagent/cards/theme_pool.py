@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 
 from hydrolitagent.cards import themes as core
+from hydrolitagent.cards.domain.source_access import LOCAL_PDF_PATH
 from hydrolitagent.cards.publication import atomic_text, text_hash
 
 PROTOCOL = "unified-theme-pool-v1"
@@ -74,7 +75,7 @@ def validate_reading(record, source):
     if (record["execution"].get("ephemeral") is not True
             or access.get("source_sha256") != source["pdf_sha256"]
             or access.get("parent_key") != source["parent_key"]
-            or access.get("method") != "local_pdf_path"
+            or access.get("method") != LOCAL_PDF_PATH
             or access.get("source_identity_verified") is not True
             or access.get("source_unchanged") is not True
             or access.get("model_reading_report_accepted") is not True):

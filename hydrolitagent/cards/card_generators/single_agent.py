@@ -8,7 +8,7 @@ from copy import deepcopy
 
 from hydrolitagent.cards.config import SINGLE_AGENT_PROTOCOL_VERSION
 from hydrolitagent.cards.progress import report_progress
-from hydrolitagent.cards.source_access import source_access_acceptable
+from hydrolitagent.cards.domain.source_access import CURRENT_METHODS, source_access_acceptable
 
 
 SOURCE_MARKER = re.compile(r"【原文(?:陈述|转述)(?:[·：:]\s*[^【】\r\n]+)?】")
@@ -88,7 +88,7 @@ class SingleAgentCardGeneratorAdapter:
             access = result.get("source_access")
             if (not source_access_acceptable(access, expected_sha256=digest,
                                              expected_parent_key=kwargs["zotero_parent_key"])
-                or access.get("method") not in {"local_pdf_path", "claude_pdf_read"} or result.get("ephemeral") is not True):
+                or access.get("method") not in CURRENT_METHODS or result.get("ephemeral") is not True):
                 raise ValueError("单 Agent 来源身份、阅读记录或会话隔离不符合协议")
             output = result.get("output")
             if not isinstance(output, dict):

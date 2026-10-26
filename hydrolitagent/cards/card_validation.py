@@ -17,7 +17,12 @@ from hydrolitagent.cards.card_generation import (
 )
 from hydrolitagent.cards.evidence_templates import EvidenceTemplateError
 from hydrolitagent.cards.publication import atomic_text
-from hydrolitagent.cards.source_access import source_access_acceptable
+from hydrolitagent.cards.domain.source_access import (
+    CLAUDE_PDF_READ,
+    CURRENT_METHODS,
+    LOCAL_PDF_PATH,
+    source_access_acceptable,
+)
 
 POLICY = "subject-card-validation-v1"
 FIELDS = ("research_questions", "study_objects_and_scales", "data_and_methods",
@@ -177,7 +182,7 @@ def _provenance(assets, draft, record, identity, add):
     claude = protocol == "claude-local-pdf-v1"
     reading = _read_prompt(assets.claude_reading_prompt if claude else assets.reading_prompt)
     access = draft.get("reading_record")
-    if isinstance(access, dict) and access.get("method") != ("claude_pdf_read" if claude else "local_pdf_path"):
+    if isinstance(access, dict) and access.get("method") != (CLAUDE_PDF_READ if claude else LOCAL_PDF_PATH):
         add("CARD_READING_RECORD_INVALID", "/reading_record/method", "阅读记录与所选后端协议不一致")
     provenance = draft.get("provenance")
     if not isinstance(provenance, dict):
@@ -269,11 +274,11 @@ def validate_subject_card(config, draft, paper_input):
     if (not isinstance(access, dict) or access.get("source_sha256") != source.get("pdf_sha256")
         or access.get("parent_key") != source.get("parent_key")
         or type(access.get("page_count")) is not int or access["page_count"] != pages
-        or access.get("method") not in {"local_pdf_path", "claude_pdf_read"}
+        or access.get("method") not in CURRENT_METHODS
         or any(access.get(k) is not True for k in ("source_identity_verified", "source_unchanged",
                                                   "model_reading_report_accepted"))):
         add("CARD_READING_RECORD_INVALID", "/reading_record", "阅读记录与草稿来源不一致或未被接受")
-    if isinstance(access, dict) and access.get("method") == "claude_pdf_read" and not source_access_acceptable(
+    if isinstance(access, dict) and access.get("method") == CLAUDE_PDF_READ and not source_access_acceptable(
             access, expected_sha256=source.get("pdf_sha256"), expected_parent_key=source.get("parent_key")):
         add("CARD_READING_RECORD_INVALID", "/reading_record", "Claude 的只读 PDF 回执或来源身份不完整")
     body = draft.get("card_body_markdown")

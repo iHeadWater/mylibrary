@@ -183,6 +183,8 @@ results/*
 *.doc
 *.docx
 outputs/
+# 单篇制卡的工作输入：由 paper-input 生成，含本机 PDF 绝对路径
+/paper-input.json
 
 # legacy 真实配置（含本机路径/人名）；仓库只提交 .example
 _legacy/configs/platform.toml

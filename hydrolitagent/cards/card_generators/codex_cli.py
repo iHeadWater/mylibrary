@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -13,6 +12,21 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from hydrolitagent.cards.config import CardGeneratorConfig
+from hydrolitagent.cards.domain.protocol import GENERATION_PROTOCOL_VERSION
+from hydrolitagent.cards.domain.source_access import BOUND_LOCAL_PDF_MCP
+# Underscore aliases are re-exports, not local helpers: ``codex_local_pdf``,
+# ``codex_text`` and the connection-guard tests import these names from this
+# module. Keep them stable even when the implementation lives elsewhere.
+from hydrolitagent.cards.adapters.runners.diagnostics import (
+    event_diagnostic_parts as _event_diagnostic_parts,
+    safe_exec_diagnostic as _safe_exec_diagnostic,
+    sanitize_diagnostic_text as _sanitize_diagnostic_text,
+    timeout_text as _timeout_text,
+)
+from hydrolitagent.cards.infrastructure.toml import (
+    toml_string as _toml_string,
+    toml_string_map as _toml_string_map,
+)
 from hydrolitagent.cards.card_generators.streaming import ExecutionStopped, run_streaming_prompt
 from hydrolitagent.cards.card_generators.connection_guard import is_reconnect_event
 from hydrolitagent.cards.card_generators.proxy import codex_proxy_environment, proxy_summary
@@ -39,7 +53,6 @@ DISALLOWED_SMOKE_ITEM_TYPES = frozenset(
 DISALLOWED_GENERATION_ITEM_TYPES = frozenset(
     {"command_execution", "file_change", "web_search"}
 )
-GENERATION_PROTOCOL_VERSION = "evidence-card-generation-v3"
 USAGE_FIELDS = (
     "input_tokens",
     "cached_input_tokens",
@@ -47,27 +60,6 @@ USAGE_FIELDS = (
     "reasoning_output_tokens",
     "total_tokens",
 )
-DIAGNOSTIC_EVENT_TYPES = frozenset({"error", "turn.failed"})
-DIAGNOSTIC_KEYS = frozenset(
-    {"type", "code", "message", "status", "param", "reason", "error"}
-)
-DIAGNOSTIC_LINE_PATTERN = re.compile(
-    r"error|fail|denied|invalid|unsupported|unavailable|refus|limit|quota|"
-    r"timeout|sandbox|permission|context|disconnect|closed|cancel",
-    re.IGNORECASE,
-)
-USER_PROFILE_PATTERN = re.compile(r"(?i)\b[A-Z]:\\Users\\[^\\\s\"']+")
-SECRET_PATTERNS = (
-    re.compile(r"(?i)\bsk-[A-Za-z0-9_-]{8,}\b"),
-    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/=]{8,}"),
-    re.compile(
-        r"(?i)\b(authorization|api[_ -]?key|access[_ -]?token|refresh[_ -]?token|"
-        r"secret|password)\b\s*[:=]\s*[^\s,;]+"
-    ),
-)
-MAX_DIAGNOSTIC_SUMMARY_LENGTH = 1600
-
-
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -125,117 +117,6 @@ def _combined_output(result: subprocess.CompletedProcess[str]) -> str:
         for part in (result.stdout or "", result.stderr or "")
         if part and part.strip()
     )
-
-
-def _sanitize_diagnostic_text(value: str) -> str:
-    sanitized = value.replace("\x00", " ")
-    sanitized = USER_PROFILE_PATTERN.sub("%USERPROFILE%", sanitized)
-    for pattern in SECRET_PATTERNS:
-        sanitized = pattern.sub("<redacted>", sanitized)
-    sanitized = " ".join(sanitized.split())
-    if len(sanitized) > MAX_DIAGNOSTIC_SUMMARY_LENGTH:
-        sanitized = sanitized[: MAX_DIAGNOSTIC_SUMMARY_LENGTH - 1].rstrip() + "…"
-    return sanitized
-
-
-def _event_diagnostic_parts(value: Any, *, key: str | None = None) -> list[str]:
-    if isinstance(value, dict):
-        parts: list[str] = []
-        for child_key, child_value in value.items():
-            parts.extend(_event_diagnostic_parts(child_value, key=str(child_key)))
-        return parts
-    if isinstance(value, list):
-        parts = []
-        for child in value:
-            parts.extend(_event_diagnostic_parts(child, key=key))
-        return parts
-    if key not in DIAGNOSTIC_KEYS or not isinstance(value, (str, int, float, bool)):
-        return []
-    rendered = _sanitize_diagnostic_text(f"{key}={value}")
-    return [rendered] if rendered else []
-
-
-def _safe_exec_diagnostic(
-    result: subprocess.CompletedProcess[str],
-    category: str,
-    *,
-    stage: str = "codex_exec",
-) -> dict[str, Any]:
-    event_summaries: list[str] = []
-    error_events: list[str] = []
-    first_tool_error: dict[str, str] | None = None
-    for line in (result.stdout or "").splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(event, dict):
-            continue
-        item = event.get("item")
-        if (
-            first_tool_error is None and event.get("type") == "item.completed"
-            and isinstance(item, dict) and item.get("type") == "mcp_tool_call"
-            and item.get("status") == "failed"
-        ):
-            first_tool_error = {
-                "server": _sanitize_diagnostic_text(str(item.get("server", "unknown"))),
-                "tool": _sanitize_diagnostic_text(str(item.get("tool", "unknown"))),
-                "summary": _sanitize_diagnostic_text(" | ".join(
-                    _event_diagnostic_parts(item.get("error"), key="error")
-                )) or "工具失败，CLI 未提供错误细节",
-            }
-        if event.get("type") in DIAGNOSTIC_EVENT_TYPES:
-            parts = _event_diagnostic_parts(event)
-            event_summaries.extend(parts)
-            error_events.append(_sanitize_diagnostic_text(" | ".join(parts)))
-
-    stderr_lines = [
-        line.strip()
-        for line in (result.stderr or "").splitlines()
-        if line.strip() and DIAGNOSTIC_LINE_PATTERN.search(line)
-    ]
-    if not stderr_lines and not event_summaries:
-        stderr_lines = [
-            line.strip()
-            for line in (result.stderr or "").splitlines()
-            if line.strip()
-        ][-3:]
-    stderr_summaries = [
-        _sanitize_diagnostic_text(line) for line in stderr_lines[-6:]
-    ]
-
-    if event_summaries and stderr_summaries:
-        source = "codex_error_event+stderr"
-    elif event_summaries:
-        source = "codex_error_event"
-    elif stderr_summaries:
-        source = "codex_stderr"
-    else:
-        source = "none"
-    summaries = event_summaries + stderr_summaries
-
-    unique_summaries = list(dict.fromkeys(part for part in summaries if part))
-    summary = _sanitize_diagnostic_text(" | ".join(unique_summaries))
-    if not summary:
-        summary = "Codex CLI 未提供可安全提取的错误摘要"
-    diagnostic = {
-        "stage": stage,
-        "exit_code": result.returncode,
-        "category": category,
-        "source": source,
-        "summary": summary,
-    }
-    if error_events:
-        diagnostic["first_error"] = error_events[0]
-        diagnostic["last_error"] = error_events[-1]
-        diagnostic["error_event_count"] = len(error_events)
-    if first_tool_error is not None:
-        diagnostic["first_tool_error"] = first_tool_error
-    return diagnostic
-
-
-def _timeout_text(value: str | bytes | None) -> str:
-    return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value or ""
 
 
 def _terminal_failure_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -486,21 +367,6 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _toml_string(value: str) -> str:
-    """JSON strings are valid TOML basic strings for these scalar values."""
-
-    return json.dumps(value, ensure_ascii=False)
-
-
-def _toml_string_map(values: Mapping[str, str]) -> str:
-    """Encode a string map as a TOML inline table for Codex CLI overrides."""
-
-    entries = (
-        f"{key}={_toml_string(value)}" for key, value in sorted(values.items())
-    )
-    return "{" + ",".join(entries) + "}"
-
-
 def _source_pdf_access_from_receipt(
     receipt: Any,
     *,
@@ -567,7 +433,7 @@ def _source_pdf_access_from_receipt(
     return (
         {
             "verified": True,
-            "method": "bound_local_pdf_mcp",
+            "method": BOUND_LOCAL_PDF_MCP,
             "server_name": server_name,
             "receipt_schema_version": 1,
             "page_count": page_count,
