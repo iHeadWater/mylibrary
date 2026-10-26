@@ -1,15 +1,26 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import subprocess
 import threading
 import time
-from typing import Mapping, Sequence, TextIO
+from typing import BinaryIO, Mapping, Sequence, TextIO
 
 from hydrolitagent.cards.card_generators.connection_guard import ConnectionGuard
 from hydrolitagent.cards.config import ConnectionGuardConfig
+from hydrolitagent.cards.infrastructure.decoding import (
+    DecodedText,
+    decode_process_output,
+    normalize_newlines,
+)
 from hydrolitagent.cards.progress import ProgressCallback, report_progress
+
+# stdout carries the JSONL event protocol and stays UTF-8.  Its newline handling
+# must keep the universal-newline translation the previous ``text=True`` mode
+# applied, otherwise Windows children writing CRLF change the captured text.
+_STDOUT_ENCODING = "utf-8"
 
 
 class ExecutionStopped(subprocess.SubprocessError):
@@ -70,7 +81,7 @@ def _status_event(line: str, progress: ProgressCallback | None, server: str) -> 
         report_progress(progress, "phase", message=message)
 
 
-def _stop_process(process: subprocess.Popen[str]) -> None:
+def _stop_process(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is None:
         # This PID belongs to the child we just created, not another user session.
         if os.name == "nt":
@@ -88,6 +99,36 @@ def _stop_process(process: subprocess.Popen[str]) -> None:
     process.wait(timeout=5)
 
 
+def _decoded_stderr(stderr_bytes: bytes) -> DecodedText:
+    """Decode stderr bytes and keep the pre-binary-capture newline semantics."""
+
+    decoded = decode_process_output(stderr_bytes)
+    return DecodedText(
+        normalize_newlines(decoded.text), decoded.encoding, decoded.replacement_count
+    )
+
+
+def _completed_result(
+    command: Sequence[str],
+    returncode: int | None,
+    stdout_text: str,
+    stderr_bytes: bytes,
+) -> subprocess.CompletedProcess[str]:
+    """Build the legacy return type while carrying the stderr decode metadata.
+
+    ``subprocess.CompletedProcess`` has no field for "how was this decoded", so
+    the metadata rides along as an extra attribute; callers that do not know
+    about it keep receiving exactly the same ``str`` fields as before.
+    """
+
+    decoded_stderr = _decoded_stderr(stderr_bytes)
+    result = subprocess.CompletedProcess(
+        command, returncode, stdout_text, decoded_stderr.text
+    )
+    setattr(result, "stderr_meta", decoded_stderr)
+    return result
+
+
 def run_streaming_prompt(
     command: Sequence[str], prompt: str, timeout_seconds: float,
     environment: Mapping[str, str] | None = None, *,
@@ -98,27 +139,43 @@ def run_streaming_prompt(
     env.update(environment or {})
     deadline = time.monotonic() + timeout_seconds
     guard = ConnectionGuard(connection_guard or ConnectionGuardConfig(), server)
+    # Binary pipes: stdout is decoded as UTF-8 for the JSONL contract, while
+    # stderr is kept as bytes until the process exits so the decode ladder can
+    # pick the locale encoding instead of destroying CP936 text.
     process = subprocess.Popen(
         list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
-        text=True, encoding="utf-8", errors="replace", env=env,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        env=env, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
-    stdout: list[str] = []
-    stderr: list[str] = []
+    stdout_lines: list[str] = []
+    stderr_chunks: list[bytes] = []
     errors: list[Exception] = []
+    stdout_stream = io.TextIOWrapper(
+        process.stdout, encoding=_STDOUT_ENCODING, errors="replace", newline=None
+    )
 
-    def drain(stream: TextIO, destination: list[str], *, events: bool) -> None:
+    def drain_stdout(stream: TextIO) -> None:
         try:
             for line in stream:
-                destination.append(line)
-                if events:
-                    try:
-                        event = json.loads(line)
-                    except (ValueError, TypeError):
-                        event = None
-                    if isinstance(event, dict):
-                        guard.observe(event)
-                    _status_event(line, progress, server)
+                stdout_lines.append(line)
+                try:
+                    event = json.loads(line)
+                except (ValueError, TypeError):
+                    event = None
+                if isinstance(event, dict):
+                    guard.observe(event)
+                _status_event(line, progress, server)
+        except Exception as exc:
+            errors.append(exc)
+        finally:
+            stream.close()
+
+    def drain_stderr(stream: BinaryIO) -> None:
+        try:
+            while True:
+                chunk = stream.read(65536)
+                if not chunk:
+                    break
+                stderr_chunks.append(chunk)
         except Exception as exc:
             errors.append(exc)
         finally:
@@ -126,7 +183,7 @@ def run_streaming_prompt(
 
     def send_input() -> None:
         try:
-            process.stdin.write(prompt)
+            process.stdin.write(prompt.encode("utf-8"))
         except BrokenPipeError:
             pass
         except Exception as exc:
@@ -138,10 +195,14 @@ def run_streaming_prompt(
                 pass
 
     threads = [
-        threading.Thread(target=drain, args=(process.stdout, stdout), kwargs={"events": True}, daemon=True),
-        threading.Thread(target=drain, args=(process.stderr, stderr), kwargs={"events": False}, daemon=True),
+        threading.Thread(target=drain_stdout, args=(stdout_stream,), daemon=True),
+        threading.Thread(target=drain_stderr, args=(process.stderr,), daemon=True),
         threading.Thread(target=send_input, daemon=True),
     ]
+
+    def stderr_bytes() -> bytes:
+        return b"".join(stderr_chunks)
+
     try:
         report_progress(progress, "phase", message=f"{provider_label} 子进程已启动，等待模型服务响应")
         for thread in threads:
@@ -169,7 +230,9 @@ def run_streaming_prompt(
         if errors:
             raise subprocess.SubprocessError(f"读取 {provider_label} 进程输出失败") from errors[0]
         report_progress(progress, "phase", message=f"{provider_label} 进程已退出，正在校验输出并判定结果")
-        return subprocess.CompletedProcess(command, process.returncode, "".join(stdout), "".join(stderr))
+        return _completed_result(
+            command, process.returncode, "".join(stdout_lines), stderr_bytes()
+        )
     except BaseException as exc:
         if isinstance(exc, ExecutionStopped):
             report_progress(progress, "phase", message=f"已触发停止保护：{exc}；正在清理本次子进程")
@@ -178,8 +241,12 @@ def run_streaming_prompt(
             if thread.ident is not None:
                 thread.join(timeout=1)
         if isinstance(exc, ExecutionStopped):
-            exc.result = subprocess.CompletedProcess(command, process.returncode, "".join(stdout), "".join(stderr))
+            exc.result = _completed_result(
+                command, process.returncode, "".join(stdout_lines), stderr_bytes()
+            )
         elif isinstance(exc, subprocess.TimeoutExpired):
-            exc.output = "".join(stdout)
-            exc.stderr = "".join(stderr)
+            decoded = _decoded_stderr(stderr_bytes())
+            exc.output = "".join(stdout_lines)
+            exc.stderr = decoded.text
+            setattr(exc, "stderr_meta", decoded)
         raise

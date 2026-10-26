@@ -13,6 +13,8 @@ import re
 import subprocess
 from typing import Any
 
+from hydrolitagent.cards.infrastructure.decoding import DecodedText, decode_text
+
 
 DIAGNOSTIC_EVENT_TYPES = frozenset({"error", "turn.failed"})
 DIAGNOSTIC_KEYS = frozenset(
@@ -139,11 +141,15 @@ def safe_exec_diagnostic(
         diagnostic["error_event_count"] = len(error_events)
     if first_tool_error is not None:
         diagnostic["first_tool_error"] = first_tool_error
+    stderr_meta = getattr(result, "stderr_meta", None)
+    if isinstance(stderr_meta, DecodedText):
+        diagnostic["stderr_encoding"] = stderr_meta.encoding
+        diagnostic["stderr_replacement_count"] = stderr_meta.replacement_count
     return diagnostic
 
 
 def timeout_text(value: str | bytes | None) -> str:
-    return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value or ""
+    return decode_text(value)
 
 
 __all__ = [
