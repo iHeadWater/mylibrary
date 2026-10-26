@@ -787,6 +787,32 @@ def test_zotero_sync_does_not_build_item_for_existing_item(monkeypatch, tmp_path
     assert mock_zot.create_items.call_count == 1
 
 
+def test_zotero_sync_passes_source_meta_from_the_environment(monkeypatch, tmp_path):
+    """download_paper hands over the record it resolved with --landing-url."""
+    import json as _json
+
+    calls = []
+
+    def fake_build(doi, fallback, **kwargs):
+        calls.append(kwargs)
+        return {"itemType": "journalArticle", "title": "国家水网", "creators": []}, {}
+
+    shaped = {
+        "type": "journal-article",
+        "title": ["国家水网复杂网络模型构建及结构特征分析"],
+        "container-title": ["水科学进展"],
+        "volume": "37", "issue": "6", "page": "993-1007",
+        "author": [{"family": "王丽川", "given": ""}],
+    }
+    monkeypatch.setenv("MYLIBRARY_SOURCE_META", _json.dumps(shaped, ensure_ascii=False))
+
+    _run_sync_main(monkeypatch, tmp_path, existing_key=None, build_item=fake_build)
+
+    assert calls, "build_item should have been called for a new item"
+    assert calls[0]["source_meta"]["volume"] == "37"
+    assert calls[0]["source_meta"]["container-title"] == ["水科学进展"]
+
+
 def test_merge_delta_drops_trashed_items():
     """Trashing is an item update (data.deleted=1); the ledger must drop it."""
     merged = _merge_delta(

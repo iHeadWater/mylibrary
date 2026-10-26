@@ -822,3 +822,97 @@ class TestResolveZoteroCredentials:
         lib_id, api_key = paper_to_zotero._resolve_zotero_credentials()
 
         assert (lib_id, api_key) == ("", "")
+
+
+# ── Chinese journals (CNKI DOIs absent from Crossref) ────────────────
+
+
+class TestChineseJournalFallback:
+    """When Crossref has no record, chndoi/publisher metadata builds the item."""
+
+    DOI = "10.14042/j.cnki.32.1309.2026.06.001"
+
+    def _chinese_cr(self) -> dict:
+        return {
+            "type": "journal-article",
+            "title": ["黄河中游水沙变化归因分析"],
+            "container-title": ["水科学进展"],
+            "volume": "37",
+            "issue": "6",
+            "page": "993-1007",
+            "ISSN": ["1001-6791"],
+            "author": [
+                {"family": "王丽川", "given": ""},
+                {"family": "李四", "given": ""},
+            ],
+            "abstract": "目的：分析黄河中游水沙变化的驱动因素。",
+            "published-print": {"date-parts": [[2026, 6, 1]]},
+        }
+
+    def test_builds_a_journal_article_from_chinese_metadata(self):
+        with (
+            patch.object(paper_to_zotero, "fetch_crossref", return_value=None),
+            patch.object(paper_to_zotero, "fetch_chinese_crossref",
+                         return_value=self._chinese_cr()) as mock_cn,
+        ):
+            item, extra = paper_to_zotero.build_item(self.DOI, {})
+
+        mock_cn.assert_called_once_with(self.DOI)
+        assert item["itemType"] == "journalArticle"
+        assert item["title"] == "黄河中游水沙变化归因分析"
+        assert item["publicationTitle"] == "水科学进展"
+        assert item["volume"] == "37"
+        assert item["issue"] == "6"
+        assert item["pages"] == "993-1007"
+        assert item["ISSN"] == "1001-6791"
+        assert item["date"] == "2026-06-01"
+        assert item["abstractNote"].startswith("目的")
+        assert item["language"] == "zh"
+        assert item["creators"] == [
+            {"creatorType": "author", "firstName": "", "lastName": "王丽川"},
+            {"creatorType": "author", "firstName": "", "lastName": "李四"},
+        ]
+        assert "publicationTitle" not in extra
+
+    def test_source_meta_wins_and_avoids_both_fetches(self):
+        """The download pipeline hands over an already-resolved record."""
+        with (
+            patch.object(paper_to_zotero, "fetch_crossref",
+                         side_effect=AssertionError("must not be consulted")),
+            patch.object(paper_to_zotero, "fetch_chinese_crossref",
+                         side_effect=AssertionError("must not be consulted")),
+        ):
+            item, _ = paper_to_zotero.build_item(
+                self.DOI, {}, source_meta=self._chinese_cr())
+
+        assert item["publicationTitle"] == "水科学进展"
+        assert item["volume"] == "37"
+        assert item["pages"] == "993-1007"
+
+    def test_arxiv_doi_skips_the_chndoi_probe(self):
+        """arXiv DOIs live in DataCite; probing chndoi would only cost a hop."""
+        with (
+            patch.object(paper_to_zotero, "fetch_crossref", return_value=None),
+            patch.object(paper_to_zotero, "fetch_arxiv", return_value=None),
+            patch.object(paper_to_zotero, "fetch_published_doi_s2", return_value=None),
+            patch.object(paper_to_zotero, "fetch_chinese_crossref",
+                         side_effect=AssertionError("must not probe chndoi for arXiv")),
+        ):
+            paper_to_zotero.build_item("10.48550/arXiv.2606.06473", {"title": "T"})
+
+    def test_crossref_still_wins_when_present(self):
+        crossref_cr = {
+            "type": "journal-article",
+            "title": ["English Title"],
+            "container-title": ["Journal"],
+            "author": [{"given": "John", "family": "Doe"}],
+        }
+
+        with (
+            patch.object(paper_to_zotero, "fetch_crossref", return_value=crossref_cr),
+            patch.object(paper_to_zotero, "fetch_chinese_crossref",
+                         side_effect=AssertionError("must not be consulted")),
+        ):
+            item, _ = paper_to_zotero.build_item("10.1234/test", {})
+
+        assert item["title"] == "English Title"

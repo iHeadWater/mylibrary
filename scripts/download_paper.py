@@ -46,6 +46,18 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT, help="Output directory")
     ap.add_argument("--resolve-only", action="store_true", help="Show metadata and exit")
     ap.add_argument("--sync", action="store_true", help="Sync to Zotero after download")
+    ap.add_argument("--landing-url",
+                    help="Publisher article page, for DOI resolvers that fail "
+                         "(CNKI-registered Chinese journals)")
+    ap.add_argument("--pdf-url",
+                    help="Direct PDF URL, for CNKI-registered Chinese journals "
+                         "whose article page cannot be parsed")
+    ap.add_argument("--replace", action="store_true",
+                    help="With --sync: overwrite the GDrive PDF when the "
+                         "existing attachment is a different version")
+    ap.add_argument("--skip-existing", action="store_true",
+                    help="With --sync: skip the DOI entirely when it is already "
+                         "in Zotero (default attaches/updates)")
     return ap
 
 
@@ -65,6 +77,10 @@ def main(argv=None) -> int:
         sync=args.sync,
         resolve_only=args.resolve_only,
         title=args.title,
+        landing_url=args.landing_url,
+        pdf_url=args.pdf_url,
+        replace=args.replace,
+        skip_existing=args.skip_existing,
     )
 
 

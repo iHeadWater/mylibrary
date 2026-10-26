@@ -101,7 +101,13 @@ ENTRY_TITLE_MARKERS = (
 # Weaker signals that would also match plausible paper titles ("Security check
 # of levee systems"). Used once a flow is running, where waiting is bounded and
 # the flow can press its own verification button — never for the entry gate.
-CHALLENGE_TITLE_MARKERS = ENTRY_TITLE_MARKERS + ("security check", "human verification")
+CHALLENGE_TITLE_MARKERS = ENTRY_TITLE_MARKERS + (
+    "security check",
+    "human verification",
+    # CNKI-family sites answer a too-fast request with a slider interstitial.
+    "安全验证",
+    "拖动滑块",
+)
 
 # Visible challenge DOM nodes. Deliberately Cloudflare-specific: a generic
 # [class*="captcha"] also matches benign site-wide widgets such as Google's
@@ -668,8 +674,13 @@ async def _launch_context(pw, downloads_dir: Path, *, headless: bool):
     )
 
 
-async def _pdf_url_candidates(page, doi: str, *, wait_s: float = 12.0) -> list[str]:
+async def _pdf_url_candidates(page, doi: str, *, wait_s: float = 12.0,
+                              extra: list[str] | None = None) -> list[str]:
     """PDF URLs advertised by the article page, plus the common DOI layouts.
+
+    ``extra`` holds URLs known before the page loads (``citation_pdf_url`` read
+    from a metadata fetch); they are tried first. ``None`` — the default —
+    keeps the historical behaviour for every existing caller.
 
     Single-page-app publishers (sciengine) inject ``citation_pdf_url`` only after
     their JS renders, so poll briefly instead of guessing from a blank shell.
@@ -688,9 +699,10 @@ async def _pdf_url_candidates(page, doi: str, *, wait_s: float = 12.0) -> list[s
     page_urls = page_urls[:2]
     page_url = getattr(page, "url", "") or ""
     origin = "/".join(page_url.split("/")[:3]) if page_url.startswith("http") else "https://doi.org"
+    given = [u for u in (extra or []) if isinstance(u, str) and u.startswith("http")]
     # Keep the DOI-layout fallbacks in the budget: a page that advertises many
     # PDF-ish anchors must not crowd out the URLs that actually work.
-    urls = page_urls + [
+    urls = given + page_urls + [
         f"{origin}/doi/pdf/{doi}?download=true",
         f"{origin}/doi/pdfdirect/{doi}?download=true",
     ]
@@ -712,9 +724,23 @@ async def generic_flow(ctx, doi: str, meta: dict, dest: Path, *,
     """
     dest.unlink(missing_ok=True)
     page = await new_page(ctx)
-    # _attempt may already have navigated for the challenge check; navigating
-    # again on the same page aborts the first redirect chain (ERR_ABORTED).
-    if not (getattr(page, "url", "") or "").startswith("http"):
+    current = getattr(page, "url", "") or ""
+    # A resolved landing page (Chinese journals: doi.org redirects to a host
+    # whose certificate does not match, so the publisher page must be opened
+    # directly). Always visit it unless the entry check already landed there.
+    # Otherwise keep the historical doi.org navigation, but skip it when the
+    # challenge pre-check already navigated: a second goto on the same page
+    # aborts the first redirect chain (ERR_ABORTED).
+    landing = meta.get("landing_url") or ""
+    if landing:
+        if current != landing:
+            try:
+                await page.goto(landing, timeout=60_000, wait_until="domcontentloaded")
+            except Exception as e:
+                # A known pdf_url can still be fetched without the page; the
+                # candidate loop below tries it.
+                log(f"  generic: landing page unavailable ({type(e).__name__})")
+    elif not current.startswith("http"):
         try:
             await page.goto(f"https://doi.org/{doi}", timeout=60_000,
                             wait_until="domcontentloaded")
@@ -739,7 +765,14 @@ async def generic_flow(ctx, doi: str, meta: dict, dest: Path, *,
             return True
         dest.unlink(missing_ok=True)
 
-    for url in await _pdf_url_candidates(page, doi):
+    known_pdf = [meta["pdf_url"]] if meta.get("pdf_url") else None
+    # The extra argument is only passed when there is something to add, so the
+    # two-positional-argument signature that tests monkeypatch stays valid.
+    if known_pdf:
+        candidates = await _pdf_url_candidates(page, doi, extra=known_pdf)
+    else:
+        candidates = await _pdf_url_candidates(page, doi)
+    for url in candidates:
         # Bytes first: an inline PDF opens the viewer and never fires a download.
         if await fetch_pdf_bytes(ctx, url, dest, referer=page.url):
             return True
@@ -812,10 +845,13 @@ async def _attempt(*, headless: bool, out_dir: Path, prefix: str, doi: str, meta
     async with apw() as pw:
         ctx = await _launch_context(pw, out_dir, headless=headless)
         try:
-            if prefix not in SCRIPTED_PREFIXES:
+            if prefix not in SCRIPTED_PREFIXES and not meta.get("landing_url"):
                 # No flow to defer to, so check the challenge here. Scripted
                 # prefixes are skipped: they navigate the page themselves and a
                 # second navigation on the same page aborts (ERR_ABORTED).
+                # A resolved landing page is skipped too: doi.org is not a
+                # usable address for those DOIs (certificate mismatch), and
+                # generic_flow opens the landing page itself.
                 page = await new_page(ctx)
                 try:
                     await page.goto(f"https://doi.org/{doi}", timeout=60_000,

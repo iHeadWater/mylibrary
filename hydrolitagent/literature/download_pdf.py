@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Optional
 
 from hydrolitagent.literature._paths import PAPERS_DIR, PROJECT_ROOT
+from hydrolitagent.literature.chinese_doi import resolve_chinese_meta, to_download_meta
 
 
 # ---------------------------------------------------------------------------
@@ -537,6 +538,53 @@ def crossref_meta(doi: str) -> dict:
     }
 
 
+def resolve_meta(doi: str, *, landing_url: str | None = None,
+                 pdf_url: str | None = None) -> dict:
+    """Metadata for ``doi``: Crossref first, Chinese-journal pages second.
+
+    CNKI-registered DOIs are absent from Crossref and raise ``HTTPError: 404``;
+    those fall back to chndoi.org plus the publisher's ``citation_*`` tags.
+    ``crossref_meta`` is called by name (module global) so tests that
+    monkeypatch it keep covering this path.
+
+    Raises:
+        LookupError: neither source could describe the DOI.
+    """
+    try:
+        return crossref_meta(doi)
+    except Exception as crossref_error:
+        chinese = resolve_chinese_meta(doi, landing_url=landing_url, pdf_url=pdf_url)
+        if chinese is None:
+            raise LookupError(
+                f"no Crossref record for {doi} ({crossref_error}) and no chndoi.org "
+                "record either. For CNKI-registered journals pass "
+                "--landing-url <article page> and/or --pdf-url <pdf>."
+            ) from None
+        flat = to_download_meta(chinese)
+        # Keep the Crossref-shaped original for the sync subprocess: it cannot
+        # see --landing-url, and re-resolving there would drop 刊名/卷/期/页.
+        flat["_crossref"] = chinese
+        return flat
+
+
+_CNKI_HOSTS = ("link.cnki.net", "link.oversea.cnki.net", "kns.cnki.net", "cnki.net")
+
+
+def is_cnki_url(url: str) -> bool:
+    """True for CNKI landing hosts.
+
+    CNKI serves a certificate whose name does not match the host and answers
+    non-browser clients with HTTP 418, so a CNKI-only record has no reachable
+    article page. Callers use this to fail fast with an actionable hint instead
+    of burning a headless + visible browser attempt on a dead link.
+    """
+    try:
+        host = (urllib.parse.urlsplit(url or "").hostname or "").lower()
+    except ValueError:
+        return False
+    return any(host == h or host.endswith("." + h) for h in _CNKI_HOSTS)
+
+
 def unpaywall_is_oa(doi: str) -> str | None:
     """Return the best OA PDF URL if the paper has one."""
     url = f"https://api.unpaywall.org/v2/{doi}?email=mylibrary@example.com"
@@ -620,15 +668,33 @@ def curl_with_cookies(article_url: str, pdf_url: str, dest: Path) -> bool:
     return is_pdf_file(dest)
 
 
-def sync_to_zotero(pdf_path: Path, doi: str) -> int:
+def sync_to_zotero(pdf_path: Path, doi: str, *, replace: bool = False,
+                   skip_existing: bool = False, meta: dict | None = None) -> int:
     cmd = [
         "uv", "run", "python", "-m",
         "hydrolitagent.literature.zotero_sync", str(pdf_path), doi,
     ]
+    if replace:
+        cmd.append("--replace")
+    if skip_existing:
+        cmd.append("--skip-existing")
     # Windows consoles default to GBK; force UTF-8 so the Chinese GDrive path
     # and CJK titles printed by zotero_sync don't crash with a UnicodeEncodeError.
     env = dict(os.environ)
     env.setdefault("PYTHONIOENCODING", "utf-8")
+    # The subprocess re-resolves metadata from the DOI alone, which cannot see
+    # --landing-url. Hand over the already-resolved Crossref-shaped record so a
+    # manually resolved Chinese paper keeps its 刊名/卷/期/页 in Zotero.
+    shaped = (meta or {}).get("_crossref")
+    if isinstance(shaped, dict) and shaped.get("title"):
+        payload = dict(shaped)
+        if len(json.dumps(payload, ensure_ascii=False, default=str)) > 16_000:
+            payload.pop("abstract", None)
+        try:
+            env["MYLIBRARY_SOURCE_META"] = json.dumps(
+                payload, ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            pass
     try:
         # Budget covers the one-time index rebuild; steady state is seconds.
         return subprocess.run(cmd, env=env, timeout=ZOTERO_SYNC_TIMEOUT).returncode
@@ -722,6 +788,10 @@ def download_paper(
     sync: bool = False,
     resolve_only: bool = False,
     title: str | None = None,
+    landing_url: str | None = None,
+    pdf_url: str | None = None,
+    replace: bool = False,
+    skip_existing: bool = False,
 ) -> int:
     """Download a paper by DOI or arXiv id; return a process exit code.
 
@@ -761,14 +831,35 @@ def download_paper(
             log("FAILED: no %PDF- header")
             return 1
         log(f"SAVED: {dest} ({dest.stat().st_size} bytes)")
-        return sync_to_zotero(dest, f"10.48550/arXiv.{arxiv}") if sync else 0
+        return (sync_to_zotero(dest, f"10.48550/arXiv.{arxiv}",
+                               replace=replace, skip_existing=skip_existing)
+                if sync else 0)
 
-    meta = crossref_meta(doi)
+    try:
+        meta = resolve_meta(doi, landing_url=landing_url, pdf_url=pdf_url)
+    except LookupError as e:
+        log(f"FAILED: {e}")
+        return 1
     if resolve_only:
-        print(json.dumps(meta, ensure_ascii=False, indent=2))
+        public = {k: v for k, v in meta.items() if not k.startswith("_")}
+        print(json.dumps(public, ensure_ascii=False, indent=2))
         return 0
     log(f"{meta['title'][:80]}")
     log(f"  {meta['container']} | {meta['prefix']}")
+
+    # A chndoi-only record points at CNKI, which is unreachable by design here
+    # (cert mismatch + 418). Trying it costs two full browser attempts (~2 min)
+    # and always fails, so stop with the escape hatch instead.
+    if (meta.get("source") == "chndoi" and not meta.get("pdf_url")
+            and (not meta.get("landing_url") or is_cnki_url(meta["landing_url"]))):
+        log("FAILED: this DOI only resolves to CNKI, which serves a mismatched "
+            "TLS certificate and rejects scripted access.")
+        if meta.get("landing_url"):
+            log(f"  CNKI landing (unreachable here): {meta['landing_url']}")
+        log("  Pass the journal's own article page instead:")
+        log("    --landing-url <journal article page>")
+        log("    --pdf-url     <direct PDF url>")
+        return 1
 
     try:
         dest = asyncio.run(download_with_browser(doi, meta, out))
@@ -779,7 +870,9 @@ def download_paper(
         log("FAILED: download did not produce a verified PDF")
         return 1
     log(f"SAVED: {dest} ({dest.stat().st_size} bytes)")
-    return sync_to_zotero(dest, doi) if sync else 0
+    return (sync_to_zotero(dest, doi, replace=replace, skip_existing=skip_existing,
+                           meta=meta)
+            if sync else 0)
 
 
 # ---------------------------------------------------------------------------

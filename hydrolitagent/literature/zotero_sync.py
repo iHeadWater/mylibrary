@@ -538,9 +538,25 @@ def main():
         "author": pdf_meta.authors[0] if pdf_meta.authors else "",
     }
 
+    # The download pipeline resolves Chinese journals through a publisher page
+    # it had to locate itself (--landing-url); this subprocess only sees the
+    # DOI, so it is handed the already-resolved Crossref-shaped record instead
+    # of re-resolving (which would drop 刊名/卷/期/页).
+    source_meta = None
+    raw_source = os.environ.get("MYLIBRARY_SOURCE_META")
+    if raw_source:
+        try:
+            parsed = json.loads(raw_source)
+            if isinstance(parsed, dict) and parsed.get("title"):
+                source_meta = parsed
+        except (TypeError, ValueError):
+            source_meta = None
+
     def _build():
         from hydrolitagent.zotero.paper_to_zotero import build_item
 
+        if source_meta is not None:
+            return build_item(doi, fallback_meta, source_meta=source_meta)
         return build_item(doi, fallback_meta)
 
     # -- Dry-run: preview only --------------------------------------------
