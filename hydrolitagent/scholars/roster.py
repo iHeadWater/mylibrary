@@ -20,7 +20,7 @@ ALIAS_SPLIT_RE = re.compile(r"[|;；,，、]+")
 
 HEADER_ALIASES: dict[str, tuple[str, ...]] = {
     "name": ("姓名", "name", "中文名"),
-    "institute": ("所属研究所", "研究所", "institute", "部门", "单位"),
+    "institute": ("所属机构", "机构", "所属研究所", "研究所", "institute", "部门", "单位"),
     "aliases": ("英文名/别名", "英文名", "别名", "aliases", "alias", "name_en"),
     "orcid": ("orcid", "orcid id", "orcidid"),
     "openalex_ids": ("openalexid", "openalex_id", "openalex id", "openalex"),

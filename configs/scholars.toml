@@ -1,4 +1,4 @@
-# 学者论文统计默认配置。
+# 学者与机构论文统计默认配置。
 # API key 不要写在这里：放到 .env 的 OPENALEX_API_KEY。
 # 也支持 HYDROLITAGENT_SCHOLARS_CONFIG 指向其他配置文件。
 

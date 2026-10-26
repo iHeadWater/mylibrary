@@ -84,10 +84,10 @@ nav:
                   - 主题工作流运行账: user-guide/cards/主题模板/03_主题工作流运行账模板.md
           - 统一主题池: user-guide/cards/unified-theme-pool.md
           - 运行维护: user-guide/cards/runtime-maintenance.md
-      - 学者论文统计:
+      - 学者与机构论文统计:
           - 概述: user-guide/scholars/index.md
           - 名单格式: user-guide/scholars/roster.md
-          - 输出与填表: user-guide/scholars/outputs.md
+          - 输出与导出: user-guide/scholars/outputs.md
   - 开发:
       - 模块架构: development/architecture.md
       - 贡献指南: development/contributing.md

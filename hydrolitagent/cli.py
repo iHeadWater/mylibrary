@@ -228,14 +228,14 @@ def _print_paths(*, as_json: bool) -> None:
 
 
 def add_scholars_subparser(subparsers: argparse._SubParsersAction) -> None:
-    """学者论文统计：按人检索 OpenAlex 并生成自查表数据。
+    """学者与机构论文统计：按人/机构检索 OpenAlex，统计论文产出。
 
     与 ``cards`` 一样是独立子 CLI；这里只放占位，实际 parser 在
     ``hydrolitagent/scholars/cli.py``。
     """
     subparsers.add_parser(
         "scholars",
-        help="按人检索 OpenAlex 论文并生成学院自查统计",
+        help="按人/机构统计 OpenAlex 论文产出、作者位次与研究方向",
     )
 
 

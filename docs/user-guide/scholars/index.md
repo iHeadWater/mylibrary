@@ -1,9 +1,18 @@
-# 学者论文统计
+# 学者与机构论文统计
 
-**按人查文献，生成学院学术论文自查表所需的结构化数据。**
+**按人/机构统计论文产出、作者位次与研究方向。**
 
-不要把它理解成「解析学院下发的表格」：这个工具从**一个人**出发，去 OpenAlex 查这个人的论文，
-统计 2021 年以来的论文总数，以及本人作为**第一作者或通讯作者**的论文数，最后输出 CSV/JSON/Markdown。
+给定一个人（或一份名单），去 OpenAlex 查他的论文，统计 2021 年以来的论文数、
+第一/通讯作者数、年份与期刊分布，并输出可逐篇复核的明细。结果可以和 `papers/`
+主题目录或 graphify 图谱按 DOI/题名对照，用来回答“谁在什么方向”；
+需要时再导出成学院/机构要求的表格。
+
+## 能用来做什么
+
+- 看某位老师/课题组近几年在哪些方向产出；
+- 对比机构内不同人的研究方向与活跃度；
+- 把外部作者与本地 `papers/` 主题库、graphify 图谱对照；
+- 需要时导出成学院/机构表格（`form_summary.csv`，表头按常见机构表格列名）。
 
 ## 快速开始
 
@@ -13,7 +22,7 @@ uv run hydrolitagent scholars resolve --name "张三" --name-en "Zhang San" --js
 
 # 2) 单人统计
 uv run hydrolitagent scholars stats --name "张三" --name-en "Zhang San" \
-  --institute "水利水电工程研究所" --output-dir outputs/scholars/2026-10-26 --json
+  --institute "某研究所" --output-dir outputs/scholars/2026-10-26 --json
 
 # 3) 批量名单
 uv run hydrolitagent scholars batch --roster configs/scholars_roster.example.csv \
@@ -22,14 +31,14 @@ uv run hydrolitagent scholars batch --roster configs/scholars_roster.example.csv
 
 产物在 `--output-dir` 下：
 
-- `form_summary.csv`：表头与学院表逐字一致，可直接打开/粘贴
+- `form_summary.csv`：表格导出（可选），表头与常见学院/机构表一致，可直接打开/粘贴
 - `summary_audit.csv`：带作者 ID、匹配状态、撤稿数、复核标记
 - `works.csv`：每篇论文一行，含完整作者列表、本人署名、作者序号、计数原因
 - `works_by_person.md`：**按人分组的可读明细**，列出全部检索结果（含未计入），并做「清单篇数/计入篇数 vs 汇总数字」对账
 - `summary.json`：机器可读
 - `review.md`：同名候选、通讯信息缺失、撤稿、查询失败等复核清单
 
-详见[名单格式](roster.md)与[输出与填表](outputs.md)。
+详见[名单格式](roster.md)与[输出与导出](outputs.md)。
 
 ## 统计口径
 
@@ -107,5 +116,5 @@ CNKI、万方、维普、NAPSTIC、工程科学与技术、SciEngine），不是
 ## 相关
 
 - [名单格式](roster.md)
-- [输出与填表](outputs.md)
+- [输出与导出](outputs.md)
 - [模块架构](../../development/architecture.md)

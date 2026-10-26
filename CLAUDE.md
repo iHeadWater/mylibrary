@@ -102,9 +102,9 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 不要直接读写平台的状态文件与主题池注册表(`themes/_registry.json`),也不要手工编辑生成的文献卡/主题文件——平台原子写入并校验哈希,手改会被判为漂移。完整说明在 `docs/user-guide/cards/`,实现细节在 `docs/development/platform/`。
 
-### 学者论文统计 (hydrolitagent scholars)
+### 学者与机构论文统计 (hydrolitagent scholars)
 
-按人检索 OpenAlex 论文，生成学院学术论文自查表所需的结构化数据。口径：2021 年起；第一作者**或**通讯作者任一计入；同名不猜。
+按人/机构检索 OpenAlex，统计论文产出、作者位次、第一/通讯与年份/期刊分布；结果可导出为表格，也可用于对照 `papers/` 主题库或 graphify 图谱的研究方向。口径：2021 年起；第一作者**或**通讯作者任一计入；同名不猜。
 
 - 确认身份：`uv run hydrolitagent scholars resolve --name "张三" --name-en "Zhang San" --json`
 - 单人统计：`uv run hydrolitagent scholars stats --name "张三" --name-en "Zhang San" --institute "研究所" --output-dir outputs/scholars/YYYY-MM-DD --json`

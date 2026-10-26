@@ -1,4 +1,4 @@
-"""产物写出：学院汇总 CSV、审计 CSV、论文明细 CSV、JSON、复核 Markdown。"""
+"""产物写出：汇总 CSV（可导出为机构表格）、审计 CSV、论文明细 CSV、JSON、复核 Markdown。"""
 
 from __future__ import annotations
 
@@ -392,7 +392,7 @@ def _candidate_rows(result: PersonResult) -> list[list[str]]:
 
 def write_review_md(path: Path, batch: BatchResult) -> None:
     lines: list[str] = [
-        "# 学术论文自查统计 — 复核清单",
+        "# 论文统计 — 复核清单",
         "",
         f"- 生成时间：{batch.generated_at}",
         f"- 单位：{batch.config.get('identity', {}).get('institution_name', '')}"

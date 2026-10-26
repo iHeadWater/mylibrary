@@ -32,7 +32,7 @@ def _configure_stdio() -> None:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="hydrolitagent scholars",
-        description="按人检索 OpenAlex 论文，生成学院学术论文自查统计",
+        description="按人/机构检索 OpenAlex 论文，统计产出、作者位次与研究方向",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

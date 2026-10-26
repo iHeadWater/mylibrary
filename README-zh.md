@@ -118,9 +118,11 @@ uv run hydrolitagent cards ai-config --json
 - 生成的产物(文献卡、主题池、运行记录)**不入库** —— 运行时写入,另行共享。仓库里只有代码、模板、提示词与 schema。
 - 完整命令清单:`uv run hydrolitagent cards --help`(5 个子命令)。
 
-### 学者论文统计
+### 学者与机构论文统计
 
-按人查论文，生成学院「学术论文自查情况统计」表所需的数据。**不是解析学院下发的表**，而是从一个人出发去 OpenAlex 查他的论文。
+按人/机构统计论文产出：给定姓名、ORCID 或 OpenAlex ID，检索论文，统计数量、作者位次、
+第一/通讯、年份与期刊分布，并可与 `papers/` 主题目录或 graphify 图谱按 DOI/题名对照，
+用来回答“谁在什么方向”。需要时再导出成学院/机构表格。
 
 ```bash
 # 确认身份（同名时只列候选）
@@ -135,7 +137,7 @@ uv run hydrolitagent scholars batch --roster configs/scholars_roster.example.csv
 - 同名/中文名无别名时**不猜**，汇总数字留空并进复核清单。
 - 中文文献可 `--web-search deepseek`（复用 `DEEPSEEK_API_KEY`）出候选，人工确认后用 `--supplement` 计入。
 
-详见[学者论文统计](docs/user-guide/scholars/index.md)。
+详见[学者与机构论文统计](docs/user-guide/scholars/index.md)。
 
 ## Agent Skills
 

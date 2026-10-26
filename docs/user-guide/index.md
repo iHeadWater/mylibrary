@@ -9,7 +9,7 @@
 | **③ 组织起来** | 精读成分析卡；主题聚类 | [文献深度处理](literature.md) |
 | **④ 产出内容** | 公众号文章 / 播客 / B 站 | [文献深度处理](literature.md) |
 | **⑤ 沉淀成资产** | 文献卡 → 主题卡（长期可追溯） | [文献卡与主题卡](cards/index.md)（细分页见下） |
-| **⑥ 填表统计** | 按人查论文，生成学院学术论文自查表数据 | [学者论文统计](scholars/index.md) |
+| **⑥ 按人/机构统计** | 统计某人/某机构的论文产出、作者位次与研究方向 | [学者与机构论文统计](scholars/index.md) |
 | 另外 | 新增论文 → NotebookLM 中文简报 / 音频 / 视频 | [Zotero → NotebookLM](zotero-notebooklm.md) |
 | 配置 | 环境变量、TOML、Linked Attachment Base Directory | [Zotero 配置参考](config.md) |
 
