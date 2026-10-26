@@ -2,7 +2,7 @@
 name: paper-to-zotero
 description: Use when the user wants to download a paper AND add it to Zotero — by DOI, arXiv ID, or paper title. Trigger on "下载并加到Zotero", "同步至Zotero", "同步到Zotero文库", "下载论文并导入", "加到文献库", "加到Zotero", "download and add to Zotero", "save paper to Zotero", "put this paper in my library", "download X paper and sync to Zotero", or ANY phrase that combines obtaining a paper (下载/找/获取/download/find/fetch/get) with Zotero/library (Zotero/文献库/library/references).
 homepage: https://github.com/Agents365-ai/myopenclaw
-metadata: {"author":"owen","version":"6.1","category":"research","tags":["paper","pdf","zotero","google-drive","literature"]}
+metadata: {"author":"mylibrary","version":"6.1","category":"research","tags":["paper","pdf","zotero","google-drive","literature"]}
 ---
 
 # Paper-to-Zotero (双模式)

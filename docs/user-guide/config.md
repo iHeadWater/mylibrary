@@ -74,7 +74,7 @@ external = false     # root 指向仓库外时必须显式设为 true
 
 ```bash
 # 写在 .env(不进 Git),或直接 export
-HYDROLITAGENT_LITERATURE_ROOT=D:/OneDrive/mylibrary-products
+HYDROLITAGENT_LITERATURE_ROOT=/path/to/mylibrary-products
 ```
 
 指向仓库外的路径时,**设这个变量本身就是显式 opt-in**,不需要第二个开关——
@@ -130,11 +130,11 @@ api_key = "xxxxxxxxxxxxxxxxxxxxxxxx"
 ### 设置方法
 
 1. Zotero → Preferences → Advanced → Files and Folders
-2. 设置 **Linked Attachment Base Directory** 为你的 PDF 存储根目录（如 `/Users/owen/Papers` 或 Google Drive 本地同步目录）
+2. 设置 **Linked Attachment Base Directory** 为你的 PDF 存储根目录（如 `~/Papers` 或 Google Drive 本地同步目录）
 
 这样：
-- macOS 上 `attachments:paper.pdf` → `/Users/owen/Papers/paper.pdf`
-- Linux 上 `attachments:paper.pdf` → `/home/owen/Papers/paper.pdf`
+- macOS 上 `attachments:paper.pdf` → `~/Papers/paper.pdf`
+- Linux 上 `attachments:paper.pdf` → `~/Papers/paper.pdf`
 
 各操作系统只需各自设置一次 Base Directory 即可。
 

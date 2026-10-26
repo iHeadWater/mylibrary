@@ -210,7 +210,7 @@ uv run mkdocs build --strict
 
 ## 许可证
 
-**GNU Affero General Public License v3.0**（AGPL-3.0）。© 2025 OuyangWenyu。完整正文见 [LICENSE](LICENSE)。
+**GNU Affero General Public License v3.0**（AGPL-3.0）。© 2025 mylibrary contributors。完整正文见 [LICENSE](LICENSE)。
 
 > **这个协议管什么**：你可以自由使用、修改、分发 —— **包括商用**；但只要你**分发**本软件、
 > 或把**修改过的版本作为网络服务提供**给别人用，就必须**同样以 AGPL-3.0 提供完整源码**

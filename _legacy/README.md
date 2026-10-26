@@ -11,8 +11,9 @@ cp configs/manual_records.toml.example configs/manual_records.toml
 PYTHONPATH=. python platform_mine.py --config configs/platform.toml
 ```
 
-真实的 `platform.toml` / `manual_records.toml` 含本机路径和人名，已加入 `.gitignore`；
-仓库只提交脱敏的 `.example`，不要提交真实配置。
+真实的 `platform.toml` / `manual_records.toml` 含本机路径和人名，**不要放在仓库里**。
+仓库只提交脱敏的 `.example`；旧的真实配置已移到仓库外的
+`~/mylibrary-private-configs/`，需要时用 `--config` 指向那里。
 
 ## 测试
 

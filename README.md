@@ -154,6 +154,6 @@ uv run pytest           # 一套测试：tests/（原平台测试已并入）
 
 ## 许可
 
-**AGPL-3.0**（© 2025 OuyangWenyu）—— 可自由使用、修改、分发，**含商用**；
+**AGPL-3.0**（© 2025 mylibrary contributors）—— 可自由使用、修改、分发，**含商用**；
 但分发本软件、或把修改过的版本作为**网络服务**提供时，必须同样以 AGPL-3.0 提供完整源码。
 详见 [LICENSE](LICENSE)。

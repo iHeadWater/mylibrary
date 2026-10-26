@@ -66,13 +66,13 @@ def sample_zotero_item():
     return {
         "key": "ABC12345",
         "version": 1234,
-        "library": {"type": "user", "id": 123456, "name": "owen"},
+        "library": {"type": "user", "id": 123456, "name": "testuser"},
         "links": {
             "self": {"href": "https://api.zotero.org/users/123456/items/ABC12345"},
         },
         "meta": {
-            "createdByUser": {"id": 123456, "username": "owen"},
-            "lastModifiedByUser": {"id": 123456, "username": "owen"},
+            "createdByUser": {"id": 123456, "username": "testuser"},
+            "lastModifiedByUser": {"id": 123456, "username": "testuser"},
         },
         "data": {
             "key": "ABC12345",
