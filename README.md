@@ -52,7 +52,7 @@ cd /path/to/mylibrary
 | 「看看能聚出哪些主题」 | 由已有的文献卡生成候选主题、必要时定向精读并回填 | [统一主题池](docs/user-guide/cards/unified-theme-pool.md) |
 | 「主题池现在什么样」 | 报当前候选与历史版本 | [统一主题池](docs/user-guide/cards/unified-theme-pool.md) |
 | 「当前用哪个模型 / 产物放哪」 | 报模型选择与产物落点，不调模型 | [运行维护](docs/user-guide/cards/runtime-maintenance.md) |
-| 「按人查一下论文，填学院自查表」 | 按姓名/ORCID 查 OpenAlex → 统计第一/通讯作者论文数 → 输出 CSV/JSON | [学者论文统计](docs/user-guide/scholars/index.md) |
+| 「看看某个人/机构在哪些方向有论文」 | 按姓名/ORCID 查 OpenAlex → 统计论文数、第一/通讯、年份与期刊 → 可与本地主题库对照 | [学者与机构论文统计](docs/user-guide/scholars/index.md) |
 
 > 前三行是**入库与当期内容**线；后五行是**文献卡与主题卡**线（底层是 `uv run hydrolitagent cards …`
 > 的 5 条子命令）。无论哪条 —— **你不需要读那些详情页**，只在想自己动手或排错时才去。
@@ -98,10 +98,11 @@ uv run hydrolitagent cards ai-config --json          # 看模型选择与产物�
 
 单篇本地流程**不需要**先填工具链的 Zotero Web API 密钥，也**不需要**启动 MCP Server。
 
-### 学者论文统计
+### 学者与机构论文统计
 
-按人检索 OpenAlex，统计 2021 年以来论文数与「第一作者或通讯作者」论文数，
-输出学院自查表所需的 CSV/JSON/Markdown。同名不猜；自查问题列不自动填写。
+按人/机构检索 OpenAlex，统计 2021 年以来的论文数、作者位次、第一/通讯作者、
+年份与期刊分布；结果可与 `papers/` 主题库或 graphify 图谱对照，用来回答
+“谁在什么方向”。需要时再导出成学院/机构表格。同名不猜。
 
 ```bash
 uv run hydrolitagent scholars resolve --name "张三" --name-en "Zhang San" --json
@@ -109,7 +110,7 @@ uv run hydrolitagent scholars stats --name "张三" --name-en "Zhang San" --inst
 uv run hydrolitagent scholars batch --roster configs/scholars_roster.example.csv --output-dir outputs/scholars/2026-10-26 --json
 ```
 
-详见[学者论文统计](docs/user-guide/scholars/index.md)。
+详见[学者与机构论文统计](docs/user-guide/scholars/index.md)。
 
 ### 其他工具链与批量自动化
 

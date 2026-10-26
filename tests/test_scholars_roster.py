@@ -23,6 +23,13 @@ def test_csv_with_bom_and_chinese_headers(tmp_path) -> None:
     assert person.self_check_note == "备注"
 
 
+def test_institute_alias(tmp_path) -> None:
+    path = tmp_path / "roster.csv"
+    path.write_text("姓名,所属机构\n张三,水利所\n", encoding="utf-8")
+    roster = load_roster(path)
+    assert roster.people[0].institute == "水利所"
+
+
 def test_english_headers(tmp_path) -> None:
     path = tmp_path / "roster.csv"
     path.write_text("name,institute,aliases,orcid\nLi Si,Geotech,Li Si,\n", encoding="utf-8")
