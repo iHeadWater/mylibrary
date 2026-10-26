@@ -7,7 +7,11 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
-from hydrolitagent.cards.application.card_workflow import generate_markdown_card_draft
+from hydrolitagent.cards.application.card_workflow import (
+    finalize_session_run,
+    generate_markdown_card_draft,
+    prepare_session_run,
+)
 from hydrolitagent.cards.card_draft import generate_subject_card_draft
 from hydrolitagent.cards.card_validation import ValidationAssets, validate_subject_card_file
 from hydrolitagent.cards.ai_config import resolve_ai_config, subject_card_config, describe_ai, AIConfigError
@@ -16,7 +20,11 @@ from hydrolitagent.cards.card_generation import (
     CardGenerationError,
     generate_evidence_card,
 )
-from hydrolitagent.cards.composition import build_markdown_pipeline
+from hydrolitagent.cards.composition import (
+    build_doctor_report,
+    build_markdown_pipeline,
+    build_session_pipeline,
+)
 from hydrolitagent.cards.config import ConfigError, load_config, resolve_pipeline_mode
 from hydrolitagent.cards.paper_input_config import load_paper_input_config
 from hydrolitagent.cards.evidence_packages import EvidencePackageError, sync_evidence_packages
@@ -147,6 +155,44 @@ def _parser() -> argparse.ArgumentParser:
                 help="关闭 stderr 实时进度，仅保留最终结果",
             )
 
+    run = subparsers.add_parser(
+        "run",
+        help="两阶段制卡：准备材料目录，或收口 agent 写好的 response.json（不调用模型）",
+    )
+    run_sub = run.add_subparsers(dest="run_command", required=True)
+    for run_name, run_help in (
+        ("prepare", "把 paper.md、图资产、schema 与请求写入 --run-dir，不调用模型"),
+        ("finalize", "读取 --run-dir/response.json，校验接地后生成待校验草稿"),
+    ):
+        run_command = run_sub.add_parser(run_name, help=run_help)
+        run_command.add_argument(
+            "--config",
+            default=None,
+            help="总配置文件路径；默认读取项目 config/config.json",
+        )
+        run_command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
+        run_command.add_argument(
+            "--paper-input",
+            required=True,
+            help="单篇 READY JSON（输入记录）文件，或 - 从 stdin 读取",
+        )
+        run_command.add_argument("--run-dir", required=True, help="两阶段协议的运行目录")
+        run_command.add_argument(
+            "--output-root",
+            help="收口时草稿产物根；不传则用默认解析（configs/paths.toml → outputs/）",
+        )
+
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="只读自查转换器、运行器与存储；不调用模型、不读取用户 PDF",
+    )
+    doctor.add_argument("--config", default=_default_config_path(), help="总配置文件路径")
+    doctor.add_argument("--output-root", help="检查另一个产物根是否可写")
+    doctor.add_argument(
+        "--network", action="store_true", help="额外检查 Zotero Local API；默认不联网"
+    )
+    doctor.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
+
     ai = subparsers.add_parser("ai-config", help="查看模型选择与精读产物根，不运行模型")
     ai.add_argument("--ai-config")
     ai.add_argument(
@@ -162,6 +208,57 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _render_human(result: dict[str, Any]) -> str:
+    if result.get("operation") == "doctor":
+        status = "通过" if result.get("ok") else "存在问题"
+        lines = [f"能力自查：{status}（未调用模型）", f"- 平台：{result.get('platform')}"]
+        for check in result.get("checks", []):
+            line = (
+                f"- [{check['status']}] {check['name']}（{check['capability']}）："
+                f"{check['detail']}"
+            )
+            if check.get("fix"):
+                line += f"；修复：{check['fix']}"
+            lines.append(line)
+        return "\n".join(lines)
+    if result.get("operation") == "session_prepare":
+        if not result.get("ok"):
+            error = result.get("error", {})
+            return (
+                f"两阶段准备失败（{result.get('failed_stage', 'input')}）"
+                f"[{error.get('code', 'UNKNOWN')}]：{error.get('message', '未知错误')}"
+            )
+        run_dir = result["run_dir"]
+        return "\n".join(
+            [
+                "已准备两阶段制卡目录；平台未调用模型",
+                f"- 运行目录：{run_dir}",
+                f"- 论文 Markdown：{run_dir}/paper.md（sha256 {result['markdown_sha256']}）",
+                f"- 答案 schema：{result['schema_path']}",
+                f"- 给 agent 的说明：{result['instructions_path']}",
+                (
+                    f"- 页数：{result['page_count']}；"
+                    f"canary：{len(result.get('canaries', []))}；"
+                    f"图：{len(result.get('figures', []))}"
+                ),
+                f"- 写完后运行：cards run finalize --run-dir {run_dir} --paper-input <输入 JSON>",
+            ]
+        )
+    if result.get("operation") == "session_finalize":
+        if not result.get("ok"):
+            error = result.get("error", {})
+            return (
+                f"两阶段收口失败（{result.get('failed_stage', 'input')}）"
+                f"[{error.get('code', 'UNKNOWN')}]：{error.get('message', '未知错误')}"
+            )
+        return "\n".join(
+            [
+                "已收口 response.json 并生成待校验主体卡草稿；未通过内容门禁、未正式发布",
+                f"- 正文：{result['card_path']}",
+                f"- 正文、机器字段与来源记录：{result['draft_path']}",
+                f"- 精读产物根：{result['literature_root']}",
+                f"- Markdown 接地校验：{result.get('reading_status') or '未知'}",
+            ]
+        )
     if result.get("operation") == "subject_card_validation":
         lines = ["主体卡代码校验：" + result["status"] + "（不代表科研结论正确或正式发布）"]
         lines += [f"- {item['code']} {item['path']}：{item['message']}"
@@ -390,6 +487,79 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = {"ok": False, "error": {"code": "CARD_DRAFT_CONFIG_OR_INPUT_INVALID", "message": str(exc)}}
         _emit(result, args.json)
         return 0 if result["ok"] else 3
+    if args.command == "doctor":
+        try:
+            config = load_config(args.config, require_group=False)
+            result = build_doctor_report(
+                config, output_root=args.output_root, network=args.network
+            )
+        except (ConfigError, OSError, ValueError) as exc:
+            result = {
+                "schema_version": 1,
+                "operation": "doctor",
+                "ok": False,
+                "model_invoked": False,
+                "platform": sys.platform,
+                "checks": [
+                    {
+                        "name": "config.load",
+                        "capability": "config.load",
+                        "status": "fail",
+                        "detail": str(exc),
+                        "fix": "检查 --config 指向的配置文件是否存在且为有效 JSON",
+                    }
+                ],
+                "capabilities": {},
+            }
+        _emit(result, args.json)
+        return 0 if result["ok"] else 3
+
+    if args.command == "run":
+        operation = f"session_{args.run_command}"
+        try:
+            config = load_config(args.config or _default_config_path(), require_group=False)
+            raw = (
+                sys.stdin.read()
+                if args.paper_input == "-"
+                else Path(args.paper_input).read_text(encoding="utf-8-sig")
+            )
+            record = json.loads(raw)
+            built = build_session_pipeline(config)
+            options = {
+                "converter": built.converter,
+                "store": built.store,
+                "runner": built.runner,
+                "run_dir": Path(args.run_dir),
+                "output_root": args.output_root,
+                "options": built.options,
+            }
+            if args.run_command == "prepare":
+                result = prepare_session_run(config, record, **options)
+            else:
+                result = finalize_session_run(config, record, **options)
+        except json.JSONDecodeError:
+            result = {
+                "schema_version": 1,
+                "operation": operation,
+                "ok": False,
+                "error": {
+                    "code": "CARD_DRAFT_INPUT_INVALID",
+                    "message": "无法读取单篇论文输入 JSON",
+                },
+            }
+        except (ConfigError, OSError, ValueError, RuntimeError) as exc:
+            result = {
+                "schema_version": 1,
+                "operation": operation,
+                "ok": False,
+                "error": {
+                    "code": "CARD_DRAFT_CONFIG_OR_INPUT_INVALID",
+                    "message": str(exc),
+                },
+            }
+        _emit(result, args.json)
+        return 0 if result["ok"] else 3
+
     try:
         config_loader = load_paper_input_config if args.command == "paper-input" else load_config
         app_config = config_loader(

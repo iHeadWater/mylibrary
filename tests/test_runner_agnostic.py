@@ -21,17 +21,24 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
 from hydrolitagent.cards.adapters.pdf.pymupdf_converter import PymupdfConverter
+from hydrolitagent.cards.adapters.runners.in_session import InSessionRunner
 from hydrolitagent.cards.adapters.runners.openai_compatible import (
     OpenAICompatibleRunner,
 )
 from hydrolitagent.cards.adapters.storage.paper_store import PaperStore
-from hydrolitagent.cards.application.card_workflow import generate_markdown_card_draft
+from hydrolitagent.cards.application.card_workflow import (
+    finalize_session_run,
+    generate_markdown_card_draft,
+    prepare_session_run,
+)
 from hydrolitagent.cards.domain.source_access import MARKDOWN_PREPARED
+from hydrolitagent.cards.ports.paper import ConversionOptions
 
 # ``app_config`` is a fixture defined in the workflow test module; importing it
 # makes it available here without duplicating the asset wiring.
@@ -70,7 +77,47 @@ def _normalize(draft: dict) -> dict:
     data["provenance"].pop("combined_prompt_sha256", None)
     data["process_audit"].pop("runner_id", None)
     data["process_audit"].pop("duration_seconds", None)
+    # in_session never invokes a model; that is a runner fact, not a paper fact.
+    data["process_audit"].pop("model_invoked", None)
     return data
+
+
+def _in_session_draft(app_config, record, store: PaperStore, tmp_path: Path) -> dict:
+    """Prepare a run directory, answer it like an external agent, then finalize."""
+
+    run_dir = tmp_path / "session-run"
+    runner = InSessionRunner()
+    options = ConversionOptions()
+    prepared = prepare_session_run(
+        app_config,
+        record,
+        converter=PymupdfConverter(),
+        store=store,
+        runner=runner,
+        run_dir=run_dir,
+        output_root=tmp_path / "literature-session",
+        options=options,
+    )
+    assert prepared["ok"], prepared
+
+    staged = SimpleNamespace(
+        workspace=run_dir,
+        paper=SimpleNamespace(page_count=prepared["page_count"]),
+    )
+    (run_dir / "response.json").write_text(
+        json.dumps(grounded_output(staged), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return finalize_session_run(
+        app_config,
+        record,
+        converter=PymupdfConverter(),
+        store=store,
+        runner=runner,
+        run_dir=run_dir,
+        output_root=tmp_path / "literature-session",
+        options=options,
+    )
 
 
 def test_the_same_prepared_paper_yields_the_same_draft_for_each_runner(
@@ -144,6 +191,37 @@ def test_the_same_prepared_paper_yields_the_same_draft_for_each_runner(
     assert api_draft["usage"]["total_tokens"] == 150
 
     assert _normalize(api_draft) == _normalize(scripted_draft)
+
+
+def test_the_same_prepared_paper_yields_the_same_draft_for_in_session(
+    app_config, tmp_path
+):
+    """The file-based runner goes through the same gates as a CLI or HTTP one."""
+
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    record = _record(pdf)
+    store = PaperStore(tmp_path / "cache")
+
+    scripted_result = generate_markdown_card_draft(
+        app_config,
+        record,
+        converter=PymupdfConverter(),
+        store=store,
+        runner=WorkspaceRunner(grounded_output),
+        output_root=tmp_path / "literature-scripted",
+    )
+    session_result = _in_session_draft(app_config, record, store, tmp_path)
+
+    scripted_draft = _draft(scripted_result)
+    session_draft = _draft(session_result)
+
+    assert session_draft["source_access"]["method"] == MARKDOWN_PREPARED
+    assert session_draft["source_access"]["reading"]["verified"] is True
+    assert session_draft["provenance"]["runner_id"] == "in_session"
+    assert session_draft["process_audit"]["model_invoked"] is False
+    assert session_draft["usage"] is None
+
+    assert _normalize(session_draft) == _normalize(scripted_draft)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual invocation convenience

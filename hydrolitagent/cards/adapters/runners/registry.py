@@ -31,10 +31,10 @@ RunnerFactory = Callable[..., CardRunner]
 _ADAPTER_SUFFIX = "_cli"
 
 # Documented ids that cannot be built yet. They live outside ``ids()`` so the
-# listing never promises a runner that ``create`` would reject.
-_PLANNED: dict[str, str] = {
-    "in_session": "阶段 4b 实现：只写请求、读响应，不自己调用模型",
-}
+# listing never promises a runner that ``create`` would reject. The mapping is
+# currently empty: ``in_session`` became buildable in stage 4b, and a planned id
+# must be a real commitment, not a placeholder kept alive for tests.
+_PLANNED: dict[str, str] = {}
 
 _FACTORIES: dict[str, RunnerFactory] = {}
 
@@ -152,8 +152,17 @@ def _openai_compatible_runner(**options: Any) -> CardRunner:
     )
 
 
+def _in_session_runner(**options: Any) -> CardRunner:
+    from hydrolitagent.cards.adapters.runners.in_session import InSessionRunner
+
+    # A file-based runner has nothing to configure: the run directory arrives on
+    # the request, not in the factory options.
+    return InSessionRunner()
+
+
 register("claude", _claude_runner)
 register("codex", _codex_runner)
+register("in_session", _in_session_runner)
 register("openai_compatible", _openai_compatible_runner)
 
 

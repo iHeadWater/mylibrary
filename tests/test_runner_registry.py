@@ -26,7 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_ids_list_only_the_buildable_runners() -> None:
-    assert registry.ids() == ("claude", "codex", "openai_compatible")
+    assert registry.ids() == ("claude", "codex", "in_session", "openai_compatible")
 
 
 def test_unknown_id_reports_the_available_runners() -> None:
@@ -39,14 +39,13 @@ def test_unknown_id_reports_the_available_runners() -> None:
         assert runner_id in message, f"{runner_id} 未出现在错误信息里：{message}"
 
 
-def test_planned_runner_is_named_but_not_buildable() -> None:
-    """``in_session`` is documented for stage 4b; ``ids()`` must not promise it."""
+def test_in_session_runner_is_buildable_without_configuration() -> None:
+    """Stage 4b: the file-based runner is real, not a planned placeholder."""
 
-    assert "in_session" in registry.planned_ids()
-    assert "in_session" not in registry.ids()
-    with pytest.raises(registry.RegistryError) as caught:
-        registry.create("in_session")
-    assert "尚未实现" in str(caught.value)
+    assert registry.planned_ids() == ()
+    runner = registry.create("in_session")
+    assert runner.runner_id == "in_session"
+    assert runner.doctor().available is True
 
 
 def test_legacy_adapter_suffix_resolves_to_the_same_runner() -> None:
@@ -104,9 +103,13 @@ def test_a_new_runner_needs_one_registration_and_no_shared_layer_change() -> Non
     assert "dummy" not in registry.ids()
 
 
-def test_registering_a_planned_id_is_refused() -> None:
+def test_registering_a_planned_id_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The planned table is empty now; inject one so this guard stays exercised
+    # instead of passing vacuously.
+    monkeypatch.setitem(registry._PLANNED, "future_runner", "未来阶段")
     with pytest.raises(registry.RegistryError, match="计划中的运行器"):
-        registry.register("in_session", lambda **_: _DummyRunner())
+        registry.register("future_runner", lambda **_: _DummyRunner())
+    assert "future_runner" not in registry.ids()
 
 
 def test_registry_import_pulls_no_provider_module() -> None:

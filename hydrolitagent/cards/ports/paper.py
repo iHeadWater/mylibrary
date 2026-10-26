@@ -56,13 +56,14 @@ class ConversionError:
 
 @dataclass(frozen=True)
 class ConverterDoctor:
-    """Self-report of a converter, used by ``cards doctor`` in a later stage."""
+    """Self-report of a converter, used by ``cards doctor``."""
 
     converter_id: str
     available: bool
     version: str | None
     capabilities: tuple[str, ...]
     error: str | None = None
+    fix: str | None = None
 
 
 class ConversionFailure(RuntimeError):
