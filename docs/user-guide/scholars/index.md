@@ -71,16 +71,38 @@ OPENALEX_API_KEY=your-key
 ## 中文文献
 
 OpenAlex 对中文期刊覆盖有限。**知网/万方没有稳定的公开 API**，直接爬会遇到登录和验证码，
-不适合作为工具的主路径。工具因此提供两条补充路径：
+不适合作为工具的主路径。中文补充有两条路：
 
-1. `--web-search firecrawl`：检索 CNKI/万方/百度学术，结果只进 `web_candidates.csv`，
-   **不自动计入**。
+1. `--web-search <provider>`：网页检索，结果只进 `web_candidates.csv`，**不自动计入**。
 2. `--supplement confirmed.csv`：人工确认后的论文清单，以 `source=manual` 合入统计。
 
-推荐流程：
+### `--web-search` 有哪些 provider
 
-1. 在知网/万方/维普/百度学术的公开检索页按作者名找到论文题名；
-2. 核对题名、年份、期刊、DOI、**作者位次**和**是否通讯**；
+| provider | 需要什么 | 说明 |
+|---|---|---|
+| `none`（默认） | 无 | 不做网页检索；核心流程不需要它 |
+| `deepseek`（推荐国内用户） | `DEEPSEEK_API_KEY` | 用 DeepSeek 自研搜索（`/v1/tools/search`），以「姓名+单位」查询，再按学术站点白名单过滤；结构化结果，按成功请求计费 |
+| `firecrawl` | `FIRECRAWL_API_KEY` | 第三方搜索+抓取服务；**不是核心依赖**，需要单独申请，适合已有 key 的用户 |
+| `manual` | 无 | 只读 `--supplement`，不做网页检索 |
+
+DeepSeek 的搜索 API 和主 API 共用 Bearer key，5 QPS；如果只是偶尔补几篇中文论文，
+成本很低。它返回标题/URL/摘要，**作者位次和是否通讯仍需人工核对**。
+`configs/scholars.toml` 的 `web_search.domains` 是**学术站点白名单**（默认
+CNKI、万方、维普、NAPSTIC、工程科学与技术、SciEngine），不是搜索目标；DeepSeek
+先用“姓名+单位”查，再只保留这些域名下的结果。
+
+其他可扩展、但当前未内置的国内方案：
+
+- **博查 Bocha**：中文搜索 API，新用户约 1000 次免费试用，之后约 0.036 元/次；
+- **智谱 Web Search**：结构化搜索，仓库已有 `ZHIPUAI_API_KEY`，适合后续接入；
+- **SearXNG**：自建、免费、无需 key，但需要自己部署；
+- **Qwen `enable_search`**：是“搜索增强生成”，返回模型回答而不是原始结果列表，
+  适合问答，不适合逐篇核对。
+
+### 推荐流程
+
+1. 先跑 `--web-search deepseek`（或 `firecrawl`），看 `web_candidates.csv`；
+2. 在知网/万方/维普/百度学术的公开检索页核对题名、年份、期刊、DOI、**作者位次**和**是否通讯**；
 3. 写进 `confirmed.csv`，重跑时加 `--supplement confirmed.csv`。
 
 注意：OpenAlex 有时会把中文论文的英文题名单独收录（例如《基于深度学习的水面漂浮物

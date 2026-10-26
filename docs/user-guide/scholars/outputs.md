@@ -67,6 +67,10 @@
 中文库网页检索的候选：`姓名,标题,作者,来源,年份,URL,置信度,状态`。
 默认 `confidence=low`、`status=pending`，**不参与统计**。
 
+provider 由 `--web-search none|deepseek|firecrawl` 决定：`deepseek` 复用
+`DEEPSEEK_API_KEY`（推荐国内用户），`firecrawl` 需要 `FIRECRAWL_API_KEY`。
+不启用网页检索时不会生成这个文件。
+
 确认流程：
 
 1. 看 `web_candidates.csv`，把确认的论文整理成 `confirmed.csv`（列见下）。

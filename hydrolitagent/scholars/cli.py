@@ -19,7 +19,7 @@ from .models import BatchResult, PersonQuery, WebCandidate
 from .output import write_web_candidates
 from .roster import load_roster, roster_person_to_query
 from .service import default_output_dir, make_client, run_batch, write_outputs
-from .websearch import load_supplement, search_firecrawl
+from .websearch import load_supplement, search_web
 
 
 def _configure_stdio() -> None:
@@ -91,9 +91,9 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--supplement", help="人工确认论文清单 CSV")
     parser.add_argument(
         "--web-search",
-        choices=["none", "firecrawl"],
+        choices=["none", "deepseek", "firecrawl"],
         default="none",
-        help="中文库网页检索；结果只进候选，不计入统计",
+        help="中文库网页检索；deepseek 用 DEEPSEEK_API_KEY，结果只进候选，不计入统计",
     )
 
 
@@ -231,10 +231,10 @@ def _run_queries(
         client.close()
 
     web_candidates: list[WebCandidate] = []
-    if args.web_search == "firecrawl":
+    if args.web_search != "none":
         for query in queries:
             try:
-                web_candidates.extend(search_firecrawl(query, config))
+                web_candidates.extend(search_web(query, config, args.web_search))
             except ScholarsError as exc:
                 print(f"[warn] {query.name} 网页检索失败：{exc}", file=sys.stderr)
 

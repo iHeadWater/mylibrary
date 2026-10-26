@@ -89,6 +89,14 @@ class WebSearchSettings:
     enabled: bool = False
     provider: str = "none"
     max_results_per_person: int = 20
+    domains: tuple[str, ...] = (
+        "cnki.net",
+        "wanfangdata.com.cn",
+        "cqvip.com",
+        "napstic.cn",
+        "cjournal.hep.com.cn",
+        "sciengine.com",
+    )
 
 
 @dataclass(frozen=True)
@@ -134,6 +142,7 @@ class ScholarsConfig:
                 "enabled": self.web_search.enabled,
                 "provider": self.web_search.provider,
                 "max_results_per_person": self.web_search.max_results_per_person,
+                "domains": list(self.web_search.domains),
             },
             "output": {"root": str(self.output.root)},
             "config_path": str(self.config_path) if self.config_path else "",
@@ -358,6 +367,23 @@ def load_config(
         mailto=str(openalex_raw.get("mailto", "")),
     )
 
+    domains_raw = web_raw.get(
+        "domains",
+        [
+            "cnki.net",
+            "wanfangdata.com.cn",
+            "cqvip.com",
+            "napstic.cn",
+            "cjournal.hep.com.cn",
+            "sciengine.com",
+        ],
+    )
+    if not isinstance(domains_raw, list) or not domains_raw:
+        raise ConfigError("web_search.domains 必须是非空字符串列表")
+    domains = tuple(str(item).strip() for item in domains_raw if str(item).strip())
+    if not domains:
+        raise ConfigError("web_search.domains 不能为空")
+
     web_search = WebSearchSettings(
         enabled=_bool(web_raw.get("enabled", False), "web_search.enabled"),
         provider=_str(web_raw.get("provider", "none"), "web_search.provider"),
@@ -367,9 +393,10 @@ def load_config(
             minimum=1,
             maximum=100,
         ),
+        domains=domains,
     )
-    if web_search.provider not in {"none", "manual", "firecrawl"}:
-        raise ConfigError("web_search.provider 只能是 none / manual / firecrawl")
+    if web_search.provider not in {"none", "manual", "firecrawl", "deepseek"}:
+        raise ConfigError("web_search.provider 只能是 none / manual / firecrawl / deepseek")
 
     output_root_value = overrides.get(
         "output_root",

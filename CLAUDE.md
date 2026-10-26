@@ -109,7 +109,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 - 确认身份：`uv run hydrolitagent scholars resolve --name "张三" --name-en "Zhang San" --json`
 - 单人统计：`uv run hydrolitagent scholars stats --name "张三" --name-en "Zhang San" --institute "研究所" --output-dir outputs/scholars/YYYY-MM-DD --json`
 - 批量名单：`uv run hydrolitagent scholars batch --roster configs/scholars_roster.example.csv --output-dir outputs/scholars/YYYY-MM-DD --json`
-- 中文补充：`--web-search firecrawl` 只产候选；人工确认后 `--supplement confirmed.csv` 才计入。
+- 中文补充：`--web-search deepseek`（复用 `DEEPSEEK_API_KEY`）或 `firecrawl` 只产候选；人工确认后 `--supplement confirmed.csv` 才计入。
 - 配置：`configs/scholars.toml`；名单示例：`configs/scholars_roster.example.csv`；文档：`docs/user-guide/scholars/`。
 
 ### Docs

@@ -39,9 +39,19 @@ per_page = 100
 
 [web_search]
 enabled = false
-# none | manual | firecrawl
+# none | manual | deepseek | firecrawl
+# deepseek 使用 DEEPSEEK_API_KEY，推荐国内用户；firecrawl 需要 FIRECRAWL_API_KEY。
 provider = "none"
 max_results_per_person = 20
+# 中文库学术站点白名单；DeepSeek 只保留这些域名下的结果。
+domains = [
+  "cnki.net",
+  "wanfangdata.com.cn",
+  "cqvip.com",
+  "napstic.cn",
+  "cjournal.hep.com.cn",
+  "sciengine.com",
+]
 
 [output]
 root = "outputs/scholars"

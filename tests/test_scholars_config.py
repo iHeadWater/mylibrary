@@ -55,6 +55,16 @@ root = "outputs/custom"
     assert config.output.root.name == "custom"
 
 
+def test_web_search_domains(tmp_path) -> None:
+    path = write_config(
+        tmp_path,
+        '[web_search]\nprovider = "deepseek"\ndomains = ["cnki.net"]\n',
+    )
+    config = load_config(path)
+    assert config.web_search.provider == "deepseek"
+    assert config.web_search.domains == ("cnki.net",)
+
+
 def test_invalid_work_type(tmp_path) -> None:
     path = write_config(tmp_path, '[query]\nwork_types = ["nonsense"]\n')
     with pytest.raises(ConfigError, match="未知作品类型"):

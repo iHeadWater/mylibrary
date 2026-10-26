@@ -13,6 +13,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -148,6 +149,162 @@ def load_supplement(path: str | Path) -> dict[str, list[WorkRecord]]:
     return grouped
 
 
+DEEPSEEK_SEARCH_URL = "https://api.deepseek.com/v1/tools/search"
+
+
+def _year_from_date(value: str | None) -> int | None:
+    text = (value or "").strip()
+    match = re.search(r"(20\d{2})", text)
+    return int(match.group(1)) if match else None
+
+
+def _deepseek_queries(
+    query: PersonQuery,
+    institutions: list[str],
+) -> list[str]:
+    name = query.name or (query.aliases[0] if query.aliases else "")
+    queries: list[str] = []
+    for institution in institutions:
+        queries.append(f'"{name}" "{institution}" 论文')
+        queries.append(f'"{name}" "{institution}"')
+    return list(dict.fromkeys(queries))
+
+
+def _is_academic_url(url: str, domains: tuple[str, ...]) -> bool:
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").casefold()
+    if not host:
+        return False
+    if not any(host == domain.casefold() or host.endswith("." + domain.casefold()) for domain in domains):
+        return False
+    path = parsed.path.casefold()
+    if "/writer/" in path:
+        return False
+    if ("/paper" in path or "/periodical" in path) and "q=" in parsed.query:
+        return False
+    return True
+
+
+def search_deepseek(
+    query: PersonQuery,
+    config: ScholarsConfig,
+    *,
+    client: httpx.Client | None = None,
+) -> list[WebCandidate]:
+    """用 DeepSeek 自研搜索查中文库；只返回候选，不参与计数。
+
+    接口：``POST https://api.deepseek.com/v1/tools/search``，与 DeepSeek
+    主 API 共用 ``DEEPSEEK_API_KEY``。按配置的域名逐个查，结果去重。
+    """
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        raise ScholarsError(
+            "未设置 DEEPSEEK_API_KEY，无法用 DeepSeek 搜索；"
+            "可改用 --web-search firecrawl，或直接用 --supplement 手动补充。"
+        )
+    institutions: list[str] = []
+    for value in (config.identity.institution_name, query.institute):
+        text = value.strip()
+        if text and text not in institutions:
+            institutions.append(text)
+    if not institutions:
+        institutions = [config.identity.institution_name]
+    owns_client = client is None
+    client = client or httpx.Client(timeout=config.openalex.timeout_seconds)
+    candidates: list[WebCandidate] = []
+    seen: set[str] = set()
+    errors: list[str] = []
+    try:
+        for search_query in _deepseek_queries(query, institutions):
+            payload = {
+                "query": search_query,
+                "count": config.web_search.max_results_per_person,
+                "need_content": False,
+            }
+            try:
+                response = client.post(
+                    DEEPSEEK_SEARCH_URL,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json=payload,
+                )
+            except httpx.HTTPError as exc:
+                errors.append(f"{search_query[:40]}: {exc}")
+                continue
+            if response.status_code >= 400:
+                errors.append(
+                    f"{search_query[:40]}: HTTP {response.status_code} {response.text[:200]}"
+                )
+                continue
+            try:
+                data = response.json()
+            except ValueError:
+                errors.append(f"{search_query[:40]}: 返回了无法解析的 JSON")
+                continue
+            for item in (data.get("results") or []):
+                if not isinstance(item, dict):
+                    continue
+                title = _text(item.get("title"))
+                url = _text(item.get("url"))
+                key = url or title
+                if not title or key in seen:
+                    continue
+                if not _is_academic_url(url, config.web_search.domains):
+                    continue
+                # 搜索结果页/无关页面很多；人名或别名必须出现在标题/摘要里
+                snippet = _text(item.get("snippet"))
+                summary = _text(item.get("summary"))
+                haystack = f"{title} {snippet} {summary}".casefold()
+                names = [query.name, *query.aliases]
+                if not any(
+                    name.strip().casefold() in haystack
+                    for name in names
+                    if name.strip()
+                ):
+                    continue
+                if "浏览器版本过低" in title:
+                    continue
+                seen.add(key)
+                candidates.append(
+                    WebCandidate(
+                        person_name=query.name,
+                        title=title,
+                        source="deepseek",
+                        year=(
+                            _year_from_date(item.get("date"))
+                            or _year_from_date(snippet)
+                            or _year_from_date(summary)
+                        ),
+                        url=url,
+                        confidence="low",
+                        status="pending",
+                    )
+                )
+    finally:
+        if owns_client:
+            client.close()
+
+    if not candidates and errors:
+        raise ScholarsError("DeepSeek 检索失败：" + "；".join(errors))
+    return candidates[: config.web_search.max_results_per_person]
+
+
+def search_web(
+    query: PersonQuery,
+    config: ScholarsConfig,
+    provider: str,
+    *,
+    client: httpx.Client | None = None,
+) -> list[WebCandidate]:
+    """按 provider 分发；结果一律是候选，绝不自动计入。"""
+    if provider == "deepseek":
+        return search_deepseek(query, config, client=client)
+    if provider == "firecrawl":
+        return search_firecrawl(query, config, client=client)
+    if provider in {"none", "manual"}:
+        return []
+    raise ScholarsError(f"未知网页检索 provider：{provider}")
+
+
 def _firecrawl_api_key() -> str:
     return os.environ.get("FIRECRAWL_API_KEY", "").strip()
 
@@ -166,10 +323,8 @@ def search_firecrawl(
         )
     aliases = " OR ".join(f'"{name}"' for name in query.all_names if name.strip())
     institution = query.institute or config.identity.institution_name
-    search_query = (
-        f"({aliases}) {institution} 论文 2021..2026 "
-        "site:cnki.net OR site:wanfangdata.com.cn OR site:xueshu.baidu.com"
-    )
+    sites = " OR ".join(f"site:{domain}" for domain in config.web_search.domains)
+    search_query = f"({aliases}) {institution} 论文 {sites}"
     payload = {
         "query": search_query,
         "limit": config.web_search.max_results_per_person,

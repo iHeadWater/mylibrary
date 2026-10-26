@@ -134,7 +134,7 @@ uv run hydrolitagent scholars batch --roster configs/scholars_roster.example.csv
 - 口径：2021 年起；期刊 + 会议；第一作者**或**通讯作者任一计入。
 - 同名/中文名无别名时**不猜**，汇总数字留空并进复核清单。
 - 自查问题列默认「待本人确认」；程序只自动检测撤稿。
-- 中文文献可 `--web-search firecrawl` 出候选，人工确认后用 `--supplement` 计入。
+- 中文文献可 `--web-search deepseek`（复用 `DEEPSEEK_API_KEY`）出候选，人工确认后用 `--supplement` 计入。
 
 详见[学者论文统计](docs/user-guide/scholars/index.md)。
 
