@@ -130,7 +130,7 @@ def write_excluded_csv(excluded: list[ExcludedRecord], path: Path) -> None:
 
 
 def kind_label(kind: str) -> str:
-    return {"paper": "论文", "patent": "专利", "project": "项目"}.get(kind, kind)
+    return {"patent": "专利", "project": "项目"}.get(kind, kind)
 
 
 def compact_text(value: str, max_chars: int = 180) -> str:
@@ -256,7 +256,7 @@ def person_summary_table(records: list[Record], config: AppConfig) -> list[str]:
         rows.append(
             [
                 person,
-                "，".join(f"{kind_label(kind)}{kind_counts[kind]}" for kind in ["paper", "patent", "project"] if kind_counts[kind]),
+                "，".join(f"{kind_label(kind)}{kind_counts[kind]}" for kind in ["patent", "project"] if kind_counts[kind]),
                 "，".join(f"{track}{count}" for track, count in track_counts.items()),
                 "；".join(compact_text(record.title, 36) for record in group[:5]),
             ]
@@ -273,7 +273,7 @@ def status_summary(records: list[Record]) -> list[str]:
             if term in record.status or term in record.raw_text:
                 status_counts[term] += 1
     lines = []
-    for kind in ["paper", "patent", "project"]:
+    for kind in ["patent", "project"]:
         if kind_counts[kind]:
             lines.append(f"- {kind_label(kind)}：{kind_counts[kind]}")
     if status_counts:
@@ -290,7 +290,7 @@ def contribution_sentence(track: str, records: list[Record], config: AppConfig) 
         return ""
     return (
         f"在{track}方向，平台已形成以{titles}等为代表的阶段性成果，"
-        "为“数据感知—模拟预警—智能调控”链条提供了论文、专利和项目支撑。"
+        "为“数据感知—模拟预警—智能调控”链条提供了专利和项目支撑。"
     )
 
 

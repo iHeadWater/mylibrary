@@ -65,7 +65,6 @@ def urls_in_text(text: str) -> list[str]:
     return re.findall(r"https?://[^\s，,；;]+", text)
 
 
-DOI_PATTERN = r"10\.\d{4,9}/[-._;()/:A-Z0-9]+"
 PATENT_PATTERNS = [
     r"ZL\s?\d{4}\s?\d?\s?\d{6,}\.?\w*",
     r"CN\d{9,}(?:\.\d+)?[A-Z]?",
@@ -84,13 +83,11 @@ def clean_identifier(value: str) -> str:
 
 
 def identifier_patterns(kind: str) -> list[str]:
-    if kind == "paper":
-        return [DOI_PATTERN]
     if kind == "patent":
         return PATENT_PATTERNS
     if kind == "project":
         return PROJECT_PATTERNS
-    return [DOI_PATTERN, *PATENT_PATTERNS, *PROJECT_PATTERNS]
+    return [*PATENT_PATTERNS, *PROJECT_PATTERNS]
 
 
 def identifier_from_text(text: str, configured: list[str], kind: str) -> str:
@@ -108,7 +105,7 @@ def identifier_from_text(text: str, configured: list[str], kind: str) -> str:
 
 
 def is_headerish(text: str) -> bool:
-    header_terms = ["序号", "论文名称", "项目名称", "专利名称", "发表时间", "完成人", "作者"]
+    header_terms = ["序号", "项目名称", "专利名称", "完成人"]
     if not text:
         return True
     return sum(1 for term in header_terms if term in text) >= 2
@@ -128,10 +125,6 @@ def record_type_for_sheet(sheet_name: str, config: AppConfig) -> RecordTypeConfi
 def status_for(text: str, sheet_name: str, rule: RecordTypeConfig) -> str:
     haystack = f"{sheet_name} {text}" if rule.time.status_from_sheet else text
     hits = [term for term in rule.time.status_terms if term in haystack]
-    if rule.kind == "paper" and "已发表" in sheet_name and "已发表" not in hits:
-        hits.insert(0, "已发表")
-    if rule.kind == "paper" and "在审" in sheet_name and "在审" not in hits:
-        hits.insert(0, "在审")
     if rule.kind == "patent" and "授权" in sheet_name and "授权" not in hits:
         hits.insert(0, "授权")
     if rule.kind == "patent" and "受理" in sheet_name and "受理" not in hits:

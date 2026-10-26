@@ -1,8 +1,11 @@
+# 专利/项目统计示例配置。
+# 复制为 platform.toml 后填你自己的 Excel 路径与人名；真实配置不要提交。
+#   cp configs/platform.toml.example configs/platform.toml
+
 [input]
 files = [
-  "C:/Users/owen/OneDrive/事务/教研室/2026学科交叉平台研究进展/1.1.项目-基本信息汇总表-纵向.xlsx",
-  "C:/Users/owen/OneDrive/事务/教研室/2026学科交叉平台研究进展/2.论文统计及标注情况总表.xlsx",
-  "C:/Users/owen/OneDrive/事务/教研室/2026学科交叉平台研究进展/3.专利汇总表.xlsx",
+  "path/to/项目汇总表.xlsx",
+  "path/to/专利汇总表.xlsx",
 ]
 
 [output]
@@ -12,7 +15,7 @@ dir = "outputs"
 records_file = "configs/manual_records.toml"
 
 [platform]
-name = "水网系统智能监测与调控"
+name = "示例平台"
 story_axis = ["监测", "预警/预测", "调控"]
 keywords = [
   "水网", "水文", "水资源", "水库", "流域", "洪水", "防洪", "降雨",
@@ -24,33 +27,11 @@ keywords = [
   "urban flood", "floodwater", "rainfall-runoff", "physics-based"
 ]
 
+# 示例人名与别名；换成你自己的名单。
 [people.allowlist]
-"张弛" = ["张弛", "张驰", "Chi Zhang", "Zhang Chi"]
-"赵铜铁钢" = ["赵铜铁钢", "Tongtiegang Zhao", "Zhao Tongtiegang", "T. Zhao"]
-"吕恒" = ["吕恒", "Heng Lyu", "Heng Lv", "Lv Heng", "Lyu Heng", "Heng Lü", "Lü Heng"]
-"欧阳文宇" = ["欧阳文宇", "Wenyu Ouyang", "Ouyang Wenyu"]
-"李子林" = ["李子林", "Zilin Li", "Li Zilin"]
-"王泽" = ["王泽", "Ze Wang", "Wang Ze"]
-"夏尉" = ["夏尉", "Wei Xia", "Xia Wei"]
-"韩鹏飞" = ["韩鹏飞", "Pengfei Han", "Han Pengfei"]
-
-[record_types.paper]
-enabled = true
-sheet_keywords = ["论文", "英文", "中文"]
-exclude_sheet_keywords = ["项目总表", "JCR", "标注形式"]
-title_columns = [2]
-summary_columns = [3]
-people_columns = [4, 5, 6, 7, 8, 9, 10, 11]
-venue_columns = [12, 13, 14]
-identifier_columns = [23]
-
-[record_types.paper.time]
-start_date = "2025-06-01"
-date_policy = "record_or_status"
-status_terms = ["已发表", "录用", "待刊", "在审", "一审", "二审", "返修", "发表", "刊出"]
-status_can_bypass_date_terms = ["录用", "待刊", "在审", "一审", "二审", "返修"]
-status_from_sheet = true
-keep_year_only_if_year_at_least = 2025
+"张三" = ["张三", "Zhang San", "San Zhang"]
+"李四" = ["李四", "Li Si", "Si Li"]
+"王五" = ["王五", "Wang Wu", "Wu Wang"]
 
 [record_types.patent]
 enabled = true
@@ -117,9 +98,3 @@ keywords = [
   "groundwater management", "ecological flow"
 ]
 prompt = "围绕水库/水网调度、智能优化、数字孪生和决策支持，说明平台如何服务水网安全高效运行。"
-
-[enrichment]
-enabled = false
-cache_dir = "cache/enrichment"
-timeout_seconds = 10
-providers = ["semantic_scholar", "openalex", "crossref"]

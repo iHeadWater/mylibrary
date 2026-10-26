@@ -30,7 +30,10 @@ from pathlib import Path
 
 from pyzotero import zotero as zt
 
-CROSSREF_UA = "zotero-bridge/1.0 (mailto:wenyuouyang@outlook.com)"
+CROSSREF_MAILTO = os.environ.get("CROSSREF_MAILTO", "").strip()
+CROSSREF_UA = "zotero-bridge/1.0" + (
+    f" (mailto:{CROSSREF_MAILTO})" if CROSSREF_MAILTO else ""
+)
 ARXIV_API = "http://export.arxiv.org/api/query"
 
 # Load the repo .env so bare-host runs (no Zotero TOML) can read credentials

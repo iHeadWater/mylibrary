@@ -1,0 +1,28 @@
+# 人工纳入/排除/补充示例。
+# 复制为 manual_records.toml 后按需填写；真实记录不要提交。
+#   cp configs/manual_records.toml.example configs/manual_records.toml
+
+[include_overrides.example_project]
+kind = "project"
+title = "示例项目 A"
+track = "预警/预测"
+decision_reason = "人工确认纳入"
+source_note = "示例"
+added_at = "2026-01-01"
+
+[exclude_overrides.example_excluded]
+kind = "project"
+title = "示例项目 B"
+decision_reason = "人工确认排除"
+source_note = "示例"
+added_at = "2026-01-01"
+
+[supplemental_records.example_patent]
+kind = "patent"
+title = "示例专利"
+people = ["张三"]
+status = "授权"
+track = "监测"
+decision_reason = "人工补充"
+source_note = "示例"
+added_at = "2026-01-01"

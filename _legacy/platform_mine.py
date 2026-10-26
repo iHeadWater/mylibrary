@@ -5,7 +5,6 @@ import argparse
 from pathlib import Path
 
 from hydro_miner.config import load_config
-from hydro_miner.enrich import enrich_records
 from hydro_miner.extract_excel import export_sheets, read_workbook
 from hydro_miner.filtering import filter_records
 from hydro_miner.manual import apply_manual_records
@@ -15,8 +14,11 @@ from hydro_miner.writers import write_all_outputs
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Mine hydrology platform research outputs.")
-    parser.add_argument("--config", default="configs/platform.toml", help="Path to TOML config.")
-    parser.add_argument("--enrich", action="store_true", help="Enable scholarly API enrichment for papers.")
+    parser.add_argument(
+        "--config",
+        default="configs/platform.toml",
+        help="Path to TOML config (copy configs/platform.toml.example first).",
+    )
     parser.add_argument("--output-dir", help="Override output directory.")
     return parser.parse_args()
 
@@ -40,9 +42,6 @@ def main() -> None:
     records = normalize_records(sheets, config)
     main_records, review_records, excluded = filter_records(records, config)
     main_records, review_records, excluded = apply_manual_records(main_records, review_records, excluded, config)
-
-    if args.enrich or config.enrichment.enabled:
-        enrich_records([*main_records, *review_records], config.enrichment)
 
     outputs = write_all_outputs(main_records, review_records, excluded, config, manifest)
 

@@ -118,6 +118,25 @@ uv run hydrolitagent cards ai-config --json
 - 生成的产物(文献卡、主题池、运行记录)**不入库** —— 运行时写入,另行共享。仓库里只有代码、模板、提示词与 schema。
 - 完整命令清单:`uv run hydrolitagent cards --help`(5 个子命令)。
 
+### 学者论文统计
+
+按人查论文，生成学院「学术论文自查情况统计」表所需的数据。**不是解析学院下发的表**，而是从一个人出发去 OpenAlex 查他的论文。
+
+```bash
+# 确认身份（同名时只列候选）
+uv run hydrolitagent scholars resolve --name "张三" --name-en "Zhang San" --json
+
+# 单人 / 批量
+uv run hydrolitagent scholars stats --name "张三" --name-en "Zhang San" --institute "水利所" --output-dir outputs/scholars/2026-10-26 --json
+uv run hydrolitagent scholars batch --roster configs/scholars_roster.example.csv --output-dir outputs/scholars/2026-10-26 --json
+```
+
+- 口径：2021 年起；期刊 + 会议；第一作者**或**通讯作者任一计入。
+- 同名/中文名无别名时**不猜**，汇总数字留空并进复核清单。
+- 中文文献可 `--web-search deepseek`（复用 `DEEPSEEK_API_KEY`）出候选，人工确认后用 `--supplement` 计入。
+
+详见[学者论文统计](docs/user-guide/scholars/index.md)。
+
 ## Agent Skills
 
 | Skill | 功能 |
@@ -190,7 +209,7 @@ uv run mkdocs build --strict
 
 ## 许可证
 
-**GNU Affero General Public License v3.0**（AGPL-3.0）。© 2025 OuyangWenyu。完整正文见 [LICENSE](LICENSE)。
+**GNU Affero General Public License v3.0**（AGPL-3.0）。© 2025 mylibrary contributors。完整正文见 [LICENSE](LICENSE)。
 
 > **这个协议管什么**：你可以自由使用、修改、分发 —— **包括商用**；但只要你**分发**本软件、
 > 或把**修改过的版本作为网络服务提供**给别人用，就必须**同样以 AGPL-3.0 提供完整源码**

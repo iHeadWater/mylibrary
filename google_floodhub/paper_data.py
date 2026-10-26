@@ -1,11 +1,7 @@
 """
-Author: Wenyu Ouyang
-Date: 2025-01-03 13:31:33
-LastEditTime: 2025-01-03 15:29:26
-LastEditors: Wenyu Ouyang
-Description: This is a script to read data of google floodhub paper
-FilePath: \hydro_ai_papers\google_floodhub\paper_data.py
-Copyright (c) 2023-2024 Wenyu Ouyang. All rights reserved.
+Read data for the Google FloodHub paper reproduction.
+
+Override paths in definitions_private.py if needed.
 """
 
 import os
