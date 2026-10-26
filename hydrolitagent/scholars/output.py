@@ -123,7 +123,7 @@ def form_rows(results: Iterable[PersonResult]) -> list[list[Any]]:
                 result.query.name,
                 paper_count,
                 first_count,
-                result.query.self_check or "待本人确认",
+                result.query.self_check,
                 _review_note(result),
             ]
         )
@@ -141,7 +141,7 @@ def audit_rows(results: Iterable[PersonResult]) -> list[list[Any]]:
                 result.query.name,
                 paper_count,
                 first_count,
-                result.query.self_check or "待本人确认",
+                result.query.self_check,
                 _review_note(result),
                 "|".join(result.identity.author_ids),
                 result.identity.candidate.orcid if result.identity.candidate else result.query.orcid,
@@ -400,8 +400,6 @@ def write_review_md(path: Path, batch: BatchResult) -> None:
         f"- 时间窗口：{batch.config.get('query', {}).get('from_date', '')} 起",
         f"- 作品类型：{', '.join(batch.config.get('query', {}).get('work_types', []))}",
         "",
-        "> **自查列未由程序填写。**「待本人确认」不代表「无问题」。",
-        "> 程序只自动检测撤稿；实验记录、原始数据、抄袭剽窃、代写代投、买卖论文等只能人工自查。",
         "> 若启用了中文库网页检索，候选见同目录 `web_candidates.csv`，默认不计入统计。",
         "> 逐篇校核请看同目录 `works_by_person.md`（按人分组，含未计入论文）与 `works.csv`。",
         "",

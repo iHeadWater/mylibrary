@@ -104,7 +104,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 ### 学者论文统计 (hydrolitagent scholars)
 
-按人检索 OpenAlex 论文，生成学院学术论文自查表所需的结构化数据。口径：2021 年起；第一作者**或**通讯作者任一计入；同名不猜；自查列不自动填写（程序只检测撤稿）。
+按人检索 OpenAlex 论文，生成学院学术论文自查表所需的结构化数据。口径：2021 年起；第一作者**或**通讯作者任一计入；同名不猜。
 
 - 确认身份：`uv run hydrolitagent scholars resolve --name "张三" --name-en "Zhang San" --json`
 - 单人统计：`uv run hydrolitagent scholars stats --name "张三" --name-en "Zhang San" --institute "研究所" --output-dir outputs/scholars/YYYY-MM-DD --json`

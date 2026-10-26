@@ -31,7 +31,7 @@ def test_form_summary_headers_exact(tmp_path) -> None:
     assert rows[0] == FORM_HEADERS
     assert rows[1][3] == "1"
     assert rows[1][4] == "1"
-    assert rows[1][5] == "待本人确认"
+    assert rows[1][5] == ""
 
 
 def test_unresolved_counts_blank_not_zero(tmp_path) -> None:
@@ -89,14 +89,13 @@ def test_summary_json_does_not_leak_api_key(tmp_path) -> None:
     assert json.loads(text)["schema_version"] == 1
 
 
-def test_review_mentions_retraction_and_self_check_disclaimer(tmp_path) -> None:
+def test_review_mentions_retraction(tmp_path) -> None:
     path = tmp_path / "review.md"
     result = make_result(works=(make_record(work_id="W1", is_retracted=True),))
     batch = BatchResult(people=(result,), generated_at="2026-10-26T00:00:00+00:00", config={})
     write_review_md(path, batch)
     text = path.read_text(encoding="utf-8")
     assert "撤稿论文" in text
-    assert "自查列未由程序填写" in text
 
 
 def test_write_outputs_creates_all_files(tmp_path) -> None:
