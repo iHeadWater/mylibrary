@@ -16,8 +16,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from hydrolitagent.cards.card_generators.codex_local_pdf import CodexLocalPdfAdapter
-from hydrolitagent.cards.card_generators.codex_text import CodexTextAdapter
 from hydrolitagent.cards.domain.source_access import LOCAL_PDF_PATH
 from hydrolitagent.cards.evidence_packages import EvidencePackageError, load_evidence_manifest
 from hydrolitagent.cards.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
@@ -39,6 +37,28 @@ class ThemeError(RuntimeError):
     def __init__(self, code, message, **details):
         super().__init__(message)
         self.code, self.details = code, details
+
+
+# --- Transitional adapter seam (stage 1.4) -------------------------------------------
+# Theme code must not depend on one provider at module import time. Callers can
+# inject ``text_adapter`` / ``pdf_adapter`` directly (tests and, later, the
+# composition layer) or supply a factory. The defaults below import the legacy
+# Codex adapters only when actually used, so importing this module stays
+# provider-neutral. Stage 5 replaces these defaults with a factory injected by
+# ``composition``; the signature is deliberately the same shape a real factory
+# will have: ``factory(config, *, progress=...) -> adapter``.
+
+
+def _default_text_adapter_factory(config, *, progress=None):
+    """Lazily build the legacy Codex text adapter (transitional default)."""
+    from hydrolitagent.cards.card_generators.codex_text import CodexTextAdapter
+    return CodexTextAdapter(config, progress=progress)
+
+
+def _default_pdf_adapter_factory(config, *, progress=None):
+    """Lazily build the legacy Codex local-PDF adapter (transitional default)."""
+    from hydrolitagent.cards.card_generators.codex_local_pdf import CodexLocalPdfAdapter
+    return CodexLocalPdfAdapter(config, progress=progress)
 
 
 def _json(value):
@@ -212,10 +232,16 @@ def _source_links(tasks, sources, directory, theme_id=None):
     return "\n".join(lines) + "\n"
 
 
-def _run_legacy(config, report, *, progress, text_adapter, pdf_adapter, delivery_preparer, remaining_seconds):
+def _run_legacy(config, report, *, progress, text_adapter, pdf_adapter, delivery_preparer,
+                remaining_seconds, text_adapter_factory=None, pdf_adapter_factory=None):
     """Historical implementation retained for migration regression fixtures only.
 
     No CLI, scheduler or production dispatcher selects this path.
+
+    ``text_adapter_factory`` / ``pdf_adapter_factory`` are the stage 1.4
+    transitional seam: adapters already injected win, otherwise the injected
+    factory builds one, otherwise the lazy Codex default runs. Stage 5 replaces
+    the defaults with factories provided by ``composition``.
     """
     sources = _sources(config)
     report["source_count"] = len(sources)
@@ -251,8 +277,10 @@ def _run_legacy(config, report, *, progress, text_adapter, pdf_adapter, delivery
             batch_completed=(batch / "completion.json").exists())
         return
     _publish(_safe_path(batch, "inputs.json"), _json(binding))
-    text_adapter = text_adapter or CodexTextAdapter(cg, progress=progress)
-    pdf_adapter = pdf_adapter or CodexLocalPdfAdapter(cg, progress=progress)
+    text_adapter = text_adapter or (text_adapter_factory or _default_text_adapter_factory)(
+        cg, progress=progress)
+    pdf_adapter = pdf_adapter or (pdf_adapter_factory or _default_pdf_adapter_factory)(
+        cg, progress=progress)
 
     def invoke(stage, prompt, schema_name, *, source=None):
         _assert_sources(sources)
@@ -380,7 +408,20 @@ def _run(config, report, **kwargs):
 
 
 def run_themes(config, *, progress=None, dry_run=False, text_adapter=None, pdf_adapter=None,
-               delivery_preparer=None, remaining_seconds=None, migration_only=False):
+               delivery_preparer=None, remaining_seconds=None, migration_only=False,
+               text_adapter_factory=None, pdf_adapter_factory=None):
+    """Run the theme pipeline.
+
+    Adapter selection is injectable (stage 1.4 transitional seam):
+
+    * ``text_adapter`` / ``pdf_adapter`` -- already-built adapters win;
+    * ``text_adapter_factory`` / ``pdf_adapter_factory`` -- optional callables
+      ``factory(config, *, progress=...) -> adapter``;
+    * otherwise the legacy Codex adapters are imported lazily inside the run.
+
+    Stage 5 moves the default wiring into ``composition``; until then callers
+    that pass nothing keep the exact previous behaviour.
+    """
     started = time.monotonic()
     cap = config.pipeline.max_run_seconds
     remaining_seconds = remaining_seconds or (lambda: float("inf") if cap is None else cap - (time.monotonic() - started))
@@ -392,11 +433,13 @@ def run_themes(config, *, progress=None, dry_run=False, text_adapter=None, pdf_a
     try:
         if dry_run:
             _run(config, report, progress=progress, text_adapter=text_adapter, pdf_adapter=pdf_adapter,
-                delivery_preparer=delivery_preparer, remaining_seconds=remaining_seconds)
+                delivery_preparer=delivery_preparer, remaining_seconds=remaining_seconds,
+                text_adapter_factory=text_adapter_factory, pdf_adapter_factory=pdf_adapter_factory)
         else:
             with PipelineRunLock(config.paths.lock_file.with_name(config.paths.lock_file.name + ".themes")):
                 _run(config, report, progress=progress, text_adapter=text_adapter, pdf_adapter=pdf_adapter,
-                    delivery_preparer=delivery_preparer or prepare_pdf_delivery, remaining_seconds=remaining_seconds)
+                    delivery_preparer=delivery_preparer or prepare_pdf_delivery, remaining_seconds=remaining_seconds,
+                    text_adapter_factory=text_adapter_factory, pdf_adapter_factory=pdf_adapter_factory)
     except KeyboardInterrupt:
         report.update(ok=False, status="CANCELLED", error={"code": "CANCELLED", "message": "已中止；保存的候选/精读步骤保留，下次继续"})
     except (ThemeError, EvidencePackageError, PdfDeliveryError, PdfGateError, TaskStoreError, ZoteroApiError) as exc:

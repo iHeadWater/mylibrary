@@ -136,7 +136,10 @@ class ProxyAdapterTests(unittest.TestCase):
         for mocked in (True, False):
             with self.subTest(mocked=mocked):
                 prompt_runner = Mock(return_value=subprocess.CompletedProcess([], 0, "", ""))
-                with patch("hydrolitagent.cards.card_generators.codex_cli.run_streaming_prompt", prompt_runner):
+                with patch(
+                    "hydrolitagent.cards.adapters.runners.codex.adapter.run_streaming_prompt",
+                    prompt_runner,
+                ):
                     adapter = CodexCliAdapter(config, **({"prompt_runner": prompt_runner} if mocked else {}))
                     adapter._prompt_runner(["codex", "exec"], "task", 5, metadata)
                 env = prompt_runner.call_args.args[3]

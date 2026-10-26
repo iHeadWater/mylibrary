@@ -143,6 +143,46 @@ def test_domain_does_not_import_outer_layers() -> None:
 
 
 # --------------------------------------------------------------------------------------
+# 1a. workflow modules may build adapters lazily, never at module level
+# --------------------------------------------------------------------------------------
+
+
+def _top_level_imports(path: Path) -> list[tuple[int, str]]:
+    """Imports executed at import time only (module body, not function bodies)."""
+
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found: list[tuple[int, str]] = []
+    for node in tree.body:
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for target in _imported_targets(path, node):
+                found.append((getattr(node, "lineno", 0), target))
+    return found
+
+
+@pytest.mark.parametrize("relative", ["themes.py", "theme_pool_runner.py"])
+def test_theme_modules_do_not_import_adapters_at_module_level(relative: str) -> None:
+    """The theme workflows take adapter factories; concrete adapters are lazy.
+
+    A function-level import is allowed (it is the stage-1 transitional seam),
+    but a module-level one makes the whole cards package import a provider as
+    soon as themes are touched -- the exact coupling this migration removes.
+    """
+
+    path = CARDS_DIR / relative
+    assert path.is_file(), f"缺少模块：{path}"
+
+    offenders = [
+        f"{relative}:{lineno} -> {target}"
+        for lineno, target in _top_level_imports(path)
+        if "codex" in target.lower() or "claude" in target.lower()
+    ]
+    assert not offenders, (
+        "主题流程在模块层 import 了具体 provider；应改为接收 factory 并在函数内惰性构造：\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+# --------------------------------------------------------------------------------------
 # 1b. application/ orchestrates ports; it must not reach into concrete adapters
 # --------------------------------------------------------------------------------------
 

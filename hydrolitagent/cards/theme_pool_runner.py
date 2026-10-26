@@ -1,4 +1,9 @@
-"""One global knowledge pool, incremental candidate evolution and reading reuse."""
+"""One global knowledge pool, incremental candidate evolution and reading reuse.
+
+Adapter construction is injected (stage 1.4 transitional seam): this module
+never imports a concrete provider. ``themes`` supplies the lazy Codex defaults
+until stage 5 wires a real factory through ``composition``.
+"""
 from __future__ import annotations
 
 from dataclasses import replace
@@ -37,7 +42,15 @@ def _links(config, refs, directory):
     return "\n".join(lines) + "\n"
 
 
-def run(config, report, *, progress, text_adapter, pdf_adapter, delivery_preparer, remaining_seconds):
+def run(config, report, *, progress, text_adapter, pdf_adapter, delivery_preparer, remaining_seconds,
+        text_adapter_factory=None, pdf_adapter_factory=None):
+    """Run one pool change.
+
+    ``text_adapter_factory`` / ``pdf_adapter_factory`` are the stage 1.4 seam:
+    an already-built adapter wins, then an injected factory, then the lazy Codex
+    default owned by ``themes``. Stage 5 replaces the defaults with factories
+    supplied by ``composition``.
+    """
     sources = core._sources(config)
     report.update(protocol_version=pool.PROTOCOL, source_count=len(sources),
                   pool_path=str(config.paths.themes_dir),
@@ -90,8 +103,10 @@ def run(config, report, *, progress, text_adapter, pdf_adapter, delivery_prepare
     change_dir = pool.root_path(config, "changes/" + change_id)
     report.update(change_id=change_id, change_path=str(change_dir))
     core._publish(change_dir / "inputs.json", core._json({"base_registry": base, "input": binding}))
-    text_adapter = text_adapter or core.CodexTextAdapter(cg, progress=progress)
-    pdf_adapter = pdf_adapter or core.CodexLocalPdfAdapter(cg, progress=progress)
+    text_adapter = text_adapter or (text_adapter_factory or core._default_text_adapter_factory)(
+        cg, progress=progress)
+    pdf_adapter = pdf_adapter or (pdf_adapter_factory or core._default_pdf_adapter_factory)(
+        cg, progress=progress)
 
     def unchanged():
         core._assert_sources(sources)
