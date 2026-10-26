@@ -87,6 +87,8 @@ uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元
 （`HEADLESS_CHALLENGE_GRACE_S`）没能通过就提前升级。有专用 flow 的前缀
 （`10.1016`/`10.1029`/`10.1002`/`10.1175`/`10.1038`/`10.2139`）不做入口预导航——
 第二次 `goto` 会打断它们的重定向链（ScienceDirect 会报 `ERR_ABORTED`），改由各流程自己处理验证。
+已解析出刊社落点的中文期刊 DOI 同样跳过入口预导航：`doi.org` 对它们不可用，落点由通用 flow
+直接打开（见下文「中文期刊（CNKI DOI）」）。
 
 流程中途若再次弹出验证，会继续等你通过，不会直接判定失败：
 
@@ -125,6 +127,7 @@ agent 打开 Chromium 窗口。你只需在以下情况交互：
 | **science.org** | 开放获取 | curl 两步法优先；被 Cloudflare 拦截时回退浏览器（无头优先） |
 | **SSRN** | 免费下载 | 浏览器访问摘要页 → 无头优先，必要时弹窗过一次验证 → 点击下载 |
 | **其他（未列出的前缀）** | 视出版社 | 通用 flow：读 `citation_pdf_url` / PDF 锚点 → 导航触发下载 |
+| **中文期刊（CNKI DOI）** | 站点公开 PDF | Crossref 无记录 → `chndoi.org` 解析页 + 刊社 `citation_*` → 打开刊社文章页取 PDF；定位不到时用 `--landing-url` / `--pdf-url` |
 
 ## 工作原理
 
@@ -228,6 +231,66 @@ Playwright 取不到该响应的 body（异常还被静默吞掉，会表现成"
 
 遇到验证同样是无头优先、失败弹窗、点完自动继续。
 
+### 中文期刊（CNKI DOI）
+
+CNKI 系中文期刊的 DOI（如 `10.14042`；这类前缀有几十个，不按前缀硬编码）**不在 Crossref /
+DataCite 注册**，`https://doi.org/<doi>` 会落到证书域名不匹配的 `link.cnki.net`，浏览器直接拒绝加载。
+脚本因此按「解析页 → 刊社文章页」的路径走：
+
+1. `crossref_meta` 404 → `hydrolitagent/literature/chinese_doi.py` 请求
+   `https://www.chndoi.org/Resolution/Handler?doi=<urlencoded>`，取题名、作者、出版机构、注册时间
+   （**只**用题名/作者入库：出版机构是 CNKI 注册方、注册时间是登记日期，二者都不写入 Zotero）；
+2. 依次打开解析页给出的境内/境外链接，读刊社页面的 `citation_*` meta
+   （刊名、ISSN、卷期页、`citation_pdf_url`、摘要）；
+3. `generic_flow` 的落点改为**刊社文章页**（不是 `doi.org`）；`citation_pdf_url` 作为第一个候选，
+   先走共享 cookie 的 `context.request` 取字节，再用页面导航/锚点兜底。
+
+`--resolve-only` 会打印解析结果，中文路径多一个 `"source": "chndoi"`：
+
+```bash
+uv run python scripts/download_paper.py --doi 10.14042/j.cnki.32.1309.2026.06.001 --resolve-only
+```
+
+解析页若只给出 CNKI 链接（CNKI 系 DOI 的常见情况），`--resolve-only` 仍能打印题名/作者，
+但**下载会秒级失败并给出提示**，不会对着不可达的 CNKI 主机空跑两轮浏览器：
+
+```text
+FAILED: this DOI only resolves to CNKI, which serves a mismatched TLS certificate
+        and rejects scripted access.
+  Pass the journal's own article page instead: --landing-url / --pdf-url
+```
+
+这时补上刊社文章页即可（页面上的 `citation_pdf_url` 会被自动选用）：
+
+```bash
+uv run python scripts/download_paper.py --doi 10.14042/j.cnki.32.1309.2026.06.001 \
+    --landing-url http://skxjz.nhri.cn/cn/article/doi/10.14042/j.cnki.32.1309.2026.06.001 --sync
+```
+
+同一条命令重跑是幂等的：PDF 已挂且内容一致时 `zotero_sync` 报
+`already attached (identical content)`，不会新建重复条目。
+
+当解析结果里**没有任何可打开的页面**（未注册 DOI、解析页不可达、站点改版导致链接丢失），
+同样**不会退化成乱猜**：脚本报错并提示手工指定。
+
+```bash
+uv run python scripts/download_paper.py --doi <中文DOI> \
+    --landing-url https://<刊社文章页> --sync
+# 只有 PDF 直链时：
+uv run python scripts/download_paper.py --doi <中文DOI> --pdf-url https://<xxx.pdf> --sync
+```
+
+- 页面编码依次回退：`Content-Type` → `<meta charset>` → UTF-8 → `gb18030`，老刊的 GBK 页可读；
+- 滑块/验证页（标题含 `安全验证`、`拖动滑块`）按挑战页处理，沿用无头→有头的升级逻辑；
+- 自动路径下 Zotero 条目为 `journalArticle`、`language=zh`，中文作者写成 `family=全名, given=""`，
+  卷期页与中文刊名取自刊社页面。
+- **手工兜底同样带着元数据入库**：`download_paper` 把已解析的记录经环境变量
+  `MYLIBRARY_SOURCE_META` 交给 `zotero_sync` 子进程，所以 `--landing-url` 解析出的
+  刊名/卷/期/页不会丢。早期版本会重解析一次，导致这条路径只挂上 PDF、卷期页缺失，已修。
+
+`--sync` 的两个条目冲突开关也可直接透传（此前只能手工跑 `zotero_sync`）：
+`--replace`（同名附件内容不同时覆盖）与 `--skip-existing`（DOI 已存在则整篇跳过）。
+
 ### SSRN
 
 SSRN 预印本免费下载。Cloudflare 挑战在 MCP 浏览器 profile 下自动通过。访问摘要页
@@ -255,6 +318,14 @@ SSRN 预印本免费下载。Cloudflare 挑战在 MCP 浏览器 profile 下自�
 uv run python scripts/download_paper.py --doi <doi> [--sync] [--out DIR]
 uv run python scripts/download_paper.py --arxiv <id> [--sync]
 uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元数据
+
+# 中文期刊（CNKI DOI）解析不到刊社站点时手工指定
+uv run python scripts/download_paper.py --doi <doi> --landing-url <文章页> [--sync]
+uv run python scripts/download_paper.py --doi <doi> --pdf-url <PDF 直链> [--sync]
+
+# --sync 的条目冲突开关（透传给 zotero_sync）
+uv run python scripts/download_paper.py --doi <doi> --sync --replace         # 覆盖同名但内容不同的附件
+uv run python scripts/download_paper.py --doi <doi> --sync --skip-existing   # DOI 已存在则整篇跳过
 
 # 只有标题、没有 DOI 时：Crossref 检索后解析成 DOI
 uv run python scripts/download_paper.py --title "<标题>" [--sync]

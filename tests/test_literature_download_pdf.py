@@ -2079,3 +2079,372 @@ def test_attempt_propagates_no_access_without_generic_fallback(tmp_path, monkeyp
             )
         )
 
+
+# ---------------------------------------------------------------------------
+# Chinese-journal (CNKI DOI) metadata and landing-page routing
+# ---------------------------------------------------------------------------
+
+
+def _chinese_shaped() -> dict:
+    """Crossref-shaped metadata as ``chinese_doi.resolve_chinese_meta`` returns it."""
+    return {
+        "type": "journal-article",
+        "title": ["黄河中游水沙变化归因分析"],
+        "author": [{"family": "王丽川", "given": ""}, {"family": "李四", "given": ""}],
+        "container-title": ["水科学进展"],
+        "volume": "37",
+        "issue": "6",
+        "page": "993-1007",
+        "ISSN": ["1001-6791"],
+        "abstract": "摘要正文",
+        "published-print": {"date-parts": [[2026, 6, 1]]},
+        "prefix": "10.14042",
+        "suffix": "j.cnki.32.1309.2026.06.001",
+        "landing_url": "https://journal.example.cn/article/1",
+        "pdf_url": "https://journal.example.cn/article/1.pdf",
+        "source": "chndoi",
+    }
+
+
+def _raise_oserror(doi):
+    raise OSError("HTTP Error 404: Not Found")
+
+
+def test_resolve_meta_falls_back_to_chinese_metadata(monkeypatch):
+    """A 404 from Crossref must degrade to chndoi/publisher metadata, not raise."""
+    from hydrolitagent.literature import download_pdf
+
+    monkeypatch.setattr(download_pdf, "crossref_meta", _raise_oserror)
+    monkeypatch.setattr(
+        download_pdf, "resolve_chinese_meta",
+        lambda doi, **kw: _chinese_shaped(),
+    )
+
+    meta = download_pdf.resolve_meta("10.14042/j.cnki.32.1309.2026.06.001")
+
+    assert meta["title"] == "黄河中游水沙变化归因分析"
+    assert meta["container"] == "水科学进展"
+    assert meta["source"] == "chndoi"
+    assert meta["landing_url"] == "https://journal.example.cn/article/1"
+    assert meta["pdf_url"] == "https://journal.example.cn/article/1.pdf"
+    assert meta["prefix"] == "10.14042"
+
+
+def test_resolve_meta_does_not_consult_chndoi_when_crossref_answers(monkeypatch):
+    """The Chinese fallback must stay a *fallback* — no extra request per DOI."""
+    from hydrolitagent.literature import download_pdf
+
+    monkeypatch.setattr(
+        download_pdf, "crossref_meta",
+        lambda doi: {"title": "T", "container": "J", "type": "journal-article",
+                     "pii": None, "prefix": "10.1080", "suffix": "x"},
+    )
+
+    def must_not_run(doi, **kw):
+        raise AssertionError("chndoi must not be consulted when Crossref answers")
+
+    monkeypatch.setattr(download_pdf, "resolve_chinese_meta", must_not_run)
+
+    meta = download_pdf.resolve_meta("10.1080/x")
+
+    assert meta["title"] == "T"
+    assert "source" not in meta           # unchanged Crossref shape
+
+
+def test_resolve_meta_raises_lookup_error_when_no_source_knows_the_doi(monkeypatch):
+    from hydrolitagent.literature import download_pdf
+
+    monkeypatch.setattr(download_pdf, "crossref_meta", _raise_oserror)
+    monkeypatch.setattr(download_pdf, "resolve_chinese_meta", lambda doi, **kw: None)
+
+    with pytest.raises(LookupError) as excinfo:
+        download_pdf.resolve_meta("10.14042/unknown")
+
+    assert "--landing-url" in str(excinfo.value)
+
+
+def test_resolve_meta_forwards_manual_landing_and_pdf_urls(monkeypatch):
+    from hydrolitagent.literature import download_pdf
+
+    seen: dict = {}
+
+    def fake_chinese(doi, **kwargs):
+        seen.update(kwargs)
+        return _chinese_shaped()
+
+    monkeypatch.setattr(download_pdf, "crossref_meta", _raise_oserror)
+    monkeypatch.setattr(download_pdf, "resolve_chinese_meta", fake_chinese)
+
+    download_pdf.resolve_meta(
+        "10.14042/x",
+        landing_url="https://journal.example.cn/handmade",
+        pdf_url="https://journal.example.cn/handmade.pdf",
+    )
+
+    assert seen == {
+        "landing_url": "https://journal.example.cn/handmade",
+        "pdf_url": "https://journal.example.cn/handmade.pdf",
+    }
+
+
+def test_download_paper_unknown_doi_returns_1_with_a_hint(tmp_path, monkeypatch, capsys):
+    """No traceback for a DOI nobody indexes — a clear error and exit code 1."""
+    from hydrolitagent.literature import download_pdf
+
+    monkeypatch.setattr(download_pdf, "crossref_meta", _raise_oserror)
+    monkeypatch.setattr(download_pdf, "resolve_chinese_meta", lambda doi, **kw: None)
+
+    assert download_pdf.download_paper(doi="10.14042/unknown", out_dir=tmp_path) == 1
+    out = capsys.readouterr().out
+    assert "FAILED" in out
+    assert "--landing-url" in out
+
+
+def test_is_cnki_url():
+    """Only CNKI landing hosts count; a journal site never does."""
+    from hydrolitagent.literature import download_pdf
+
+    assert download_pdf.is_cnki_url("https://link.cnki.net/doi/10.14042/x")
+    assert download_pdf.is_cnki_url("https://kns.cnki.net/kcms2/article/abstract?v=1")
+    assert not download_pdf.is_cnki_url("https://skxjz.nhri.cn/cn/article/doi/1")
+    assert not download_pdf.is_cnki_url("https://notcnki.net.example/x")
+    assert not download_pdf.is_cnki_url("")
+
+
+def test_download_paper_chndoi_only_cnki_landing_fails_fast(tmp_path, monkeypatch, capsys):
+    """A CNKI-only record must not burn two browser attempts on a dead link."""
+    from hydrolitagent.literature import download_browser, download_pdf
+
+    shaped = _chinese_shaped()
+    shaped["container-title"] = []          # journal page never reached
+    shaped["volume"] = shaped["issue"] = shaped["page"] = ""
+    shaped["ISSN"] = []
+    shaped["landing_url"] = "https://link.cnki.net/doi/10.14042/x"
+    shaped["pdf_url"] = ""
+
+    monkeypatch.setattr(download_pdf, "crossref_meta", _raise_oserror)
+    monkeypatch.setattr(download_pdf, "resolve_chinese_meta", lambda doi, **kw: shaped)
+
+    launched: list[int] = []
+
+    async def boom(*args, **kwargs):
+        launched.append(1)
+        raise AssertionError("browser must not launch for a CNKI-only record")
+
+    monkeypatch.setattr(download_browser, "download_with_browser", boom)
+
+    assert download_pdf.download_paper(doi="10.14042/x", out_dir=tmp_path) == 1
+    assert launched == []
+    out = capsys.readouterr().out
+    assert "CNKI" in out
+    assert "--landing-url" in out
+
+
+def test_download_paper_resolve_only_reports_the_chinese_source(tmp_path, monkeypatch, capsys):
+    from hydrolitagent.literature import download_pdf
+
+    monkeypatch.setattr(download_pdf, "crossref_meta", _raise_oserror)
+    monkeypatch.setattr(download_pdf, "resolve_chinese_meta", lambda doi, **kw: _chinese_shaped())
+
+    assert download_pdf.download_paper(doi="10.14042/x", out_dir=tmp_path,
+                                       resolve_only=True) == 0
+
+    meta = json.loads(capsys.readouterr().out)
+    assert meta["source"] == "chndoi"
+    assert meta["title"] == "黄河中游水沙变化归因分析"
+
+
+def test_sync_to_zotero_forwards_replace_and_skip_existing(tmp_path, monkeypatch):
+    """The CLI flags offered by zotero_sync must be reachable from download_paper."""
+    from hydrolitagent.literature import download_pdf
+
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(list(cmd))
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(download_pdf.subprocess, "run", fake_run)
+
+    rc = download_pdf.sync_to_zotero(
+        tmp_path / "x.pdf", "10.14042/x", replace=True, skip_existing=True
+    )
+
+    assert rc == 0
+    assert calls[0][-2:] == ["--replace", "--skip-existing"]
+
+
+def test_sync_to_zotero_hands_over_resolved_chinese_metadata(tmp_path, monkeypatch):
+    """The sync subprocess cannot see --landing-url, so it gets the record."""
+    from hydrolitagent.literature import download_pdf
+
+    monkeypatch.delenv("MYLIBRARY_SOURCE_META", raising=False)
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["env"] = kwargs.get("env") or {}
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(download_pdf.subprocess, "run", fake_run)
+
+    meta = {"title": "T", "source": "chndoi", "_crossref": _chinese_shaped()}
+    assert download_pdf.sync_to_zotero(tmp_path / "x.pdf", "10.14042/x", meta=meta) == 0
+
+    payload = json.loads(captured["env"]["MYLIBRARY_SOURCE_META"])
+    assert payload["container-title"] == ["水科学进展"]
+    assert payload["volume"] == "37"
+
+
+def test_sync_to_zotero_does_not_set_the_env_without_a_chinese_record(tmp_path, monkeypatch):
+    from hydrolitagent.literature import download_pdf
+
+    monkeypatch.delenv("MYLIBRARY_SOURCE_META", raising=False)
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["env"] = kwargs.get("env") or {}
+        return types.SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(download_pdf.subprocess, "run", fake_run)
+
+    assert download_pdf.sync_to_zotero(tmp_path / "x.pdf", "10.1029/x") == 0
+    assert "MYLIBRARY_SOURCE_META" not in captured["env"]
+
+
+def test_download_paper_passes_resolved_meta_to_sync(tmp_path, monkeypatch):
+    """--sync must keep the metadata resolved with the manual landing page."""
+    from pathlib import Path
+
+    from hydrolitagent.literature import download_browser, download_pdf
+
+    monkeypatch.setattr(download_pdf, "crossref_meta", _raise_oserror)
+    monkeypatch.setattr(download_pdf, "resolve_chinese_meta", lambda doi, **kw: _chinese_shaped())
+
+    async def fake_dl(doi, meta, out_dir):
+        p = Path(out_dir) / "x.pdf"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(_pdf_payload())
+        return p
+
+    monkeypatch.setattr(download_browser, "download_with_browser", fake_dl)
+    seen: dict = {}
+
+    def fake_sync(pdf, doi, **kwargs):
+        seen.update(kwargs)
+        return 0
+
+    monkeypatch.setattr(download_pdf, "sync_to_zotero", fake_sync)
+
+    assert download_pdf.download_paper(doi="10.14042/x", out_dir=tmp_path,
+                                       sync=True) == 0
+    assert seen["meta"]["_crossref"]["volume"] == "37"
+
+
+def test_pdf_url_candidates_puts_a_known_pdf_url_first():
+    """Metadata read before navigation wins over page anchors and DOI layouts."""
+    from hydrolitagent.literature import download_browser
+
+    page = FakePage(pdf_candidates=["https://journal.example.cn/from-page.pdf"])
+
+    urls = asyncio.run(download_browser._pdf_url_candidates(
+        page, "10.14042/x", wait_s=0,
+        extra=["https://journal.example.cn/direct.pdf"],
+    ))
+
+    assert urls[0] == "https://journal.example.cn/direct.pdf"
+    assert "https://journal.example.cn/from-page.pdf" in urls
+
+
+def test_generic_pdf_flow_navigates_to_the_landing_url(tmp_path, monkeypatch):
+    """doi.org is unusable for CNKI DOIs; the publisher page must be opened."""
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    page = FakePage([{"payload": _pdf_payload()}])
+    ctx = FakeContext(page)
+
+    async def candidates(p, doi):
+        return ["https://journal.example.cn/article/1.pdf"]
+
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    meta = {
+        "suffix": "x",
+        "landing_url": "https://journal.example.cn/article/1",
+    }
+    assert asyncio.run(download_browser.generic_flow(ctx, "10.14042/x", meta, dest)) is True
+
+    assert page.goto_calls[0] == "https://journal.example.cn/article/1"
+    assert not any("doi.org" in url for url in page.goto_calls)
+
+
+def test_generic_pdf_flow_passes_a_known_pdf_url_as_the_first_candidate(
+    tmp_path, monkeypatch,
+):
+    from hydrolitagent.literature import download_browser
+
+    dest = tmp_path / "out.pdf"
+    page = FakePage([{"payload": _pdf_payload()}])
+    ctx = FakeContext(page)
+    seen: dict = {}
+
+    async def candidates(p, doi, *, extra=None):
+        seen["extra"] = extra
+        return list(extra or []) + ["https://journal.example.cn/later.pdf"]
+
+    monkeypatch.setattr(download_browser, "_pdf_url_candidates", candidates)
+
+    meta = {
+        "suffix": "x",
+        "landing_url": "https://journal.example.cn/article/1",
+        "pdf_url": "https://journal.example.cn/direct.pdf",
+    }
+    assert asyncio.run(download_browser.generic_flow(ctx, "10.14042/x", meta, dest)) is True
+
+    assert seen["extra"] == ["https://journal.example.cn/direct.pdf"]
+    assert page.goto_calls[-1] == "https://journal.example.cn/direct.pdf"
+
+
+def test_attempt_pre_navigates_doi_org_without_a_landing_url(tmp_path, monkeypatch):
+    """Baseline: an unresolved DOI still gets the entry challenge pre-check."""
+    db = download_browser_module()
+    page = FakePage()
+    _wire_attempt(monkeypatch, page, FakeContext(page))
+
+    asyncio.run(
+        db._attempt(
+            headless=False, out_dir=tmp_path, prefix="10.1080", doi="10.1080/x",
+            meta={"suffix": "x"}, dest=tmp_path / "x.pdf",
+        )
+    )
+
+    assert page.goto_calls == ["https://doi.org/10.1080/x"]
+
+
+def test_attempt_does_not_pre_navigate_a_resolved_landing_page(tmp_path, monkeypatch):
+    """doi.org is not a usable address for a CNKI DOI (certificate mismatch)."""
+    db = download_browser_module()
+    page = FakePage()
+    _wire_attempt(monkeypatch, page, FakeContext(page))
+
+    asyncio.run(
+        db._attempt(
+            headless=False, out_dir=tmp_path, prefix="10.14042", doi="10.14042/x",
+            meta={"suffix": "x", "landing_url": "https://journal.example.cn/article/1"},
+            dest=tmp_path / "x.pdf",
+        )
+    )
+
+    assert not any("doi.org" in url for url in page.goto_calls)
+
+
+def test_chinese_slider_page_is_a_challenge():
+    """CNKI-family slider interstitials are verification pages, not articles."""
+    from hydrolitagent.literature import download_browser
+
+    assert "拖动滑块" in download_browser.CHALLENGE_TITLE_MARKERS
+
+    page = FakePage(title="安全验证 - 请拖动滑块完成验证", challenge=False)
+
+    assert asyncio.run(download_browser.challenge_pending(page)) is True
+

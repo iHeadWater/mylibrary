@@ -192,10 +192,17 @@ def real_keys() -> tuple[str, str]:
     computed here straight from the Local API so the assertion stays
     independent of how the tool selects.  Item 6HF7ADML is the motivating
     case: five PDF children, and the paper (276,543 chars) is listed last.
+
+    Items with several PDFs are preferred: the first item in a discovery
+    collection changes as the library grows, and picking whichever came first
+    made the multi-PDF premise below fail silently (a single-PDF item was
+    returned). Fall back to a single-PDF item so the other fulltext tests still
+    get a target.
     """
     items = json.loads(
         _get(f"/collections/{DISCOVERY_COLLECTION}/items/top?limit=10")
     )
+    fallback: tuple[str, str] | None = None
     for item in items:
         item_key = item.get("key") or item.get("data", {}).get("key")
         if not item_key:
@@ -211,8 +218,14 @@ def real_keys() -> tuple[str, str]:
             for entry in pdfs
         ]
         best_chars, best_key = max(scored)
-        if best_key and best_chars > 0:
+        if not (best_key and best_chars > 0):
+            continue
+        if len(pdfs) >= 2:
             return item_key, best_key
+        if fallback is None:
+            fallback = (item_key, best_key)
+    if fallback is not None:
+        return fallback
     pytest.skip(f"no indexed PDF attachment found in {DISCOVERY_COLLECTION}")
 
 

@@ -20,6 +20,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 import sys
 import time
 import tomllib
@@ -30,11 +31,17 @@ from pathlib import Path
 
 from pyzotero import zotero as zt
 
+from hydrolitagent.literature.chinese_doi import fetch_chinese_crossref
+
 CROSSREF_MAILTO = os.environ.get("CROSSREF_MAILTO", "").strip()
 CROSSREF_UA = "zotero-bridge/1.0" + (
     f" (mailto:{CROSSREF_MAILTO})" if CROSSREF_MAILTO else ""
 )
 ARXIV_API = "http://export.arxiv.org/api/query"
+
+# CJK Unified Ideographs (U+4E00–U+9FFF): a title written in Chinese means the
+# record is a Chinese-language paper, not an English one titled in Chinese.
+_CJK_RE = re.compile("[一-鿿]")
 
 # Load the repo .env so bare-host runs (no Zotero TOML) can read credentials
 # from ZOTERO_API_KEY / ZOTERO_LIBRARY_ID, same source as the Zotero MCP
@@ -155,8 +162,13 @@ def _pick_arxiv_id(doi: str) -> str | None:
     return None
 
 
-def build_item(doi: str, pf_meta: dict) -> tuple[dict, dict]:
+def build_item(doi: str, pf_meta: dict, *,
+               source_meta: dict | None = None) -> tuple[dict, dict]:
     """Build a Zotero item dict and extra dict from available metadata sources.
+
+    ``source_meta`` is an already-resolved Crossref-shaped record (used by the
+    download pipeline, which may have resolved a Chinese journal through a
+    manual ``--landing-url`` the sync subprocess cannot see).
 
     Returns (item_data, extra_fields).
     """
@@ -165,8 +177,13 @@ def build_item(doi: str, pf_meta: dict) -> tuple[dict, dict]:
 
     arxiv_id = _pick_arxiv_id(doi)
 
-    # Try Crossref first
-    cr = fetch_crossref(doi)
+    # Try Crossref first; CNKI-registered Chinese journals are absent from
+    # Crossref entirely, so fall back to chndoi.org + the publisher page.
+    cr = source_meta or fetch_crossref(doi)
+    if not cr and not arxiv_id:
+        # arXiv DOIs are DataCite records: probing chndoi would only add a
+        # round-trip before the arXiv path below gets its turn.
+        cr = fetch_chinese_crossref(doi)
 
     # For arXiv DOIs: attempt to upgrade metadata from preprint to
     # published version.  The arXiv API carries the formal published DOI
@@ -387,7 +404,12 @@ def build_item(doi: str, pf_meta: dict) -> tuple[dict, dict]:
 
     # Common fields
     item["DOI"] = doi
-    item["url"] = f"https://doi.org/{doi}"
+    # A Chinese record carries the publisher page; doi.org only leads to CNKI,
+    # whose certificate does not match the host. Crossref records have no
+    # landing_url, so this is a no-op for them.
+    landing = (cr or {}).get("landing_url")
+    item["url"] = landing if isinstance(landing, str) and landing.startswith("http") \
+        else f"https://doi.org/{doi}"
 
     # Try to build citationKey
     pub = (
@@ -407,8 +429,11 @@ def build_item(doi: str, pf_meta: dict) -> tuple[dict, dict]:
         if first_author and year:
             extra["citationKey"] = f"{first_author}{year}_{journal}"
 
-    # Language
-    item["language"] = "en"
+    # Language. CNKI-registered Chinese journals arrive here with a CJK title;
+    # labelling those "en" makes Zotero sort/filter them as English papers.
+    item["language"] = (
+        "zh" if _CJK_RE.search(item.get("title") or "") else "en"
+    )
 
     return item, extra
 
