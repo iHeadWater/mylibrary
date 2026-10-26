@@ -1,6 +1,6 @@
 # 输出与填表
 
-一次运行会在 `--output-dir` 下写五个文件（`--dry-run` 不写）。
+一次运行会在 `--output-dir` 下写六个文件（`--dry-run` 不写；启用 `--web-search` 时另加 `web_candidates.csv`）。
 
 ## `form_summary.csv`
 
