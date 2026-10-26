@@ -14,6 +14,7 @@ from pathlib import Path
 import pymupdf
 import pytest
 
+from hydrolitagent.cards.adapters.pdf.anchors import dominant_size, heading_level
 from hydrolitagent.cards.adapters.pdf.pymupdf_converter import (
     WARNING_RUNNING_HEADER,
     WARNING_TABLE_IMAGE,
@@ -511,6 +512,33 @@ def test_vector_figure_is_rendered_from_caption(tmp_path: Path) -> None:
     assert WARNING_VECTOR_FIGURE in prepared.warnings
     markdown = prepared.markdown_path.read_text(encoding="utf-8")
     assert f"![{figure.figure_id}]" in markdown
+
+
+def test_run_in_label_does_not_promote_prose_to_a_heading() -> None:
+    """Measured on a real AGU PDF: ``Abstract`` (12 pt) and the abstract body
+    (9 pt) arrive as **one** line, so taking the largest span size turned the
+    whole paragraph into an H2 and every quote from it looked like a heading
+    quote. The character-weighted size keeps the line at body size.
+    """
+
+    text = (
+        "Abstract Hydrologists and engineers may choose from a range of "
+        "semidistributed rainfall-runoff models"
+    )
+    spans = [
+        ("Abstract", 12.0, False),
+        (" ", 9.0, False),
+        (text.split(" ", 1)[1], 9.0, False),
+    ]
+    size = dominant_size(spans)
+    assert size == 9.0
+    assert heading_level(text, size, False, 9.0) is None
+
+
+def test_dominant_size_keeps_a_uniform_heading() -> None:
+    spans = [("Results and Discussion", 11.0, True), (" of the study", 11.0, True)]
+    assert dominant_size(spans) == 11.0
+    assert heading_level("Results and Discussion of the study", 11.0, True, 9.0) == 2
 
 
 if __name__ == "__main__":  # pragma: no cover - manual invocation convenience

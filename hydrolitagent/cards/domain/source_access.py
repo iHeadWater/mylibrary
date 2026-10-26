@@ -4,9 +4,10 @@ The method strings are part of the on-disk contract (drafts, manifests, theme
 records), so they live here instead of being repeated as literals across the
 validation, workflow and adapter layers.
 
-Stage 1 of the decoupling migration keeps the accepted set identical to the
-previous behaviour; ``MARKDOWN_PREPARED`` is reserved for the Markdown-first
-pipeline and is not accepted yet.
+``MARKDOWN_PREPARED`` is the Markdown-first pipeline: the reader saw a Python
+converted ``paper.md``, not a PDF. Stage 3a accepts it next to the two legacy
+methods so both pipelines can coexist; the legacy methods are removed only when
+the old adapters are deleted.
 """
 from __future__ import annotations
 
@@ -18,10 +19,18 @@ LOCAL_PDF_PATH = "local_pdf_path"
 MARKDOWN_PREPARED = "markdown_prepared"
 
 # Methods that may appear in newly generated artifacts.
-CURRENT_METHODS = frozenset({LOCAL_PDF_PATH, CLAUDE_PDF_READ})
+CURRENT_METHODS = frozenset({LOCAL_PDF_PATH, CLAUDE_PDF_READ, MARKDOWN_PREPARED})
 # Methods that historical artifacts may carry; still readable, never written.
 LEGACY_METHODS = frozenset({BOUND_LOCAL_PDF_MCP, CLAUDE_PDF_READ, LOCAL_PDF_PATH})
 ALL_METHODS = CURRENT_METHODS | LEGACY_METHODS
+
+
+def _is_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
 
 
 def is_accepted_method(method: Any, *, policy: str = "current") -> bool:
@@ -49,6 +58,8 @@ def source_access_acceptable(access: Any, *, expected_sha256: str | None = None,
     count = access.get("page_count")
     if type(count) is not int or count < 1:
         return False
+    if access.get("method") == MARKDOWN_PREPARED:
+        return _markdown_access_acceptable(access, expected_sha256, expected_parent_key)
     if access.get("method") == BOUND_LOCAL_PDF_MCP:
         return (access.get("verified") is True
                 and type(access.get("pages_served")) is int and access["pages_served"] == count
@@ -87,6 +98,44 @@ def source_access_acceptable(access: Any, *, expected_sha256: str | None = None,
         and access.get("model_claim_visuals") is True
         and type(access.get("command_event_count")) is int and access["command_event_count"] > 0
         and access.get("pages_served") is None and access.get("visual_pages_served") is None
+    )
+
+
+def _markdown_access_acceptable(
+    access: dict[str, Any],
+    expected_sha256: str | None,
+    expected_parent_key: str | None,
+) -> bool:
+    """A prepared-Markdown receipt: identity bound, canaries and quotes checked.
+
+    ``reading.verified`` is computed by ``domain.grounding`` from the Markdown
+    itself. It may only be true when every canary was echoed and every quote was
+    found on the page it claims; ``scientific_correctness_verified`` must stay
+    false because no automated check can promote a draft to a reviewed card.
+    """
+
+    digest = access.get("source_pdf_sha256")
+    markdown_digest = access.get("markdown_sha256")
+    parent = access.get("parent_key")
+    reading = access.get("reading")
+    if not _is_sha256(digest) or not _is_sha256(markdown_digest):
+        return False
+    if not isinstance(parent, str) or not parent:
+        return False
+    if expected_sha256 is not None and digest != expected_sha256:
+        return False
+    if expected_parent_key is not None and parent != expected_parent_key:
+        return False
+    if not isinstance(access.get("converter_id"), str) or not access["converter_id"]:
+        return False
+    if not isinstance(access.get("converter_version"), str) or not access["converter_version"]:
+        return False
+    if not isinstance(reading, dict):
+        return False
+    return (
+        reading.get("verified") is True
+        and reading.get("canaries_ok") is True
+        and reading.get("scientific_correctness_verified") is False
     )
 
 

@@ -291,6 +291,20 @@ def body_font_size(spans: Iterable[tuple[str, float, bool]]) -> float:
     large section titles from defining the body size.
     """
 
+    return dominant_size(spans, default=10.0)
+
+
+def dominant_size(
+    spans: Iterable[tuple[str, float, bool]], *, default: float = 0.0
+) -> float:
+    """Font size that carries most of the given characters.
+
+    Journal PDFs write a run-in label (``Abstract`` in 12 pt, not bold) and the
+    following paragraph as **one** line. Taking the largest span size would turn
+    that whole paragraph into a section heading; weighting by characters keeps
+    the line at body size, so the heading rule cannot fire on prose.
+    """
+
     weights: dict[float, int] = {}
     for text, size, _bold in spans:
         if not text.strip() or size <= 0:
@@ -298,8 +312,8 @@ def body_font_size(spans: Iterable[tuple[str, float, bool]]) -> float:
         key = round(size * 2) / 2
         weights[key] = weights.get(key, 0) + len(text.strip())
     if not weights:
-        return 10.0
-    return max(sorted(weights), key=lambda size: weights[size])
+        return default
+    return max(sorted(weights), key=lambda value: weights[value])
 
 
 def heading_level(
@@ -450,6 +464,7 @@ __all__ = [
     "canary_marker",
     "canary_token",
     "detect_columns",
+    "dominant_size",
     "heading_level",
     "is_download_stamp",
     "is_margin_line",

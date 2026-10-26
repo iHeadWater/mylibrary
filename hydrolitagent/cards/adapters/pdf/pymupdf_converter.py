@@ -59,6 +59,7 @@ from .anchors import (
     canary_assignment,
     canary_marker,
     detect_columns,
+    dominant_size,
     heading_level,
     is_download_stamp,
     is_margin_line,
@@ -87,9 +88,16 @@ from .tables import (
 )
 
 CONVERTER_ID = "pymupdf"
+# Extraction rules, not just the library version. Bumping this invalidates the
+# content-addressed cache for every PDF, which is exactly what a layout fix needs.
+CONVERTER_REVISION = "layout-2"
 DEFAULT_RENDER_DPI = 150
 
 _WHITESPACE = re.compile(r"\s+")
+# Some publishers draw italic variables with a symbol font whose glyph is mapped
+# to an invisible control character. It is not text, and keeping it would split
+# a word or make a verbatim quote impossible; a space keeps tokens apart.
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _CJK_START = 0x2E80
 _CJK_END = 0x9FFF
 _BOLD_FLAG = 16
@@ -198,7 +206,7 @@ def join_spans(fragments: Sequence[tuple[str, Box, float]]) -> str:
         previous_x1 = box.x1
         previous_size = size or previous_size
 
-    return _WHITESPACE.sub(" ", "".join(parts)).strip()
+    return _WHITESPACE.sub(" ", _CONTROL.sub(" ", "".join(parts))).strip()
 
 
 def _box(*values: float) -> Box:
@@ -242,7 +250,9 @@ class PymupdfConverter:
     converter_id = CONVERTER_ID
 
     def __init__(self, *, render_dpi: int = DEFAULT_RENDER_DPI) -> None:
-        self.converter_version = str(getattr(pymupdf, "__version__", "unknown"))
+        self.converter_version = (
+            f"{getattr(pymupdf, '__version__', 'unknown')}+{CONVERTER_REVISION}"
+        )
         self.render_dpi = render_dpi
         # Newer PyMuPDF releases print an advertisement to stdout the first
         # time tables are detected. This library feeds JSON-producing CLIs, so
@@ -458,7 +468,11 @@ class PymupdfConverter:
                     _Line(
                         text=text,
                         box=_box(*line.get("bbox", (0, 0, 0, 0))),
-                        size=max(size for _, _, size in typed),
+                        # Character-weighted, not the largest span: a run-in
+                        # label must not promote a whole paragraph to a heading.
+                        size=dominant_size(
+                            (text, span_size, False) for text, _, span_size in typed
+                        ),
                         bold=any(
                             bool(span.get("flags", 0) & _BOLD_FLAG) for span in spans
                         ),

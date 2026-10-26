@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
+from hydrolitagent.cards.application.card_workflow import generate_markdown_card_draft
 from hydrolitagent.cards.card_draft import generate_subject_card_draft
 from hydrolitagent.cards.card_validation import ValidationAssets, validate_subject_card_file
 from hydrolitagent.cards.ai_config import resolve_ai_config, subject_card_config, describe_ai, AIConfigError
@@ -15,7 +16,8 @@ from hydrolitagent.cards.card_generation import (
     CardGenerationError,
     generate_evidence_card,
 )
-from hydrolitagent.cards.config import ConfigError, load_config
+from hydrolitagent.cards.composition import build_markdown_pipeline
+from hydrolitagent.cards.config import ConfigError, load_config, resolve_pipeline_mode
 from hydrolitagent.cards.paper_input_config import load_paper_input_config
 from hydrolitagent.cards.evidence_packages import EvidencePackageError, sync_evidence_packages
 from hydrolitagent.cards.evidence_templates import (
@@ -120,6 +122,12 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--ai-executable", help="本机 CLI 可执行文件名或绝对路径")
             command.add_argument("--ai-timeout", type=float)
             command.add_argument("--output-root", help="本次产物根；不传则用默认解析（configs/paths.toml → outputs/）")
+            # Transitional switch: the Markdown-first pipeline is available but
+            # not the default until stage 3b. Hidden on purpose.
+            command.add_argument(
+                "--pipeline", choices=["legacy", "markdown"], default=None,
+                help=argparse.SUPPRESS,
+            )
             source = command.add_mutually_exclusive_group(required=True)
             source.add_argument("--item-key", help="旧证据包流程的 Zotero 父条目 Key")
             source.add_argument("--paper-input", help="单篇 READY JSON（输入记录）文件，或 - 从 stdin 读取；仅生成待校验草稿")
@@ -156,9 +164,15 @@ def _render_human(result: dict[str, Any]) -> str:
     if result.get("operation") == "subject_card_draft":
         if not result.get("ok"):
             return f"主体卡草稿失败（{result.get('failed_stage', 'input')}）：{result['error']['message']}"
-        return ("已生成待校验主体卡草稿；未通过内容门禁、未正式发布"
-                f"\n- 正文：{result['card_path']}\n- 正文、机器字段与来源记录：{result['draft_path']}"
-                f"\n- 精读产物根：{result['literature_root']}")
+        lines = [
+            "已生成待校验主体卡草稿；未通过内容门禁、未正式发布",
+            f"- 正文：{result['card_path']}",
+            f"- 正文、机器字段与来源记录：{result['draft_path']}",
+            f"- 精读产物根：{result['literature_root']}",
+        ]
+        if result.get("pipeline") == "markdown":
+            lines.append(f"- Markdown 接地校验：{result.get('reading_status') or '未知'}")
+        return "\n".join(lines)
     if result.get("operation") == "paper_input_batch":
         lines = [
             f"单篇输入批处理：{result['status']}",
@@ -351,7 +365,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             record = json.loads(raw)
             with ConsoleProgress(enabled=not args.no_progress, heartbeat_interval_seconds=60,
                                  initial_activity="检查单篇输入与所选模型接口") as progress:
-                result = generate_subject_card_draft(config, record, progress=progress, output_root=args.output_root)
+                pipeline = resolve_pipeline_mode() if args.pipeline is None else args.pipeline
+                if pipeline == "markdown":
+                    built = build_markdown_pipeline(config)
+                    result = generate_markdown_card_draft(
+                        config, record, converter=built.converter, store=built.store,
+                        runner=built.runner, options=built.options,
+                        progress=progress, output_root=args.output_root,
+                    )
+                else:
+                    result = generate_subject_card_draft(config, record, progress=progress, output_root=args.output_root)
                 progress.finish(result)
         except json.JSONDecodeError:
             result = {"ok": False, "error": {"code": "CARD_DRAFT_INPUT_INVALID", "message": "无法读取单篇论文输入 JSON"}}
