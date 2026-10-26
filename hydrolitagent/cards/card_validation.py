@@ -82,7 +82,7 @@ class ValidationAssets:
         return cls(config.paths.evidence_card_templates_dir,
                    config.paths.evidence_card_template_catalog_file,
                    config.paths.evidence_card_generation_prompt_file, PROMPT,
-                   config.card_generator.pdf_direct_trial.reading_prompt_file, SCHEMA,
+                   PROMPTS_DIR / "pdf-local-reading-v1.md", SCHEMA,
                    PROMPTS_DIR / "pdf-claude-reading-v1.md",
                    PROMPTS_DIR / "markdown-reading-v1.md",
                    SCHEMAS_DIR / "subject-card-draft-output-v3.schema.json")

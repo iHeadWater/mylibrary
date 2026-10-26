@@ -1,0 +1,39 @@
+{
+  "record": {
+    "binding": {
+      "batch_id": "BATCH-9ab96d5fa9ead3277b13",
+      "focus": "尺度差异能否解释结论差别？",
+      "source": {
+        "attachment_key": "WXYZ5678",
+        "card_sha256": "658f744917cad03d872e9619308697efabfcd42eafc92edd73a12dfc80cb29e2",
+        "evidence_id": "EV-ABCD1234",
+        "group_id": 42,
+        "package_directory": "EV-ABCD1234-test-paper",
+        "parent_key": "ABCD1234",
+        "pdf_sha256": "5887a8b1e1caf7281682fdb240fc7bc8a46c67e055f1f1eb63d184dccf8cde58"
+      },
+      "theme_id": "TH-9ab96d5fa9ead3277b13-001",
+      "theme_sha256": "93ca2544e181de6adff4248ff646c5f7f7b38310e0b3fb3882d9fe7904cec375"
+    },
+    "created_at": "2026-10-26T16:32:50.538358+00:00",
+    "execution": {
+      "ephemeral": true,
+      "model": "test-model",
+      "reasoning_effort": "high",
+      "source_access": {
+        "method": "local_pdf_path",
+        "model_reading_report_accepted": true,
+        "parent_key": "ABCD1234",
+        "source_identity_verified": true,
+        "source_sha256": "5887a8b1e1caf7281682fdb240fc7bc8a46c67e055f1f1eb63d184dccf8cde58",
+        "source_unchanged": true
+      }
+    },
+    "output": {
+      "reading_markdown": "精读发现：原主题需要收窄。没有固定章节。"
+    },
+    "protocol_version": "unified-theme-pool-v1",
+    "scientific_correctness_verified": false
+  },
+  "sha256": "4d1338a0a5fe401507830dada6a895072fc7773dafb7241a430daf54bb202eff"
+}

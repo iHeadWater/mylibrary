@@ -175,19 +175,9 @@ def _reading_access(prepared, output):
 # --------------------------------------------------------------------------------------
 
 
-def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seconds,
-        text_adapter=None, pdf_adapter=None, text_adapter_factory=None,
-        pdf_adapter_factory=None):
-    """Run one pool change through the configured runner.
+def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seconds):
+    """Run one pool change through the configured runner."""
 
-    ``text_adapter`` / ``pdf_adapter`` are accepted only so the historical
-    ``_run_legacy`` keeps its signature; this path never uses them.
-    """
-
-    if text_adapter is not None or pdf_adapter is not None:
-        report["deprecated_arguments_ignored"] = [
-            name for name, value in (("text_adapter", text_adapter),
-                                     ("pdf_adapter", pdf_adapter)) if value is not None]
     sources = core._sources(config)
     report.update(protocol_version=pool.PROTOCOL, source_count=len(sources),
                   pool_path=str(config.paths.themes_dir),

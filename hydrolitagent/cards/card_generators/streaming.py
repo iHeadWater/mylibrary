@@ -91,7 +91,7 @@ def _stop_process(process: subprocess.Popen[str]) -> None:
 def run_streaming_prompt(
     command: Sequence[str], prompt: str, timeout_seconds: float,
     environment: Mapping[str, str] | None = None, *,
-    progress: ProgressCallback | None = None, server: str = "hydro_pdf_reader",
+    progress: ProgressCallback | None = None, server: str = "",
     connection_guard: ConnectionGuardConfig | None = None, cwd=None, provider_label="Codex",
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()

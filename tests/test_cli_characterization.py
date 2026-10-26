@@ -38,14 +38,9 @@ AI_CONFIG_AI_KEYS_REQUIRED = {
     "reasoning_effort",
     "timeout_seconds",
 }
-# Documented upper bound. Stage 3 removes the Poppler and PDF-reader fields as a
-# direct consequence of R2; dropping them keeps this test green, while any *new*
-# field still fails it until it is registered here.
+# Documented upper bound. Stage 6a removed the Poppler fields and the PDF-reader
+# overrides; any *new* field still fails this test until it is registered here.
 AI_CONFIG_AI_KEYS_DOCUMENTED = AI_CONFIG_AI_KEYS_REQUIRED | {
-    "python_executable",
-    "pdfinfo_executable",
-    "pdftotext_executable",
-    "pdftoppm_executable",
     # Stage 3b: which single-paper pipeline the next run would take.
     "pipeline",
     # Stage 4a: runner registry alias, the ids it can build, and the HTTP

@@ -8,26 +8,97 @@ import sys
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from pypdf import PdfWriter
 
-from hydrolitagent.cards._paths import ASSETS_DIR, PACKAGE_DIR
+from hydrolitagent.cards._paths import ASSETS_DIR, PACKAGE_DIR, PROMPTS_DIR
 from hydrolitagent import _config as literature_config
 from hydrolitagent.cards import card_draft, cli
+from hydrolitagent.cards.card_generation import _read_prompt
 from hydrolitagent.cards.card_generators.single_agent import SingleAgentCardGeneratorAdapter
 from hydrolitagent.cards.config import load_config
 from test_card_generation import FakeAdapter, PARENT_KEY
-from test_codex_local_pdf import LocalProviderFixture
 from test_config import write_config
 
 AUTOMATION = ASSETS_DIR
 PLATFORM = ASSETS_DIR
 
+
+class ProviderFixture:
+    """A small file-backed provider double; no PDF toolchain is involved."""
+
+    def __init__(self, root: Path):
+        root = Path(root)
+        root.mkdir(parents=True, exist_ok=True)
+        self.root = root
+        self.config = replace(
+            load_config(write_config(root / "provider-config")).card_generator,
+            runtime_dir=root / ".runtime",
+        )
+        self.pdf = root / "paper.pdf"
+        self.pdf.write_bytes(b"%PDF-fixture")
+        self.outputs: list[dict] = []
+        self.calls: list[tuple] = []
+        self.reading_prompt = _read_prompt(PROMPTS_DIR / "pdf-local-reading-v1.md")
+        self.model = self._model
+        self.runner = Mock(side_effect=self.model)
+        self.adapter = self
+
+    def _model(self, command, prompt, timeout, environment):
+        digest = hashlib.sha256(self.pdf.read_bytes()).hexdigest()
+        return {
+            "schema_version": 1,
+            "ok": True,
+            "component": "card_generator",
+            "operation": "evidence_card_generation",
+            "adapter": "codex_cli",
+            "cli_version": "fixture",
+            "configured_model": "test-model",
+            "configured_reasoning_effort": "high",
+            "model_invoked": True,
+            "generation_protocol_version": "codex-local-pdf-v1",
+            "reading_prompt_version": self.reading_prompt["version"],
+            "reading_prompt_sha256": self.reading_prompt["sha256"],
+            "ephemeral": True,
+            "source_access": {
+                "method": "local_pdf_path",
+                "verified": False,
+                "full_read_verified": False,
+                "visual_understanding_verified": False,
+                "source_identity_verified": True,
+                "source_sha256": digest,
+                "parent_key": PARENT_KEY,
+                "page_count": 12,
+                "source_unchanged": True,
+                "sandbox_preflight_passed": True,
+                "model_reading_report_accepted": True,
+                "model_claim_full_text": True,
+                "model_claim_visuals": True,
+                "command_event_count": 1,
+                "pages_served": None,
+                "visual_pages_served": None,
+            },
+            "output": self.outputs.pop(0),
+        }
+
+    def generate(self, prompt, *, working_directory, source_pdf_path,
+                 zotero_parent_key, output_schema_path, run_label=None):
+        self.calls.append((None, prompt, None, None))
+        result = self.runner(None, prompt, None, None)
+        source = Path(source_pdf_path)
+        if hashlib.sha256(source.read_bytes()).hexdigest() != result["source_access"]["source_sha256"]:
+            return {**result, "ok": False,
+                    "error": {"code": "PDF_INPUT_CHANGED", "message": "读取期间 PDF 已改变"}}
+        saved = self.root / f"model-output-{len(self.calls)}.json"
+        saved.write_text(json.dumps(result["output"], ensure_ascii=False), encoding="utf-8")
+        return {**result, "draft_path": str(saved)}
+
+
 @pytest.fixture
 def draft_case(tmp_path, monkeypatch):
-    provider = LocalProviderFixture(tmp_path / "provider")
+    provider = ProviderFixture(tmp_path / "provider")
     writer = PdfWriter()
     for _ in range(12):
         writer.add_blank_page(width=300, height=300)
@@ -188,7 +259,7 @@ def test_synthesis_template_is_not_a_single_source_card(draft_case):
 def test_unreadable_report_stops_without_retry(draft_case):
     draft_case[2].outputs[0]["source_read_status"] = "UNREADABLE"
     result = run(draft_case)
-    assert result["error"]["code"] == "PDF_DIRECT_READING_INCOMPLETE"
+    assert result["error"]["code"] == "CODEX_PDF_READ_UNVERIFIED"
     assert len(draft_case[2].calls) == 1
     assert "draft_path" not in result
 

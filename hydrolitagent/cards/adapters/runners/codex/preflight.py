@@ -8,15 +8,14 @@ record builder; no global state is read.
 from __future__ import annotations
 
 import subprocess
-import sys
 from typing import Any
 
-from hydrolitagent.cards.adapters.runners.codex.common import _check, _now
+from hydrolitagent.cards.adapters.runners.codex.common import _check
 from hydrolitagent.cards.adapters.runners.codex.events import _combined_output
 from hydrolitagent.cards.card_generators.proxy import proxy_summary
 
 
-def run_preflight(adapter: Any, *, check_pdf_reader: bool = True) -> dict[str, Any]:
+def run_preflight(adapter: Any) -> dict[str, Any]:
     checks: list[dict[str, str]] = []
     executable = adapter._executable_finder(adapter.config.executable)
     if executable is None:
@@ -150,88 +149,11 @@ def run_preflight(adapter: Any, *, check_pdf_reader: bool = True) -> dict[str, A
             "已确认 Codex CLI 使用 ChatGPT 账号登录",
         )
     )
-    if not check_pdf_reader:
-        return {
-            "schema_version": 1, "ok": True, "component": "card_generator",
-            "resolved_executable": executable, "cli_version": cli_version,
-            "detected_auth_mode": "chatgpt_account", "checks": checks,
-            "proxy": proxy_summary(adapter.config.proxy),
-        }
-    reader = adapter.config.pdf_reader
-    if not reader.server_file.is_file():
-        checks.append(
-            _check("pdf_reader_server", "fail", "项目内置 PDF MCP 服务文件不存在")
-        )
-        return adapter._failure(
-            checks,
-            "PDF_READER_SERVER_NOT_FOUND",
-            "找不到项目内置 PDF MCP 服务文件；请检查 card_generator.pdf_reader.server_file",
-            resolved_executable=executable,
-            cli_version=cli_version,
-            detected_auth_mode="chatgpt_account",
-        )
-    checks.append(
-        _check("pdf_reader_server", "pass", "项目内置只读 PDF MCP 服务文件可用")
-    )
-
-    dependency_requests = {
-        "python": reader.python_executable or sys.executable,
-        "pdfinfo": reader.pdfinfo_executable,
-        "pdftotext": reader.pdftotext_executable,
-        "pdftoppm": reader.pdftoppm_executable,
-    }
-    resolved_dependencies: dict[str, str] = {}
-    for name, requested in dependency_requests.items():
-        resolved = adapter._executable_finder(requested)
-        if resolved is None:
-            checks.append(
-                _check(
-                    f"pdf_reader_{name}",
-                    "fail",
-                    f"找不到 PDF 读取依赖：{name}",
-                )
-            )
-            return adapter._failure(
-                checks,
-                "PDF_READER_DEPENDENCY_NOT_FOUND",
-                f"找不到 PDF 读取依赖 {name}；请检查 card_generator.pdf_reader 配置",
-                resolved_executable=executable,
-                cli_version=cli_version,
-                detected_auth_mode="chatgpt_account",
-            )
-        resolved_dependencies[name] = resolved
-        checks.append(
-            _check(
-                f"pdf_reader_{name}",
-                "pass",
-                f"已找到 PDF 读取依赖：{name}",
-            )
-        )
     return {
-        "schema_version": 1,
-        "ok": True,
-        "component": "card_generator",
-        "checked_at": _now(),
-        "adapter": adapter.config.adapter,
-        "configured_executable": adapter.config.executable,
-        "resolved_executable": executable,
-        "configured_auth_mode": adapter.config.auth_mode,
+        "schema_version": 1, "ok": True, "component": "card_generator",
+        "resolved_executable": executable, "cli_version": cli_version,
+        "detected_auth_mode": "chatgpt_account", "checks": checks,
         "proxy": proxy_summary(adapter.config.proxy),
-        "detected_auth_mode": "chatgpt_account",
-        "cli_version": cli_version,
-        "pdf_reader": {
-            "adapter": reader.adapter,
-            "server_name": reader.server_name,
-            "server_file": str(reader.server_file),
-            "resolved_python_executable": resolved_dependencies["python"],
-            "resolved_pdfinfo_executable": resolved_dependencies["pdfinfo"],
-            "resolved_pdftotext_executable": resolved_dependencies["pdftotext"],
-            "resolved_pdftoppm_executable": resolved_dependencies["pdftoppm"],
-            "render_dpi": reader.render_dpi,
-            "max_pages_per_call": reader.max_pages_per_call,
-            "output_token_limit": reader.output_token_limit,
-        },
-        "checks": checks,
     }
 
 

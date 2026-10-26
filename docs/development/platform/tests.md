@@ -11,13 +11,13 @@
 | PDF 门禁与交付 | 缺失、过小、无可用文本、身份变化和越界文件不得进入制卡 | `test_pdf_gate.py`、`test_pdf_delivery.py`、`test_pdf_sandbox.py` | 已有自动测试 |
 | 证据卡模板 | 九类模板的来源、版本、front matter 和内容指纹必须一致 | `test_evidence_templates.py` | 已有自动测试 |
 | 单 Agent 制卡 | 来源错误、空输出、非法模板、重复生成和人工改动必须停止保存 | `test_ai_config.py`、`test_card_draft.py`、`test_card_generation.py`、`test_card_saving.py`、`test_single_agent.py` | 已有自动测试 |
-| 模型适配器 | Claude 只读回执、Codex 本地 PDF 读取、代理与连接保护 | `test_claude_cli.py`、`test_codex_local_pdf.py`、`test_codex_proxy.py`、`test_connection_guard.py`、`test_codex_text.py` | 已有自动测试 |
+| 模型适配器 | Markdown 运行器、Claude 旧只读回执、代理与连接保护 | `test_markdown_runners.py`、`test_claude_cli.py`、`test_codex_proxy.py`、`test_connection_guard.py` | 已有自动测试 |
 | 主体卡校验门禁 | 最低内容、来源和版本绑定、旧 PASS 失效、失败不能进入主题输入 | `test_card_validation.py` | 已有自动测试 |
-| 候选主题池 | CREATE / UPDATE / MERGE / SPLIT 的来源、编号、血缘和原子发布必须保持，旧粗卡不得被修改 | `test_themes.py`、`test_theme_pool.py` | 已有自动测试 |
+| 候选主题池 | CREATE / UPDATE / MERGE / SPLIT 的来源、编号、血缘和原子发布必须保持，旧粗卡不得被修改；历史批次从 `tests/fixtures/legacy_themes/` 静态读取且字节不变 | `test_themes.py`、`test_theme_pool.py` | 已有自动测试 |
 | 任务与保存完整性 | 完成必须以内容与来源记录为准，不得只凭目录或任务标记；已有卡不得被覆盖 | `test_tasks.py`、`test_completion_records.py`、`test_evidence_packages.py` | 已有自动测试 |
 | 模型预检与进度 | Zotero/模型预检失败可定位，进度心跳不泄漏凭据 | `test_preflight.py`、`test_progress.py` | 已有自动测试 |
 | 仓库结构 | 代码、模板、文档和忽略的科研产物保持预期边界 | `tests/test_repo_structure.py` | 已有自动测试 |
-| 分层边界 | `domain` 不得反向 import `adapters`/`application`/`card_generators` 或 `subprocess`；共享层不得出现 provider 名称或 Poppler 工具名（历史 method 字符串按单字面量白名单豁免） | `tests/test_import_boundaries.py` | 已有自动测试 |
+| 分层边界 | `domain` 不得反向 import `adapters`/`application`/`card_generators` 或 `subprocess`；共享层不得出现 provider 名称；已删除的 PDF 直读工具名不得回到 `hydrolitagent/cards`（`legacy/` 只读解码豁免） | `tests/test_import_boundaries.py` | 已有自动测试 |
 | CLI 契约快照 | `ai-config` / `paper-input` 的 JSON 字段只增不减、退出码为 0；本机 Zotero 不可用时显式 skip | `tests/test_cli_characterization.py` | 已有自动测试 |
 | 阅读方法策略 | 新产物只接受当前 method，历史 method 只读可校验；保留的 `markdown_prepared` 尚未启用 | `tests/test_source_access_methods.py` | 已有自动测试 |
 

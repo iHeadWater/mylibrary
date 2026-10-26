@@ -83,17 +83,6 @@
         "::1"
       ]
     },
-    "pdf_direct_trial": {
-      "prompt_file": "hydrolitagent/cards/assets/prompts/pdf-direct-read-trial-v2.md",
-      "reading_prompt_file": "hydrolitagent/cards/assets/prompts/pdf-local-reading-v1.md",
-      "schema_file": "hydrolitagent/cards/assets/schemas/pdf-direct-read-trial-output.schema.json",
-      "timeout_seconds": 1200,
-      "windows_sandbox": "elevated",
-      "shell_executable": "powershell",
-      "preflight_timeout_seconds": 120,
-      "python_executable": ".venv/Scripts/python.exe",
-      "text_extractor": "pypdf"
-    },
     "connection_guard": {
       "reconnect_stop_enabled": false,
       "reconnect_event_limit": 10,
@@ -113,20 +102,6 @@
     "reasoning_effort": null,
     "smoke_test_timeout_seconds": 120,
     "generation_timeout_seconds": 1500,
-    "pdf_reader": {
-      "adapter": "local_path",
-      "server_name": "hydro_pdf_reader",
-      "python_executable": null,
-      "server_file": "hydrolitagent/cards/pdf_reader_mcp.py",
-      "pdfinfo_executable": ".tools/poppler/Library/bin/pdfinfo.exe",
-      "pdftotext_executable": ".tools/poppler/Library/bin/pdftotext.exe",
-      "pdftoppm_executable": ".tools/poppler/Library/bin/pdftoppm.exe",
-      "render_dpi": 120,
-      "max_pages_per_call": 4,
-      "output_token_limit": 60000,
-      "startup_timeout_seconds": 15,
-      "tool_timeout_seconds": 120
-    },
     "workflow_mode": "single_agent"
   }
 }

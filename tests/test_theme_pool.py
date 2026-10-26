@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
 import unittest
 from copy import deepcopy
 from dataclasses import replace
@@ -9,13 +10,16 @@ from pathlib import Path
 from unittest.mock import patch
 
 from hydrolitagent.cards import themes, theme_pool as pool
+from hydrolitagent.cards._paths import ASSETS_DIR
+from hydrolitagent.cards.config import load_config
 from hydrolitagent.cards.domain.source_access import LOCAL_PDF_PATH, MARKDOWN_PREPARED
 from hydrolitagent.cards.publication import atomic_text
+from hydrolitagent.cards.themes import run_themes
 import test_themes as fixtures
+from test_config import write_config
 
 class ThemePoolTests(unittest.TestCase):
     setUp = fixtures.ThemeTests.setUp
-    legacy_text_result = fixtures.ThemeTests.legacy_text_result
     discovery_output = fixtures.ThemeTests.discovery_output
     reading_output = fixtures.ThemeTests.reading_output
     answer = fixtures.ThemeTests.answer
@@ -235,75 +239,6 @@ class ThemePoolTests(unittest.TestCase):
         self.assertEqual(result["model_call_count"], 0)
         self.assertEqual(path.read_text(encoding="utf-8"), "我的入口")
 
-    def test_legacy_migration_preserves_bytes_and_skips_regeneration(self):
-        with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
-            legacy = self.run_theme(legacy=True)
-        self.assertTrue(legacy["ok"], legacy)
-        protected = {p: p.read_bytes() for root in (Path(legacy["batch_path"]), self.f.package)
-                     for p in root.rglob("*") if p.is_file()}
-        result = self.run_theme()
-        self.assertTrue(result["ok"], result)
-        self.assertEqual(result["imported_theme_count"], 1)
-        self.assertEqual(result["model_call_count"], 0)
-        self.assertEqual(result["themes"][0]["theme_id"], legacy["themes"][0]["theme_id"])
-        self.assertTrue(all(p.read_bytes() == data for p, data in protected.items()))
-
-    def test_legacy_reading_records_stay_readable_but_are_not_newly_written(self):
-        """A migrated pool keeps its `local_pdf_path` reading record unchanged."""
-
-        with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
-            legacy = self.run_theme(legacy=True)
-        result = self.run_theme()
-        self.assertTrue(result["ok"], result)
-        state = pool.load(self.config)
-        entry = state["themes"][result["themes"][0]["theme_id"]]
-        ref = entry["current"]["readings"][0]
-        record = pool._unwrap(pool.reading_path(self.config, ref) / "result.json")
-        self.assertEqual(record["execution"]["source_access"]["method"], LOCAL_PDF_PATH)
-        self.assertEqual(pool.check_reading(self.config, ref), record["output"]["reading_markdown"])
-        # The same pool, after a real Markdown reading, records the new method.
-        self.changed_goal("markdown-goal")
-        self.actions([{"kind": "UPDATE", "theme_ids": [entry["theme_id"]],
-                       "reason": "用 Markdown 路径重读", "themes": [self.child(reuse=None)]}])
-        upgraded = self.run_theme()
-        self.assertTrue(upgraded["ok"], upgraded)
-        fresh = pool.load(self.config)["themes"][entry["theme_id"]]["current"]["readings"][0]
-        record = pool._unwrap(pool.reading_path(self.config, fresh) / "result.json")
-        self.assertEqual(record["execution"]["source_access"]["method"], MARKDOWN_PREPARED)
-
-    def test_multiple_legacy_batches_enter_one_planner_not_isolated_pools(self):
-        with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
-            first = self.run_theme(legacy=True)
-            self.changed_goal("legacy-second")
-            second = self.run_theme(legacy=True)
-        self.actions([])
-        result = self.run_theme()
-        self.assertTrue(result["ok"], result)
-        self.assertEqual(result["imported_theme_count"], 2)
-        self.assertEqual(result["model_call_count"], 1)
-        prompt = self.calls("theme_discovery")[0].prompt
-        for old in (first, second):
-            self.assertIn(old["themes"][0]["theme_id"], prompt)
-        self.assertEqual(len(self.entries()), 2)
-
-    def test_migration_only_never_invokes_model_even_if_input_changed(self):
-        with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
-            self.run_theme(legacy=True)
-        self.add_paper()
-        self.reader.requests.clear()
-        result = self.run_theme(migration_only=True)
-        self.assertTrue(result["ok"], result)
-        self.assertEqual(result["model_call_count"], 0)
-        self.assertEqual(self.reader.requests, [])
-
-    def test_legacy_migration_dry_run_creates_nothing(self):
-        with patch("hydrolitagent.cards.themes._run", themes._run_legacy):
-            self.run_theme(legacy=True)
-        before = {str(p): p.read_bytes() for p in self.config.paths.themes_dir.rglob("*") if p.is_file()}
-        result = self.run_theme(dry_run=True)
-        self.assertTrue(result["ok"], result)
-        self.assertEqual(before, {str(p): p.read_bytes() for p in self.config.paths.themes_dir.rglob("*") if p.is_file()})
-
     def test_current_state_conflict_during_model_keeps_original_topics(self):
         self.run_theme()
         self.changed_goal()
@@ -316,6 +251,75 @@ class ThemePoolTests(unittest.TestCase):
         result = self.run_theme()
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"]["code"], "THEME_FILE_CONFLICT")
+
+class LegacyPoolFixtureTests(unittest.TestCase):
+    """Historical artifacts are read from static files; nothing regenerates them."""
+
+    FIXTURES = Path(__file__).parent / "fixtures" / "legacy_themes"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        shutil.copytree(self.FIXTURES / "themes", self.root / "themes")
+        shutil.copytree(self.FIXTURES / "evidence-packs", self.root / "evidence-packs")
+        config = load_config(write_config(self.root))
+        self.config = replace(config, theme_pipeline=replace(
+            config.theme_pipeline, enabled=True, assets_dir=ASSETS_DIR / "templates/themes"))
+
+    def snapshot(self):
+        roots = (self.config.paths.themes_dir, self.config.paths.evidence_packs_dir)
+        return {path: path.read_bytes() for root in roots for path in root.rglob("*") if path.is_file()}
+
+    def test_static_pool_loads_and_historical_reading_stays_readable(self):
+        state = pool.load(self.config)
+        self.assertEqual(len(state["themes"]), 1)
+        entry = next(iter(state["themes"].values()))
+        ref = entry["current"]["readings"][0]
+        record = pool._unwrap(pool.reading_path(self.config, ref) / "result.json")
+        self.assertEqual(record["execution"]["source_access"]["method"], LOCAL_PDF_PATH)
+        self.assertEqual(pool.check_reading(self.config, ref), record["output"]["reading_markdown"])
+        self.assertNotIn(MARKDOWN_PREPARED, {
+            r["execution"]["source_access"]["method"] for r in [record]})
+
+    def test_migration_only_never_invokes_a_model_or_rewrites_bytes(self):
+        before = self.snapshot()
+        result = run_themes(self.config, pipeline=None, migration_only=True)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["model_call_count"], 0)
+        self.assertEqual(result["action"], "UNCHANGED")
+        self.assertEqual(before, self.snapshot())
+
+    def test_dry_run_creates_nothing(self):
+        before = self.snapshot()
+        result = run_themes(self.config, pipeline=None, dry_run=True)
+        self.assertTrue(result["ok"], result)
+        self.assertFalse(result["model_invoked"])
+        self.assertEqual(before, self.snapshot())
+
+    def test_static_legacy_batch_imports_without_rewriting_its_files(self):
+        # A pool that has never been migrated only has the batch tree; the
+        # registry, index and import commit are what migration adds.
+        (self.config.paths.themes_dir / "_registry.json").unlink()
+        (self.config.paths.themes_dir / "index.md").unlink()
+        shutil.rmtree(self.config.paths.themes_dir / "changes")
+        protected = {
+            path: path.read_bytes()
+            for root in (self.config.paths.themes_dir / "candidates",
+                         self.config.paths.evidence_packs_dir)
+            for path in root.rglob("*") if path.is_file()
+        }
+        result = run_themes(self.config, pipeline=None, migration_only=True)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["action"], "MIGRATED")
+        self.assertEqual(result["imported_theme_count"], 1)
+        self.assertEqual(result["model_call_count"], 0)
+        self.assertEqual(protected, {path: path.read_bytes() for path in protected})
+        ref = next(iter(pool.load(self.config)["themes"].values()))["current"]["readings"][0]
+        self.assertEqual(pool.validate_reading(
+            pool._unwrap(pool.reading_path(self.config, ref) / "result.json"), ref["source"]),
+            "精读发现：原主题需要收窄。没有固定章节。")
+
 
 if __name__ == "__main__":
     unittest.main()

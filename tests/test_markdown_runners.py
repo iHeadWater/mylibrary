@@ -239,7 +239,7 @@ def test_codex_refuses_a_command_that_mentions_a_pdf(tmp_path):
     events = [
         {
             "type": "item.completed",
-            "item": {"type": "command_execution", "command": "pdftotext paper.pdf -"},
+            "item": {"type": "command_execution", "command": "cat paper.pdf -"},
         },
         {
             "type": "item.completed",

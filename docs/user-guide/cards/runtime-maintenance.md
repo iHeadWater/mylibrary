@@ -37,7 +37,7 @@
 
 ## 换机器
 
-重新 `uv sync --all-packages --locked`、重新登录所选模型 CLI、重新配 Poppler 路径即可。
+重新 `uv sync --all-packages --locked`、重新登录所选模型 CLI 即可；PDF 由 Python 转换，不需要另外配置 Poppler 路径。
 **不要复制别人的 `.venv`、登录文件或账号凭据。**
 
 ## 边界

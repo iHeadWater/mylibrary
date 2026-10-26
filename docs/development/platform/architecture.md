@@ -38,7 +38,7 @@ flowchart TB
     INPUT --> RUNTIME
 ```
 
-仓库只有一个包 `hydrolitagent`——文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包。`.venv` 与 `uv.lock` 只有一份。**单篇制卡与主题池的定向精读都已跨平台**：PDF 由 Python 转换成 Markdown，再由注册表提供任意运行器阅读，macOS / Linux / Windows 行为一致，不需要 Poppler。定向精读与单篇制卡共用同一份 `PreparedPaper`、同一套引文/canary 接地校验。仍带平台约束的只有旧 `CARD_PIPELINE=legacy` 回退路径与历史主题批次的重放（`_run_legacy`），它们只保留到对应迁移阶段。
+仓库只有一个包 `hydrolitagent`——文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包。`.venv` 与 `uv.lock` 只有一份。**单篇制卡与主题池的定向精读都已跨平台**：PDF 由 Python 转换成 Markdown，再由注册表提供任意运行器阅读，macOS / Linux / Windows 行为一致，不需要 Poppler。定向精读与单篇制卡共用同一份 `PreparedPaper`、同一套引文/canary 接地校验。历史主题批次只作为静态记录被 `pool.migrate` 读取，不再重放或重新生成。
 
 ## 组件职责
 

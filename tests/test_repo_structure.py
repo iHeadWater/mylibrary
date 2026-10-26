@@ -71,7 +71,7 @@ PLATFORM_IGNORED_PATHS = (
     "activity/ledger.json",
     "members/README.md",
     ".runtime/tasks.json",
-    ".tools/poppler/Library/bin/pdfinfo.exe",
+    ".tools/local-bin/example.exe",
     "hydrolitagent/cards/assets/config/config.local.json",
 )
 

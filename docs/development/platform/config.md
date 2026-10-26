@@ -90,28 +90,11 @@
 
 失败诊断由 CLI 保存到 `paths.logs_dir`（默认 `.runtime/logs`），最终 JSON 的 `diagnostic_log_path` 给出位置。只保存已脱敏的公开错误和上下文，不保存原始事件、提示词或论文全文；日志不提交 Git。日志目录不可写时保留原失败结果并给出 `diagnostic_log_warning`。
 
-## 本地 PDF 读取方式
+## PDF 读取方式
 
-`card_generator.pdf_reader` 字段说明：
+单篇制卡与主题定向精读都由 Python 先把 PDF 转成 Markdown（PyMuPDF），运行器阅读 `paper.md` 与图资产。**不再有 `card_generator.pdf_reader` 或 `card_generator.pdf_direct_trial` 配置**，平台自身也不调用 `pdfinfo` / `pdftotext` / `pdftoppm`。转换器的选择在 `converter` 配置组，缓存目录在 `paths.project_root` 下。
 
-| 字段 | 当前含义 | 允许值或规则 |
-|---|---|---|
-| `adapter` | 原始 PDF 的读取方式 | 当前 `local_path`；与工作流协议版本配套，不自动回退 |
-| `server_name` | 本次调用中注册的 MCP 服务名 | 只能含字母、数字、下划线和连字符（历史字段，`local_path` 下不生效） |
-| `python_executable` | 启动项目内置 MCP 的 Python | `null` 表示复用运行入口的解释器（历史字段） |
-| `server_file` | 项目内置 PDF MCP 服务脚本 | 相对 `paths.project_root` 解析，且必须位于项目内（历史字段） |
-| `pdfinfo_executable` | 获取 PDF 页数的程序 | 命令名、项目相对路径或绝对路径 |
-| `pdftotext_executable` | 逐页提取文字的程序 | 命令名、项目相对路径或绝对路径 |
-| `pdftoppm_executable` | 逐页渲染页面图像的程序 | 命令名、项目相对路径或绝对路径 |
-| `render_dpi` | 页面图像渲染分辨率 | 72–300；当前为 120 |
-| `max_pages_per_call` | 完整读取工具内部每批处理多少页 | 1–10；当前为 4 |
-| `output_token_limit` | 完整 PDF 工具结果的输出预算 | 大于 0 且不超过 200000；当前为 60000 |
-| `startup_timeout_seconds` | MCP 启动超时 | 大于 0（历史字段） |
-| `tool_timeout_seconds` | 单次工具调用及底层 PDF 工具的超时上限 | 大于 0 |
-
-当前配置与示例均使用项目相对工具路径 `.tools/poppler/Library/bin/`，PDF Python 使用仓库根 `.venv`（`.venv/Scripts/python.exe`，相对项目根），由 `uv sync --all-packages` 恢复。也支持明确配置已有工具路径；改目录时须同步对应字段，不需要改 Python 源码。
-
-`card_generator.pdf_direct_trial` 对象名为兼容历史保留，其运行环境字段（`windows_sandbox`、`shell_executable`、`python_executable`、`text_extractor`、`preflight_timeout_seconds`）与正式路径读取共用；该对象中的 `prompt_file`、`schema_file`、`timeout_seconds` 不用于正式制卡。
+旧的 Codex 本地 PDF 直读适配器已移除；`evidence-generate --paper-input` 是受支持的单篇路径。历史草稿仍可由 `evidence-validate` 只读校验。
 
 父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `.runtime/` 或草稿记录。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](variables.md)。
 

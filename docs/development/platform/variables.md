@@ -26,7 +26,7 @@
 9. `evidence_cards_dir`、`themes_vault_dir`、`run_records_dir`、`literature_index_dir` 均相对 `artifact_root` 解析，且必须位于 `artifact_root` 内。四者必须同属一个产物根——证据卡与主题互相引用，只挪其一会让相对定位失效；
 10. 归属随位置划分：产物根在项目内 = 平台所有（可清理）；产物根在项目外（共享盘等）= 操作者所有，平台只写不清理。
 
-相对可执行程序路径基于项目根目录，裸命令名按 PATH 查找。当前 PDF Python 为仓库根 `.venv`（`.venv/Scripts/python.exe`，相对项目根），三个原生工具在 `.tools/poppler/Library/bin/`。[字段与默认值](config.md)。
+相对可执行程序路径基于项目根目录，裸命令名按 PATH 查找。PDF 由 Python（PyMuPDF）转换，不再需要外部 PDF 工具路径。[字段与默认值](config.md)。
 
 ## 配置与秘密风险
 
@@ -42,7 +42,7 @@
 
 ## 当前限制
 
-总配置驱动路径、Zotero、模板、模型和读取工具。当前 `workflow_mode=single_agent`；`model`、`reasoning_effort`、`generation_timeout_seconds` 直接控制一个会话。`card_generator.pdf_direct_trial` 中的读取环境与正式路径读取共用。运行区下保留未校验的模型输出，仅用于故障排查，不供主题使用、不提交 Git。账号凭据不得写入仓库。
+总配置驱动路径、Zotero、模板、模型和 PDF 转换。当前 `workflow_mode=single_agent`；`model`、`reasoning_effort`、`generation_timeout_seconds` 直接控制一个会话。运行区下保留未校验的模型输出，仅用于故障排查，不供主题使用、不提交 Git。账号凭据不得写入仓库。
 
 ## 新功能的配置验收规则
 

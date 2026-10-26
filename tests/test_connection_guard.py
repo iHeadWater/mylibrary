@@ -14,7 +14,8 @@ from unittest.mock import Mock, patch
 
 from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.card_generators.connection_guard import ConnectionGuard
-from hydrolitagent.cards.card_generators.codex_cli import CodexCliAdapter, _safe_exec_diagnostic, _terminal_failure_events
+from hydrolitagent.cards.adapters.runners.codex import CodexCliAdapter, _terminal_failure_events
+from hydrolitagent.cards.adapters.runners.diagnostics import safe_exec_diagnostic as _safe_exec_diagnostic
 from hydrolitagent.cards.card_generators.streaming import ExecutionStopped, run_streaming_prompt
 from hydrolitagent.cards.cli import main
 from hydrolitagent.cards.config import ConfigError, ConnectionGuardConfig, load_config

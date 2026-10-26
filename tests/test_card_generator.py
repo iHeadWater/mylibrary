@@ -11,14 +11,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from hydrolitagent.cards._paths import ASSETS_DIR, PACKAGE_DIR
-from hydrolitagent.cards.card_generators.codex_cli import (
+from hydrolitagent.cards.adapters.runners.codex import (
     SMOKE_TEST_EXPECTED_TEXT,
     SMOKE_TEST_PROMPT,
-    CodexCliAdapter,
 )
 from hydrolitagent.cards.cli import main
-from hydrolitagent.cards.config import CardGeneratorConfig, PdfReaderConfig
+from hydrolitagent.cards.config import CardGeneratorConfig
 
 def generator_config(
     *,
@@ -34,20 +32,6 @@ def generator_config(
         reasoning_effort=reasoning_effort,
         smoke_test_timeout_seconds=120,
         generation_timeout_seconds=900,
-        pdf_reader=PdfReaderConfig(
-            adapter="project_mcp",
-            server_name="hydro_pdf_reader",
-            python_executable=None,
-            server_file=PACKAGE_DIR / "pdf_reader_mcp.py",
-            pdfinfo_executable="pdfinfo",
-            pdftotext_executable="pdftotext",
-            pdftoppm_executable="pdftoppm",
-            render_dpi=120,
-            max_pages_per_call=4,
-            output_token_limit=60000,
-            startup_timeout_seconds=15,
-            tool_timeout_seconds=120,
-        ),
     )
 
 def command_result(

@@ -35,4 +35,3 @@ def test_both_selections_use_existing_single_agent_contract():
         assert app.card_generator.workflow_mode == "single_agent"
         assert app.card_generator.adapter == provider + "_cli"
         assert app.paths.evidence_card_generation_prompt_file.is_file()
-        assert app.card_generator.pdf_direct_trial.python_executable

@@ -62,22 +62,6 @@ class TaskConfig:
 
 
 @dataclass(frozen=True)
-class PdfReaderConfig:
-    adapter: str
-    server_name: str
-    python_executable: str | None
-    server_file: Path
-    pdfinfo_executable: str
-    pdftotext_executable: str
-    pdftoppm_executable: str
-    render_dpi: int
-    max_pages_per_call: int
-    output_token_limit: int
-    startup_timeout_seconds: float
-    tool_timeout_seconds: float
-
-
-@dataclass(frozen=True)
 class CardWorkflowRoleConfig:
     model: str | None
     reasoning_effort: str | None
@@ -125,19 +109,6 @@ class CodexProxyConfig:
 
 
 @dataclass(frozen=True)
-class PdfDirectTrialConfig:
-    prompt_file: Path
-    schema_file: Path
-    timeout_seconds: float
-    windows_sandbox: str = "elevated"
-    shell_executable: str = "powershell"
-    preflight_timeout_seconds: float = 120
-    python_executable: str | None = None
-    text_extractor: str = "pdftotext"
-    reading_prompt_file: Path | None = None
-
-
-@dataclass(frozen=True)
 class CardGeneratorConfig:
     adapter: str
     executable: str
@@ -147,12 +118,10 @@ class CardGeneratorConfig:
     reasoning_effort: str | None
     smoke_test_timeout_seconds: float
     generation_timeout_seconds: float
-    pdf_reader: PdfReaderConfig
     workflow_mode: str = "single_agent"  # 收敛后只剩单 Agent（multi_agent 已移除）
     multi_agent_workflow: CardQualityWorkflowConfig | None = None
     progress: ProgressConfig = ProgressConfig()
     connection_guard: ConnectionGuardConfig = ConnectionGuardConfig()
-    pdf_direct_trial: PdfDirectTrialConfig | None = None
     runtime_dir: Path | None = None
     proxy: CodexProxyConfig = CodexProxyConfig()
 
@@ -294,9 +263,7 @@ __all__ = [
     "LOCAL_PATH_PROTOCOL_VERSION",
     "MULTI_AGENT_PROTOCOL_VERSION",
     "PATH_FIELDS",
-    "PdfDirectTrialConfig",
     "PdfGateConfig",
-    "PdfReaderConfig",
     "PathConfig",
     "PIPELINE_MODES",
     "PipelineConfig",

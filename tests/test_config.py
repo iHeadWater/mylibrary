@@ -68,20 +68,6 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
             "smoke_test_timeout_seconds": 120,
             "generation_timeout_seconds": 900,
             "workflow_mode": "single_agent",
-            "pdf_reader": {
-                "adapter": "local_path",
-                "server_name": "hydro_pdf_reader",
-                "python_executable": None,
-                "server_file": "automation/src/hydrolitagent.cards/pdf_reader_mcp.py",
-                "pdfinfo_executable": "pdfinfo",
-                "pdftotext_executable": "pdftotext",
-                "pdftoppm_executable": "pdftoppm",
-                "render_dpi": 120,
-                "max_pages_per_call": 4,
-                "output_token_limit": 60000,
-                "startup_timeout_seconds": 15,
-                "tool_timeout_seconds": 120,
-            },
         },
     }
     if overrides:

@@ -30,7 +30,7 @@ cd /path/to/mylibrary
 |---|---|
 | **所有**能力 | Git · Python 3.12–3.14 · [uv](https://docs.astral.sh/uv/) · `git clone` + `uv sync --all-packages` |
 | 读 / 写 Zotero 库 | Zotero **API key**（放 `.env`） |
-| **文献卡与主题卡** | Zotero 桌面版开着，并在设置里**允许其他应用通信** · 一个**已登录**的 AI 命令行工具（Codex 或 Claude） · 读论文 PDF 页面用的小工具 [Poppler](https://poppler.freedesktop.org/) |
+| **文献卡与主题卡** | Zotero 桌面版开着，并在设置里**允许其他应用通信** · 一个**已登录**的 AI 命令行工具（Codex 或 Claude）。PDF 由 Python 转成 Markdown，**不需要 Poppler** |
 | 论文入库 | 论文 PDF 所在的 GDrive 目录 + Zotero 里对应的「**链接附件根目录**」设置 |
 
 逐条说明与凭据清单见 **[前提与配置](getting-started/installation.md)** —— **配一次就够**。

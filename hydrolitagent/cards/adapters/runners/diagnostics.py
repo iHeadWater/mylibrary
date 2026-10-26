@@ -1,8 +1,7 @@
 """Provider-neutral subprocess diagnostics.
 
-Originally lived inside ``card_generators/codex_cli.py``; moved here so that a
-top-level module (``pdf_sandbox``) no longer imports a concrete provider's
-private helpers.
+Originally lived inside ``card_generators/codex_cli.py``; moved here so that
+shared code no longer imports a concrete provider's private helpers.
 
 Nothing here decides which provider ran.  The wording of the fallback summary is
 kept byte-compatible with the previous output during the decoupling migration.

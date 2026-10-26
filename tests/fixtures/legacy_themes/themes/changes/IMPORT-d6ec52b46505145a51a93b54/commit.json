@@ -1,0 +1,104 @@
+{
+  "record": {
+    "generation": 1,
+    "group_id": 42,
+    "index_sha256": "e7290c5925e71ed27eb9a01ef512eb749fc2f7fd3caae06da12bb0abf8320a00",
+    "last_change_id": "IMPORT-d6ec52b46505145a51a93b54",
+    "last_input": "62ee322e0101e8ca25e7fdebd1a63a0ea72a7c2d82bec6a157b09c9b4005cf80",
+    "observed_sources": [
+      {
+        "attachment_key": "WXYZ5678",
+        "card_sha256": "658f744917cad03d872e9619308697efabfcd42eafc92edd73a12dfc80cb29e2",
+        "evidence_id": "EV-ABCD1234",
+        "group_id": 42,
+        "package_directory": "EV-ABCD1234-test-paper",
+        "parent_key": "ABCD1234",
+        "pdf_sha256": "5887a8b1e1caf7281682fdb240fc7bc8a46c67e055f1f1eb63d184dccf8cde58"
+      }
+    ],
+    "previous_index_sha256": null,
+    "previous_registry_sha256": null,
+    "protocol_version": "unified-theme-pool-v1",
+    "schema_version": 1,
+    "themes": {
+      "TH-9ab96d5fa9ead3277b13-001": {
+        "current": {
+          "directory": "candidates/BATCH-9ab96d5fa9ead3277b13/TH-9ab96d5fa9ead3277b13-001",
+          "hashes": {
+            "initial.md": "24ce4bc1710ff841167a1422d3a4adb6c0116b638b4c396a74491ab5da38f9ee",
+            "manifest.json": "00941353eab361217d11256aad5cfef69132177a2cfa90c3d1aa71f240f91fa8",
+            "plan.json": "4a7ff289e9979cc973b03251fdc1574e357c7955cebae8c100e88618182ea0fb",
+            "revised.md": "ac015d6d0bdfc883502d6e71ac09c707bbfb954f2cf1799706025b2dc86490d5",
+            "revision-result.json": "61b7be9a9980db7de15620dd64c1cbcf35de43dedca30abeba6d2d978dbe18ed"
+          },
+          "readings": [
+            {
+              "context": "自由格式初版。没有固定标题，也没有固定标签。",
+              "directory": "EV-ABCD1234-test-paper/readings/TH-9ab96d5fa9ead3277b13-001",
+              "focus": "尺度差异能否解释结论差别？",
+              "hashes": {
+                "reading.md": "5e9320c69a5c1964474c1fe5ae65eec3749ed6df478c69123583d928e75addd2",
+                "result.json": "55993ec595b1ea5dee2b36eb43b758bd9aed4389d1ebc167ca0a498bc7c1b154"
+              },
+              "reading_id": "RD-4d1338a0a5fe401507830dada6a895072fc7773dafb7241a430daf54bb202eff",
+              "result_sha256": "4d1338a0a5fe401507830dada6a895072fc7773dafb7241a430daf54bb202eff",
+              "root": "evidence_packs",
+              "source": {
+                "attachment_key": "WXYZ5678",
+                "card_sha256": "658f744917cad03d872e9619308697efabfcd42eafc92edd73a12dfc80cb29e2",
+                "evidence_id": "EV-ABCD1234",
+                "group_id": 42,
+                "package_directory": "EV-ABCD1234-test-paper",
+                "parent_key": "ABCD1234",
+                "pdf_sha256": "5887a8b1e1caf7281682fdb240fc7bc8a46c67e055f1f1eb63d184dccf8cde58"
+              }
+            }
+          ]
+        },
+        "formal_confirmation": null,
+        "history": [
+          {
+            "directory": "candidates/BATCH-9ab96d5fa9ead3277b13/TH-9ab96d5fa9ead3277b13-001",
+            "hashes": {
+              "initial.md": "24ce4bc1710ff841167a1422d3a4adb6c0116b638b4c396a74491ab5da38f9ee",
+              "manifest.json": "00941353eab361217d11256aad5cfef69132177a2cfa90c3d1aa71f240f91fa8",
+              "plan.json": "4a7ff289e9979cc973b03251fdc1574e357c7955cebae8c100e88618182ea0fb",
+              "revised.md": "ac015d6d0bdfc883502d6e71ac09c707bbfb954f2cf1799706025b2dc86490d5",
+              "revision-result.json": "61b7be9a9980db7de15620dd64c1cbcf35de43dedca30abeba6d2d978dbe18ed"
+            },
+            "readings": [
+              {
+                "context": "自由格式初版。没有固定标题，也没有固定标签。",
+                "directory": "EV-ABCD1234-test-paper/readings/TH-9ab96d5fa9ead3277b13-001",
+                "focus": "尺度差异能否解释结论差别？",
+                "hashes": {
+                  "reading.md": "5e9320c69a5c1964474c1fe5ae65eec3749ed6df478c69123583d928e75addd2",
+                  "result.json": "55993ec595b1ea5dee2b36eb43b758bd9aed4389d1ebc167ca0a498bc7c1b154"
+                },
+                "reading_id": "RD-4d1338a0a5fe401507830dada6a895072fc7773dafb7241a430daf54bb202eff",
+                "result_sha256": "4d1338a0a5fe401507830dada6a895072fc7773dafb7241a430daf54bb202eff",
+                "root": "evidence_packs",
+                "source": {
+                  "attachment_key": "WXYZ5678",
+                  "card_sha256": "658f744917cad03d872e9619308697efabfcd42eafc92edd73a12dfc80cb29e2",
+                  "evidence_id": "EV-ABCD1234",
+                  "group_id": 42,
+                  "package_directory": "EV-ABCD1234-test-paper",
+                  "parent_key": "ABCD1234",
+                  "pdf_sha256": "5887a8b1e1caf7281682fdb240fc7bc8a46c67e055f1f1eb63d184dccf8cde58"
+                }
+              }
+            ]
+          }
+        ],
+        "predecessors": [],
+        "reason": "从已有完成批次接入统一主题池；保留原编号、正文和来源，不重新调用模型",
+        "status": "CANDIDATE_REFINED",
+        "successors": [],
+        "theme_id": "TH-9ab96d5fa9ead3277b13-001",
+        "title": "历史主题一"
+      }
+    }
+  },
+  "sha256": "e185b276643e5089431eb675d53913e5fa942b08b98dae3ab6f79857391f9fcd"
+}

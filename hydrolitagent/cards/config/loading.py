@@ -18,7 +18,6 @@ from .models import (
     ARTIFACT_PATH_FIELDS,
     DEFAULT_PIPELINE_MODE,
     LOCAL_PATH_PROTOCOL_VERSION,
-    MULTI_AGENT_PROTOCOL_VERSION,
     PATH_FIELDS,
     PIPELINE_MODES,
     REQUIRED_CARD_WORKFLOW_ROLES,
@@ -31,9 +30,7 @@ from .models import (
     ConnectionGuardConfig,
     ConverterConfig,
     PathConfig,
-    PdfDirectTrialConfig,
     PdfGateConfig,
-    PdfReaderConfig,
     PipelineConfig,
     ProgressConfig,
     TaskConfig,
@@ -60,7 +57,6 @@ from .validators import (
     _validate_optional_non_empty_string,
     _validate_positive_int,
     _validate_seconds,
-    _validate_server_name,
 )
 
 
@@ -325,7 +321,6 @@ def load_config(
         "reasoning_effort",
         "smoke_test_timeout_seconds",
         "generation_timeout_seconds",
-        "pdf_reader",
     )
     for name in card_generator_fields:
         if name not in raw_card_generator:
@@ -373,105 +368,11 @@ def load_config(
             raise ConfigError(f"card_generator.connection_guard.{name} 必须在 {minimum}–{maximum} 之间")
         guard_values[name] = converter(value)
     connection_guard = ConnectionGuardConfig(**guard_values, reconnect_stop_enabled=reconnect_stop_enabled)
-    raw_pdf_reader = raw_card_generator["pdf_reader"]
-    if not isinstance(raw_pdf_reader, dict):
-        raise ConfigError("card_generator.pdf_reader 必须是 JSON 对象")
-    pdf_reader_fields = (
-        "adapter",
-        "server_name",
-        "python_executable",
-        "server_file",
-        "pdfinfo_executable",
-        "pdftotext_executable",
-        "pdftoppm_executable",
-        "render_dpi",
-        "max_pages_per_call",
-        "output_token_limit",
-        "startup_timeout_seconds",
-        "tool_timeout_seconds",
-    )
-    for name in pdf_reader_fields:
-        if name not in raw_pdf_reader:
-            raise ConfigError(f"缺少 card_generator.pdf_reader.{name}")
-    raw_server_file = _path_value(
-        raw_pdf_reader["server_file"],
-        name="card_generator.pdf_reader.server_file",
-    )
-    server_file = (
-        raw_server_file
-        if raw_server_file.is_absolute()
-        else project_root / raw_server_file
-    ).resolve()
-    if not server_file.is_relative_to(project_root):
-        raise ConfigError(
-            "card_generator.pdf_reader.server_file 必须位于 paths.project_root 内"
-        )
-    pdf_reader_config = PdfReaderConfig(
-        adapter=_validate_card_generator_choice(
-            "card_generator.pdf_reader.adapter",
-            raw_pdf_reader["adapter"],
-            supported={"project_mcp", "local_path"},
-        ),
-        server_name=_validate_server_name(
-            "card_generator.pdf_reader.server_name",
-            raw_pdf_reader["server_name"],
-        ),
-        python_executable=_validate_optional_non_empty_string(
-            "card_generator.pdf_reader.python_executable",
-            raw_pdf_reader["python_executable"],
-        ),
-        server_file=server_file,
-        pdfinfo_executable=_validate_non_empty_string(
-            "card_generator.pdf_reader.pdfinfo_executable",
-            raw_pdf_reader["pdfinfo_executable"],
-        ),
-        pdftotext_executable=_validate_non_empty_string(
-            "card_generator.pdf_reader.pdftotext_executable",
-            raw_pdf_reader["pdftotext_executable"],
-        ),
-        pdftoppm_executable=_validate_non_empty_string(
-            "card_generator.pdf_reader.pdftoppm_executable",
-            raw_pdf_reader["pdftoppm_executable"],
-        ),
-        render_dpi=_validate_positive_int(
-            "card_generator.pdf_reader.render_dpi",
-            raw_pdf_reader["render_dpi"],
-        ),
-        max_pages_per_call=_validate_positive_int(
-            "card_generator.pdf_reader.max_pages_per_call",
-            raw_pdf_reader["max_pages_per_call"],
-        ),
-        output_token_limit=_validate_positive_int(
-            "card_generator.pdf_reader.output_token_limit",
-            raw_pdf_reader["output_token_limit"],
-        ),
-        startup_timeout_seconds=_validate_seconds(
-            "card_generator.pdf_reader.startup_timeout_seconds",
-            raw_pdf_reader["startup_timeout_seconds"],
-        ),
-        tool_timeout_seconds=_validate_seconds(
-            "card_generator.pdf_reader.tool_timeout_seconds",
-            raw_pdf_reader["tool_timeout_seconds"],
-        ),
-    )
-    if not 72 <= pdf_reader_config.render_dpi <= 300:
-        raise ConfigError("card_generator.pdf_reader.render_dpi 必须在 72 到 300 之间")
-    if pdf_reader_config.max_pages_per_call > 10:
-        raise ConfigError(
-            "card_generator.pdf_reader.max_pages_per_call 不能大于 10"
-        )
-    if pdf_reader_config.output_token_limit > 200000:
-        raise ConfigError(
-            "card_generator.pdf_reader.output_token_limit 不能大于 200000"
-        )
-
     workflow_mode = raw_card_generator.get("workflow_mode", "single_agent")
     if workflow_mode not in {"single_agent", "multi_agent"}:
         raise ConfigError("card_generator.workflow_mode 仅支持 single_agent 或 multi_agent")
     multi_agent_workflow = None
     if workflow_mode == "single_agent":
-        if pdf_reader_config.adapter != "local_path":
-            raise ConfigError("single_agent 当前要求 pdf_reader.adapter=local_path")
         if raw_card_generator.get("multi_agent_workflow") is not None:
             raise ConfigError("single_agent 请移除 multi_agent_workflow，避免无效配置造成误解")
     else:
@@ -492,12 +393,11 @@ def load_config(
             "card_generator.multi_agent_workflow.protocol_version",
             raw_workflow["protocol_version"],
         )
-        expected_protocol = (LOCAL_PATH_PROTOCOL_VERSION if pdf_reader_config.adapter == "local_path"
-                             else MULTI_AGENT_PROTOCOL_VERSION)
+        expected_protocol = LOCAL_PATH_PROTOCOL_VERSION
         if protocol_version != expected_protocol:
             raise ConfigError(
                 "card_generator.multi_agent_workflow.protocol_version 当前仅支持 "
-                f"{expected_protocol}（与 pdf_reader.adapter 对应）"
+                f"{expected_protocol}"
             )
 
         raw_workflow_prompts = raw_workflow["prompts"]
@@ -643,43 +543,6 @@ def load_config(
             roles=workflow_roles,
         )
 
-    raw_direct = raw_card_generator.get("pdf_direct_trial", {
-        "prompt_file": str(path_config.prompts_dir / "pdf-direct-read-trial-v2.md"),
-        "schema_file": str(path_config.schemas_dir / "pdf-direct-read-trial-output.schema.json"),
-        "timeout_seconds": 1200,
-    })
-    direct_required = {"prompt_file", "schema_file", "timeout_seconds"}
-    direct_optional = {"windows_sandbox", "shell_executable", "preflight_timeout_seconds", "python_executable", "text_extractor", "reading_prompt_file"}
-    if (not isinstance(raw_direct, dict) or not direct_required <= set(raw_direct)
-        or set(raw_direct) - direct_required - direct_optional):
-        raise ConfigError("card_generator.pdf_direct_trial 必须填写 prompt_file、schema_file、timeout_seconds")
-    direct_paths = {}
-    raw_direct = {**raw_direct, "reading_prompt_file": raw_direct.get(
-        "reading_prompt_file", str(path_config.prompts_dir / "pdf-local-reading-v1.md"))}
-    for name, parent in (("prompt_file", path_config.prompts_dir), ("schema_file", path_config.schemas_dir),
-                         ("reading_prompt_file", path_config.prompts_dir)):
-        raw_path = _path_value(raw_direct[name], name=f"card_generator.pdf_direct_trial.{name}")
-        resolved = (raw_path if raw_path.is_absolute() else project_root / raw_path).resolve()
-        if not resolved.is_relative_to(parent):
-            raise ConfigError(f"card_generator.pdf_direct_trial.{name} 必须位于配置的提示词或 schema 目录内")
-        direct_paths[name] = resolved
-    direct_trial_config = PdfDirectTrialConfig(
-        **direct_paths,
-        timeout_seconds=_validate_seconds("card_generator.pdf_direct_trial.timeout_seconds", raw_direct["timeout_seconds"]),
-        windows_sandbox=_validate_card_generator_choice(
-            "card_generator.pdf_direct_trial.windows_sandbox", raw_direct.get("windows_sandbox", "elevated"),
-            supported={"elevated", "unelevated"}),
-        shell_executable=_validate_non_empty_string(
-            "card_generator.pdf_direct_trial.shell_executable", raw_direct.get("shell_executable", "powershell")),
-        preflight_timeout_seconds=_validate_seconds(
-            "card_generator.pdf_direct_trial.preflight_timeout_seconds", raw_direct.get("preflight_timeout_seconds", 120)),
-        python_executable=(None if raw_direct.get("python_executable") is None else _validate_non_empty_string(
-            "card_generator.pdf_direct_trial.python_executable", raw_direct["python_executable"])),
-        text_extractor=_validate_card_generator_choice(
-            "card_generator.pdf_direct_trial.text_extractor", raw_direct.get("text_extractor", "pdftotext"),
-            supported={"pdftotext", "pypdf"}),
-    )
-
     card_generator_config = CardGeneratorConfig(
         # Legacy on-disk key. It selects the *legacy* PDF-reading adapter for
         # ``CARD_PIPELINE=legacy``; the Markdown pipeline picks its runner from
@@ -721,12 +584,10 @@ def load_config(
             "card_generator.generation_timeout_seconds",
             raw_card_generator["generation_timeout_seconds"],
         ),
-        pdf_reader=pdf_reader_config,
         workflow_mode=workflow_mode,
         multi_agent_workflow=multi_agent_workflow,
         progress=progress_config,
         connection_guard=connection_guard,
-        pdf_direct_trial=direct_trial_config,
         runtime_dir=path_config.runtime_dir,
         proxy=_validate_codex_proxy(raw_card_generator.get("proxy", {})),
     )
@@ -778,11 +639,7 @@ def load_config(
         theme_values["assets_dir"] = path_config.templates_dir / "themes"
 
     card_generator_config = replace(card_generator_config,
-        executable=_resolve_executable(card_generator_config.executable, path_config.project_root),
-        pdf_reader=replace(pdf_reader_config, **{name: _resolve_executable(getattr(pdf_reader_config, name), path_config.project_root)
-            for name in ("python_executable", "pdfinfo_executable", "pdftotext_executable", "pdftoppm_executable")}),
-        pdf_direct_trial=replace(direct_trial_config, **{name: _resolve_executable(getattr(direct_trial_config, name), path_config.project_root)
-            for name in ("python_executable", "shell_executable")}))
+        executable=_resolve_executable(card_generator_config.executable, path_config.project_root))
 
     converter_config = _load_converter(data.get("converter", {}), path_config)
 

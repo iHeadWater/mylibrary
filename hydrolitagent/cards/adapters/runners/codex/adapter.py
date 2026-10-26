@@ -57,7 +57,7 @@ class CodexCliAdapter:
         if prompt_runner is _run_prompt_command:
             delegate_prompt_runner = lambda command, prompt, timeout, environment: run_streaming_prompt(
                 command, prompt, timeout, environment,
-                progress=progress, server=config.pdf_reader.server_name,
+                progress=progress,
                 connection_guard=config.connection_guard,
             )
         self._prompt_runner = lambda command, prompt, timeout, environment: delegate_prompt_runner(
@@ -90,8 +90,8 @@ class CodexCliAdapter:
             "error": {"code": code, "message": message},
         }
 
-    def preflight(self, *, check_pdf_reader: bool = True) -> dict[str, Any]:
-        return run_preflight(self, check_pdf_reader=check_pdf_reader)
+    def preflight(self) -> dict[str, Any]:
+        return run_preflight(self)
 
     def _smoke_failure(
         self,

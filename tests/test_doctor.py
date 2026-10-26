@@ -47,7 +47,7 @@ def test_doctor_is_ok_without_poppler_and_never_invokes_a_model(tmp_path):
     assert report["model_invoked"] is False
     assert report["operation"] == "doctor"
     text = json.dumps(report, ensure_ascii=False).lower()
-    assert "pdfinfo" not in text and "pdftoppm" not in text
+    assert "poppler" not in text
 
     checks = {check["name"]: check for check in report["checks"]}
     assert checks["converter.pymupdf"]["status"] == "pass"

@@ -145,8 +145,8 @@ def generate_subject_card_draft(app_config, paper_input: Any, *, adapter=None, p
     try:
         record, pdf_path = _input(paper_input)
         cfg = app_config.card_generator
-        if cfg.workflow_mode != "single_agent" or cfg.pdf_reader.adapter != "local_path":
-            _fail("CARD_DRAFT_SINGLE_AGENT_REQUIRED", "主体卡草稿只支持 single_agent + local_path")
+        if cfg.workflow_mode != "single_agent":
+            _fail("CARD_DRAFT_SINGLE_AGENT_REQUIRED", "主体卡草稿只支持 single_agent")
         stage = "assets"
         root = resolve_literature_root(root=output_root)  # Same resolver and precedence as PR #27.
         base_prompt = _read_prompt(app_config.paths.evidence_card_generation_prompt_file)

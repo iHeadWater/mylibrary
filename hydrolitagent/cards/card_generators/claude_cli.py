@@ -209,7 +209,7 @@ class ClaudeCliAdapter:
             try:
                 pages = read_receipts(events, source, count)
             except ClaudePdfProtocolError as exc:
-                # 读不到页时，模型自报的读取状态与证据才是可行动的原因（例如缺 pdftoppm），
+                # 读不到页时，模型自报的读取状态与证据才是可行动的原因（例如缺少 PDF 渲染工具），
                 # 仅报页覆盖不足会把原因再次藏起来。不回传原始 stdout，只带这两个既有字段。
                 status = output.get("source_read_status")
                 if not isinstance(status, str) or status not in {"UNREADABLE", "FULL_PDF_REVIEWED"}:

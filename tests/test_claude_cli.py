@@ -162,11 +162,11 @@ def test_read_failure_surfaces_the_models_own_read_report(draft_case):
     data=events(draft_case)
     data.pop(1)
     data[-1]["structured_output"]["source_read_status"]="UNREADABLE"
-    data[-1]["structured_output"]["source_read_evidence"]="pdftoppm is not installed / Install poppler-utils"
+    data[-1]["structured_output"]["source_read_evidence"]="pdfrender is not installed / Install pdfrender-utils"
     result,_=invoke(draft_case,data)
     assert not result["ok"]
     message=result["error"]["message"]
-    assert "UNREADABLE" in message and "pdftoppm" in message
+    assert "UNREADABLE" in message and "pdfrender" in message
 
 
 def test_diagnostic_text_is_bounded_and_single_line(draft_case):
@@ -215,8 +215,8 @@ def test_credential_shaped_text_is_redacted(draft_case, secret):
 
 @pytest.mark.parametrize("keep",[
     "SHA256 b95327448289ed46b1b886d89b4c28f694c985ee29191a229f0ea1893c259fa7",
-    'Read(pages="1-9") 报错 pdftoppm is not installed',
-    "the token: pdftoppm is missing",
+    'Read(pages="1-9") 报错 pdfrender is not installed',
+    "the token: pdfrender is missing",
     "page 1-17 of 17",
 ])
 def test_technical_diagnostic_is_not_redacted(draft_case, keep):
@@ -291,15 +291,15 @@ def test_invalid_model_status_is_not_echoed_or_allowed_to_hide_evidence(draft_ca
     data = events(draft_case)
     data.pop(1)
     data[-1]["structured_output"]["source_read_status"] = status
-    data[-1]["structured_output"]["source_read_evidence"] = "pdftoppm is not installed"
+    data[-1]["structured_output"]["source_read_evidence"] = "pdfrender is not installed"
     result, _ = invoke(draft_case, data)
     message = result["error"]["message"]
     assert "private-status" not in message
-    assert "pdftoppm" in message and "INVALID" in message
+    assert "pdfrender" in message and "INVALID" in message
 
 
 @pytest.mark.parametrize("evidence", [
-    "Command failed: pdftoppm -upw private-value source.pdf out",
+    "Command failed: pdfrender -upw private-value source.pdf out",
     "Traceback (most recent call last): private-value",
     "```powershell\nclaude --model private-value\n```",
 ])

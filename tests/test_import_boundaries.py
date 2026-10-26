@@ -35,7 +35,7 @@ FORBIDDEN_DOMAIN_IMPORTS = (
 # ``subprocess`` is an executable-discovery concern, i.e. an adapter concern.
 FORBIDDEN_DOMAIN_ROOTS = ("subprocess",)
 
-PROVIDER_WORDS = ("codex", "claude", "openai", "pdfinfo", "pdftoppm")
+PROVIDER_WORDS = ("codex", "claude", "openai")
 
 # ``source_access.py`` owns the on-disk contract. ``claude_pdf_read`` is a
 # historical artifact method and ``CLAUDE_PDF_READ`` is the constant holding it;
@@ -281,38 +281,45 @@ def test_provider_allowlist_is_still_needed() -> None:
 
 
 # --------------------------------------------------------------------------------------
-# 3. stage-1 regression: pdf_sandbox no longer depends on the Codex adapter
+# 3. stage 6a: the removed PDF-direct-read helpers must not come back
 # --------------------------------------------------------------------------------------
 
+# Assembled from fragments on purpose: this guard must not itself reintroduce the
+# literals it forbids, or a repository-wide grep would flag the guard.
+LEGACY_PDF_NAMES = (
+    "pdf" + "info",
+    "pdf" + "toppm",
+    "pdf" + "totext",
+    "pdf_" + "sandbox",
+    "codex_" + "local_pdf",
+)
+# Historical reads under ``legacy/`` stay allowed; they decode old artifacts.
+LEGACY_PDF_ALLOWED_PREFIXES = ("hydrolitagent/cards/legacy/",)
 
-def test_pdf_sandbox_does_not_import_codex_adapter() -> None:
-    """``pdf_sandbox`` used to import private helpers from ``codex_cli``.
 
-    That reverse dependency made the top-level shared module depend on one
-    provider. The neutral helpers now live in ``adapters/runners/diagnostics.py``
-    and ``infrastructure/toml.py``; importing ``codex_cli`` again would restore
-    the coupling this stage removed.
+def test_cards_package_does_not_reference_removed_pdf_helpers() -> None:
+    """The platform converts PDFs with Python; it must not shell out to PDF tools.
+
+    ``legacy/`` is exempt because it only decodes artifacts written by the old
+    pipeline. Any new hit means the deleted direct-read path came back.
     """
 
-    pdf_sandbox = CARDS_DIR / "pdf_sandbox.py"
-    assert pdf_sandbox.is_file(), f"缺少 {pdf_sandbox}"
+    offenders: list[str] = []
+    scanned = 0
+    for path in sorted(CARDS_DIR.rglob("*.py")):
+        relative = path.relative_to(REPO_ROOT).as_posix()
+        if any(relative.startswith(prefix) for prefix in LEGACY_PDF_ALLOWED_PREFIXES):
+            continue
+        scanned += 1
+        text = path.read_text(encoding="utf-8").lower()
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            for name in LEGACY_PDF_NAMES:
+                if name in line:
+                    offenders.append(f"{relative}:{lineno} {name}")
 
-    forbidden = "hydrolitagent.cards.card_generators.codex_cli"
-    offenders = [
-        f"line {lineno} -> {target}"
-        for lineno, target in _imports_of(pdf_sandbox)
-        if _is_within(target, forbidden)
-    ]
+    assert scanned, "没有扫描到任何 cards 模块；这条守卫会在空集上通过"
     assert not offenders, (
-        "pdf_sandbox.py 又反向依赖了 codex_cli；中性工具应来自 "
-        "adapters/runners/diagnostics.py 与 infrastructure/toml.py：\n  "
-        + "\n  ".join(offenders)
-    )
-
-    # Non-vacuity: the neutral helpers must actually be what this module imports.
-    targets = [target for _, target in _imports_of(pdf_sandbox)]
-    assert any(_is_within(t, "hydrolitagent.cards.adapters.runners.diagnostics") for t in targets), (
-        "pdf_sandbox.py 没有导入中性诊断模块；它可能还依赖着某个 provider 模块"
+        "hydrolitagent/cards 仍引用已删除的 PDF 直读工具：\n  " + "\n  ".join(offenders)
     )
 
 

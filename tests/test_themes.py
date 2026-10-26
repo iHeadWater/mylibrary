@@ -66,10 +66,7 @@ class ThemeTests(unittest.TestCase):
         self.path = write_config(self.root)
         config = load_config(self.path)
         self.config = replace(config, theme_pipeline=replace(config.theme_pipeline, enabled=True,
-            assets_dir=ROOT / "templates/themes"), card_generator=replace(config.card_generator,
-            pdf_reader=replace(config.card_generator.pdf_reader, adapter="local_path"),
-            pdf_direct_trial=replace(config.card_generator.pdf_direct_trial,
-                reading_prompt_file=ROOT / "prompts/pdf-local-reading-v1.md")))
+            assets_dir=ROOT / "templates/themes"))
         # Build a real, validated legacy rough pack without a live provider.
         self.f.generate(FakeAdapter())
         # A real PDF: the live pipeline converts it with PyMuPDF and caches the
@@ -97,16 +94,6 @@ class ThemeTests(unittest.TestCase):
             runner=self.reader,
             options=ConversionOptions(),
         )
-        # The historical PDF-reading batch (only ``_run_legacy`` uses these).
-        self.text = Mock()
-        self.text.generate.side_effect = self.legacy_text_result
-        self.pdf_adapter = Mock()
-        self.pdf_adapter.generate.return_value = {"ok": True, "ephemeral": True,
-            "configured_model": "test-model", "configured_reasoning_effort": "high",
-            "source_access": {"source_sha256": digest, "source_identity_verified": True,
-                "parent_key": PARENT_KEY, "method": "local_pdf_path",
-                "source_unchanged": True, "model_reading_report_accepted": True},
-            "output": {"reading_markdown": "精读发现：原主题需要收窄。没有固定章节。"}}
 
     # -- scripted answers ---------------------------------------------------------
 
@@ -173,23 +160,7 @@ class ThemeTests(unittest.TestCase):
     def changed_goal(self, goal="changed-goal"):
         self.config = replace(self.config, theme_pipeline=replace(self.config.theme_pipeline, research_goal=goal))
 
-    # -- legacy (PDF-reading) fixtures -------------------------------------------
-
-    def legacy_text_result(self, prompt, **kwargs):
-        self.assertIn("输入材料", prompt)
-        if kwargs["output_schema_path"].name == "pool-discovery.schema.json":
-            output = {"problem_clusters_markdown": self.discovered["problem_clusters_markdown"], "actions": [
-                {"kind": "CREATE", "theme_ids": [], "reason": "测试新主题", "themes": [t]}
-                for t in self.discovered["themes"]]}
-        else:
-            output = self.discovered if "discovery" in kwargs["output_schema_path"].name else {
-                "revised_markdown": "精读后建议收窄主题，仍是候选。"}
-        return {"ok": True, "output": deepcopy(output), "ephemeral": True, "model": "test-model"}
-
-    def run_theme(self, legacy=False, **kwargs):
-        if legacy:
-            return run_themes(self.config, text_adapter=self.text, pdf_adapter=self.pdf_adapter,
-                delivery_preparer=self.delivery, **kwargs)
+    def run_theme(self, **kwargs):
         return run_themes(self.config, pipeline=self.pipeline, delivery_preparer=self.delivery, **kwargs)
 
     # -- behaviour ---------------------------------------------------------------

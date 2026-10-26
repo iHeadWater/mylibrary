@@ -12,14 +12,13 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from hydrolitagent.cards._paths import ASSETS_DIR
-from hydrolitagent.cards.card_generators.codex_cli import CodexCliAdapter, _run_command, _run_prompt_command
+from hydrolitagent.cards.adapters.runners.codex import CodexCliAdapter, _run_command, _run_prompt_command
 from hydrolitagent.cards.card_generators.proxy import (
     LOCAL_BYPASS, PROXY_VARIABLES, codex_proxy_environment, proxy_summary,
 )
 from hydrolitagent.cards.card_generators.streaming import run_streaming_prompt
 from hydrolitagent.cards.config import CodexProxyConfig, ConfigError, load_config
-from test_card_generator import generator_config, smoke_jsonl
-from test_codex_local_pdf import LocalProviderFixture
+from test_card_generator import generator_config
 from test_config import write_config
 
 PROXY = CodexProxyConfig(True, "http://127.0.0.1:17897", ("intranet.example",))
@@ -68,7 +67,7 @@ class ProxyConfigTests(unittest.TestCase):
         self.assertIsInstance(load_config(root / "config/config.json").card_generator.proxy, CodexProxyConfig)
 
 class ProxyEnvironmentTests(unittest.TestCase):
-    def test_override_is_a_copy_and_preserves_pdf_reader_metadata(self):
+    def test_override_is_a_copy_and_preserves_caller_metadata(self):
         metadata = {"HYDRO_SOURCE_PDF": "source.pdf", "NO_PROXY": "*", "https_proxy": "old"}
         original = dict(metadata)
         env = codex_proxy_environment(PROXY, metadata)
@@ -118,17 +117,6 @@ class ProxyEnvironmentTests(unittest.TestCase):
             self.assertEqual(json.loads(other.stdout), inherited)
 
 class ProxyAdapterTests(unittest.TestCase):
-
-    def test_local_pdf_generation_receives_proxy_only_in_environment(self):
-        with tempfile.TemporaryDirectory() as directory:
-            fixture = LocalProviderFixture(Path(directory))
-            fixture.adapter.config = replace(fixture.config, proxy=PROXY)
-            result = fixture.run()
-            self.assertTrue(result["ok"], result)
-            command, prompt, _, env = fixture.calls[0]
-            self.assertEqual(env["HTTPS_PROXY"], PROXY.url)
-            self.assertNotIn(PROXY.url, prompt)
-            self.assertNotIn(PROXY.url, " ".join(command))
 
     def test_legacy_pdf_environment_and_streaming_default_are_both_wired(self):
         metadata = {"HYDRO_SOURCE_PDF": "source.pdf", "HYDRO_PDF_RECEIPT": "receipt.json"}

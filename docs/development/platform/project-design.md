@@ -81,7 +81,7 @@ flowchart LR
 
 1. 安装并启动 Zotero，确认目标文库和 PDF 可以从本机访问。
 2. 克隆 `mylibrary`，使用 uv 安装整个 workspace。
-3. 配置模型与产物目录，安装并登录一种 CLI（Codex 或 Claude），并准备 Poppler。
+3. 配置模型与产物目录，安装并登录一种 CLI（Codex 或 Claude）。PDF 由 Python 转成 Markdown，不需要 Poppler。
 4. 核对当前产物目录与 `artifact_root` 的实际解析路径。在统一发布实现前，用户可以用 Obsidian 打开相应 Markdown 目录，但不应依赖修改 `artifact_root` 来自动搬运现有文献卡和候选主题。
 
 ### 日常研究
