@@ -93,13 +93,14 @@ uv run python -m hydrolitagent.literature.zotero_notebooklm --collection water -
 uv run python -m hydrolitagent.literature.bilibili_upload audio.mp3 --title "标题" --dry-run
 ```
 
-## 场景 6：把论文做成文献卡与主题卡（Windows）
+## 场景 6：把论文做成文献卡与主题卡
 
 **你可以这么说**：
 
 > 「把《某某》这篇做成卡」 · 「看看能聚出哪些主题」
 
-一条链路：文献卡 → 代码校验 → 候选主题。**运行时 Windows-only**，前置见[前提与配置](installation.md)。
+一条链路：文献卡 → 代码校验 → 候选主题。默认路径是 PDF→Markdown（Python + PyMuPDF），
+macOS / Linux / Windows 行为一致，**不需要 Poppler**。前置见[前提与配置](installation.md)。
 详见[文献卡与主题卡](../user-guide/cards/index.md)。
 
 ## 下一步
@@ -108,5 +109,5 @@ uv run python -m hydrolitagent.literature.bilibili_upload audio.mp3 --title "标
 - [论文入库流水线](../user-guide/paper-pipeline.md) — 下载与入库的完整流程和故障排查
 - [MCP Server 工具](../user-guide/mcp-tools.md) — 12 个工具的用途、参数与返回格式
 - [文献深度处理](../user-guide/literature.md) — 精读、公众号、播客的 CLI
-- [文献卡与主题卡](../user-guide/cards/index.md) — 自己 Zotero 的论文 → 文献卡 → 主题卡（Windows-only）
+- [文献卡与主题卡](../user-guide/cards/index.md) — 自己 Zotero 的论文 → 文献卡 → 主题卡（跨平台，PDF→Markdown）
 - [Zotero 配置参考](../user-guide/config.md) — 环境变量与配置文件

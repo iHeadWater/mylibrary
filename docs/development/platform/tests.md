@@ -8,10 +8,15 @@
 | --- | --- | --- | --- |
 | 配置与路径 | 未知字段、越界路径、重叠安装目录和非布尔开关必须拒绝 | `test_config.py` | 已有自动测试 |
 | 单篇论文输入 | 候选选择、个人/群组、父条目/附件、缺失或重复 PDF、未索引全文 | `test_paper_input.py` | 已有自动测试 |
-| PDF 门禁与交付 | 缺失、过小、无可用文本、身份变化和越界文件不得进入制卡 | `test_pdf_gate.py`、`test_pdf_delivery.py`、`test_pdf_sandbox.py` | 已有自动测试 |
+| PDF 门禁与交付 | 缺失、过小、无可用文本、身份变化和越界文件不得进入制卡 | `test_pdf_gate.py`、`test_pdf_delivery.py` | 已有自动测试 |
+| PDF→Markdown 转换 | 页锚点与页数一致、图资产与表格提取、中文/双栏/扫描件的覆盖率与 `CONVERTER_LOW_TEXT` fail-closed、同一 PDF 的 Markdown 哈希稳定 | `test_markdown_conversion.py`、`test_paper_store.py` | 已有自动测试 |
 | 证据卡模板 | 九类模板的来源、版本、front matter 和内容指纹必须一致 | `test_evidence_templates.py` | 已有自动测试 |
 | 单 Agent 制卡 | 来源错误、空输出、非法模板、重复生成和人工改动必须停止保存 | `test_ai_config.py`、`test_card_draft.py`、`test_card_generation.py`、`test_card_saving.py`、`test_single_agent.py` | 已有自动测试 |
 | 模型适配器 | Markdown 运行器、Claude 旧只读回执、代理与连接保护 | `test_markdown_runners.py`、`test_claude_cli.py`、`test_codex_proxy.py`、`test_connection_guard.py` | 已有自动测试 |
+| 运行器无关 | 注册表新增运行器只需 adapter + 注册；同一份 `PreparedPaper` 经 Codex / Claude / OpenAI 兼容 / 脚本化运行器产出相同规范化草稿（除 `runner_id`） | `test_runner_registry.py`、`test_runner_agnostic.py`、`test_openai_runner.py`、`test_markdown_runners.py` | 已有自动测试 |
+| 两阶段制卡协议 | 运行目录只含 `paper.md` / 图 / schema / 请求；`response.json` 缺失或非法、`paper.md` 被改动、Markdown 哈希或 canary 不符时结构化拒绝 | `test_in_session.py`、`test_text_only_runner.py` | 已有自动测试 |
+| 引文接地 | 逐字引文命中页锚点、过短或错页引文不计入证据、覆盖率不足时 `production_eligible=false` | `test_grounding.py`、`test_markdown_workflow.py` | 已有自动测试 |
+| 能力自查 | `cards doctor` 不调用模型；转换器 / 运行器 / 存储状态与 `fix`；缺可选运行器只 warn，全部缺失才 fail | `test_doctor.py` | 已有自动测试 |
 | 主体卡校验门禁 | 最低内容、来源和版本绑定、旧 PASS 失效、失败不能进入主题输入 | `test_card_validation.py` | 已有自动测试 |
 | 候选主题池 | CREATE / UPDATE / MERGE / SPLIT 的来源、编号、血缘和原子发布必须保持，旧粗卡不得被修改；历史批次从 `tests/fixtures/legacy_themes/` 静态读取且字节不变 | `test_themes.py`、`test_theme_pool.py` | 已有自动测试 |
 | 任务与保存完整性 | 完成必须以内容与来源记录为准，不得只凭目录或任务标记；已有卡不得被覆盖 | `test_tasks.py`、`test_completion_records.py`、`test_evidence_packages.py` | 已有自动测试 |
@@ -19,7 +24,7 @@
 | 仓库结构 | 代码、模板、文档和忽略的科研产物保持预期边界 | `tests/test_repo_structure.py` | 已有自动测试 |
 | 分层边界 | `domain` 不得反向 import `adapters`/`application`/`card_generators` 或 `subprocess`；共享层不得出现 provider 名称；已删除的 PDF 直读工具名不得回到 `hydrolitagent/cards`（`legacy/` 只读解码豁免） | `tests/test_import_boundaries.py` | 已有自动测试 |
 | CLI 契约快照 | `ai-config` / `paper-input` 的 JSON 字段只增不减、退出码为 0；本机 Zotero 不可用时显式 skip | `tests/test_cli_characterization.py` | 已有自动测试 |
-| 阅读方法策略 | 新产物只接受当前 method，历史 method 只读可校验；保留的 `markdown_prepared` 尚未启用 | `tests/test_source_access_methods.py` | 已有自动测试 |
+| 阅读方法策略 | 新产物可使用当前 method（含 `markdown_prepared`）；历史 method 只读可校验，不得写回新产物 | `tests/test_source_access_methods.py` | 已有自动测试 |
 
 这些测试主要使用模拟供应者、临时目录和隔离配置。它们证明工程边界和失败保护，不证明模型理解论文正确或主题具有科学价值。
 
@@ -38,7 +43,8 @@
 - 没有 Obsidian Adapter、人工主题决定命令、卡片—主题关系库或 idea 模块，因此不存在相应实现测试。
 - 现有自动测试不验证证据卡的科学正确性、候选主题的研究价值或 idea 创新性。
 - 尚未完成干净异机、真实关机/重新登录、云端 PDF 延迟和大规模语料的端到端验收。
-- 当前没有 CI 合并门禁；本地测试通过不会自动阻止未验证变更合入主分支。
+- `Release checks` 在 Ubuntu / macOS / Windows 三平台运行测试（不安装 Poppler），但仓库尚未配置必需状态检查；
+  测试通过不会自动阻止未验证变更合入主分支。
 
 ## 运行命令
 

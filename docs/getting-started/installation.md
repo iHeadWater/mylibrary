@@ -34,7 +34,8 @@ uv sync --all-packages
 ```
 
 > 本仓库只有**一个包 `hydrolitagent`**。入口是 `uv run hydrolitagent …`；
-> 文献卡与主题卡走子命令组 `uv run hydrolitagent cards …`（**运行时 Windows-only**）。
+> 文献卡与主题卡走子命令组 `uv run hydrolitagent cards …`。默认路径是 PDF→Markdown（Python + PyMuPDF），
+> macOS / Linux / Windows 行为一致，**不需要 Poppler**。
 
 ## 二、按能力看还要什么
 

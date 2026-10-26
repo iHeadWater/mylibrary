@@ -15,13 +15,15 @@
 
 ## 文献卡与主题卡：细分页
 
-从**你自己的** Zotero 文献出发：文献卡 → 代码校验 → 候选主题。**运行时 Windows-only。**
+从**你自己的** Zotero 文献出发：文献卡 → 代码校验 → 候选主题。默认路径是 PDF→Markdown，
+macOS / Linux / Windows 行为一致，**不需要 Poppler**。
 配好之后多数事直接跟 agent 说人话即可，见[概述](cards/index.md)。
 
 | 页面 | 讲什么 |
 |---|---|
-| [概述](cards/index.md) | 是什么、五条命令、边界 |
+| [概述](cards/index.md) | 是什么、七条命令、边界 |
 | [单篇论文输入](cards/paper-input.md) · [主体卡草稿](cards/subject-card-draft.md) · [主体卡校验](cards/subject-card-validation.md) | 单篇三步 |
+| [两阶段制卡与自查](cards/run-and-doctor.md) | `cards run prepare/finalize` 协议与 `cards doctor` 检查项 |
 | [统一主题池](cards/unified-theme-pool.md) | 一个研究问题一个长期主题：候选演化、合并/拆分、正式主题保护 |
 | [公共模板](cards/templates.md) · [运行维护](cards/runtime-maintenance.md) | 模板资产与排障 |
 | [项目级设计](../development/platform/project-design.md) · [配置字段参考](../development/platform/config.md) | 开发者向 |

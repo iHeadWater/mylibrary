@@ -81,9 +81,9 @@ uv run python scripts/paper_validate.py --draft hydrolitagent/cards/assets/examp
 
 返回 `status: PASS`、退出码 `0` 即入口可用。**不要把文档里的预期结果当成实际输出。**
 
-### 文献卡与主题卡（Windows）
+### 文献卡与主题卡
 
-配好之后跟 agent 说「把《某某》这篇做成卡」即可。自己敲是这 5 条：
+配好之后跟 agent 说「把《某某》这篇做成卡」即可。自己敲是这 7 条：
 
 ```bash
 uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json
@@ -91,10 +91,14 @@ uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai
 uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 uv run hydrolitagent cards themes-run --json
 uv run hydrolitagent cards ai-config --json          # 看模型选择与产物落点
+uv run hydrolitagent cards run prepare --paper-input paper-input.json --run-dir <运行目录> --json
+uv run hydrolitagent cards doctor --json             # 只读自查转换器、运行器与存储
 ```
 
-`--ai-provider` **只接受 `claude` 或 `codex`** —— 它选的是**命令行适配器**，不是模型厂家；
-用哪种模型由那个 CLI 自己的配置决定。详见[文献卡与主题卡](docs/user-guide/cards/index.md)（**你通常不需要读它**）。
+`--ai-provider` 选的是**运行器**，不是模型厂家；可用值以 `ai-config --json` 的 `runners` 为准
+（当前含 `claude`、`codex`、`openai_compatible`、`in_session`）。默认路径是 PDF→Markdown（Python + PyMuPDF），
+macOS / Linux / Windows 行为一致，**不需要 Poppler**。
+详见[文献卡与主题卡](docs/user-guide/cards/index.md)（**你通常不需要读它**）。
 
 单篇本地流程**不需要**先填工具链的 Zotero Web API 密钥，也**不需要**启动 MCP Server。
 
@@ -136,8 +140,9 @@ uv run python scripts/download_paper.py --title "<论文标题>" --sync         
 # 容器（myopenclaw hermes）里用打包好的流水线；逐条细节见 docs/user-guide/paper-pipeline.md
 bash scripts/run_paper_pipeline.sh "10.1016/j.jhydrol.2023.130249"
 
-# 文献卡平台：只读自查模型与产物根（Windows）
+# 文献卡平台：只读自查模型与产物根，以及转换器/运行器/存储
 uv run hydrolitagent cards ai-config --json
+uv run hydrolitagent cards doctor --json
 
 # 证据卡与主题综合：先自测，再制卡
 python skills/hydrology-evidence-cards/tests/self_test.py

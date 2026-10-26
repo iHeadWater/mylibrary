@@ -16,18 +16,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  validate:
-    name: Validate version and source
-    # The cards runtime is currently Windows-only.
-    runs-on: windows-latest
-    timeout-minutes: 20
+  checks:
+    name: Checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            shell: bash
+          - os: macos-latest
+            shell: bash
+          - os: windows-latest
+            shell: pwsh
     env:
       # Match the documented UTF-8 terminal contract, including child processes.
       PYTHONUTF8: "1"
-    defaults:
-      run:
-        shell: pwsh
     steps:
+      # `defaults.run.shell` cannot use matrix expressions, so every run step
+      # selects the platform shell explicitly: pwsh on Windows, bash elsewhere.
+      # The cards runtime is cross-platform: PDF -> Markdown uses PyMuPDF, so
+      # no Poppler, PowerShell-only probe or platform-specific binary discovery
+      # is installed anywhere in this workflow.
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -42,10 +53,14 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
       - name: Install locked dependencies
+        shell: ${{ matrix.shell }}
         run: uv sync --locked
       - name: Verify installed version and tag
         # 版本由 hatch-vcs 从 git tag 推导，`uv version` 在 dynamic version 下不可用；
         # 这里以安装后的包版本为准，并校验 tag 与之一致。
+        # tag 校验只在一个平台上跑一次即可。
+        if: runner.os == 'Windows'
+        shell: ${{ matrix.shell }}
         run: |
           $installedVersion = uv run --no-sync python -c "from importlib.metadata import version; print(version('hydrolitagent'))"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -54,20 +69,30 @@ jobs:
             throw "Tag $env:GITHUB_REF_NAME differs from v$installedVersion"
           }
           Write-Output "Verified version: $installedVersion"
+      - name: Confirm PDF converter works without Poppler
+        # This is the acceptance point for the Markdown-first pipeline: PyMuPDF
+        # is a Python wheel and needs no system PDF tools on any platform.
+        shell: ${{ matrix.shell }}
+        run: uv run --no-sync python -c "import pymupdf; print(f'pymupdf {pymupdf.__version__}')"
       - name: Run test suite
+        shell: ${{ matrix.shell }}
         env:
           # Runner context is available here, not in job-level env.
           # Avoid RUNNER~1 aliases in temporary path assertions.
           TEMP: ${{ runner.temp }}
           TMP: ${{ runner.temp }}
+          TMPDIR: ${{ runner.temp }}
         # Zotero integration tests keep their own availability/sample gates.
         # A skip is reported by pytest; failures are never filtered out.
         run: uv run --no-sync pytest -rs
       - name: Check CLI entry
+        shell: ${{ matrix.shell }}
         run: uv run --no-sync hydrolitagent cards --help
       - name: Validate offline example
+        shell: ${{ matrix.shell }}
         run: uv run --no-sync python scripts/paper_validate.py --draft hydrolitagent/cards/assets/examples/subject-card-validation/draft.json --paper-input hydrolitagent/cards/assets/examples/subject-card-validation/paper-input.json --report-dir outputs/release-validation
       - name: Build documentation in strict mode
+        shell: ${{ matrix.shell }}
         run: uv run --no-sync mkdocs build --strict
 
 # This workflow validates source releases only. It does not upload to PyPI,

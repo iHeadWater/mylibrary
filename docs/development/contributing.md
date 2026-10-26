@@ -286,7 +286,9 @@ gh release create v0.0.1 --repo iHeadWater/mylibrary --verify-tag --title "mylib
 `Release checks` 自动核对项目版本、安装版本与 tag，并运行测试、离线示例和严格文档构建。
 它不替维护者选择版本号，也不自动创建 Release。
 
-Windows 验收使用 UTF-8 模式（`PYTHONUTF8=1`）；CI 测试步骤的 `TEMP` / `TMP` 指向 runner 标准临时目录，
+`Release checks` 在 Ubuntu / macOS / Windows 三平台跑同一套测试，Windows 使用 `pwsh`、Unix 使用 `bash`，
+**不安装 Poppler** —— PDF→Markdown 由 PyMuPDF 完成，CI 另有一步显式 import 它来证明转换器可用。
+三平台都使用 UTF-8 模式（`PYTHONUTF8=1`）；CI 测试步骤的 `TEMP` / `TMP` 指向 runner 标准临时目录，
 避免托管用户的短路径别名与解析后的完整路径在断言中混用。原测试及业务代码不因 CI 失败而被排除或削弱。
 
 本项目目前只发布 **GitHub tag + Release**，不上传 PyPI，不需要 `uv publish`、PyPI 密钥或 Trusted Publishing，

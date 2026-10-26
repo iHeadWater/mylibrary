@@ -2,11 +2,12 @@
 name: literature-cards
 description: |
   文献卡与主题卡平台的运行入口：从自己的 Zotero 文献生成可追溯的证据卡与持续演化的主题池。
-  命令是 `uv run hydrolitagent cards …` 这一组（5 个子命令），不是交互式问答。
+  命令是 `uv run hydrolitagent cards …` 这一组（7 个子命令），不是交互式问答。
   Use when the user wants to run the cards platform, turn Zotero papers into evidence cards,
   update the theme pool, or check model/output configuration.
   Triggers: "跑一次平台", "制卡", "证据卡", "主题池", "更新主题", "文献卡",
-  "literature-cards", "paper-input", "themes-run", "平台排错", "ai-config".
+  "literature-cards", "paper-input", "themes-run", "平台排错", "ai-config",
+  "cards doctor", "两阶段制卡", "run prepare", "run finalize".
 ---
 
 # 文献卡与主题卡（literature-cards）
@@ -15,9 +16,12 @@ description: |
 
 ## ⚠️ 适用范围（先读）
 
-- **平台运行时为 Windows-only。** Poppler 原生工具与 PDF 沙箱探针依赖 Windows 的 PowerShell 与 `.exe`；
-  在 hermes 容器或 macOS/Linux 上未验证。
-- **前置条件**：Zotero 已登录且目标库已同步（`paper-input` 走 Local API 读本地 PDF）；`evidence-generate` 需要所选模型 CLI（Codex / Claude）已登录。不满足时命令会明确报错，不会静默降级。
+- **默认路径跨平台，不需要 Poppler。** PDF 先由 Python（PyMuPDF）确定性转换成 Markdown，
+  再由注册表中的任意运行器阅读；macOS / Linux / Windows 行为一致。
+- **前置条件**：Zotero 已登录且目标库已同步（`paper-input` 走 Local API 读本地 PDF）；
+  `evidence-generate` 需要所选运行器可用（已登录的 Codex / Claude CLI，或配置好的 OpenAI 兼容接口），
+  或改用 `cards run prepare|finalize` 让任意 agent 读写文件。不满足时命令会明确报错，不会静默降级。
+  不确定缺什么时先跑 `uv run hydrolitagent cards doctor --json`。
 - **平台不下载 PDF。** 它只读取共享库中**已经附好**的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`（本仓库另一侧能力）。
 
 ## Contract
@@ -76,8 +80,11 @@ PASS 只表示当前代码规则通过，不能声称科学结论正确或正式
 | 只读预览主题池与输入变化（不调模型） | `uv run hydrolitagent cards themes-run --dry-run --json` |
 | 只迁移已有完成主题（不调模型） | `uv run hydrolitagent cards themes-run --migrate-only --json` |
 | 只读查看模型选择与产物根（不调模型） | `uv run hydrolitagent cards ai-config --json` |
+| 只读自查转换器、运行器与存储（不调模型、不读用户 PDF） | `uv run hydrolitagent cards doctor --json` |
+| 准备两阶段运行目录（不调模型） | `uv run hydrolitagent cards run prepare --paper-input paper-input.json --run-dir <运行目录> --json` |
+| 收口 agent 写好的 `response.json`（不调模型） | `uv run hydrolitagent cards run finalize --run-dir <运行目录> --paper-input paper-input.json --json` |
 
-> 完整清单以 `uv run hydrolitagent cards --help` 为准（**当前 5 个子命令**）。
+> 完整清单以 `uv run hydrolitagent cards --help` 为准（**当前 7 个子命令**；`run` 含 `prepare` / `finalize`）。
 > `cards` 是 `hydrolitagent` CLI 的子命令组；平台已并入 `hydrolitagent` 包
 > （`hydrolitagent/cards/`）—— 它是一组子命令，不是独立的包或命令行工具。
 

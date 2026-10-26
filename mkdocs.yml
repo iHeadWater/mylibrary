@@ -75,6 +75,7 @@ nav:
           - 单篇论文输入: user-guide/cards/paper-input.md
           - 单篇主体卡草稿: user-guide/cards/subject-card-draft.md
           - 主体卡校验门禁: user-guide/cards/subject-card-validation.md
+          - 两阶段制卡与自查: user-guide/cards/run-and-doctor.md
           - 模板资产:
               - 公共模板: user-guide/cards/templates.md
               - 主题模板:
