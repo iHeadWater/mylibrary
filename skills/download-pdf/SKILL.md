@@ -423,7 +423,7 @@ The script uses Zotero's portable `attachments:<filename>` scheme. Zotero resolv
 |----------|--------|
 | `ZOTERO_API_KEY` / `ZOTERO_LIBRARY_ID` not set | Report missing env vars; PDF is already saved locally |
 | `GDRIVE_PAPERS_PATH` not set | Report missing env var; PDF is already saved locally |
-| Crossref metadata fetch fails | 回退顺序：chndoi.org + 刊社 `citation_*`（中文期刊）→ arXiv API（arXiv DOI）→ PDF 内嵌元数据（title/author/DOI）。Crossref 本身会先重试一次。 |
+| Crossref metadata fetch fails | 回退顺序：chndoi.org + 刊社 `citation_*`（中文期刊）→ arXiv API（arXiv DOI）→ PDF 内嵌元数据（title/author/DOI）。Crossref 本身会先重试一次。CNKI-only 落地页会**秒级失败**并提示 `--landing-url`（该站证书不匹配 + 418，重试无意义）；chndoi 的「出版机构/注册时间」是注册方与登记日期，不得当作刊名/出版年。 |
 | Zotero API write fails | Report error; PDF is already in GDrive folder — user can manually link |
 | Collection not found | Skip collection filing; item goes to "My Library" root |
 | `attachments:` path not resolving | User needs to configure "Linked Attachment Base Directory" in Zotero preferences |
@@ -532,6 +532,20 @@ These are the ONLY patterns to use. Do not deviate.
 ```
 1. uv run python scripts/download_paper.py --doi 10.2139/ssrn.<id> --sync
    (auto-routes to ssrn_flow: visit abstract page → wait Cloudflare → click download)
+```
+
+### Download: Chinese journal (CNKI-registered DOI)
+```
+1. uv run python scripts/download_paper.py --doi <中文DOI> --resolve-only
+   (chndoi.org supplies title/authors; 刊名/卷/期/页 come from the publisher's
+    citation_* tags — the registry page leaves 来源/出版年 empty)
+2. If chndoi only advertises CNKI links, the download fails fast with a hint.
+   Pass the journal's own article page; citation_pdf_url is then used first:
+   uv run python scripts/download_paper.py --doi <中文DOI> \
+       --landing-url <journal article page> --sync
+3. Reruns are idempotent: "already attached (identical content)", no duplicate item.
+   Resolved metadata reaches the sync subprocess via MYLIBRARY_SOURCE_META, so
+   刊名/卷/期/页 survive even on the --landing-url path.
 ```
 
 ### Batch papers (titles list)

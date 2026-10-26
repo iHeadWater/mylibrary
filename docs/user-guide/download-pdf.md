@@ -249,11 +249,29 @@ DataCite 注册**，`https://doi.org/<doi>` 会落到证书域名不匹配的 `l
 
 ```bash
 uv run python scripts/download_paper.py --doi 10.14042/j.cnki.32.1309.2026.06.001 --resolve-only
-uv run python scripts/download_paper.py --doi 10.14042/j.cnki.32.1309.2026.06.001 --sync
 ```
 
+解析页若只给出 CNKI 链接（CNKI 系 DOI 的常见情况），`--resolve-only` 仍能打印题名/作者，
+但**下载会秒级失败并给出提示**，不会对着不可达的 CNKI 主机空跑两轮浏览器：
+
+```text
+FAILED: this DOI only resolves to CNKI, which serves a mismatched TLS certificate
+        and rejects scripted access.
+  Pass the journal's own article page instead: --landing-url / --pdf-url
+```
+
+这时补上刊社文章页即可（页面上的 `citation_pdf_url` 会被自动选用）：
+
+```bash
+uv run python scripts/download_paper.py --doi 10.14042/j.cnki.32.1309.2026.06.001 \
+    --landing-url http://skxjz.nhri.cn/cn/article/doi/10.14042/j.cnki.32.1309.2026.06.001 --sync
+```
+
+同一条命令重跑是幂等的：PDF 已挂且内容一致时 `zotero_sync` 报
+`already attached (identical content)`，不会新建重复条目。
+
 当解析结果里**没有任何可打开的页面**（未注册 DOI、解析页不可达、站点改版导致链接丢失），
-或唯一落点是脚本访问不到的 CNKI 主机时，**不会退化成乱猜**：脚本报错并提示手工指定。
+同样**不会退化成乱猜**：脚本报错并提示手工指定。
 
 ```bash
 uv run python scripts/download_paper.py --doi <中文DOI> \
@@ -265,8 +283,10 @@ uv run python scripts/download_paper.py --doi <中文DOI> --pdf-url https://<xxx
 - 页面编码依次回退：`Content-Type` → `<meta charset>` → UTF-8 → `gb18030`，老刊的 GBK 页可读；
 - 滑块/验证页（标题含 `安全验证`、`拖动滑块`）按挑战页处理，沿用无头→有头的升级逻辑；
 - 自动路径下 Zotero 条目为 `journalArticle`、`language=zh`，中文作者写成 `family=全名, given=""`，
-  卷期页与中文刊名取自刊社页面。**手工兜底（`--landing-url`/`--pdf-url`）只影响下载**：同步时
-  `build_item` 会重新解析一次元数据，解析不到就回退 PDF 内嵌信息（条目可能变成 `preprint`、卷期页缺失）。
+  卷期页与中文刊名取自刊社页面。
+- **手工兜底同样带着元数据入库**：`download_paper` 把已解析的记录经环境变量
+  `MYLIBRARY_SOURCE_META` 交给 `zotero_sync` 子进程，所以 `--landing-url` 解析出的
+  刊名/卷/期/页不会丢。早期版本会重解析一次，导致这条路径只挂上 PDF、卷期页缺失，已修。
 
 `--sync` 的两个条目冲突开关也可直接透传（此前只能手工跑 `zotero_sync`）：
 `--replace`（同名附件内容不同时覆盖）与 `--skip-existing`（DOI 已存在则整篇跳过）。
