@@ -50,9 +50,9 @@ def test_shipped_config_keeps_the_legacy_pipeline() -> None:
         assert config.converter.cache_dir == config.paths.runtime_dir
 
 
-def test_pipeline_mode_defaults_to_legacy(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pipeline_mode_defaults_to_markdown(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CARD_PIPELINE", raising=False)
-    assert resolve_pipeline_mode() == "legacy"
+    assert resolve_pipeline_mode() == "markdown"
     assert resolve_pipeline_mode({"CARD_PIPELINE": "markdown"}) == "markdown"
     assert resolve_pipeline_mode({"CARD_PIPELINE": " LEGACY "}) == "legacy"
 

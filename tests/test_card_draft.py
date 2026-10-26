@@ -260,7 +260,8 @@ def test_cli_consumes_ready_json_without_zotero_or_group(draft_case, tmp_path, c
     with patch.object(cli, "load_config", return_value=app) as loader, \
          patch.object(cli, "preflight", side_effect=AssertionError("must not contact Zotero")), \
          patch.object(card_draft, "build_card_generator_adapter", return_value=adapter):
-        code = cli.main(["evidence-generate", "--paper-input", str(input_file), "--json", "--no-progress"])
+        code = cli.main(["evidence-generate", "--paper-input", str(input_file),
+                         "--pipeline", "legacy", "--json", "--no-progress"])
     result = json.loads(capsys.readouterr().out)
     assert code == 0, result
     loader.assert_not_called()
@@ -272,10 +273,12 @@ def test_cli_stdin_and_bad_json(draft_case, capsys):
     with patch.object(cli, "load_config", return_value=app), \
          patch.object(card_draft, "build_card_generator_adapter", return_value=adapter), \
          patch("sys.stdin", io.StringIO(json.dumps(record))):
-        assert cli.main(["evidence-generate", "--paper-input", "-", "--json", "--no-progress"]) == 0
+        assert cli.main(["evidence-generate", "--paper-input", "-",
+                         "--pipeline", "legacy", "--json", "--no-progress"]) == 0
     assert json.loads(capsys.readouterr().out)["ok"]
     with patch.object(cli, "load_config", return_value=app), patch("sys.stdin", io.StringIO("{bad")):
-        assert cli.main(["evidence-generate", "--paper-input", "-", "--json", "--no-progress"]) == 3
+        assert cli.main(["evidence-generate", "--paper-input", "-",
+                         "--pipeline", "legacy", "--json", "--no-progress"]) == 3
     assert json.loads(capsys.readouterr().out)["error"]["code"] == "CARD_DRAFT_INPUT_INVALID"
 
 def test_cli_keeps_old_item_key_and_rejects_ambiguous_source():

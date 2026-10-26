@@ -17,7 +17,7 @@ import json
 import pytest
 
 from hydrolitagent.cards import cli
-from hydrolitagent.cards.config import ConfigError
+from hydrolitagent.cards.config import DEFAULT_PIPELINE_MODE, ConfigError
 from hydrolitagent.cards.paper_input_config import load_paper_input_config
 from hydrolitagent.cards.zotero import ZoteroApiError, ZoteroClient
 
@@ -46,6 +46,8 @@ AI_CONFIG_AI_KEYS_STAGE1 = AI_CONFIG_AI_KEYS_REQUIRED | {
     "pdfinfo_executable",
     "pdftotext_executable",
     "pdftoppm_executable",
+    # Stage 3b: which single-paper pipeline the next run would take.
+    "pipeline",
 }
 
 # Keys every READY ``paper-input`` result carries. Optional keys (``candidates``,
@@ -96,13 +98,14 @@ def _run_json(argv: list[str], capsys, *, expected_exit: int = 0) -> dict:
     return json.loads(captured.out)
 
 
-def test_ai_config_json_contract(capsys) -> None:
+def test_ai_config_json_contract(capsys, monkeypatch) -> None:
     """``ai-config --json`` keeps its top-level and ``ai`` field sets.
 
     The command must stay runnable without any machine configuration or model
     CLI, so it is invoked with defaults only.
     """
 
+    monkeypatch.delenv("CARD_PIPELINE", raising=False)
     result = _run_json(["ai-config", "--json"], capsys)
 
     assert set(result) == AI_CONFIG_TOP_LEVEL_KEYS, (
@@ -121,6 +124,9 @@ def test_ai_config_json_contract(capsys) -> None:
     assert ai_keys <= AI_CONFIG_AI_KEYS_STAGE1, (
         "ai-config 出现未登记的新字段："
         f"{sorted(ai_keys - AI_CONFIG_AI_KEYS_STAGE1)}"
+    )
+    assert result["ai"]["pipeline"] == DEFAULT_PIPELINE_MODE == "markdown", (
+        "ai-config 必须显示下一次单篇制卡实际使用的管线"
     )
 
 

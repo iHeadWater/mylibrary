@@ -122,8 +122,8 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--ai-executable", help="本机 CLI 可执行文件名或绝对路径")
             command.add_argument("--ai-timeout", type=float)
             command.add_argument("--output-root", help="本次产物根；不传则用默认解析（configs/paths.toml → outputs/）")
-            # Transitional switch: the Markdown-first pipeline is available but
-            # not the default until stage 3b. Hidden on purpose.
+            # The default comes from CARD_PIPELINE (``markdown`` since stage 3b);
+            # the hidden override exists for one release as a rollback.
             command.add_argument(
                 "--pipeline", choices=["legacy", "markdown"], default=None,
                 help=argparse.SUPPRESS,

@@ -38,7 +38,7 @@ flowchart TB
     INPUT --> RUNTIME
 ```
 
-仓库只有一个包 `hydrolitagent`——文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包。`.venv` 与 `uv.lock` 只有一份。自动化运行时为 Windows-only；文献工具链中的部分能力可以独立运行。
+仓库只有一个包 `hydrolitagent`——文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包。`.venv` 与 `uv.lock` 只有一份。**单篇制卡默认路径已跨平台**：PDF 由 Python 转换成 Markdown，再由任意已登录 CLI 阅读，macOS / Linux / Windows 行为一致，不需要 Poppler。仍带平台约束的是旧 `CARD_PIPELINE=legacy` 回退路径与主题流程的定向精读（依赖本机 Codex CLI 与 Poppler），它们只保留到对应迁移阶段。
 
 ## 组件职责
 
@@ -47,7 +47,7 @@ flowchart TB
 | Zotero | 来源身份、条目、附件与原始 PDF | 不保存主题判断，不由平台修改数据库文件 |
 | `hydrolitagent` | 文献下载、入库、查询、附件和全文访问 | 不管理主题生命周期 |
 | 单篇输入与 PDF 门禁 | 解析唯一本地 PDF，检查文件大小、文本量和文件指纹 | 元数据或摘要不能替代全文证据 |
-| 制卡适配器 | 调用已登录的 Codex 或 Claude CLI，读取 PDF 生成主体卡草稿 | 总配置字段 `card_generator.adapter` 目前接受 `codex_cli`；单篇 `evidence-generate` 另经 `configs/ai.toml` 支持 `claude_cli`。流程通过不等于科学正确 |
+| 制卡适配器 | 调用已登录的 Codex 或 Claude CLI，读取 Python 转换的 `paper.md`（默认）或旧路径下的 PDF，生成主体卡草稿 | 总配置字段 `card_generator.adapter` 目前接受 `codex_cli`；单篇 `evidence-generate` 另经 `configs/ai.toml` 支持 `claude_cli`。流程通过不等于科学正确 |
 | 主体卡校验 | 确定性检查字段形状、来源绑定、页码、引用编号和版本指纹 | 不调用模型，不读取 Zotero，不证明科研内容正确 |
 | 主题池 | 基于全池文献卡、既有候选和适用精读执行 CREATE/UPDATE/MERGE/SPLIT | 只能处理候选主题，不能自动建立正式主题 |
 

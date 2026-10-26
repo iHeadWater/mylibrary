@@ -11,20 +11,34 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from hydrolitagent.cards.card_draft import KEY, SHA256, PROMPT, SCHEMA, SINGLE_SOURCE_TEMPLATES
-from hydrolitagent.cards._paths import ASSETS_DIR, PROMPTS_DIR
+from hydrolitagent.cards._paths import ASSETS_DIR, PROMPTS_DIR, SCHEMAS_DIR
 from hydrolitagent.cards.card_generation import (
     CardGenerationError, _load_template_bundle, _read_prompt, build_template_prompt,
 )
 from hydrolitagent.cards.evidence_templates import EvidenceTemplateError
 from hydrolitagent.cards.publication import atomic_text
+from hydrolitagent.cards.domain.protocol import MARKDOWN_CARD_PROTOCOL_VERSION
 from hydrolitagent.cards.domain.source_access import (
     CLAUDE_PDF_READ,
     CURRENT_METHODS,
     LOCAL_PDF_PATH,
+    MARKDOWN_PREPARED,
     source_access_acceptable,
 )
 
 POLICY = "subject-card-validation-v1"
+POLICY_MARKDOWN = "subject-card-validation-v2"
+MARKDOWN_DRAFT_SCHEMA_VERSION = 2
+LEGACY_READ_ONLY = "LEGACY_READ_ONLY"
+# A v2 provenance record must carry these; ``combined_prompt_sha256`` cannot be
+# recomputed from the input record alone because the prompt embeds the prepared
+# paper's canaries and page anchors.
+MARKDOWN_PROVENANCE_FIELDS = (
+    "prompt_version", "prompt_sha256", "draft_prompt_version", "draft_prompt_sha256",
+    "combined_prompt_sha256", "output_schema_sha256", "template_id", "template_version",
+    "template_sha256", "catalog_version", "converter_id", "converter_version",
+    "runner_id", "generation_protocol_version",
+)
 FIELDS = ("research_questions", "study_objects_and_scales", "data_and_methods",
           "comparison_baselines", "findings", "boundaries", "missing_information")
 FINDING = re.compile(r"F[0-9]{3,}")
@@ -42,6 +56,10 @@ class ValidationAssets:
     reading_prompt: Path
     output_schema: Path
     claude_reading_prompt: Path = PROMPTS_DIR / "pdf-claude-reading-v1.md"
+    # Markdown-first (v2) assets: the runner reads ``paper.md``, so the draft
+    # prompt and output schema differ from the legacy PDF path.
+    markdown_reading_prompt: Path = PROMPTS_DIR / "markdown-reading-v1.md"
+    markdown_output_schema: Path = SCHEMAS_DIR / "subject-card-draft-output-v3.schema.json"
 
     def __post_init__(self):
         for field in fields(self):
@@ -55,14 +73,19 @@ class ValidationAssets:
                    root / "prompts/subject-card-draft-v1.md",
                    root / "prompts/pdf-local-reading-v1.md",
                    root / "schemas/subject-card-draft-output.schema.json",
-                   root / "prompts/pdf-claude-reading-v1.md")
+                   root / "prompts/pdf-claude-reading-v1.md",
+                   root / "prompts/markdown-reading-v1.md",
+                   root / "schemas/subject-card-draft-output-v3.schema.json")
 
     @classmethod
     def from_config(cls, config):
         return cls(config.paths.evidence_card_templates_dir,
                    config.paths.evidence_card_template_catalog_file,
                    config.paths.evidence_card_generation_prompt_file, PROMPT,
-                   config.card_generator.pdf_direct_trial.reading_prompt_file, SCHEMA)
+                   config.card_generator.pdf_direct_trial.reading_prompt_file, SCHEMA,
+                   PROMPTS_DIR / "pdf-claude-reading-v1.md",
+                   PROMPTS_DIR / "markdown-reading-v1.md",
+                   SCHEMAS_DIR / "subject-card-draft-output-v3.schema.json")
 
     def as_dict(self):
         return {field.name: str(getattr(self, field.name)) for field in fields(self)}
@@ -219,35 +242,91 @@ def _provenance(assets, draft, record, identity, add):
             add("CARD_VERSION_MISMATCH", f"/provenance/{key}", "记录与当前输入或配置的版本不一致")
 
 
-def validate_subject_card(config, draft, paper_input):
-    """Pure with respect to input artifacts: read assets, return a report, never invoke AI."""
-    assets = _assets(config)
-    errors, warnings = [], []
-    def add(code, path, message, **details):
-        errors.append({"code": code, "path": path, "message": message, **details})
-
-    report = {
+def _base_report(policy_version, *, pipeline, legacy_read_only, errors, warnings):
+    return {
         "schema_version": 1, "operation": "subject_card_validation",
         "validation_id": uuid.uuid4().hex, "validated_at": datetime.now(timezone.utc).isoformat(),
-        "policy_version": POLICY,
+        "policy_version": policy_version,
         "validator_sha256": hashlib.sha256(Path(__file__).read_text(encoding="utf-8").encode("utf-8")).hexdigest(),
+        # ``report_mode`` labels a historical draft without reinterpreting it:
+        # v1 artifacts stay readable but are never treated as a current pass.
+        "report_mode": LEGACY_READ_ONLY if legacy_read_only else "CURRENT",
+        "draft_pipeline": pipeline,
         "ok": False, "status": "FAIL", "eligible_for_theme_generation": False,
         "content_validation_performed": True,
         "scientific_correctness_verified": False, "production_eligible": False,
         "errors": errors, "warnings": warnings,
     }
-    try:
-        report["draft_sha256"], report["input_sha256"] = fingerprint(draft), fingerprint(paper_input)
-    except (ValueError, TypeError, OverflowError, RecursionError):
-        add("CARD_JSON_INVALID", "/", "输入必须是可规范化的有限 JSON")
-        return report
-    identity = _input_identity(paper_input, add)
-    if not isinstance(draft, dict):
-        add("CARD_DRAFT_INVALID", "/", "主体卡草稿必须为对象")
-        return report
-    report["draft_id"] = draft.get("draft_id")
-    report["draft_schema_version"] = draft.get("schema_version")
-    report["input_schema_version"] = paper_input.get("schema_version") if isinstance(paper_input, dict) else None
+
+
+def _validate_machine_fields(schema_path, draft, body, pages, add, warnings):
+    """Deterministic wire/content checks shared by v1 and v2 drafts.
+
+    It judges shape, placeholders, page ranges and finding references. It never
+    decides whether the science is right.
+    """
+    schema = json.loads(Path(schema_path).read_text(encoding="utf-8"))["properties"]["machine_fields"]
+    fields = draft.get("machine_fields")
+    _shape(fields, schema, "/machine_fields", add)
+    fields = fields if isinstance(fields, dict) else {}
+    ids = set()
+    for category in FIELDS:
+        rows = fields.get(category)
+        path = f"/machine_fields/{category}"
+        if not isinstance(rows, list) or not rows:
+            add("CARD_CONTENT_MISSING", path, "必须提供内容；未报告或不适用时提供原因记录")
+            continue
+        for i, row in enumerate(rows):
+            entry = f"{path}/{i}"
+            if not isinstance(row, dict):
+                continue
+            if not _content(row.get("statement")):
+                add("CARD_CONTENT_MISSING", entry + "/statement", "陈述为空、占位符或只有缺失标签而无说明")
+            status, role, locations = (row.get(k) for k in ("information_status", "statement_role", "source_locations"))
+            if status in ("not_reported", "not_applicable", "unavailable") and role != "information_boundary":
+                add("CARD_INFORMATION_BOUNDARY", entry, "缺失或不适用信息必须明确标为信息边界")
+            if status == "reported" and (not isinstance(locations, list) or not locations):
+                add("CARD_LOCATION_REQUIRED", entry + "/source_locations", "已报告的陈述必须提供原文位置")
+            if isinstance(locations, list):
+                for j, location in enumerate(locations):
+                    if not isinstance(location, dict):
+                        continue
+                    locpath = entry + f"/source_locations/{j}"
+                    page = location.get("pdf_page")
+                    if ((page is not None or status == "reported")
+                        and (type(page) is not int or not 1 <= page <= pages)):
+                        add("CARD_LOCATION_INVALID", locpath + "/pdf_page", "原文页码必须在 PDF 物理页范围内")
+                    for key in ("section", "figure", "table"):
+                        if location.get(key) is not None and not _text(location[key]):
+                            add("CARD_LOCATION_INVALID", locpath + "/" + key, "原文位置必须为非空文本或 null")
+            if category == "findings":
+                fid = row.get("finding_id")
+                if not isinstance(fid, str) or not FINDING.fullmatch(fid) or fid in ids:
+                    add("CARD_FINDING_ID_INVALID", entry + "/finding_id", "结果编号必须是唯一的 F001 格式")
+                else:
+                    ids.add(fid)
+    # Headings are visible references too. Strip them only for the nonempty-body check above.
+    reference_text = re.sub(r"<!--.*?-->", "", body, flags=re.S) if isinstance(body, str) else ""
+    body_ids = set(re.findall(r"(?<![A-Za-z0-9])F[0-9]{3,}(?![A-Za-z0-9])", reference_text))
+    for fid in sorted(ids - body_ids):
+        add("CARD_FINDING_REFERENCE", "/card_body_markdown", f"正文没有引用机器结果 {fid}", finding_id=fid)
+    for fid in sorted(body_ids - ids):
+        add("CARD_FINDING_REFERENCE", "/card_body_markdown", f"正文引用了未定义的结果 {fid}", finding_id=fid)
+
+
+def _check_body(draft, add, warnings):
+    body = draft.get("card_body_markdown")
+    visible = re.sub(r"<!--.*?-->|(?m:^[ \t]*#{1,6}[ \t]+[^\r\n]*$)", "", body, flags=re.S) if isinstance(body, str) else ""
+    if not _content(visible):
+        add("CARD_CONTENT_MISSING", "/card_body_markdown", "缺少可读正文或仅有占位内容")
+    elif len(visible.strip()) < 300:
+        warnings.append({"code": "CARD_TEXT_SHORT", "path": "/card_body_markdown",
+                         "message": "正文较短，请关注信息覆盖；字数不决定是否通过"})
+    return body
+
+
+def _validate_legacy_draft(assets, draft, paper_input, identity, report, add, warnings):
+    """Rules for schema_version 1 drafts (PDF read by the provider itself)."""
     if type(draft.get("schema_version")) is not int or draft["schema_version"] != 1:
         add("CARD_DRAFT_VERSION", "/schema_version", "仅支持主体卡草稿协议版本 1")
     if not isinstance(draft.get("draft_id"), str) or not re.fullmatch(r"[a-f0-9]{16}", draft["draft_id"]):
@@ -281,66 +360,190 @@ def validate_subject_card(config, draft, paper_input):
     if isinstance(access, dict) and access.get("method") == CLAUDE_PDF_READ and not source_access_acceptable(
             access, expected_sha256=source.get("pdf_sha256"), expected_parent_key=source.get("parent_key")):
         add("CARD_READING_RECORD_INVALID", "/reading_record", "Claude 的只读 PDF 回执或来源身份不完整")
-    body = draft.get("card_body_markdown")
-    visible = re.sub(r"<!--.*?-->|(?m:^[ \t]*#{1,6}[ \t]+[^\r\n]*$)", "", body, flags=re.S) if isinstance(body, str) else ""
-    if not _content(visible):
-        add("CARD_CONTENT_MISSING", "/card_body_markdown", "缺少可读正文或仅有占位内容")
-    elif len(visible.strip()) < 300:
-        warnings.append({"code": "CARD_TEXT_SHORT", "path": "/card_body_markdown",
-                         "message": "正文较短，请关注信息覆盖；字数不决定是否通过"})
+    body = _check_body(draft, add, warnings)
     try:
-        schema = json.loads(assets.output_schema.read_text(encoding="utf-8"))["properties"]["machine_fields"]
-        fields = draft.get("machine_fields")
-        _shape(fields, schema, "/machine_fields", add)
-        fields = fields if isinstance(fields, dict) else {}
-        ids = set()
-        for category in FIELDS:
-            rows = fields.get(category)
-            path = f"/machine_fields/{category}"
-            if not isinstance(rows, list) or not rows:
-                add("CARD_CONTENT_MISSING", path, "必须提供内容；未报告或不适用时提供原因记录")
-                continue
-            for i, row in enumerate(rows):
-                entry = f"{path}/{i}"
-                if not isinstance(row, dict):
-                    continue
-                if not _content(row.get("statement")):
-                    add("CARD_CONTENT_MISSING", entry + "/statement", "陈述为空、占位符或只有缺失标签而无说明")
-                status, role, locations = (row.get(k) for k in ("information_status", "statement_role", "source_locations"))
-                if status in ("not_reported", "not_applicable", "unavailable") and role != "information_boundary":
-                    add("CARD_INFORMATION_BOUNDARY", entry, "缺失或不适用信息必须明确标为信息边界")
-                if status == "reported" and (not isinstance(locations, list) or not locations):
-                    add("CARD_LOCATION_REQUIRED", entry + "/source_locations", "已报告的陈述必须提供原文位置")
-                if isinstance(locations, list):
-                    for j, location in enumerate(locations):
-                        if not isinstance(location, dict):
-                            continue
-                        locpath = entry + f"/source_locations/{j}"
-                        page = location.get("pdf_page")
-                        if ((page is not None or status == "reported")
-                            and (type(page) is not int or not 1 <= page <= pages)):
-                            add("CARD_LOCATION_INVALID", locpath + "/pdf_page", "原文页码必须在 PDF 物理页范围内")
-                        for key in ("section", "figure", "table"):
-                            if location.get(key) is not None and not _text(location[key]):
-                                add("CARD_LOCATION_INVALID", locpath + "/" + key, "原文位置必须为非空文本或 null")
-                if category == "findings":
-                    fid = row.get("finding_id")
-                    if not isinstance(fid, str) or not FINDING.fullmatch(fid) or fid in ids:
-                        add("CARD_FINDING_ID_INVALID", entry + "/finding_id", "结果编号必须是唯一的 F001 格式")
-                    else:
-                        ids.add(fid)
-        # Headings are visible references too. Strip them only for the nonempty-body check above.
-        reference_text = re.sub(r"<!--.*?-->", "", body, flags=re.S) if isinstance(body, str) else ""
-        body_ids = set(re.findall(r"(?<![A-Za-z0-9])F[0-9]{3,}(?![A-Za-z0-9])", reference_text))
-        for fid in sorted(ids - body_ids):
-            add("CARD_FINDING_REFERENCE", "/card_body_markdown", f"正文没有引用机器结果 {fid}", finding_id=fid)
-        for fid in sorted(body_ids - ids):
-            add("CARD_FINDING_REFERENCE", "/card_body_markdown", f"正文引用了未定义的结果 {fid}", finding_id=fid)
+        _validate_machine_fields(assets.output_schema, draft, body, pages, add, warnings)
         _provenance(assets, draft, paper_input, identity, add)
     except (OSError, ValueError, KeyError, CardGenerationError, EvidenceTemplateError) as exc:
         add("CARD_RULESET_UNAVAILABLE", "/provenance", f"无法读取校验所需协议或版本资产：{type(exc).__name__}", asset_paths=assets.as_dict())
+
+
+def _check_markdown_access(access, source, pages, add):
+    """The v2 receipt: both digests, converter identity and program verdicts."""
+    if not isinstance(access, dict):
+        add("CARD_READING_RECORD_INVALID", "/source_access", "缺少 Markdown 阅读回执")
+        return
+    if access.get("method") != MARKDOWN_PREPARED:
+        add("CARD_READING_RECORD_INVALID", "/source_access/method", "阅读回执必须记录 markdown_prepared")
+    digest = access.get("source_pdf_sha256")
+    if not isinstance(digest, str) or not SHA256.fullmatch(digest) or digest != source.get("pdf_sha256"):
+        add("CARD_SOURCE_MISMATCH", "/source_access/source_pdf_sha256", "回执的 PDF 哈希与草稿来源不一致")
+    markdown_digest = access.get("markdown_sha256")
+    if not isinstance(markdown_digest, str) or not SHA256.fullmatch(markdown_digest):
+        add("CARD_READING_RECORD_INVALID", "/source_access/markdown_sha256", "缺少有效的 Markdown 哈希")
+    if access.get("parent_key") != source.get("parent_key"):
+        add("CARD_SOURCE_MISMATCH", "/source_access/parent_key", "回执的父条目与草稿来源不一致")
+    if type(access.get("page_count")) is not int or access["page_count"] != pages:
+        add("CARD_READING_RECORD_INVALID", "/source_access/page_count", "回执页数与草稿来源不一致")
+    for key in ("converter_id", "converter_version"):
+        if not _text(access.get(key)):
+            add("CARD_READING_RECORD_INVALID", f"/source_access/{key}", "缺少转换器身份")
+    reading = access.get("reading")
+    if not isinstance(reading, dict):
+        add("CARD_READING_RECORD_INVALID", "/source_access/reading", "缺少由程序计算的阅读结论")
+        return
+    if reading.get("verified") is not True:
+        add("CARD_READING_NOT_VERIFIED", "/source_access/reading/verified",
+            "引文与页锚点未通过程序校验；不能作为已核验阅读")
+    if reading.get("canaries_ok") is not True:
+        add("CARD_READING_NOT_VERIFIED", "/source_access/reading/canaries_ok",
+            "完整性 canary 未被全部回显")
+    if reading.get("scientific_correctness_verified") is not False:
+        add("CARD_READING_RECORD_INVALID", "/source_access/reading/scientific_correctness_verified",
+            "自动校验不能声称科研正确性")
+    coverage = reading.get("quote_coverage")
+    if (isinstance(coverage, bool) or not isinstance(coverage, (int, float))
+            or not 0.0 <= float(coverage) <= 1.0):
+        add("CARD_READING_RECORD_INVALID", "/source_access/reading/quote_coverage",
+            "引文覆盖率必须是 0 到 1 之间的数值")
+
+
+def _provenance_markdown(assets, draft, add):
+    """Compare the v2 provenance record with the assets shipped with this code."""
+    catalog, templates = _load_template_bundle(assets.templates_dir, assets.catalog_file)
+    templates = {k: v for k, v in templates.items() if k in SINGLE_SOURCE_TEMPLATES}
+    base = _read_prompt(assets.generation_prompt)
+    supplement = _read_prompt(assets.markdown_reading_prompt)
+    provenance = draft.get("provenance")
+    if not isinstance(provenance, dict):
+        add("CARD_PROVENANCE_MISSING", "/provenance", "缺少转换器、运行器和模板版本信息")
+        return
+    for key in MARKDOWN_PROVENANCE_FIELDS:
+        if key not in provenance:
+            add("CARD_PROVENANCE_MISSING", f"/provenance/{key}", "缺少版本或指纹")
+    expected = {
+        "prompt_version": base["version"], "prompt_sha256": base["sha256"],
+        "draft_prompt_version": supplement["version"], "draft_prompt_sha256": supplement["sha256"],
+        "output_schema_sha256": hashlib.sha256(
+            assets.markdown_output_schema.read_text(encoding="utf-8").encode("utf-8")
+        ).hexdigest(),
+        "catalog_version": catalog["catalog_version"],
+        "generation_protocol_version": MARKDOWN_CARD_PROTOCOL_VERSION,
+    }
+    tid = provenance.get("template_id")
+    template = templates.get(tid) if isinstance(tid, str) else None
+    if template is None:
+        add("CARD_TEMPLATE_INVALID", "/provenance/template_id", "不是当前启用的单来源模板")
+    else:
+        expected.update(template_version=template["local_version"], template_sha256=template["content_sha256"])
+    for key, value in expected.items():
+        if key not in provenance:
+            continue
+        if provenance[key] != value:
+            add("CARD_VERSION_MISMATCH", f"/provenance/{key}", "记录与当前输入或配置的版本不一致")
+    # ``combined_prompt_sha256`` embeds prepared-paper canaries and anchors that
+    # the input record does not carry, so only its shape is checkable here.
+    combined = provenance.get("combined_prompt_sha256")
+    if "combined_prompt_sha256" in provenance and (
+        not isinstance(combined, str) or not SHA256.fullmatch(combined)
+    ):
+        add("CARD_VERSION_MISMATCH", "/provenance/combined_prompt_sha256", "必须记录 64 位 SHA-256")
+    access = draft.get("source_access") if isinstance(draft.get("source_access"), dict) else {}
+    for key in ("converter_id", "converter_version"):
+        if key in provenance and provenance[key] != access.get(key):
+            add("CARD_VERSION_MISMATCH", f"/provenance/{key}", "与阅读回执记录的转换器不一致")
+    if not _text(provenance.get("runner_id")):
+        add("CARD_PROVENANCE_MISSING", "/provenance/runner_id", "缺少运行器标识")
+
+
+def _validate_markdown_draft(assets, draft, paper_input, identity, report, add, warnings):
+    """Rules for schema_version 2 drafts produced by the Markdown-first pipeline."""
+    if type(draft.get("schema_version")) is not int or draft["schema_version"] != MARKDOWN_DRAFT_SCHEMA_VERSION:
+        add("CARD_DRAFT_VERSION", "/schema_version", "仅支持主体卡草稿协议版本 2")
+    if draft.get("pipeline") != "markdown":
+        add("CARD_DRAFT_INVALID", "/pipeline", "v2 草稿必须记录 markdown 管线")
+    if not isinstance(draft.get("draft_id"), str) or not re.fullmatch(r"[a-f0-9]{16}", draft["draft_id"]):
+        add("CARD_DRAFT_INVALID", "/draft_id", "缺少有效的草稿版本标识")
+    if not _time(draft.get("created_at")):
+        add("CARD_DRAFT_INVALID", "/created_at", "缺少带时区的生成时间")
+    if (draft.get("status") != "DRAFT_PENDING_VALIDATION"
+        or any(draft.get(k) is not False for k in
+               ("content_validation_performed", "scientific_correctness_verified", "production_eligible"))):
+        add("CARD_DRAFT_STATE", "/status", "校验输入必须是未发布的待校验草稿，不能自行声称通过")
+    source = draft.get("source")
+    if not isinstance(source, dict):
+        source = {}
+        add("CARD_SOURCE_MISMATCH", "/source", "缺少来源身份")
+    if identity is not None:
+        for key, value in identity.items():
+            if fingerprint(source.get(key)) != fingerprint(value):
+                add("CARD_SOURCE_MISMATCH", f"/source/{key}", "来源与单篇输入记录不一致")
+    pages = source.get("pdf_page_count")
+    if type(pages) is not int or not 1 <= pages <= 100000:
+        add("CARD_LOCATION_INVALID", "/source/pdf_page_count", "PDF 总页数无效")
+        pages = 0
+    access = draft.get("source_access")
+    _check_markdown_access(access, source, pages, add)
+    # ``verified`` is computed by ``domain.grounding`` at generation time; this
+    # report only records it so eligibility can require it explicitly.
+    reading = access.get("reading") if isinstance(access, dict) else None
+    verified_reading = (
+        isinstance(reading, dict)
+        and reading.get("verified") is True
+        and reading.get("canaries_ok") is True
+    )
+    report["reading_verified"] = verified_reading
+    report["reading_status"] = "VERIFIED" if verified_reading else "PARTIAL"
+    # During the migration the draft carries the same receipt under both names;
+    # a mismatch means one of them was edited independently.
+    if fingerprint(draft.get("reading_record")) != fingerprint(access):
+        add("CARD_READING_RECORD_INVALID", "/reading_record",
+            "reading_record 与 source_access 必须是同一份回执")
+    body = _check_body(draft, add, warnings)
+    try:
+        _validate_machine_fields(assets.markdown_output_schema, draft, body, pages, add, warnings)
+        _provenance_markdown(assets, draft, add)
+    except (OSError, ValueError, KeyError, CardGenerationError, EvidenceTemplateError) as exc:
+        add("CARD_RULESET_UNAVAILABLE", "/provenance", f"无法读取校验所需协议或版本资产：{type(exc).__name__}", asset_paths=assets.as_dict())
+
+
+def validate_subject_card(config, draft, paper_input):
+    """Pure with respect to input artifacts: read assets, return a report, never invoke AI."""
+    assets = _assets(config)
+    errors, warnings = [], []
+    def add(code, path, message, **details):
+        errors.append({"code": code, "path": path, "message": message, **details})
+
+    markdown = isinstance(draft, dict) and draft.get("pipeline") == "markdown"
+    report = _base_report(
+        POLICY_MARKDOWN if markdown else POLICY,
+        pipeline="markdown" if markdown else "legacy",
+        legacy_read_only=not markdown,
+        errors=errors, warnings=warnings,
+    )
+    try:
+        report["draft_sha256"], report["input_sha256"] = fingerprint(draft), fingerprint(paper_input)
+    except (ValueError, TypeError, OverflowError, RecursionError):
+        add("CARD_JSON_INVALID", "/", "输入必须是可规范化的有限 JSON")
+        return report
+    identity = _input_identity(paper_input, add)
+    if not isinstance(draft, dict):
+        add("CARD_DRAFT_INVALID", "/", "主体卡草稿必须为对象")
+        return report
+    report["draft_id"] = draft.get("draft_id")
+    report["draft_schema_version"] = draft.get("schema_version")
+    report["input_schema_version"] = paper_input.get("schema_version") if isinstance(paper_input, dict) else None
+    if markdown:
+        _validate_markdown_draft(assets, draft, paper_input, identity, report, add, warnings)
+    else:
+        _validate_legacy_draft(assets, draft, paper_input, identity, report, add, warnings)
+    eligible = not errors
+    if markdown:
+        # A new draft may only enter theme generation with a verified reading;
+        # a PARTIAL grounding is saved as a draft but never eligible.
+        eligible = eligible and report.get("reading_verified") is True
     report.update(ok=not errors, status="FAIL" if errors else "PASS",
-                  eligible_for_theme_generation=not errors)
+                  eligible_for_theme_generation=eligible)
     return report
 
 

@@ -16,10 +16,16 @@ uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai
 
 - `paper-input.json` 是上一页产出的 READY 记录。**不能**传搜索候选列表，也**不能**传批处理的外层结果。
 - 也支持 `--paper-input -` 从 stdin 读。
+- 用 `uv run hydrolitagent cards ai-config --json` 可以确认当前默认管线（`ai.pipeline` 为
+  `markdown` 或显式回退的 `legacy`）。
 
 **前提**：一种**已登录**的模型 CLI（Codex 或 Claude），见[前提与配置](../../getting-started/installation.md)。
-后端二选一 —— **Codex** 用本地 PDF 适配器（需要 `pypdf` 与 Poppler 的 `pdfinfo` / `pdftoppm`）；
-**Claude** 走原生 PDF Read（需要 PATH 里的 `pdftoppm`；**缺它就不能算「完整读过了」**）。
+
+**默认走 Python 转换的 Markdown 路径**：程序先用 PyMuPDF 把 PDF 转成 `paper.md`（含页锚点、
+完整性 canary 与图资产），按 PDF 哈希缓存，再把 Markdown 交给所选 CLI 阅读。**不再需要
+Poppler**；`--ai-provider` 只决定用哪个 CLI 执行，两条路径读到的都是同一份 Markdown。
+需要回退到旧的「CLI 自己读 PDF」路径时，设置环境变量 `CARD_PIPELINE=legacy`（该路径仍需要
+`pdfinfo` / `pdftoppm`，只保留一个版本）。
 
 > Claude CLI 需支持**隔离模式与结构化输出**（本机验证版本 **2.1.280**）；版本过旧会直接失败，
 > **不会**退回不受限模式。

@@ -225,10 +225,12 @@ class ConverterConfig:
     cache_dir: Path | None = None
 
 
-# ``CARD_PIPELINE`` selects the conversion pipeline for a run. Stage 2 ships the
-# converter but keeps the legacy path as the default.
+# ``CARD_PIPELINE`` selects the conversion pipeline for a run. Stage 3b makes
+# the Markdown-first pipeline the default: Python converts the PDF once and the
+# runner reads ``paper.md``, so Poppler is no longer a prerequisite. ``legacy``
+# stays available for one release as an explicit rollback.
 PIPELINE_MODES = ("legacy", "markdown")
-DEFAULT_PIPELINE_MODE = "legacy"
+DEFAULT_PIPELINE_MODE = "markdown"
 
 
 @dataclass(frozen=True)

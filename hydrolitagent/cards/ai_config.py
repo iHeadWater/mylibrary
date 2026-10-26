@@ -11,7 +11,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from hydrolitagent._config import PROJECT_ROOT, read_dotenv_values, resolve_literature_root
-from hydrolitagent.cards.config import CardGeneratorConfig, PdfReaderConfig, PdfDirectTrialConfig, ConnectionGuardConfig
+from hydrolitagent.cards.config import (
+    CardGeneratorConfig,
+    ConnectionGuardConfig,
+    PdfDirectTrialConfig,
+    PdfReaderConfig,
+    resolve_pipeline_mode,
+)
 from hydrolitagent.cards._paths import PACKAGE_DIR, PROMPTS_DIR, SCHEMAS_DIR, TEMPLATES_DIR, REPO_ROOT
 
 
@@ -119,6 +125,9 @@ def subject_card_config(selection, *, base_config=None):
 
 
 def describe_ai(selection, *, output_root=None):
-    return {"ok": True, "operation": "ai_config", "ai": selection,
+    # ``pipeline`` is data, not a provider choice: it tells the operator which
+    # single-paper path the next ``evidence-generate`` run will take.
+    ai = {**selection, "pipeline": resolve_pipeline_mode()}
+    return {"ok": True, "operation": "ai_config", "ai": ai,
             "literature_root": str(resolve_literature_root(root=output_root)),
             "credentials": "由所选 CLI 使用本机登录或环境变量；本配置不保存凭据"}

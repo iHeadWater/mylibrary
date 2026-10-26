@@ -89,7 +89,7 @@ _CONVERTER_TABLE_MODES = frozenset({"markdown", "text"})
 
 
 def resolve_pipeline_mode(environ: Mapping[str, str] | None = None) -> str:
-    """Read ``CARD_PIPELINE``; default stays ``legacy`` until stage 3 flips it."""
+    """Read ``CARD_PIPELINE``; the default is ``markdown`` (``legacy`` is the rollback)."""
 
     values = os.environ if environ is None else environ
     value = str(values.get(CARD_PIPELINE_ENV, DEFAULT_PIPELINE_MODE)).strip().casefold()
