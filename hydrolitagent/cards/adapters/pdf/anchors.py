@@ -7,6 +7,7 @@ heading levels and canary placement can be tested without a PDF file.
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 from dataclasses import dataclass
 from typing import Iterable, Literal, Sequence
@@ -129,8 +130,14 @@ def order_boxes(boxes: Sequence[Box], layout: ColumnLayout) -> list[int]:
     """Return block indices in intended reading order.
 
     Single-column pages sort by ``(y, x)``. Two-column pages emit left column
-    then right column, using full-width blocks as band separators so titles and
-    wide tables stay between the columns they belong to.
+    then right column, using full-width blocks (titles, wide tables, display
+    equations) as band separators.
+
+    The bands partition the page by the separators' *top* edges, so a block
+    that vertically overlaps a separator is still emitted exactly once. An
+    earlier version used each separator's bottom edge as the next band start
+    and silently dropped any overlapping block that was not itself full width
+    -- 28 formula fragments disappeared from one page of a real paper.
     """
 
     indices = [i for i, b in enumerate(boxes) if b.width > 0 and b.height > 0]
@@ -138,30 +145,36 @@ def order_boxes(boxes: Sequence[Box], layout: ColumnLayout) -> list[int]:
         return sorted(indices, key=lambda i: (round(boxes[i].y0, 2), round(boxes[i].x0, 2)))
 
     gutter = layout.gutter_x
-    full_width = [
-        i for i in indices
-        if boxes[i].x0 < gutter - _GUTTER_TOLERANCE
-        and boxes[i].x1 > gutter + _GUTTER_TOLERANCE
-    ]
-    band_edges = sorted(((boxes[i].y0, boxes[i].y1, i) for i in full_width))
+    separators = sorted(
+        (
+            i
+            for i in indices
+            if boxes[i].x0 < gutter - _GUTTER_TOLERANCE
+            and boxes[i].x1 > gutter + _GUTTER_TOLERANCE
+        ),
+        key=lambda i: (round(boxes[i].y0, 2), round(boxes[i].x0, 2)),
+    )
+    separator_set = set(separators)
+    remaining = [i for i in indices if i not in separator_set]
+    key = lambda i: (round(boxes[i].y0, 2), round(boxes[i].x0, 2))  # noqa: E731
 
     ordered: list[int] = []
 
-    def emit_columns(top: float, bottom: float) -> None:
-        left = [i for i in indices if i not in full_width and top <= boxes[i].center_y < bottom
-                and boxes[i].center_x < gutter]
-        right = [i for i in indices if i not in full_width and top <= boxes[i].center_y < bottom
-                 and boxes[i].center_x >= gutter]
-        key = lambda i: (round(boxes[i].y0, 2), round(boxes[i].x0, 2))  # noqa: E731
+    def emit_band(top: float, bottom: float) -> None:
+        band = [i for i in remaining if top <= boxes[i].center_y < bottom]
+        left = [i for i in band if boxes[i].center_x < gutter]
+        right = [i for i in band if boxes[i].center_x >= gutter]
         ordered.extend(sorted(left, key=key))
         ordered.extend(sorted(right, key=key))
 
     cursor = float("-inf")
-    for top, bottom, index in band_edges:
-        emit_columns(cursor, top)
+    for index in separators:
+        boundary = boxes[index].y0
+        if boundary > cursor:
+            emit_band(cursor, boundary)
         ordered.append(index)
-        cursor = bottom
-    emit_columns(cursor, float("inf"))
+        cursor = max(cursor, boundary)
+    emit_band(cursor, float("inf"))
     return ordered
 
 
@@ -181,6 +194,94 @@ _BODY_WORDS = ("introduction", "引言", "1 introduction")
 
 def normalize_heading(text: str) -> str:
     return _WS.sub(" ", text).strip()
+
+
+# --------------------------------------------------------------------------------------
+# Running headers, running footers and download stamps
+# --------------------------------------------------------------------------------------
+
+# A line is a margin candidate when its centre falls inside this fraction of the
+# page height at the top or the bottom. Publisher headers live there; body text
+# does not.
+MARGIN_BAND = 0.08
+# A text must appear in this share of the pages to count as running matter.
+REPEAT_PAGE_SHARE = 0.5
+
+_EDGE_WS = re.compile(r"\s+")
+_DIGITS = re.compile(r"\d+")
+_DOWNLOAD_MARKERS = (
+    "downloaded from",
+    "onlinelibrary.wiley.com",
+    "terms and conditions",
+)
+
+
+def normalize_margin_text(text: str) -> str:
+    """Key used to compare margin lines across pages.
+
+    Page numbers change on every page, so digit runs collapse to ``#``. That
+    makes "7036" and "7037" compare equal without treating unrelated body text
+    as repeated.
+    """
+
+    collapsed = _EDGE_WS.sub(" ", text).strip().casefold()
+    return _DIGITS.sub("#", collapsed)
+
+
+def is_margin_line(box: Box, page_height: float, *, band: float = MARGIN_BAND) -> bool:
+    """True when a line starts inside the top band or ends inside the bottom one.
+
+    Using the line edge rather than its centre matters: a 17 pt journal header
+    whose baseline sits just below the 8% line still belongs to the header, and
+    excluding it would leave the masthead in every page's body text.
+    """
+
+    if page_height <= 0:
+        return False
+    return box.y0 <= page_height * band or box.y1 >= page_height * (1 - band)
+
+
+def is_download_stamp(text: str) -> bool:
+    """True for publisher "Downloaded from ..." stamps and licence footers."""
+
+    lowered = text.casefold()
+    return any(marker in lowered for marker in _DOWNLOAD_MARKERS)
+
+
+def repeated_margin_texts(
+    page_lines: Sequence[Sequence[tuple[str, Box]]],
+    page_heights: Sequence[float],
+    *,
+    band: float = MARGIN_BAND,
+    share: float = REPEAT_PAGE_SHARE,
+) -> tuple[str, ...]:
+    """Normalised texts that repeat in the margins of enough pages.
+
+    Detection is deliberately two-step: a text only becomes a candidate when it
+    sits in the top/bottom band of several pages, which stops one stray body
+    line from being deleted. Callers then remove every line with that text --
+    including the copy on a page whose header sits slightly lower than the band,
+    which is exactly the title page in real journal layouts.
+    """
+
+    if not page_lines:
+        return ()
+    counts: dict[str, set[int]] = {}
+    for index, (lines, height) in enumerate(zip(page_lines, page_heights)):
+        seen: set[str] = set()
+        for text, box in lines:
+            if not text.strip():
+                continue
+            if not is_margin_line(box, height, band=band):
+                continue
+            key = normalize_margin_text(text)
+            if key:
+                seen.add(key)
+        for key in seen:
+            counts.setdefault(key, set()).add(index)
+
+    threshold = max(2, math.ceil(len(page_lines) * share))
+    return tuple(sorted(key for key, pages in counts.items() if len(pages) >= threshold))
 
 
 def body_font_size(spans: Iterable[tuple[str, float, bool]]) -> float:
@@ -339,7 +440,9 @@ __all__ = [
     "Box",
     "CanaryToken",
     "ColumnLayout",
+    "MARGIN_BAND",
     "MIN_READABLE_CHARACTERS",
+    "REPEAT_PAGE_SHARE",
     "SINGLE_COLUMN",
     "assign_page_roles",
     "body_font_size",
@@ -348,10 +451,14 @@ __all__ = [
     "canary_token",
     "detect_columns",
     "heading_level",
+    "is_download_stamp",
+    "is_margin_line",
     "is_readable_page",
     "normalize_heading",
+    "normalize_margin_text",
     "order_boxes",
     "page_marker",
     "readable_characters",
+    "repeated_margin_texts",
     "text_coverage",
 ]

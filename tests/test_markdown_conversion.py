@@ -14,7 +14,12 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from hydrolitagent.cards.adapters.pdf.pymupdf_converter import PymupdfConverter
+from hydrolitagent.cards.adapters.pdf.pymupdf_converter import (
+    WARNING_RUNNING_HEADER,
+    WARNING_TABLE_IMAGE,
+    WARNING_VECTOR_FIGURE,
+    PymupdfConverter,
+)
 from hydrolitagent.cards.adapters.pdf.pypdf_converter import PypdfConverter
 from hydrolitagent.cards.ports.paper import ConversionOptions, ConversionRequest
 
@@ -403,6 +408,109 @@ def test_pypdf_fallback_declares_missing_capabilities(tmp_path: Path) -> None:
     assert prepared.figures == ()
     assert len(prepared.page_anchors) == 3
     assert _canary_count(prepared.markdown_path.read_text(encoding="utf-8")) == 3
+
+
+# --------------------------------------------------------------------------------------
+# Real-layout regressions: running matter, borderless tables, vector figures
+# --------------------------------------------------------------------------------------
+
+
+def _running_matter_pdf(tmp_path: Path) -> Path:
+    doc = pymupdf.open()
+    for page_number in range(1, 4):
+        page = _page(doc)
+        _text(page, 72, 30, "Journal of Test Hydrology", 14)
+        _text(page, 72, 60, "Volume 12, Issue 3", 9)
+        _paragraph(page, 95, BODY * 2)
+        # A numeric body line must survive: only margin page numbers are
+        # removed, even though both normalise to "#".
+        _text(page, 72, 400, "42", 9)
+        _text(page, 72, 812, "SMITH ET AL. RUNNING MATTER FIXTURE", 8)
+        _text(page, 500, 812, str(900 + page_number), 8)
+    path = tmp_path / "running-matter.pdf"
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def _borderless_table_pdf(tmp_path: Path) -> Path:
+    doc = pymupdf.open()
+    page = _page(doc)
+    _text(page, 72, 80, "Catchment Summary", 16)
+    _paragraph(page, 95, BODY)
+    _text(page, 72, 380, "Table 1. Sites and measured values", 9)
+    rows = (
+        ("Site", "Rain", "Flow"),
+        ("A", "12", "3"),
+        ("B", "20", "5"),
+        ("C", "18", "4"),
+    )
+    for row, values in enumerate(rows):
+        top = 405 + row * 20
+        for column, value in enumerate(values):
+            _text(page, 72 + column * 100, top, value, 9)
+    path = tmp_path / "borderless-table.pdf"
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def _vector_figure_pdf(tmp_path: Path) -> Path:
+    doc = pymupdf.open()
+    page = _page(doc)
+    _paragraph(page, 95, BODY)
+    page.draw_rect(pymupdf.Rect(72, 300, 400, 500))
+    page.draw_line((72, 500), (400, 500))
+    for step in range(1, 4):
+        page.draw_line((72 + step * 80, 300), (72 + step * 80, 500))
+    _text(page, 72, 530, "Figure 1. Simulated hydrograph for the study catchment.", 9)
+    _paragraph(page, 555, BODY, 9)
+    path = tmp_path / "vector-figure.pdf"
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def test_running_headers_and_footers_are_removed(tmp_path: Path) -> None:
+    pdf = _running_matter_pdf(tmp_path)
+    prepared, error = _convert(pdf, tmp_path / "out")
+
+    assert error is None and prepared is not None
+    markdown = prepared.markdown_path.read_text(encoding="utf-8")
+    assert "Journal of Test Hydrology" not in markdown
+    assert "SMITH ET AL. RUNNING MATTER FIXTURE" not in markdown
+    # Page numbers differ per page but normalise to the same running text.
+    assert "901" not in markdown and "902" not in markdown
+    assert WARNING_RUNNING_HEADER in prepared.warnings
+    # The body survives the filter, including a line that is only a number:
+    # page-number removal must be position-bound.
+    assert "Rainfall-runoff processes" in markdown
+    assert "\n42\n" in markdown
+
+
+def test_borderless_table_is_recovered_as_markdown(tmp_path: Path) -> None:
+    pdf = _borderless_table_pdf(tmp_path)
+    prepared, error = _convert(pdf, tmp_path / "out")
+
+    assert error is None and prepared is not None
+    markdown = prepared.markdown_path.read_text(encoding="utf-8")
+    assert "| Site | Rain | Flow |" in markdown
+    assert "| A | 12 | 3 |" in markdown
+    assert WARNING_TABLE_IMAGE not in prepared.warnings
+
+
+def test_vector_figure_is_rendered_from_caption(tmp_path: Path) -> None:
+    pdf = _vector_figure_pdf(tmp_path)
+    prepared, error = _convert(pdf, tmp_path / "out")
+
+    assert error is None and prepared is not None
+    assert len(prepared.figures) == 1
+    figure = prepared.figures[0]
+    assert figure.caption and figure.caption.startswith("Figure 1.")
+    assert figure.path.is_file() and figure.path.stat().st_size > 0
+    assert WARNING_VECTOR_FIGURE in prepared.warnings
+    markdown = prepared.markdown_path.read_text(encoding="utf-8")
+    assert f"![{figure.figure_id}]" in markdown
 
 
 if __name__ == "__main__":  # pragma: no cover - manual invocation convenience
