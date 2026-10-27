@@ -26,11 +26,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     env:
       # Match the documented UTF-8 terminal contract, including child processes.
+      # ``runner.*`` is step-scoped, so TEMP/TMP stay on the test step below.
       PYTHONUTF8: "1"
-      # Avoid RUNNER~1 aliases in temporary path assertions.
-      TEMP: ${{ runner.temp }}
-      TMP: ${{ runner.temp }}
-      TMPDIR: ${{ runner.temp }}
     defaults:
       run:
         # GitHub-hosted runners all ship Git Bash; one shell everywhere keeps
@@ -71,6 +68,11 @@ jobs:
       - name: Run test suite
         # Zotero integration tests keep their own availability/sample gates.
         # A skip is reported by pytest; failures are never filtered out.
+        # Avoid RUNNER~1 aliases in temporary path assertions.
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+          TMPDIR: ${{ runner.temp }}
         run: uv run --no-sync pytest -rs
       - name: Check CLI entry
         run: uv run --no-sync hydrolitagent cards --help
