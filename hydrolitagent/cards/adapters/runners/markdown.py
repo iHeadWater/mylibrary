@@ -17,6 +17,7 @@ cannot reach one.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -314,6 +315,27 @@ def _claude_read_activity(
     return reads, warnings
 
 
+DEFAULT_CLAUDE_MAX_OUTPUT_TOKENS = 64000
+CLAUDE_MAX_OUTPUT_ENV = "HYDROLITAGENT_CARDS_CLAUDE_MAX_OUTPUT_TOKENS"
+
+
+def _claude_environment(environment: Mapping[str, str] | None) -> dict[str, str]:
+    """Give the Claude CLI enough output budget for a theme refinement.
+
+    The CLI defaults to 32000 output tokens and hard-fails when a single
+    response exceeds it (``API Error: ... exceeded the 32000 output token
+    maximum``). A one-card refinement fits; a multi-card theme refinement does
+    not. An explicit ``CLAUDE_CODE_MAX_OUTPUT_TOKENS`` from the caller wins,
+    then our own env var, then the default.
+    """
+    merged = dict(environment or {})
+    if "CLAUDE_CODE_MAX_OUTPUT_TOKENS" in merged:
+        return merged
+    configured = merged.get(CLAUDE_MAX_OUTPUT_ENV) or os.environ.get(CLAUDE_MAX_OUTPUT_ENV)
+    merged["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(configured or DEFAULT_CLAUDE_MAX_OUTPUT_TOKENS)
+    return merged
+
+
 class ClaudeMarkdownRunner:
     """Read-only file reader rooted at the run directory, with a JSON schema."""
 
@@ -329,7 +351,7 @@ class ClaudeMarkdownRunner:
         prompt_runner=run_streaming_prompt,
     ) -> None:
         self.executable = executable
-        self.environment = dict(environment or {})
+        self.environment = _claude_environment(environment)
         self.connection_guard = connection_guard
         self._finder = finder
         self._prompt_runner = prompt_runner

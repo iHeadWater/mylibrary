@@ -410,3 +410,29 @@ def test_missing_executable_is_reported_without_running_anything(tmp_path):
 )
 def test_doctor_needs_no_model_call(runner_factory) -> None:
     assert runner_factory().doctor().available is True
+
+
+def test_claude_runner_raises_the_cli_output_cap(monkeypatch) -> None:
+    """A multi-card refinement exceeds the CLI's 32000-token default."""
+
+    monkeypatch.delenv("HYDROLITAGENT_CARDS_CLAUDE_MAX_OUTPUT_TOKENS", raising=False)
+    runner = ClaudeMarkdownRunner("claude", finder=lambda _: "claude")
+
+    assert runner.environment["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == "64000"
+
+
+def test_claude_runner_honours_an_explicit_output_cap() -> None:
+    runner = ClaudeMarkdownRunner(
+        "claude",
+        environment={"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "90000"},
+        finder=lambda _: "claude",
+    )
+
+    assert runner.environment["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == "90000"
+
+
+def test_claude_runner_reads_the_output_cap_from_the_environment(monkeypatch) -> None:
+    monkeypatch.setenv("HYDROLITAGENT_CARDS_CLAUDE_MAX_OUTPUT_TOKENS", "128000")
+    runner = ClaudeMarkdownRunner("claude", finder=lambda _: "claude")
+
+    assert runner.environment["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == "128000"
