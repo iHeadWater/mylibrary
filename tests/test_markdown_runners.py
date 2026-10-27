@@ -89,14 +89,17 @@ def request_for(tmp_path: Path) -> CardRunRequest:
 class FakeProcessRunner:
     """Records the command and returns a canned completed process."""
 
-    def __init__(self, stdout: str, returncode: int = 0) -> None:
+    def __init__(self, stdout: str, returncode: int = 0, stderr: str = "") -> None:
         self.stdout = stdout
         self.returncode = returncode
+        self.stderr = stderr
         self.calls: list[tuple[list[str], str, Path]] = []
 
     def __call__(self, command, prompt, timeout, environment=None, **kwargs):
         self.calls.append((list(command), prompt, Path(kwargs["cwd"])))
-        return subprocess.CompletedProcess(command, self.returncode, self.stdout, "")
+        return subprocess.CompletedProcess(
+            command, self.returncode, self.stdout, self.stderr
+        )
 
 
 def codex_stdout(payload: dict) -> str:
@@ -172,6 +175,9 @@ def test_claude_command_grants_only_the_read_tool(tmp_path):
     assert command[command.index("--allowedTools") + 1] == "Read"
     assert command[command.index("--add-dir") + 1] == str(request.workspace.resolve())
     assert "--json-schema" in command
+    # The stock system prompt lists a shell even when --tools does not offer
+    # one; the extra instruction keeps a proxy-backed model from calling Bash.
+    assert "no Bash" in command[command.index("--append-system-prompt") + 1]
     assert cwd == request.workspace.resolve()
     assert result.output == {"ok": True}
 
@@ -214,6 +220,76 @@ def test_claude_rejects_a_tool_other_than_read(tmp_path):
 
     assert result.ok is False
     assert result.error.code == "MARKDOWN_RUNNER_UNEXPECTED_ACTIVITY"
+    assert result.error.detail["tool"] == "Bash"
+    assert "ls" in result.error.detail["input_summary"]
+
+
+def test_claude_allows_a_call_for_a_tool_the_session_never_exposed(tmp_path):
+    request = request_for(tmp_path)
+    stdout = "\n".join(
+        json.dumps(event)
+        for event in [
+            {"type": "system", "subtype": "init", "tools": ["Read", "StructuredOutput"]},
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "tool_use", "name": "Bash", "id": "t1", "input": {"command": "wc -l paper.md"}}
+                    ]
+                },
+            },
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "tool_use", "name": "Read", "id": "t2",
+                         "input": {"file_path": str(request.workspace / MARKDOWN_FILENAME)}}
+                    ]
+                },
+            },
+            {
+                "type": "result",
+                "subtype": "success",
+                "is_error": False,
+                "structured_output": {"ok": True},
+            },
+        ]
+    ) + "\n"
+    runner = ClaudeMarkdownRunner(
+        "claude", finder=lambda _: "claude", prompt_runner=FakeProcessRunner(stdout)
+    )
+
+    result = runner.run(request)
+
+    assert result.ok, result.error
+    assert "RUNNER_ATTEMPTED_UNAVAILABLE_TOOL:Bash" in result.warnings
+
+
+def test_claude_rejects_an_exposed_tool_that_is_not_read(tmp_path):
+    request = request_for(tmp_path)
+    stdout = "\n".join(
+        json.dumps(event)
+        for event in [
+            {"type": "system", "subtype": "init", "tools": ["Read", "Bash", "StructuredOutput"]},
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "tool_use", "name": "Bash", "id": "t1", "input": {"command": "ls"}}
+                    ]
+                },
+            },
+        ]
+    ) + "\n"
+    runner = ClaudeMarkdownRunner(
+        "claude", finder=lambda _: "claude", prompt_runner=FakeProcessRunner(stdout)
+    )
+
+    result = runner.run(request)
+
+    assert result.ok is False
+    assert result.error.code == "MARKDOWN_RUNNER_UNEXPECTED_ACTIVITY"
+    assert result.error.detail["tool"] == "Bash"
 
 
 def test_codex_rejects_an_mcp_call(tmp_path):
@@ -258,6 +334,47 @@ def test_codex_refuses_a_command_that_mentions_a_pdf(tmp_path):
     assert result.ok is False
     assert result.error.code == "MARKDOWN_RUNNER_UNEXPECTED_ACTIVITY"
     assert ".pdf" in result.error.detail["command_summary"]
+
+
+def test_claude_failure_writes_redacted_evidence_into_the_workspace(tmp_path):
+    request = request_for(tmp_path)
+    stdout = "\n".join(
+        json.dumps(event)
+        for event in [
+            {
+                "type": "result",
+                "subtype": "error_during_execution",
+                "is_error": True,
+                "result": "stream ended before an answer",
+            },
+            {"type": "error", "message": "login failed for key sk-abcdefgh12345678"},
+        ]
+    ) + "\n"
+    fake = FakeProcessRunner(
+        stdout, returncode=1, stderr="Error: C:\\Users\\owen\\profile password=abcdef\n"
+    )
+    runner = ClaudeMarkdownRunner("claude", finder=lambda _: "claude", prompt_runner=fake)
+
+    result = runner.run(request)
+
+    assert result.ok is False
+    assert result.error.code == "MARKDOWN_RUNNER_FAILED"
+    detail = result.error.detail
+    assert detail["exit_code"] == 1
+    assert detail["terminal_subtypes"] == ["error_during_execution"]
+    path = Path(detail["diagnostic_path"])
+    assert path == request.workspace / "failure.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["exit_code"] == 1
+    assert payload["stdout_bytes"] > 0
+    assert payload["stderr_bytes"] > 0
+    assert payload["terminal_events"][0]["subtype"] == "error_during_execution"
+    assert payload["terminal_events"][0]["is_error"] is True
+    assert any("login failed" in message for message in payload["error_messages"])
+    # Redaction survives the trip to disk: no profile path, no API key.
+    assert "C:\\Users\\owen" not in payload["stderr_tail"]
+    assert "sk-" not in json.dumps(payload, ensure_ascii=False)
+    assert "password=abcdef" not in payload["stderr_tail"]
 
 
 def test_a_staged_paper_that_differs_from_the_preparation_is_refused(tmp_path):

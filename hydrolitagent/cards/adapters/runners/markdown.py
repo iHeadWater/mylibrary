@@ -53,6 +53,10 @@ from hydrolitagent.cards.card_generators.streaming import (
     run_streaming_prompt,
 )
 from hydrolitagent.cards.config import ConnectionGuardConfig
+from hydrolitagent.cards.infrastructure.decoding import (
+    DecodedText,
+    decode_process_output,
+)
 from hydrolitagent.cards.infrastructure.toml import toml_literal
 from hydrolitagent.cards.ports.runner import (
     CardRunError,
@@ -75,6 +79,14 @@ FORBIDDEN_ITEM_TYPES = frozenset(
     {"mcp_tool_call", "web_search", "web_search_call", "collab_tool_call"}
 )
 _ALLOWED_CLAUDE_TOOLS = frozenset({"Read", "StructuredOutput"})
+
+# A failed local CLI call leaves no answer behind, so the only evidence is what
+# the process streams said. Keep it inside the staged workspace (never in the
+# theme pool or a saved artifact) after redaction, because it may contain a
+# path or a token echoed by the provider.
+FAILURE_FILENAME = "failure.json"
+FAILURE_STDERR_LIMIT = 4000
+FAILURE_RESULT_LIMIT = 500
 
 
 def _failure(
@@ -106,18 +118,154 @@ def _read_outside_workspace(path: str, workspace: Path) -> bool:
         return True
 
 
+def _text_length(value: str | bytes | None) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, bytes):
+        return len(value)
+    return len(value.encode("utf-8"))
+
+
+def _bounded_sanitized(value: Any, limit: int) -> str:
+    """Redact first, then cut, so a secret is never split into a leaky tail."""
+
+    if value is None:
+        return ""
+    rendered = sanitize_diagnostic_text(value if isinstance(value, str) else str(value))
+    if len(rendered) <= limit:
+        return rendered
+    return rendered[: limit - 1].rstrip() + "…"
+
+
+def _stderr_evidence(completed: subprocess.CompletedProcess[str]) -> tuple[str, str, int]:
+    """Return ``(text, encoding, replacement_count)`` for the captured stderr.
+
+    ``run_streaming_prompt`` already decoded stderr with the locale ladder and
+    keeps the result on ``stderr_meta``. A process double may hand back plain
+    ``str``; raw bytes are decoded here with the same ladder so a CP936 console
+    message is not destroyed by a single ``errors="replace"`` pass.
+    """
+
+    raw = completed.stderr
+    meta = getattr(completed, "stderr_meta", None)
+    if isinstance(raw, bytes):
+        decoded = decode_process_output(raw)
+        return decoded.text, decoded.encoding, decoded.replacement_count
+    text = raw or ""
+    if isinstance(meta, DecodedText):
+        return text, meta.encoding, meta.replacement_count
+    return text, ("empty" if not text else "already_text"), 0
+
+
+def _stderr_tail(text: str, limit: int = FAILURE_STDERR_LIMIT) -> str:
+    """Redact line by line, then keep the tail.
+
+    ``sanitize_diagnostic_text`` caps its own result at 1600 characters, so a
+    whole-stream call would hide the part of the error that arrived last. One
+    line at a time keeps each redaction local and leaves the tail readable.
+    """
+
+    lines = [
+        sanitize_diagnostic_text(line) for line in text.splitlines() if line.strip()
+    ]
+    tail = "\n".join(line for line in lines if line)
+    return tail[-limit:] if len(tail) > limit else tail
+
+
+def _claude_failure_evidence(
+    completed: subprocess.CompletedProcess[str],
+    events: Sequence[Mapping[str, Any]],
+    workspace: Path,
+    *,
+    runner_id: str,
+) -> dict[str, Any]:
+    """Write ``failure.json`` next to the staged paper and summarise it.
+
+    Only the redacted summary rides on the run error, so a caller may report
+    ``diagnostic_path`` without redistributing stderr text. A write failure
+    must not mask the original runner failure.
+    """
+
+    stderr_text, stderr_encoding, replacement_count = _stderr_evidence(completed)
+    terminals = [event for event in events if event.get("type") == "result"]
+    error_messages = [
+        _bounded_sanitized(event.get("message"), FAILURE_RESULT_LIMIT)
+        for event in events
+        if event.get("type") == "error" and event.get("message")
+    ]
+    payload = {
+        "schema_version": 1,
+        "runner_id": runner_id,
+        "exit_code": completed.returncode,
+        "stdout_bytes": _text_length(completed.stdout),
+        "stderr_bytes": _text_length(completed.stderr),
+        "stderr_encoding": stderr_encoding,
+        "stderr_replacement_count": replacement_count,
+        "stderr_tail": _stderr_tail(stderr_text),
+        "terminal_events": [
+            {
+                "subtype": event.get("subtype"),
+                "is_error": event.get("is_error"),
+                "result": _bounded_sanitized(event.get("result"), FAILURE_RESULT_LIMIT),
+            }
+            for event in terminals
+        ],
+        "error_messages": error_messages,
+    }
+    try:
+        target = Path(workspace) / FAILURE_FILENAME
+        target.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+    except OSError:
+        target = None
+    detail: dict[str, Any] = {
+        "exit_code": completed.returncode,
+        "terminal_subtypes": [event.get("subtype") for event in terminals],
+        "stderr_encoding": stderr_encoding,
+    }
+    if target is not None:
+        detail["diagnostic_path"] = str(target)
+    return detail
+
+
+def _exposed_claude_tools(events: Sequence[Any]) -> frozenset[str] | None:
+    """The tool list the CLI reported at session start, or ``None`` if absent.
+
+    ``--tools Read`` is what keeps Bash and the other code-running tools out of
+    the session. A model served through an OpenAI-compatible proxy can still
+    emit a call for a tool that was never offered; the init event is the
+    authoritative evidence that such a call had nothing to execute.
+    """
+
+    for event in events:
+        if not isinstance(event, Mapping) or event.get("type") != "system":
+            continue
+        if event.get("subtype") != "init":
+            continue
+        tools = event.get("tools")
+        if isinstance(tools, list):
+            return frozenset(item for item in tools if isinstance(item, str))
+    return None
+
+
 def _claude_read_activity(
     events: Sequence[Any], workspace: Path
 ) -> tuple[int, list[str]]:
-    """Validate tool activity; return the read count and any PDF-touch warnings.
+    """Validate tool activity; return the read count and any warnings.
 
-    Any tool other than the read-only file reader is a protocol failure. Any
-    read outside the workspace is a protocol failure. Reading a ``.pdf`` is
-    recorded as a warning because the file should not exist in the workspace,
-    but a model that reaches for one is telling us the prompt or the staging
-    is wrong.
+    Any *available* tool other than the read-only file reader is a protocol
+    failure, and so is any read outside the workspace. A call for a tool the
+    session never exposed is recorded as a warning instead: the model asked,
+    but the CLI had nothing to run, so the workspace boundary was not crossed.
+    Reading a ``.pdf`` is recorded as a warning because the file should not
+    exist in the workspace, but a model that reaches for one is telling us the
+    prompt or the staging is wrong.
     """
 
+    exposed = _exposed_claude_tools(events)
     reads = 0
     warnings: list[str] = []
     for event in events:
@@ -134,9 +282,18 @@ def _claude_read_activity(
                 continue
             name = block.get("name")
             if name not in _ALLOWED_CLAUDE_TOOLS:
+                if isinstance(name, str) and exposed is not None and name not in exposed:
+                    warnings.append(f"RUNNER_ATTEMPTED_UNAVAILABLE_TOOL:{name}")
+                    continue
                 raise _RunnerFailure(
                     "MARKDOWN_RUNNER_UNEXPECTED_ACTIVITY",
                     f"runner 调用了只读读取之外的工具：{name}",
+                    detail={
+                        "tool": name if isinstance(name, str) else None,
+                        "input_summary": _bounded_sanitized(
+                            block.get("input"), FAILURE_RESULT_LIMIT
+                        ),
+                    },
                 )
             if name != "Read":
                 continue
@@ -216,6 +373,13 @@ class ClaudeMarkdownRunner:
                 "--verbose",
                 "--json-schema",
                 json.dumps(request.output_schema, ensure_ascii=False, separators=(",", ":")),
+                # A proxy-backed model can follow the stock tool list in the
+                # system prompt instead of the tools actually offered; name the
+                # real set so it does not reach for a shell that is not there.
+                "--append-system-prompt",
+                "Only the Read and StructuredOutput tools exist in this session. "
+                "Do not call any other tool; there is no shell, no Bash, and no "
+                "network. Read the staged paper.md and figures/ with Read.",
             ]
             if request.model:
                 command += ["--model", request.model]
@@ -264,7 +428,9 @@ class ClaudeMarkdownRunner:
                 raise _RunnerFailure(
                     "MARKDOWN_RUNNER_FAILED",
                     "runner 未成功完成；请检查本机登录、模型选择与服务可用性",
-                    detail={"exit_code": completed.returncode},
+                    detail=_claude_failure_evidence(
+                        completed, events, workspace, runner_id=self.runner_id
+                    ),
                 )
             output = terminal[0].get("structured_output")
             if not isinstance(output, Mapping):
