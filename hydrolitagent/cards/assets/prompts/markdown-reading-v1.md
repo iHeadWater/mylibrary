@@ -46,8 +46,18 @@ prompt_version: "markdown-reading-v1"
 
 ## 与机器字段的耦合
 
-机器字段（`machine_fields`）保持原有七类数组与编号规则：`findings` 每条要有唯一 `finding_id`（例如 F001），
-正文必须在可见位置至少引用一次该编号，且不得引用未定义的编号。
+机器字段（`machine_fields`）保持原有七类数组与编号规则：`findings` 每条要有唯一 `finding_id`（例如 F001）。
+正文中出现的 `F###` 集合与 `findings` 定义的集合必须**完全相同**：引用了未定义的编号，或定义了正文从未引用的
+编号，都会被判为失败。
+
+`information_status` 与 `statement_role` 必须成对，不能各写各的：
+
+- `reported` → `original_statement` 或 `original_paraphrase`，并提供 `source_locations`；
+- `not_reported` / `not_applicable` / `unavailable` → **必须**是 `information_boundary`，
+  并在 `statement` 里写清缺的是什么、为什么在当前来源里不可得；
+- `ai_inference` 只用于在 `reported` 基础上做的推断，**不得**与缺失状态混用。
+
+违反配对会被代码门禁判为 `CARD_INFORMATION_BOUNDARY`，即使正文写得好也保存不了。
 
 本次新增的读取证据不改变原有声明：
 
