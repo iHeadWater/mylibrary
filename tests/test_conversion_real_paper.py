@@ -24,6 +24,7 @@ from hydrolitagent.cards.adapters.pdf.pymupdf_converter import (
     WARNING_TABLE_IMAGE,
     PymupdfConverter,
 )
+from hydrolitagent.cards.domain.grounding import verify_quote
 from hydrolitagent.cards.ports.paper import ConversionRequest
 
 DEFAULT_PDF = Path(
@@ -31,6 +32,19 @@ DEFAULT_PDF = Path(
     r"\Bartlett 等 - 2016 - Framework for event-based semidistributed modeling"
     r" that unifies the SCS-CN method, VIC, PDM, and TOP.pdf"
 )
+
+ACKNOWLEDGMENTS_PDF = Path(
+    r"G:\我的云端硬盘\Documents\Papers\Zotero_Papers"
+    r"\Bartlett 等 - 2015 - Beyond the SCS-CN method A theoretical framework"
+    r" for spatially lumped rainfall-runoff response.pdf"
+)
+# A real quote that failed with QUOTE_NOT_FOUND while the acknowledgements
+# sidebar was interleaved line by line with the references column beside it.
+ACKNOWLEDGMENTS_QUOTE = (
+    "The data used for Figure 9 are reproduced from Tedela et al. [2011, 2008]. "
+    "Processed data and code are available by e-mail from the corresponding author."
+)
+
 LONG_TOKEN = re.compile(r"[A-Za-z]{31,}")
 TABLE_SEPARATOR = re.compile(r"^\|(?: --- \|)+$")
 
@@ -141,6 +155,57 @@ def test_conversion_is_deterministic(prepared_pair) -> None:
     assert [figure.figure_id for figure in first.figures] == [
         figure.figure_id for figure in second.figures
     ]
+
+
+# --------------------------------------------------------------------------------------
+# Unequal columns: a narrow acknowledgements sidebar beside a wide references column
+# --------------------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def acknowledgments_prepared(tmp_path_factory: pytest.TempPathFactory):
+    override = os.environ.get("HYDROLITAGENT_ACKNOWLEDGMENTS_PAPER")
+    pdf = Path(override) if override else ACKNOWLEDGMENTS_PDF
+    if not pdf.is_file():
+        pytest.skip(f"真实论文不在本机：{pdf}")
+    prepared, error = _convert(pdf, tmp_path_factory.mktemp("ack-paper"))
+    assert error is None, error
+    assert prepared is not None
+    return prepared
+
+
+def test_acknowledgments_are_contiguous(acknowledgments_prepared) -> None:
+    """Page 18 sets a narrow acknowledgements column beside the references.
+
+    Reading it line by line by y order shreds every sentence with reference
+    text, which is what made a verbatim quote fail grounding.
+    """
+
+    prepared = acknowledgments_prepared
+    markdown = prepared.markdown_path.read_text(encoding="utf-8")
+    anchor = prepared.page_anchors[17]
+    page_text = markdown[anchor.char_start : anchor.char_end]
+    collapsed = " ".join(page_text.split())
+
+    assert ACKNOWLEDGMENTS_QUOTE in collapsed
+    assert "Acknowledgments" in page_text
+    # The references column starts only after the acknowledgements paragraph.
+    assert collapsed.index(ACKNOWLEDGMENTS_QUOTE) < collapsed.index("Ajami, N. K.")
+
+    verdict = verify_quote(ACKNOWLEDGMENTS_QUOTE, markdown, prepared.page_anchors)
+    assert verdict.ok, verdict.reason
+    assert verdict.page == 18
+
+
+def test_references_keep_their_order(acknowledgments_prepared) -> None:
+    prepared = acknowledgments_prepared
+    markdown = prepared.markdown_path.read_text(encoding="utf-8")
+    anchor = prepared.page_anchors[17]
+    page_text = markdown[anchor.char_start : anchor.char_end]
+
+    entries = ["Ajami, N. K.", "Ali, G.", "Ameli, A. A.", "Antoine, M.", "Au, C."]
+    positions = [page_text.index(entry) for entry in entries]
+    assert positions == sorted(positions)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual invocation convenience

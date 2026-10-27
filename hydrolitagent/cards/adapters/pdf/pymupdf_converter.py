@@ -90,7 +90,7 @@ from .tables import (
 CONVERTER_ID = "pymupdf"
 # Extraction rules, not just the library version. Bumping this invalidates the
 # content-addressed cache for every PDF, which is exactly what a layout fix needs.
-CONVERTER_REVISION = "layout-2"
+CONVERTER_REVISION = "layout-3"
 DEFAULT_RENDER_DPI = 150
 
 _WHITESPACE = re.compile(r"\s+")

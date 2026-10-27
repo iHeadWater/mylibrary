@@ -119,6 +119,29 @@ def _two_column_pdf(tmp_path: Path) -> Path:
     return path
 
 
+def _unequal_columns_pdf(tmp_path: Path) -> Path:
+    """Narrow left column beside a wide right one, with a full-width title.
+
+    The gutter sits well left of the page centre, so a centre split finds no
+    right-hand column at all and falls back to y-order, which interleaves the
+    two columns line by line. The bare acknowledgements column of a real
+    journal page has exactly this shape.
+    """
+
+    doc = pymupdf.open()
+    page = _page(doc)
+    _text(page, 50, 80, "Unequal Column Layout Study", 12)
+    for row in range(12):
+        y = 110 + row * 22
+        _text(page, 50, y, f"LEFT-{row + 1:02d} narrow column text", 8)
+        _text(page, 230, y, f"RIGHT-{row + 1:02d} wide column text goes here", 8)
+
+    path = tmp_path / "unequal-columns.pdf"
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
 def _table_pdf(tmp_path: Path) -> Path:
     doc = pymupdf.open()
     page = _page(doc)
@@ -301,6 +324,25 @@ def test_two_columns_are_read_left_then_right(tmp_path: Path) -> None:
     assert "LEFT COLUMN" in markdown
     assert "RIGHT COLUMN" in markdown
     assert markdown.index("LEFT COLUMN") < markdown.index("RIGHT COLUMN")
+
+
+def test_unequal_columns_are_read_column_by_column(tmp_path: Path) -> None:
+    """A narrow sidebar must not be interleaved with a wide neighbouring column."""
+
+    pdf = _unequal_columns_pdf(tmp_path)
+    prepared, error = _convert(pdf, tmp_path / "out")
+
+    assert error is None and prepared is not None
+    markdown = prepared.markdown_path.read_text(encoding="utf-8")
+
+    left = [markdown.index(f"LEFT-{row:02d}") for row in range(1, 13)]
+    right = [markdown.index(f"RIGHT-{row:02d}") for row in range(1, 13)]
+
+    assert left == sorted(left)
+    assert right == sorted(right)
+    assert max(left) < min(right), "窄栏与宽栏被逐行交错了"
+    # The full-width title stays a band above both columns.
+    assert markdown.index("Unequal Column Layout Study") < min(left)
 
 
 def test_table_cells_become_markdown(tmp_path: Path) -> None:

@@ -60,10 +60,12 @@ class Box:
 class ColumnLayout:
     """Detected column structure of one page.
 
-    ``kind`` is ``single`` or ``two``. ``gutter_x`` is the estimated boundary
-    between columns. ``uncertain`` means the evidence was contradictory (for
-    example text blocks straddling the gutter), so the caller should record a
-    reading-order warning instead of trusting the order silently.
+    ``kind`` is ``single`` or ``two``. ``gutter_x`` is the boundary between the
+    columns, found from the page's own vertical whitespace rather than assumed
+    to be the page centre. ``uncertain`` means the evidence was contradictory
+    (for example narrow text blocks straddling the gutter, or two equally
+    plausible gutters), so the caller should record a reading-order warning
+    instead of trusting the order silently.
     """
 
     kind: Literal["single", "two"]
@@ -76,6 +78,48 @@ SINGLE_COLUMN = ColumnLayout(kind="single", gutter_x=None, uncertain=False)
 _GUTTER_TOLERANCE = 2.0
 _MIN_BLOCKS_PER_COLUMN = 2
 _MIN_VERTICAL_OVERLAP = 0.30
+# Narrowest whitespace band that can be a column gutter. Word spaces and
+# glyph gaps are far narrower; journal gutters are at least several points.
+_MIN_GUTTER_WIDTH = 4.0
+# Share of a page's lines that must sit inside the two columns. Full-width
+# titles, tables and enclosed text may cross the gutter, but they cannot be
+# most of the page: equations and short last lines leave whitespace pockets
+# near the right margin of single-column pages.
+_MIN_COLUMN_SHARE = 0.72
+# Share of the height over which the two columns coexist that may be covered
+# by lines crossing the gutter. A real gutter is empty there; only content
+# outside the column region (a full-width title above, notes below) may cross.
+_MAX_CROSSING_SHARE = 0.30
+# A column is a body of prose, so it needs several lines that span real text.
+# Without this, a page of centred display equations yields a "column" made of
+# equation numbers such as (7), (8), ... and the page is read column-wise.
+_MIN_COLUMN_WIDTH_SHARE = 0.08
+# Crossing content above this share of the coexistence band means separator
+# text overlaps the column region; the order is usable but no longer certain.
+_UNCERTAIN_CROSSING_SHARE = 0.12
+# Text this wide relative to the page is a full-width block (title band, wide
+# table, display equation), not evidence against a gutter.
+_NARROW_BLOCK_SHARE = 0.35
+
+
+def _crossed_height(boxes: Sequence[Box], top: float, bottom: float) -> float:
+    """Height between ``top`` and ``bottom`` covered by any of the boxes."""
+
+    if bottom <= top:
+        return 0.0
+    spans = sorted(
+        (max(top, box.y0), min(bottom, box.y1))
+        for box in boxes
+        if box.y1 > top and box.y0 < bottom
+    )
+    covered = 0.0
+    cursor = top
+    for start, end in spans:
+        start = max(start, cursor)
+        if end > start:
+            covered += end - start
+            cursor = end
+    return covered
 
 
 def _vertical_overlap(left: Sequence[Box], right: Sequence[Box]) -> float:
@@ -88,6 +132,26 @@ def _vertical_overlap(left: Sequence[Box], right: Sequence[Box]) -> float:
     return overlap / smaller if smaller > 0 else 0.0
 
 
+def _gutter_candidates(
+    usable: Sequence[Box],
+) -> list[tuple[float, float, float]]:
+    """Whitespace bands between distinct line-box edges, as (middle, start, end).
+
+    Projecting every box onto the x axis finds the page's real vertical
+    whitespace. Nothing here assumes the gutter is near the page centre: in
+    journal layouts a narrow acknowledgements column can sit in the left margin
+    while the wide body column starts well past the middle.
+    """
+
+    edges = sorted({box.x0 for box in usable} | {box.x1 for box in usable})
+    candidates: list[tuple[float, float, float]] = []
+    for start, end in zip(edges, edges[1:]):
+        if end - start < _MIN_GUTTER_WIDTH:
+            continue
+        candidates.append(((start + end) / 2, start, end))
+    return candidates
+
+
 def detect_columns(
     boxes: Sequence[Box],
     page_width: float,
@@ -97,33 +161,98 @@ def detect_columns(
 ) -> ColumnLayout:
     """Detect a two-column page from text block geometry.
 
-    The heuristic is deliberately conservative: a page is only treated as
-    two-column when both halves hold at least ``min_blocks_per_column`` blocks
-    and those blocks overlap vertically. Anything that straddles the middle
-    makes the result ``uncertain`` rather than silently reordering content.
+    Candidate gutters are the whitespace bands between line-box edges. A band
+    is only believed when
+
+    * each side holds at least ``min_blocks_per_column`` lines;
+    * each side has real prose lines, not just equation numbers;
+    * the two sides overlap vertically (they coexist side by side);
+    * at least ``_MIN_COLUMN_SHARE`` of the page's lines sit wholly on one
+      side, and where the two sides coexist at most ``_MAX_CROSSING_SHARE`` of
+      that height is crossed by full-width blocks (a title above or notes below
+      the column region may cross; body text running through it may not).
+
+    The best candidate assigns the most lines to a column, so a narrow sidebar
+    (a few acknowledgement lines beside a long reference list) is ordered as a
+    whole column instead of being interleaved line by line.
+
+    Contradictory evidence keeps the result usable but flagged: a narrow line
+    straddling the chosen band, two equally good gutters, or separator text
+    overlapping the column region make ``uncertain`` true so the caller records
+    ``READING_ORDER_UNCERTAIN``.
     """
 
     usable = [b for b in boxes if b.width > 0 and b.height > 0]
     if page_width <= 0 or len(usable) < min_blocks_per_column * 2:
         return SINGLE_COLUMN
 
-    middle = page_width / 2
-    left = [b for b in usable if b.x1 <= middle - _GUTTER_TOLERANCE]
-    right = [b for b in usable if b.x0 >= middle + _GUTTER_TOLERANCE]
-    if len(left) < min_blocks_per_column or len(right) < min_blocks_per_column:
-        return SINGLE_COLUMN
-    if _vertical_overlap(left, right) < min_overlap:
-        return SINGLE_COLUMN
+    required = len(usable) * _MIN_COLUMN_SHARE
+    best: ColumnLayout | None = None
+    best_score: tuple[int, int, float] | None = None
+    best_crossing = 0.0
+    ambiguous = False
 
-    gutter = (max(b.x1 for b in left) + min(b.x0 for b in right)) / 2
-    straddling = [
-        b for b in usable
-        if b.x0 < gutter - _GUTTER_TOLERANCE and b.x1 > gutter + _GUTTER_TOLERANCE
-    ]
-    # Wide straddling blocks are normal (titles, full-width tables). Narrow ones
-    # mean the gutter estimate is wrong, so flag the order as uncertain.
-    uncertain = any(b.width < page_width * 0.35 for b in straddling)
-    return ColumnLayout(kind="two", gutter_x=gutter, uncertain=uncertain)
+    for gutter, start, end in _gutter_candidates(usable):
+        left = [index for index, box in enumerate(usable) if box.x1 <= start]
+        right = [index for index, box in enumerate(usable) if box.x0 >= end]
+        if len(left) < min_blocks_per_column or len(right) < min_blocks_per_column:
+            continue
+        if len(left) + len(right) < required:
+            # Most lines cross this band, so it is the inside of one text
+            # column (or of a full-width table), not a gutter.
+            continue
+        min_line_width = page_width * _MIN_COLUMN_WIDTH_SHARE
+        left_boxes = [usable[i] for i in left]
+        right_boxes = [usable[i] for i in right]
+        if (
+            sum(1 for box in left_boxes if box.width >= min_line_width)
+            < min_blocks_per_column
+            or sum(1 for box in right_boxes if box.width >= min_line_width)
+            < min_blocks_per_column
+        ):
+            # Typed lines, not a column: equation numbers and superscripts.
+            continue
+        overlap = _vertical_overlap(left_boxes, right_boxes)
+        if overlap < min_overlap:
+            continue
+        assigned = set(left) | set(right)
+        straddling = [box for index, box in enumerate(usable) if index not in assigned]
+        core_top = max(
+            min(box.y0 for box in left_boxes), min(box.y0 for box in right_boxes)
+        )
+        core_bottom = min(
+            max(box.y1 for box in left_boxes), max(box.y1 for box in right_boxes)
+        )
+        core_height = core_bottom - core_top
+        crossing_height = _crossed_height(straddling, core_top, core_bottom)
+        if crossing_height > core_height * _MAX_CROSSING_SHARE:
+            # Where the two sides coexist, text still crosses the band: it is
+            # the middle of one column, not the space between two.
+            continue
+        # Wide straddling blocks are normal (titles, full-width tables).
+        narrow = sum(
+            1 for box in straddling if box.width < page_width * _NARROW_BLOCK_SHARE
+        )
+        score = (len(left) + len(right), -narrow, overlap)
+        if best_score is None or score > best_score:
+            best = ColumnLayout(kind="two", gutter_x=gutter, uncertain=False)
+            best_score = score
+            best_crossing = crossing_height / core_height if core_height > 0 else 0.0
+            ambiguous = False
+        elif score == best_score:
+            ambiguous = True
+
+    if best is None or best_score is None:
+        return SINGLE_COLUMN
+    return ColumnLayout(
+        kind="two",
+        gutter_x=best.gutter_x,
+        uncertain=(
+            ambiguous
+            or best_score[1] < 0
+            or best_crossing > _UNCERTAIN_CROSSING_SHARE
+        ),
+    )
 
 
 def order_boxes(boxes: Sequence[Box], layout: ColumnLayout) -> list[int]:
