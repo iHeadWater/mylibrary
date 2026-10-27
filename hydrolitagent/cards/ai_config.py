@@ -120,6 +120,41 @@ def resolve_ai_config(config_file=None, **overrides):
     return values
 
 
+def apply_ai_selection(app_config, selection):
+    """Overlay an AI selection onto an already loaded application config.
+
+    ``themes-run`` needs the provider choice *and* the rest of the loaded
+    configuration (paths, Zotero group, converter, pipeline limits). Rebuilding
+    the config from the selection would silently drop those, so only the
+    provider-facing fields change and everything else is carried over.
+
+    The executable is kept exactly as ``resolve_ai_config`` returned it: that
+    function owns the "bare command name or explicit path" contract, and the
+    runners add whatever platform wrapping is needed to launch it.
+    """
+
+    cfg = app_config.card_generator
+    updated = replace(
+        cfg,
+        adapter=selection["provider"] + "_cli",
+        executable=selection["executable"],
+        model=selection["model"] or None,
+        reasoning_effort=selection["reasoning_effort"] or None,
+        generation_timeout_seconds=selection["timeout_seconds"],
+    )
+    return replace(
+        app_config,
+        card_generator=updated,
+        # Same provider-neutral bag ``subject_card_config`` hands to
+        # ``composition``; only the HTTP runner reads it.
+        runner_options={
+            "base_url": selection.get("base_url") or None,
+            "max_input_tokens": selection.get("max_input_tokens"),
+            "max_output_tokens": selection.get("max_output_tokens"),
+        },
+    )
+
+
 def subject_card_config(selection, *, base_config=None):
     """Reuse existing dataclasses/adapters; single-paper work does not need Zotero/scheduler config."""
     if base_config is not None:

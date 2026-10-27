@@ -14,7 +14,13 @@ from hydrolitagent.cards.application.card_workflow import (
 )
 from hydrolitagent.cards.card_draft import generate_subject_card_draft
 from hydrolitagent.cards.card_validation import ValidationAssets, validate_subject_card_file
-from hydrolitagent.cards.ai_config import resolve_ai_config, subject_card_config, describe_ai, AIConfigError
+from hydrolitagent.cards.ai_config import (
+    AIConfigError,
+    apply_ai_selection,
+    describe_ai,
+    resolve_ai_config,
+    subject_card_config,
+)
 from hydrolitagent.cards.card_generators import build_card_generator_adapter
 from hydrolitagent.cards.card_generation import (
     CardGenerationError,
@@ -124,6 +130,17 @@ def _parser() -> argparse.ArgumentParser:
         if name == "themes-run":
             command.add_argument("--dry-run", action="store_true", help="只预览本地粗卡输入和配置；不扫描 Zotero、不写文件、不调用模型")
             command.add_argument("--migrate-only", action="store_true", help="仅将已完成旧主题接入统一池；不调用模型、不重新精读")
+            # The same selection the single-paper path accepts: a theme run
+            # makes model calls too, so it must not be stuck on the adapter
+            # baked into config.json.
+            command.add_argument("--ai-config", help="模型选择 TOML；默认 configs/ai.toml")
+            command.add_argument(
+                "--ai-provider", metavar="RUNNER",
+                help="制卡运行器 id，例如 codex、claude、openai_compatible；可用值见 ai-config --json 的 runners",
+            )
+            command.add_argument("--ai-model", help="所选服务可用的模型名")
+            command.add_argument("--ai-executable", help="本机 CLI 可执行文件名或绝对路径")
+            command.add_argument("--ai-timeout", type=float)
         if name == "evidence-generate":
             command.add_argument("--ai-config", help="模型选择 TOML；默认 configs/ai.toml")
             # The registry, not argparse, owns the list of runner ids: a new
@@ -625,16 +642,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "themes-run":
         try:
             extra = {"migration_only": args.migrate_only}
-            if args.dry_run:
-                # A dry run must not require a working runner: it only reports
-                # what the next change would need.
-                result = run_themes(app_config, dry_run=True, **extra)
+            if args.dry_run or args.migrate_only:
+                # A dry run or a migration-only run must not require a working
+                # runner (nor parse the AI selection): it only reports what the
+                # next change would need.
+                result = run_themes(app_config, dry_run=args.dry_run, **extra)
             else:
+                # Same selection contract as the single-paper path; without it
+                # the theme run would stay on the adapter baked into
+                # config.json and ignore --ai-provider / configs/ai.toml.
+                selection = resolve_ai_config(
+                    args.ai_config, provider=args.ai_provider, model=args.ai_model,
+                    executable=args.ai_executable, timeout_seconds=args.ai_timeout,
+                )
+                app_config = apply_ai_selection(app_config, selection)
                 pipeline = build_theme_pipeline(app_config)
                 with ConsoleProgress(enabled=app_config.card_generator.progress.enabled and not args.no_progress,
                     heartbeat_interval_seconds=app_config.card_generator.progress.heartbeat_interval_seconds) as progress:
                     result = run_themes(app_config, progress=progress, pipeline=pipeline, **extra)
                     progress.finish(result)
+        except AIConfigError as exc:
+            # A bad provider id must name the choices, not become a generic
+            # local-error message.
+            result = {"schema_version": 1, "ok": False, "error": {
+                "code": "CARD_AI_CONFIG_INVALID", "message": str(exc)}}
         except (TaskStoreError, OSError, ValueError) as exc:
             result = {"schema_version": 1, "ok": False, "error": {
                 "code": getattr(exc, "code", "PIPELINE_LOCAL_ERROR"), "message": "无法读取本地粗卡输入或运行配置"}}

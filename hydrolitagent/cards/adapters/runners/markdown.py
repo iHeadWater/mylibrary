@@ -38,6 +38,7 @@ from hydrolitagent.cards.adapters.runners.diagnostics import (
     safe_exec_diagnostic,
     sanitize_diagnostic_text,
 )
+from hydrolitagent.cards.adapters.runners.executable import launch_argv
 from hydrolitagent.cards.adapters.runners.workspace import (
     RESPONSE_FILENAME,
     SCHEMA_FILENAME,
@@ -52,7 +53,7 @@ from hydrolitagent.cards.card_generators.streaming import (
     run_streaming_prompt,
 )
 from hydrolitagent.cards.config import ConnectionGuardConfig
-from hydrolitagent.cards.infrastructure.toml import toml_string
+from hydrolitagent.cards.infrastructure.toml import toml_literal
 from hydrolitagent.cards.ports.runner import (
     CardRunError,
     CardRunRequest,
@@ -382,10 +383,13 @@ class CodexMarkdownRunner:
             markdown = _workspace_markdown(request)
             schema_path = _write_schema(request)
             workspace = Path(request.workspace).resolve()
-            if not self._finder(self.executable):
+            # Use the resolved path, not the bare name: on Windows the
+            # implicit extension search only finds ``.exe``, so a bare ``codex``
+            # would never reach the npm-installed ``codex.CMD``.
+            resolved = self._finder(self.executable)
+            if not resolved:
                 raise _RunnerFailure("MARKDOWN_RUNNER_NOT_FOUND", "找不到配置的本地命令行")
-            command = [
-                self.executable,
+            arguments = [
                 "exec",
                 "--json",
                 "--ephemeral",
@@ -398,10 +402,13 @@ class CodexMarkdownRunner:
                 "never",
                 "--output-schema",
                 str(schema_path),
+                # TOML literal strings keep the argv free of double quotes:
+                # cmd.exe (needed for a ``.CMD`` shim on Windows) does not
+                # understand the backslash escaping Python applies to ``"``.
                 "--config",
-                'approval_policy="never"',
+                "approval_policy='never'",
                 "--config",
-                'web_search="disabled"',
+                "web_search='disabled'",
                 # No flag can drop the user's config file on every CLI version,
                 # so empty the MCP table explicitly. The event check below is
                 # what actually refuses a tool call: a flag is a request, an
@@ -416,10 +423,11 @@ class CodexMarkdownRunner:
                 "multi_agent",
             ]
             if request.model:
-                command += ["--model", request.model]
+                arguments += ["--model", request.model]
             if request.reasoning_effort:
-                command += ["--config", "model_reasoning_effort=" + toml_string(request.reasoning_effort)]
-            command.append("-")
+                arguments += ["--config", "model_reasoning_effort=" + toml_literal(request.reasoning_effort)]
+            arguments.append("-")
+            command = launch_argv(resolved, arguments)
             report_progress(
                 request.progress,
                 "phase",

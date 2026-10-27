@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from hydrolitagent.cards.domain.protocol import (
     LEGACY_SINGLE_AGENT_PROTOCOL_VERSION,
@@ -213,6 +214,11 @@ class AppConfig:
     pipeline: PipelineConfig = PipelineConfig()
     theme_pipeline: ThemePipelineConfig = ThemePipelineConfig()
     converter: ConverterConfig = ConverterConfig()
+    # Provider-neutral bag handed to the runner factory (``base_url`` and the
+    # HTTP runner's token budgets). ``None`` means "the on-disk config chose no
+    # AI selection"; the file loader leaves it unset so nothing changes for
+    # existing configs.
+    runner_options: dict[str, Any] | None = None
 
 
 PATH_FIELDS = (
