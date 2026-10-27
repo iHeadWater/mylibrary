@@ -12,10 +12,13 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from hydrolitagent.cards import theme_pool as pool
 from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.adapters.pdf.pymupdf_converter import PymupdfConverter
 from hydrolitagent.cards.adapters.runners.markdown import ScriptedRunner
 from hydrolitagent.cards.adapters.storage.paper_store import PaperStore
+from hydrolitagent.cards.application.prepare_paper import prepare_paper
+from hydrolitagent.cards.card_validation import fingerprint
 from hydrolitagent.cards.cli import main
 from hydrolitagent.cards.composition import MarkdownPipeline
 from hydrolitagent.cards.config import ConfigError, load_config
@@ -26,7 +29,7 @@ from hydrolitagent.cards.ports.paper import ConversionOptions
 from hydrolitagent.cards.ports.runner import CardRunError, RunnerDoctor
 from hydrolitagent.cards.tasks import PipelineRunLock
 from hydrolitagent.cards.themes import ThemeError, _publish, _safe_path, run_themes
-from test_card_generation import GenerationFixture, FakeAdapter, PARENT_KEY
+from test_card_generation import ATTACHMENT_KEY, GenerationFixture, FakeAdapter, PARENT_KEY
 from test_config import write_config
 from test_markdown_workflow import first_prose_quote, _write_pdf
 
@@ -161,7 +164,128 @@ class ThemeTests(unittest.TestCase):
         self.config = replace(self.config, theme_pipeline=replace(self.config.theme_pipeline, research_goal=goal))
 
     def run_theme(self, **kwargs):
+        # An empty literature root isolates the test from drafts on this machine.
+        kwargs.setdefault("literature_root", self.root / "literature")
         return run_themes(self.config, pipeline=self.pipeline, delivery_preparer=self.delivery, **kwargs)
+
+    # -- validated single-paper drafts as sources ---------------------------------
+
+    draft_card = "# 已验证主体卡草稿\n\n本卡由单篇流程生成，等待主题聚合。\n"
+
+    def use_validated_drafts_only(self):
+        """Point the run at one validated personal-library draft and no packs.
+
+        Returns the prepared paper that backs the draft, so a test can check the
+        reading reuses that exact Markdown.
+        """
+
+        empty = self.root / "empty-packs"
+        empty.mkdir(exist_ok=True)
+        self.config = replace(self.config, paths=replace(self.config.paths, evidence_packs_dir=empty))
+        prepare_paper(self.pdf, converter=PymupdfConverter(), store=self.pipeline.store,
+                      options=ConversionOptions(), group_id=None, parent_key=PARENT_KEY,
+                      attachment_key=ATTACHMENT_KEY)
+        digest = hashlib.sha256(self.pdf.read_bytes()).hexdigest()
+        directory = (self.root / "literature" / "zotero" / f"user-0-{PARENT_KEY}" / "drafts" / ("d" * 16))
+        directory.mkdir(parents=True)
+        draft = {
+            "schema_version": 2, "draft_id": "d" * 16, "status": "DRAFT_PENDING_VALIDATION",
+            "created_at": "2026-10-27T00:00:00Z", "pipeline": "markdown",
+            "source": {"library": {"type": "user", "id": 0}, "parent_key": PARENT_KEY,
+                       "requested_item_key": PARENT_KEY, "attachment_key": ATTACHMENT_KEY,
+                       "pdf_sha256": digest, "pdf_size_bytes": self.pdf.stat().st_size,
+                       "pdf_page_count": 3, "item": {"title": "Draft source paper"}},
+            "card_body_markdown": self.draft_card,
+            "provenance": {"converter_id": "pymupdf",
+                           "converter_version": PymupdfConverter().converter_version},
+        }
+        (directory / "draft.json").write_text(json.dumps(draft, ensure_ascii=False), encoding="utf-8")
+        (directory / "card.md").write_text(self.draft_card, encoding="utf-8")
+        validation = directory / "validations" / ("v" * 32)
+        validation.mkdir(parents=True)
+        (validation / "validation.json").write_text(json.dumps({
+            "schema_version": 1, "validation_id": "v" * 32,
+            "validated_at": "2026-10-27T00:00:01Z", "status": "PASS", "ok": True,
+            "reading_verified": True, "eligible_for_theme_generation": True,
+            "draft_id": draft["draft_id"], "draft_sha256": fingerprint(draft),
+        }), encoding="utf-8")
+        return directory
+
+    def test_draft_source_runs_the_whole_theme_chain(self):
+        directory = self.use_validated_drafts_only()
+        result = self.run_theme()
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["status"], "CANDIDATES_REFINED")
+        self.assertEqual(result["source_count"], 1)
+        self.assertEqual(result["sources_by_kind"], {"evidence_pack": 0, "draft": 1})
+        self.assertEqual(result["source_ids"], [EID])
+        self.assertEqual(result["duplicate_sources"], [])
+        # No evidence pack exists, so no PDF was delivered: the reading reused
+        # the conversion cache the draft was built from.
+        self.assertEqual(self.delivery.call_count, 0)
+        reading = self.calls("focused_reading")[0]
+        self.assertIn("本卡由单篇流程生成", self.calls("theme_discovery")[0].prompt)
+        self.assertEqual(reading.paper.source.pdf_sha256,
+                         hashlib.sha256(self.pdf.read_bytes()).hexdigest())
+        theme = result["themes"][0]
+        self.assertTrue(Path(theme["revised_path"]).is_file())
+        self.assertIn("card.md", Path(theme["revised_path"]).read_text(encoding="utf-8"))
+        self.assertIn("drafts", Path(theme["revised_path"]).read_text(encoding="utf-8"))
+        self.assertTrue(Path(theme["readings"][0]["path"]).is_relative_to(
+            self.config.paths.evidence_packs_dir))
+        state = pool.load(self.config)
+        self.assertEqual(len(state["themes"]), 1)
+        pool.check_index(self.config, state)
+        # A rerun is unchanged: same source identity, no model call.
+        again = self.run_theme()
+        self.assertTrue(again["ok"], again)
+        self.assertEqual(again["model_call_count"], 0)
+        self.assertTrue(directory.is_dir())
+
+    def test_draft_dry_run_reports_sources_without_writing(self):
+        self.use_validated_drafts_only()
+        before = sorted(str(path) for path in self.root.rglob("*"))
+        result = self.run_theme(dry_run=True)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["sources_by_kind"], {"evidence_pack": 0, "draft": 1})
+        self.assertEqual(result["source_ids"], [EID])
+        self.assertEqual(sum(result["rejected_drafts"].values()), 0)
+        self.assertEqual(self.reader.requests, [])
+        self.assertEqual(before, sorted(str(path) for path in self.root.rglob("*")))
+
+    def test_unvalidated_draft_is_not_a_source(self):
+        directory = self.use_validated_drafts_only()
+        shutil.rmtree(directory / "validations")
+        result = self.run_theme(dry_run=True)
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["status"], "NO_ROUGH_CARDS")
+        self.assertEqual(result["sources_by_kind"], {"evidence_pack": 0, "draft": 0})
+        self.assertEqual(result["rejected_drafts"]["unvalidated"], 1)
+        self.assertEqual(self.reader.requests, [])
+
+    def test_draft_without_cached_markdown_blocks_before_the_reader(self):
+        self.use_validated_drafts_only()
+        shutil.rmtree(self.pipeline.store.cache_dir)
+        result = self.run_theme()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"]["code"], "THEME_DRAFT_MARKDOWN_MISSING")
+        self.assertEqual(self.calls("focused_reading"), [])
+        self.assertEqual(self.delivery.call_count, 0)
+
+    def test_draft_edit_during_run_is_blocked(self):
+        self.use_validated_drafts_only()
+
+        def edit(request, output):
+            if request.role == "theme_discovery":
+                path = next((self.root / "literature").rglob("card.md"))
+                path.write_text(self.draft_card + "手工改动。", encoding="utf-8")
+            return None
+
+        self.answer_hooks.append(edit)
+        result = self.run_theme()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"]["code"], "THEME_INPUT_CHANGED")
+        self.assertEqual(self.calls("focused_reading"), [])
 
     # -- behaviour ---------------------------------------------------------------
 

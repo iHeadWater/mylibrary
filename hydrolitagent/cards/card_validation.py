@@ -547,6 +547,15 @@ def validate_subject_card(config, draft, paper_input):
     return report
 
 
+def read_strict_json(path):
+    """Public name for the decoder shared by drafts and their validation records.
+
+    One owner for the on-disk contract: duplicate keys and non-finite numbers
+    are rejected everywhere instead of each reader growing its own rules.
+    """
+    return _read_json(path)
+
+
 def _read_json(path):
     def invalid_constant(value):
         raise ValueError("非有限 JSON 常量")

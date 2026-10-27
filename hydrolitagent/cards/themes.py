@@ -128,7 +128,21 @@ def _file_sha(path):
     return digest.hexdigest()
 
 
-def _sources(config):
+def _collect_sources(config, literature_root=None):
+    """Return ``(sources, report_fields)`` for one theme run.
+
+    Two kinds of sources share one evidence identity: validated single-paper
+    drafts and legacy rough evidence packs. A pack wins when both describe the
+    same paper, so an old batch keeps its behaviour.
+
+    A draft's focused readings are written under
+    ``<evidence_packs_dir>/draft-readings/<evidence_id>/``: the theme pool's
+    reading references are relative to that root, and the pool's immutable
+    revision rules stay unchanged.
+    """
+
+    from hydrolitagent.cards.application.draft_sources import scan_drafts
+
     result = {}
     root = config.paths.evidence_packs_dir
     for manifest_path in sorted(root.glob("*/manifest.json")):
@@ -143,14 +157,59 @@ def _sources(config):
         if eid in result:
             raise ThemeError("THEME_DUPLICATE_SOURCE", "同一篇文献存在多个证据包；不重复读取", evidence_id=eid)
         card = (pack / "card.md").read_text(encoding="utf-8")
-        result[eid] = {"pack": pack, "card": card, "record": {
+        result[eid] = {"kind": "evidence_pack", "pack": pack, "card": card, "record": {
             **{k: manifest[k] for k in SOURCE_FIELDS}, "card_sha256": text_hash(card),
             "package_directory": pack.name}}
-    return result
+    pack_count = len(result)
+    pack_ids = set(result)
+    scan = scan_drafts(config, literature_root)
+    draft_ids, duplicates = set(), []
+    for item in scan.items:
+        if item.evidence_id in draft_ids:
+            # Two drafts for one paper are ambiguous unless a pack already owns
+            # the identity; a pack-preferred duplicate is recorded, not fatal.
+            if item.evidence_id in pack_ids:
+                continue
+            raise ThemeError("THEME_DUPLICATE_SOURCE",
+                             "同一篇文献存在多个已验证草稿；不任意选择", evidence_id=item.evidence_id)
+        draft_ids.add(item.evidence_id)
+        if item.evidence_id in pack_ids:
+            duplicates.append({"evidence_id": item.evidence_id,
+                               "code": "DUPLICATE_SOURCE_PREFERRED_PACK"})
+            continue
+        result[item.evidence_id] = {
+            "kind": "draft",
+            "pack": _safe_path(root, "draft-readings", item.evidence_id),
+            "card": item.card,
+            "record": item.record,
+            "directory": item.directory,
+            "literature_root": scan.root,
+            "pdf_size_bytes": item.pdf_size_bytes,
+            "converter": (item.converter_id, item.converter_version),
+        }
+    report_fields = {
+        "sources_by_kind": {"evidence_pack": pack_count, "draft": len(result) - pack_count},
+        "source_ids": list(result),
+        "duplicate_sources": duplicates,
+        "rejected_drafts": dict(scan.rejected),
+    }
+    return result, report_fields
 
 
-def _assert_sources(sources):
+def _sources(config, literature_root=None):
+    return _collect_sources(config, literature_root)[0]
+
+
+def _assert_sources(sources, config=None):
+    from hydrolitagent.cards.application.draft_sources import inspect_draft
+
     for source in sources.values():
+        if source.get("kind") == "draft":
+            fresh, _ = inspect_draft(source["directory"], literature_root=source["literature_root"],
+                                     group_id=config.zotero.group_id)
+            if fresh is None or fresh.record != source["record"] or fresh.card != source["card"]:
+                raise ThemeError("THEME_INPUT_CHANGED", "运行过程中草稿来源改变；不混用新旧结果")
+            continue
         manifest = validate_saved_package(source["pack"])
         if manifest is None or any(manifest[k] != source["record"][k] for k in SOURCE_FIELDS):
             raise ThemeError("THEME_INPUT_CHANGED", "运行过程中证据包来源改变；不混用新旧结果")
@@ -235,12 +294,14 @@ def _run(config, report, **kwargs):
 
 def run_themes(config, *, progress=None, dry_run=False,
                delivery_preparer=None, remaining_seconds=None, migration_only=False,
-               pipeline=None):
+               pipeline=None, literature_root=None):
     """Run the theme pipeline.
 
     ``pipeline`` is the ``composition.MarkdownPipeline`` (converter, paper store,
     runner, options). Without it the configured runner is built through
     ``composition`` on first use, so ``run_themes(config)`` stays callable.
+    ``literature_root`` overrides where validated drafts are scanned; the CLI
+    leaves it unset so the same resolver as the single-paper path applies.
     """
     started = time.monotonic()
     cap = config.pipeline.max_run_seconds
@@ -254,12 +315,12 @@ def run_themes(config, *, progress=None, dry_run=False,
         if dry_run:
             _run(config, report, progress=progress,
                 delivery_preparer=delivery_preparer, remaining_seconds=remaining_seconds,
-                pipeline=pipeline)
+                pipeline=pipeline, literature_root=literature_root)
         else:
             with PipelineRunLock(config.paths.lock_file.with_name(config.paths.lock_file.name + ".themes")):
                 _run(config, report, progress=progress,
                     delivery_preparer=delivery_preparer or prepare_pdf_delivery, remaining_seconds=remaining_seconds,
-                    pipeline=pipeline)
+                    pipeline=pipeline, literature_root=literature_root)
     except KeyboardInterrupt:
         report.update(ok=False, status="CANCELLED", error={"code": "CANCELLED", "message": "已中止；保存的候选/精读步骤保留，下次继续"})
     except (ThemeError, EvidencePackageError, PdfDeliveryError, PdfGateError, TaskStoreError, ZoteroApiError) as exc:

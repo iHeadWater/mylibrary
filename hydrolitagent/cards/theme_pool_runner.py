@@ -23,7 +23,9 @@ import shutil
 import uuid
 from collections.abc import Mapping
 from dataclasses import replace
+from pathlib import Path
 
+from hydrolitagent._config import resolve_literature_root
 from hydrolitagent.cards import theme_pool as pool
 from hydrolitagent.cards import themes as core
 from hydrolitagent.cards.application.prepare_paper import prepare_paper
@@ -58,15 +60,31 @@ def _summary(config, state, report):
     report["status"] = "CANDIDATES_REFINED" if report["themes"] else "NO_CANDIDATES"
 
 
-def _links(config, refs, directory):
+def _links(config, refs, directory, literature_root=None):
     lines = ["\n\n---\n程序维护的来源引用（不代表独立科学核验）：\n"]
     for ref in refs:
         eid = ref["source"]["evidence_id"]
-        pack = core._safe_path(config.paths.evidence_packs_dir, ref["source"]["package_directory"])
+        card = _source_card_path(config, ref["source"], literature_root) / "card.md"
         read = pool.reading_path(config, ref) / "reading.md"
-        lines.append(f"- [{eid} 粗卡](<{core._link(pack / 'card.md', directory)}>)"
+        lines.append(f"- [{eid} 粗卡](<{core._link(card, directory)}>)"
                      f" · [定向精读](<{core._link(read, directory)}>)")
     return "\n".join(lines) + "\n"
+
+
+def _source_card_path(config, record, literature_root=None):
+    """Locate a source's card without adding a kind field to the pool record.
+
+    Evidence packs are relative to ``evidence_packs_dir``; drafts are relative
+    to the literature root. The record keeps one stable field, and the existing
+    file decides which root it belongs to.
+    """
+
+    directory = record["package_directory"]
+    pack = core._safe_path(config.paths.evidence_packs_dir, directory)
+    if (pack / "card.md").is_file():
+        return pack
+    root = Path(literature_root) if literature_root is not None else resolve_literature_root()
+    return core._safe_path(root, directory)
 
 
 # --------------------------------------------------------------------------------------
@@ -74,15 +92,61 @@ def _links(config, refs, directory):
 # --------------------------------------------------------------------------------------
 
 
-def _prepared_source(config, source, *, delivery_preparer, pipeline):
-    """Deliver the pack's PDF, convert it once, and prove the identities match.
+def _cached_prepared(source, pipeline):
+    """Reuse the Markdown a validated draft was already built from.
 
-    The delivery step verifies the PDF against the evidence pack; the store
-    hashes the file again before conversion, so a PDF that changed between the
-    two steps is rejected instead of being read under a stale identity.
+    The store is content-addressed, so a draft that recorded the PDF hash and
+    size can reuse its conversion without touching the PDF at all -- the only
+    road available for a personal-library draft, which has no evidence-pack
+    delivery. The draft's recorded converter is tried first, then the
+    configured one; a miss returns ``None`` and nothing is converted.
     """
 
     identity = source["record"]
+    size_bytes = source.get("pdf_size_bytes")
+    if type(size_bytes) is not int or size_bytes < 1:
+        return None
+    recorded = source.get("converter") or (None, None)
+    candidates = [recorded, (pipeline.converter.converter_id, pipeline.converter.converter_version)]
+    for converter_id, converter_version in candidates:
+        if not isinstance(converter_id, str) or not isinstance(converter_version, str):
+            continue
+        prepared = pipeline.store.get_cached(
+            pdf_sha256=identity["pdf_sha256"],
+            size_bytes=size_bytes,
+            converter_id=converter_id,
+            converter_version=converter_version,
+            group_id=identity["group_id"],
+            parent_key=identity["parent_key"],
+            attachment_key=identity["attachment_key"],
+        )
+        if prepared is not None:
+            return prepared
+    return None
+
+
+def _prepared_source(config, source, *, delivery_preparer, pipeline):
+    """Return ``(delivery, prepared)``; ``delivery`` may be ``None``.
+
+    For a draft source the prepared Markdown is reused from the paper cache
+    when present, because a personal-library draft has no pack to deliver a PDF
+    from. A group draft without a cached conversion keeps the pack delivery
+    path, whose identity checks are unchanged.
+    """
+
+    identity = source["record"]
+    if source.get("kind") == "draft":
+        prepared = _cached_prepared(source, pipeline)
+        if prepared is not None:
+            if prepared.source.pdf_sha256 != identity["pdf_sha256"]:
+                raise core.ThemeError("THEME_INPUT_CHANGED", "已转换 Markdown 与草稿记录的 PDF 身份不符")
+            return None, prepared
+        if identity["group_id"] is None:
+            raise core.ThemeError(
+                "THEME_DRAFT_MARKDOWN_MISSING",
+                "草稿记录的已转换 Markdown 不在本机缓存，个人库草稿也没有证据包 PDF 交付",
+                fix="用同一转换器重新生成该篇草稿，或改用 --paper-input 重新制卡后再跑主题",
+            )
     delivery = delivery_preparer(config.zotero, config.pdf_gate, config.tasks,
         config.paths.tasks_file, config.paths.lock_file, config.paths.evidence_packs_dir,
         identity["parent_key"], allow_trial_states=True)
@@ -175,15 +239,17 @@ def _reading_access(prepared, output):
 # --------------------------------------------------------------------------------------
 
 
-def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seconds):
+def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seconds,
+        literature_root=None):
     """Run one pool change through the configured runner."""
 
-    sources = core._sources(config)
+    sources, source_report = core._collect_sources(config, literature_root)
     report.update(protocol_version=pool.PROTOCOL, source_count=len(sources),
                   pool_path=str(config.paths.themes_dir),
                   index_path=str(config.paths.themes_dir / "index.md"),
                   reused_reading_count=0, updated_theme_count=0,
-                  note="统一文献池与主题池；运行记录不隔开知识。候选可自动演化，正式主题不自动覆盖")
+                  note="统一文献池与主题池；运行记录不隔开知识。候选可自动演化，正式主题不自动覆盖",
+                  **source_report)
     if not sources:
         report.update(status="NO_ROUGH_CARDS")
         return
@@ -208,7 +274,7 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
     report["imported_theme_count"] = imported
     pool.check_index(config, state)
     if report["dry_run"]:
-        report.update(status="LOCAL_PREVIEW", source_ids=list(sources), candidate_count=sum(
+        report.update(status="LOCAL_PREVIEW", candidate_count=sum(
             e["status"] == pool.ACTIVE for e in state["themes"].values()),
             input_changed=state["last_input"] != core._digest(binding))
         return
@@ -234,7 +300,7 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
     core._publish(change_dir / "inputs.json", core._json({"base_registry": base, "input": binding}))
 
     def unchanged():
-        core._assert_sources(sources)
+        core._assert_sources(sources, config)
         if pool.load(config) != base:
             raise core.ThemeError("THEME_POOL_CHANGED", "处理中主题池发生变化，保留结果、不覆盖")
         pool.check_index(config, state)
@@ -303,7 +369,9 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
             }
             if prepared is not None:
                 payload["source_access"] = _reading_access(prepared, payload["output"])
-                if core._file_sha(delivery.pdf_path) != source["record"]["pdf_sha256"]:
+                # A source reused from the paper cache has no delivered PDF to
+                # re-hash; its identity is the cache manifest, checked above.
+                if delivery is not None and core._file_sha(delivery.pdf_path) != source["record"]["pdf_sha256"]:
                     raise core.ThemeError("THEME_INPUT_CHANGED", "原始 PDF 在处理期间改变，未接受结果")
             unchanged()
             shutil.rmtree(workspace, ignore_errors=True)
@@ -401,7 +469,7 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
                 body = core._nonempty(revision["output"].get("revised_markdown"), "回填主题正文")
                 unchanged()
                 core._publish(directory / "revised.md", "<!-- CANDIDATE_REFINED; NOT CONFIRMED -->\n" + body
-                              + _links(config, refs, directory))
+                              + _links(config, refs, directory, literature_root))
                 core._publish(directory / "manifest.json", core._json({"theme_id": tid, "status": pool.ACTIVE,
                     "formal_confirmation": None, "change_id": change_id, "reason": action["reason"],
                     "kind": action["kind"], "predecessors": action["theme_ids"], "readings": refs}))

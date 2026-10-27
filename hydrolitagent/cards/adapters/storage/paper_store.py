@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import tempfile
 from collections.abc import Mapping
@@ -39,6 +40,9 @@ from hydrolitagent.cards.ports.paper import (
 )
 
 _CACHE_SUBDIR = "papers"
+# Cache keys become path segments; reject anything that could leave the cache.
+_SHA_PATTERN = re.compile(r"[a-f0-9]{64}")
+_CONVERTER_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
 
 
 def _sha256_file(path: Path) -> str:
@@ -133,6 +137,49 @@ class PaperStore:
         return rebuilt
 
     # -- cache reads ------------------------------------------------------------------
+
+    def get_cached(
+        self,
+        *,
+        pdf_sha256: str,
+        size_bytes: int,
+        converter_id: str,
+        converter_version: str,
+        group_id: int | None = None,
+        parent_key: str | None = None,
+        attachment_key: str | None = None,
+    ) -> PreparedPaper | None:
+        """Return a stored conversion without touching the source PDF.
+
+        A caller that knows the PDF hash and size (a validated draft records
+        both) can reuse the exact Markdown an earlier run produced. A missing,
+        malformed or mismatched entry returns ``None``: nothing is converted and
+        no directory is created.
+        """
+
+        if (not isinstance(pdf_sha256, str) or not _SHA_PATTERN.fullmatch(pdf_sha256)
+                or type(size_bytes) is not int or size_bytes < 1
+                or not isinstance(converter_id, str) or not _CONVERTER_ID_PATTERN.fullmatch(converter_id)
+                or not isinstance(converter_version, str)
+                or not _CONVERTER_ID_PATTERN.fullmatch(converter_version)):
+            return None
+        target = (
+            self.cache_dir
+            / _CACHE_SUBDIR
+            / pdf_sha256
+            / f"{converter_id}-{converter_version}"
+        )
+        return self._load_cached(
+            target,
+            SourceIdentity(
+                pdf_sha256=pdf_sha256,
+                size_bytes=size_bytes,
+                page_count=0,
+                group_id=group_id,
+                parent_key=parent_key,
+                attachment_key=attachment_key,
+            ),
+        )
 
     def _load_cached(self, paper_dir: Path, source: SourceIdentity) -> PreparedPaper | None:
         manifest_path = paper_dir / MANIFEST_FILENAME

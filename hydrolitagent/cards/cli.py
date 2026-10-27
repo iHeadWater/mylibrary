@@ -338,8 +338,12 @@ def _render_human(result: dict[str, Any]) -> str:
             )
         return "\n".join(lines)
     if result.get("operation") == "themes_run":
+        kinds = result.get("sources_by_kind") or {}
+        detail = (f"（证据包 {kinds.get('evidence_pack', 0)} · 已验证草稿 {kinds.get('draft', 0)}）"
+                  if kinds else "")
         return (f"主题流程：{result['status']}"
-                f"\n- 粗卡：{result.get('source_count', 0)}；候选：{result['candidate_count']}；已回填：{result['refined_count']}"
+                f"\n- 文献来源：{result.get('source_count', 0)}{detail}；"
+                f"候选：{result['candidate_count']}；已回填：{result['refined_count']}"
                 f"\n- 本轮模型调用：{result['model_call_count']}；复用步骤：{result['reused_step_count']}"
                 f"\n- 统一主题入口：{result.get('index_path', '尚未创建')}"
                 "\n- 修订结果仍为候选，不会自动成为正式主题"

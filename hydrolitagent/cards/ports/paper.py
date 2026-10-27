@@ -97,6 +97,20 @@ class PaperStore(Protocol):
         options: ConversionOptions,
     ) -> PreparedPaper: ...
 
+    def get_cached(
+        self,
+        *,
+        pdf_sha256: str,
+        size_bytes: int,
+        converter_id: str,
+        converter_version: str,
+        group_id: int | None = None,
+        parent_key: str | None = None,
+        attachment_key: str | None = None,
+    ) -> PreparedPaper | None:
+        """Reuse a stored conversion by content identity; never convert."""
+        ...
+
 
 __all__ = [
     "ConversionError",

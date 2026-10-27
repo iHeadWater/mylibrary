@@ -181,7 +181,7 @@ class ThemePoolTests(unittest.TestCase):
         self.run_theme()
         state = pool.load(self.config)
         tid = next(iter(state["themes"]))
-        sources = themes._sources(self.config)
+        sources = themes._sources(self.config, literature_root=self.root / "literature")
         catalog = pool.reading_catalog(self.config, state)
         action = {"problem_clusters_markdown": "reason", "actions": [
             {"kind": "UPDATE", "theme_ids": [tid], "reason": "change", "themes": [self.child()]}]}
@@ -284,7 +284,8 @@ class LegacyPoolFixtureTests(unittest.TestCase):
 
     def test_migration_only_never_invokes_a_model_or_rewrites_bytes(self):
         before = self.snapshot()
-        result = run_themes(self.config, pipeline=None, migration_only=True)
+        result = run_themes(self.config, pipeline=None, migration_only=True,
+                            literature_root=self.root / "literature")
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["model_call_count"], 0)
         self.assertEqual(result["action"], "UNCHANGED")
@@ -292,7 +293,8 @@ class LegacyPoolFixtureTests(unittest.TestCase):
 
     def test_dry_run_creates_nothing(self):
         before = self.snapshot()
-        result = run_themes(self.config, pipeline=None, dry_run=True)
+        result = run_themes(self.config, pipeline=None, dry_run=True,
+                            literature_root=self.root / "literature")
         self.assertTrue(result["ok"], result)
         self.assertFalse(result["model_invoked"])
         self.assertEqual(before, self.snapshot())
@@ -309,7 +311,8 @@ class LegacyPoolFixtureTests(unittest.TestCase):
                          self.config.paths.evidence_packs_dir)
             for path in root.rglob("*") if path.is_file()
         }
-        result = run_themes(self.config, pipeline=None, migration_only=True)
+        result = run_themes(self.config, pipeline=None, migration_only=True,
+                            literature_root=self.root / "literature")
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["action"], "MIGRATED")
         self.assertEqual(result["imported_theme_count"], 1)
