@@ -293,7 +293,10 @@ def _attachment_filename(attachment: dict, local_path: str = "") -> str:
     if raw_path.startswith("attachments:"):
         return raw_path.split("attachments:", 1)[1]
     if local_path:
-        return os.path.basename(local_path)
+        # Zotero runs on the host, so ``local_path`` may be a Windows path even
+        # when this server runs in a Linux container. Split on both separators
+        # instead of asking the local OS which one separates paths.
+        return re.split(r"[\\/]", local_path.rstrip("\\/"))[-1]
     return str(attachment.get("title") or "")
 
 
