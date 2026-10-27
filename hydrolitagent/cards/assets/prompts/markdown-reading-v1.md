@@ -39,6 +39,12 @@ prompt_version: "markdown-reading-v1"
 
 - `quote`：从 `paper.md` **逐字复制**的原文片段（不要改写、不要翻译、不要拼接不相邻的文字）。
   中文引文至少 12 个汉字，西文至少 24 个字符；只命中标题、页眉或页脚的短文本会被判为无效。
+  **边界规则**：引文必须从一个完整词开始、在一个完整词结束，且大小写、标点、虚词都与原文一致。
+  不要为了句子通顺补上或删掉开头的 `For example, `、`However, `、`In this study, ` 等成分，
+  也不要把句中的小写改成大写。错误示例：
+  - 原文：`For example, for a storm event with average rainfall of R 5 61 mm …`
+  - 错误引文：`For a storm event with average rainfall of R 5 61 mm …`（删了 `example, for`、改了大写）
+  - 正确引文：`for a storm event with average rainfall of R 5 61 mm …`（从原文的词边界原样开始）
 - `anchor`：形如 `P3`，表示引文所在物理页；`pdf_page` 用同一页号。
 - `section`、`figure`、`table`：能确定就填，不确定填 `null`；不要编造。
 - 引文必须落在所声称页面的正文范围内。若某个结论是模型推断而非原文陈述，把 `statement_role` 标为
