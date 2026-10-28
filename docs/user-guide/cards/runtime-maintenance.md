@@ -11,7 +11,7 @@
 | 位置 | 是什么 |
 |---|---|
 | `.runtime/` | 运行区（任务、锁、日志、快照） |
-| `themes/` | 主题池 —— 从 `themes/index.md` 进，那是给人看的总入口 |
+| `outputs/themes/` | 主题池 —— 从 `outputs/themes/index.md` 进，那是给人看的总入口 |
 
 这些文件由程序**原子写入并校验哈希** —— **不要手工编辑**：手改会被判为漂移或冲突，
 程序**保留现场而不覆盖**。`.runtime` 不存在是正常的，下次运行按需重建。
@@ -37,12 +37,14 @@
 
 ## 换机器
 
-重新 `uv sync --all-packages --locked`、重新登录所选模型 CLI、重新配 Poppler 路径即可。
+重新 `uv sync --all-packages --locked`、重新登录所选模型 CLI 即可；PDF 由 Python 转换，不需要另外配置 Poppler 路径。
 **不要复制别人的 `.venv`、登录文件或账号凭据。**
 
 ## 边界
 
-- 只有 `evidence-generate` 与 `themes-run` 会**调用模型**；`paper-input` / `evidence-validate` / `ai-config` 不调用。
+- 只有 `evidence-generate` 与 `themes-run --ai-provider direct` 会**调用模型**；
+  `paper-input` / `evidence-validate` / `ai-config` / `run prepare|finalize`（单篇或 `--theme`）不调用。
+  `themes-run --ai-provider in_session` 等价于一次 `run prepare --theme`，同样不调用模型。
 - 这些命令都**不改动 Zotero**、**不提交或推送 Git** —— **本地保存不等于已完成远端备份**。
 - 想自查当前模型选择与产物落点：`uv run hydrolitagent cards ai-config --json`
   —— 它只读配置，**不证明**模型服务连通或 CLI 已登录。

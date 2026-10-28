@@ -2,11 +2,12 @@
 name: literature-cards
 description: |
   文献卡与主题卡平台的运行入口：从自己的 Zotero 文献生成可追溯的证据卡与持续演化的主题池。
-  命令是 `uv run hydrolitagent cards …` 这一组（5 个子命令），不是交互式问答。
+  命令是 `uv run hydrolitagent cards …` 这一组（7 个子命令），不是交互式问答。
   Use when the user wants to run the cards platform, turn Zotero papers into evidence cards,
   update the theme pool, or check model/output configuration.
   Triggers: "跑一次平台", "制卡", "证据卡", "主题池", "更新主题", "文献卡",
-  "literature-cards", "paper-input", "themes-run", "平台排错", "ai-config".
+  "literature-cards", "paper-input", "themes-run", "平台排错", "ai-config",
+  "cards doctor", "两阶段制卡", "run prepare", "run finalize".
 ---
 
 # 文献卡与主题卡（literature-cards）
@@ -15,9 +16,12 @@ description: |
 
 ## ⚠️ 适用范围（先读）
 
-- **平台运行时为 Windows-only。** Poppler 原生工具与 PDF 沙箱探针依赖 Windows 的 PowerShell 与 `.exe`；
-  在 hermes 容器或 macOS/Linux 上未验证。
-- **前置条件**：Zotero 已登录且目标库已同步（`paper-input` 走 Local API 读本地 PDF）；`evidence-generate` 需要所选模型 CLI（Codex / Claude）已登录。不满足时命令会明确报错，不会静默降级。
+- **默认路径跨平台，不需要 Poppler。** PDF 先由 Python（PyMuPDF）确定性转换成 Markdown，
+  再由注册表中的任意运行器阅读；macOS / Linux / Windows 行为一致。
+- **前置条件**：Zotero 已登录且目标库已同步（`paper-input` 走 Local API 读本地 PDF）；
+  `evidence-generate` 需要 `direct` 执行者可用（`DEEPSEEK_API_KEY`，可换其它 OpenAI 兼容 endpoint），
+  或改用 `cards run prepare|finalize`（`in_session`，不需要 key）让当前 agent 读写文件。不满足时命令会明确报错，不会静默降级。
+  不确定缺什么时先跑 `uv run hydrolitagent cards doctor --json`。
 - **平台不下载 PDF。** 它只读取共享库中**已经附好**的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`（本仓库另一侧能力）。
 
 ## Contract
@@ -36,17 +40,17 @@ YOU MUST 记住平台**不自动同步 Git、不自动登录、不唤醒关机�
 uv sync --all-packages      # 从仓库根执行
 ```
 
-**不要**手工创建或复制别人的 `.venv`；换机后重新 `uv sync` 并重新登录所选模型 CLI。
+**不要**手工创建或复制别人的 `.venv`；换机后重新 `uv sync`，并在 `.env` 里配好所选执行者需要的变量（`direct` 用 `DEEPSEEK_API_KEY`，`in_session` 不需要 key）。
 
 ## 单篇主体卡草稿（#30）
 
 收到 #29 的单篇 READY JSON 后，在仓库根运行：
 
 ~~~powershell
-uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
+uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider direct --json
 ~~~
 
-此入口要求 single_agent + local_path；个人库和群组库均可使用，无需再次扫描 Zotero。
+此入口执行者由 `--ai-provider` 决定（`direct` 直连 API，或改用 `cards run prepare|finalize` 的 `in_session`）；个人库和群组库均可使用，无需再次扫描 Zotero。
 一次调用同时生成详细正文和固定机器字段。输出仅为 DRAFT_PENDING_VALIDATION，
 不代表 #31 校验通过，不自动执行 #32 修正或 #35 正式保存，不触发主题或 idea。
 文件按 #27 的统一规则写入精读产物根下 zotero/<文库类型>-<文库ID>-<父条目key>/drafts/<草稿ID>/。
@@ -70,20 +74,23 @@ PASS 只表示当前代码规则通过，不能声称科学结论正确或正式
 | 需要做什么 | 命令 |
 |---|---|
 | 查一篇自己的论文（个人库；群组库去掉 `--user-library`） | `uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json` |
-| 从 READY JSON 生成主体卡草稿 | `uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json` |
+| 从 READY JSON 生成主体卡草稿 | `uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider direct --json` |
 | 离线校验主体卡（不调模型） | `uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json` |
 | 从粗卡生成候选主题 | `uv run hydrolitagent cards themes-run --json` |
 | 只读预览主题池与输入变化（不调模型） | `uv run hydrolitagent cards themes-run --dry-run --json` |
 | 只迁移已有完成主题（不调模型） | `uv run hydrolitagent cards themes-run --migrate-only --json` |
 | 只读查看模型选择与产物根（不调模型） | `uv run hydrolitagent cards ai-config --json` |
+| 只读自查转换器、运行器与存储（不调模型、不读用户 PDF） | `uv run hydrolitagent cards doctor --json` |
+| 准备两阶段运行目录（不调模型） | `uv run hydrolitagent cards run prepare --paper-input paper-input.json --run-dir <运行目录> --json` |
+| 收口 agent 写好的 `response.json`（不调模型） | `uv run hydrolitagent cards run finalize --run-dir <运行目录> --paper-input paper-input.json --json` |
 
-> 完整清单以 `uv run hydrolitagent cards --help` 为准（**当前 5 个子命令**）。
+> 完整清单以 `uv run hydrolitagent cards --help` 为准（**当前 7 个子命令**；`run` 含 `prepare` / `finalize`）。
 > `cards` 是 `hydrolitagent` CLI 的子命令组；平台已并入 `hydrolitagent` 包
 > （`hydrolitagent/cards/`）—— 它是一组子命令，不是独立的包或命令行工具。
 
 ## 结果怎么读
 
-平台的 JSON 结果里，**保存成功只表示流程通过，不代表科学正确性已被机器独立验证**。证据包的 `quality-audit.json` 同理。
+平台的 JSON 结果里，**保存成功只表示流程通过，不代表科学正确性已被机器独立验证**。历史证据包的 `quality-audit.json` 同理。
 
 - `ok: true` + `model_invoked: false` 的 `--dry-run` 结果**不代表**最新文献已被发现。
 - 正式主题受保护，**不会**被自动覆盖；候选主题可以自动更新、合并、拆分。

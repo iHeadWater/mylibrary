@@ -1,21 +1,24 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-import shutil
-import tempfile
-import unicodedata
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from hydrolitagent.cards.config import MULTI_AGENT_PROTOCOL_VERSION, LOCAL_PATH_PROTOCOL_VERSION, SINGLE_AGENT_PROTOCOL_VERSION, LEGACY_SINGLE_AGENT_PROTOCOL_VERSION, TaskConfig
-from hydrolitagent.cards.source_access import source_access_acceptable
-from hydrolitagent.cards.tasks import RuntimeLock, build_task_id, load_task_registry
+from hydrolitagent.cards.config import (
+    LEGACY_SINGLE_AGENT_PROTOCOL_VERSION,
+    LOCAL_PATH_PROTOCOL_VERSION,
+    MULTI_AGENT_PROTOCOL_VERSION,
+    SINGLE_AGENT_PROTOCOL_VERSION,
+)
+from hydrolitagent.cards.domain.source_access import (
+    BOUND_LOCAL_PDF_MCP,
+    LOCAL_PDF_PATH,
+    source_access_acceptable,
+)
+from hydrolitagent.cards.tasks import build_task_id
 
 
-ELIGIBLE_STATE = "READY_FOR_EXTRACTION"
 PLACEHOLDER_CARD = "# 待生成证据卡\n\n状态：PLACEHOLDER\n"
 _KEY_PATTERN = re.compile(r"^[A-Za-z0-9]+$")
 _HASH_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -29,11 +32,6 @@ class EvidencePackageError(RuntimeError):
         self.code = code
 
 
-def _timestamp(value: datetime | None = None) -> str:
-    moment = value or datetime.now(timezone.utc)
-    return moment.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
 def _safe_key(value: Any, *, name: str) -> str:
     if not isinstance(value, str) or not _KEY_PATTERN.fullmatch(value):
         raise EvidencePackageError(
@@ -41,24 +39,6 @@ def _safe_key(value: Any, *, name: str) -> str:
             f"{name} 必须是只包含字母和数字的 Zotero Key",
         )
     return value
-
-
-def _slugify(title: Any, *, max_length: int = 60) -> str:
-    text = unicodedata.normalize("NFKC", title if isinstance(title, str) else "")
-    pieces: list[str] = []
-    separator_pending = False
-    for character in text.strip().lower():
-        if character.isalnum():
-            if separator_pending and pieces:
-                pieces.append("-")
-            pieces.append(character)
-            separator_pending = False
-        else:
-            separator_pending = True
-    slug = "".join(pieces).strip("-")
-    if not slug:
-        return "untitled"
-    return slug[:max_length].rstrip("-") or "untitled"
 
 
 def validate_evidence_task(task: Any, group_id: int) -> dict[str, Any]:
@@ -104,23 +84,6 @@ def validate_evidence_task(task: Any, group_id: int) -> dict[str, Any]:
         "attachment_key": attachment_key,
         "pdf_sha256": normalized_hash,
         "title": normalized_title,
-    }
-
-
-def _manifest(task: dict[str, Any], at: str) -> dict[str, Any]:
-    parent_key = task["parent_key"]
-    return {
-        "schema_version": 1,
-        "evidence_id": f"EV-{parent_key}",
-        "group_id": task["group_id"],
-        "parent_key": parent_key,
-        "attachment_key": task["attachment_key"],
-        "pdf_sha256": task["pdf_sha256"],
-        "source_task_id": task["task_id"],
-        "title": task["title"],
-        "card_status": "PLACEHOLDER",
-        "created_at": at,
-        "updated_at": at,
     }
 
 
@@ -204,7 +167,7 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
         source_page_count = generation.get("source_page_count")
         source_pages_served = generation.get("source_pages_served")
         source_visual_pages_served = generation.get("source_visual_pages_served")
-        direct = generation.get("source_access_method") == "local_pdf_path"
+        direct = generation.get("source_access_method") == LOCAL_PDF_PATH
         protocol = generation.get("workflow_protocol_version")
         single = protocol in {SINGLE_AGENT_PROTOCOL_VERSION, LEGACY_SINGLE_AGENT_PROTOCOL_VERSION}
         expected_quality_status = ("PROCESS_VALIDATED" if protocol == SINGLE_AGENT_PROTOCOL_VERSION
@@ -213,7 +176,7 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
             access = generation.get("source_access")
             source_ok = (source_access_acceptable(access, expected_sha256=data["pdf_sha256"],
                                                   expected_parent_key=data["parent_key"])
-                         and access.get("method") == "local_pdf_path" and access.get("page_count") == source_page_count
+                         and access.get("method") == LOCAL_PDF_PATH and access.get("page_count") == source_page_count
                          and generation.get("source_access_verified") is False
                          and generation.get("source_access_server") is None
                          and generation.get("source_access_receipt_schema_version") is None
@@ -221,7 +184,7 @@ def load_evidence_manifest(path: Path) -> dict[str, Any]:
                          and generation.get("quality_status") == expected_quality_status
                          and protocol in {LOCAL_PATH_PROTOCOL_VERSION, SINGLE_AGENT_PROTOCOL_VERSION, LEGACY_SINGLE_AGENT_PROTOCOL_VERSION})
         else:
-            source_ok = (generation.get("source_access_method") == "bound_local_pdf_mcp"
+            source_ok = (generation.get("source_access_method") == BOUND_LOCAL_PDF_MCP
                          and generation.get("source_access_verified") is True
                          and isinstance(generation.get("source_access_server"), str) and bool(generation["source_access_server"])
                          and generation.get("source_access_receipt_schema_version") == 1
@@ -287,128 +250,3 @@ def find_evidence_package(root: Path, parent_key: str) -> Path | None:
             f"证据包路径不是目录：{package_path}",
         )
     return package_path
-
-
-def _existing_result(package_path: Path, task: dict[str, Any]) -> dict[str, Any]:
-    manifest_path = package_path / "manifest.json"
-    card_path = package_path / "card.md"
-    if not manifest_path.is_file() or not card_path.is_file():
-        raise EvidencePackageError(
-            "EVIDENCE_PACKAGE_INCOMPLETE",
-            f"证据包缺少 manifest.json 或 card.md：{package_path}",
-        )
-
-    manifest = load_evidence_manifest(manifest_path)
-    expected = {
-        "evidence_id": f"EV-{task['parent_key']}",
-        "group_id": task["group_id"],
-        "parent_key": task["parent_key"],
-        "attachment_key": task["attachment_key"],
-        "pdf_sha256": task["pdf_sha256"],
-        "source_task_id": task["task_id"],
-    }
-    mismatched = [name for name, value in expected.items() if manifest.get(name) != value]
-    if mismatched:
-        raise EvidencePackageError(
-            "EVIDENCE_INPUT_MISMATCH",
-            f"证据包与当前任务输入不一致（{', '.join(mismatched)}）：{package_path}",
-        )
-
-    try:
-        card_content = card_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        raise EvidencePackageError(
-            "EVIDENCE_CARD_INVALID",
-            f"无法读取证据卡：{card_path}",
-        ) from exc
-    return {
-        "evidence_id": expected["evidence_id"],
-        "parent_key": task["parent_key"],
-        "action": "UNCHANGED",
-        "card_state": "PLACEHOLDER" if card_content == PLACEHOLDER_CARD else "PRESERVED",
-        "path": str(package_path.resolve()),
-    }
-
-
-def _create_package(root: Path, task: dict[str, Any], at: str) -> dict[str, Any]:
-    package_name = f"EV-{task['parent_key']}-{_slugify(task['title'])}"
-    package_path = root / package_name
-    temporary_path = Path(tempfile.mkdtemp(prefix=".tmp-package-", dir=root))
-    try:
-        (temporary_path / "manifest.json").write_text(
-            json.dumps(_manifest(task, at), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        (temporary_path / "card.md").write_text(PLACEHOLDER_CARD, encoding="utf-8")
-        os.replace(temporary_path, package_path)
-    except OSError as exc:
-        raise EvidencePackageError(
-            "EVIDENCE_PACKAGE_WRITE_FAILED",
-            f"无法原子创建证据包：{package_path}",
-        ) from exc
-    finally:
-        if temporary_path.exists():
-            shutil.rmtree(temporary_path, ignore_errors=True)
-
-    return {
-        "evidence_id": f"EV-{task['parent_key']}",
-        "parent_key": task["parent_key"],
-        "action": "CREATED",
-        "card_state": "PLACEHOLDER",
-        "path": str(package_path.resolve()),
-    }
-
-
-def sync_evidence_packages(
-    group_id: int,
-    task_config: TaskConfig,
-    task_path: str | Path,
-    lock_path: str | Path,
-    evidence_packs_path: str | Path,
-    *,
-    now: datetime | None = None,
-    parent_keys: set[str] | None = None,
-) -> dict[str, Any]:
-    moment = now or datetime.now(timezone.utc)
-    at = _timestamp(moment)
-    root = Path(evidence_packs_path)
-
-    with RuntimeLock(lock_path, stale_seconds=task_config.lock_stale_seconds):
-        registry = load_task_registry(task_path, group_id, now=moment)
-        try:
-            root.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            raise EvidencePackageError(
-                "EVIDENCE_ROOT_UNAVAILABLE",
-                f"无法创建或访问证据包根目录：{root}",
-            ) from exc
-
-        packages: list[dict[str, Any]] = []
-        eligible_count = 0
-        for _, raw_task in sorted(registry["tasks"].items()):
-            if parent_keys is not None and raw_task.get("parent_key") not in parent_keys:
-                continue
-            if raw_task.get("state") != ELIGIBLE_STATE:
-                continue
-            eligible_count += 1
-            task = validate_evidence_task(raw_task, group_id)
-            existing = find_evidence_package(root, task["parent_key"])
-            packages.append(
-                _existing_result(existing, task)
-                if existing is not None
-                else _create_package(root, task, at)
-            )
-
-    created_count = sum(package["action"] == "CREATED" for package in packages)
-    unchanged_count = sum(package["action"] == "UNCHANGED" for package in packages)
-    return {
-        "schema_version": 1,
-        "ok": True,
-        "group_id": group_id,
-        "eligible_task_count": eligible_count,
-        "package_count": len(packages),
-        "created_count": created_count,
-        "unchanged_count": unchanged_count,
-        "packages": packages,
-        "evidence_packs_path": str(root.resolve()),
-    }

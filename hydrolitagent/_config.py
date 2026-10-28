@@ -197,11 +197,16 @@ def resolve_literature_root(
     env: Mapping[str, str] | None = None,
     dotenv: Mapping[str, str] | None = None,
     warn: bool = True,
+    default: str | Path | None = None,
 ) -> Path:
     """解析精读产物根。
 
     优先级(高到低):显式 ``root`` → ``HYDROLITAGENT_LITERATURE_ROOT`` →
-    ``configs/paths.toml`` 的 ``[literature].root`` → ``PROJECT_ROOT/outputs``。
+    ``configs/paths.toml`` 的 ``[literature].root`` → ``default``（缺省为
+    ``PROJECT_ROOT/outputs``）。
+
+    ``default`` 让嵌入方（如 cards 平台）在自带 ``configs/paths.toml`` 的
+    项目里按该项目根回落，而不是按包的安装位置回落。
 
     ``env`` / ``dotenv`` 可注入,让测试不必依赖进程真实环境(仓库根有活的 .env)。
     未注入时 ``env`` 读 ``os.environ``,``dotenv`` 补读 ``.env`` 但不写回。
@@ -236,7 +241,7 @@ def resolve_literature_root(
             )
         return _finalize(resolved, external_opt_in=declared, warn=warn)
 
-    return DEFAULT_LITERATURE_ROOT
+    return _as_root(default) if default is not None else DEFAULT_LITERATURE_ROOT
 
 
 def _finalize(path: Path, *, external_opt_in: bool, warn: bool) -> Path:

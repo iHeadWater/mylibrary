@@ -70,7 +70,10 @@ def test_defaults_to_repo_outputs_when_unconfigured(tmp_path):
 
 def test_external_root_in_config_file_requires_explicit_opt_in(tmp_path):
     """提交进仓库的配置不得指向仓库外 —— 它会改变所有用户的默认落点。"""
-    config = _config(tmp_path, '[literature]\nroot = "D:/elsewhere"\n')
+    # A real absolute path outside the repository on every platform: a
+    # hard-coded drive letter is only absolute on Windows.
+    elsewhere = tmp_path.parent / "elsewhere-external"
+    config = _config(tmp_path, f'[literature]\nroot = "{elsewhere.as_posix()}"\n')
 
     with pytest.raises(PathConfigError, match="external"):
         resolve_literature_root(config_path=config, env={}, dotenv={})
@@ -78,11 +81,15 @@ def test_external_root_in_config_file_requires_explicit_opt_in(tmp_path):
 
 def test_external_root_allowed_when_declared_in_config_file(tmp_path):
     """显式写了 external = true 就放行 —— 意图是写明的。"""
-    config = _config(tmp_path, '[literature]\nroot = "D:/elsewhere"\nexternal = true\n')
+    elsewhere = tmp_path.parent / "elsewhere-external"
+    config = _config(
+        tmp_path,
+        f'[literature]\nroot = "{elsewhere.as_posix()}"\nexternal = true\n',
+    )
 
     resolved = resolve_literature_root(config_path=config, env={}, dotenv={})
 
-    assert resolved.as_posix().endswith("D:/elsewhere")
+    assert resolved.as_posix().endswith("elsewhere-external")
 
 
 def test_external_root_via_env_var_needs_no_second_switch(tmp_path):

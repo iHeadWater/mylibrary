@@ -1,0 +1,55 @@
+{
+  "record": {
+    "binding": {
+      "assets": {
+        "discovery.md": "705fb674d661fea8e2f70d59fe3aac7fcff395a6f51916ad844820f904a1e0ad",
+        "discovery.schema.json": "9a2e3056e81a852c2d519c85bd3a5222f13004520c459b913232c06f6f6383da",
+        "focused-reading.md": "4f26b31e712d028369407bc26cbf8267db76261e2698dc0f64ce023e5481c16f",
+        "focused-reading.schema.json": "cc5406e62c590333d6b830b86c02d0cd5e56ebc5669275791cff456171d8024f",
+        "refinement.md": "1e4a868fc19e4397263d653257aece4c6904c76ee58b6fbc3b3bc2da39e6836f",
+        "refinement.schema.json": "6c38825f4b9d902564c71ac36709e3824073b521aaa39ec4a9928aa3944bfad1"
+      },
+      "group_id": 42,
+      "model": null,
+      "pdf_reading_prompt_sha256": "04869bca4910358839fe731cecd4a38e4db3fbed60c37f729308c3aeabefc01d",
+      "protocol_version": "cards-to-refined-candidates-v1",
+      "reasoning_effort": null,
+      "research_goal": "历史主题批次静态样本",
+      "sources": [
+        {
+          "attachment_key": "WXYZ5678",
+          "card_sha256": "658f744917cad03d872e9619308697efabfcd42eafc92edd73a12dfc80cb29e2",
+          "evidence_id": "EV-ABCD1234",
+          "group_id": 42,
+          "package_directory": "EV-ABCD1234-test-paper",
+          "parent_key": "ABCD1234",
+          "pdf_sha256": "5887a8b1e1caf7281682fdb240fc7bc8a46c67e055f1f1eb63d184dccf8cde58"
+        }
+      ]
+    },
+    "created_at": "2026-10-26T16:32:50.521599+00:00",
+    "execution": {
+      "ephemeral": true,
+      "model": "test-model",
+      "reasoning_effort": "high"
+    },
+    "output": {
+      "problem_clusters_markdown": "问题簇：静态样本。",
+      "themes": [
+        {
+          "candidate_markdown": "自由格式初版。没有固定标题，也没有固定标签。",
+          "paper_tasks": [
+            {
+              "evidence_id": "EV-ABCD1234",
+              "focus": "尺度差异能否解释结论差别？"
+            }
+          ],
+          "title": "历史主题一"
+        }
+      ]
+    },
+    "protocol_version": "cards-to-refined-candidates-v1",
+    "scientific_correctness_verified": false
+  },
+  "sha256": "284eb140c6405ab528b7ed3b86c6b13e93b8dc1406ec3491959f1c3ba5001b10"
+}

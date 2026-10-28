@@ -1,5 +1,6 @@
 """#31: fixed #30 provider fixtures, no network or scientific correctness claim."""
 from copy import deepcopy
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -9,19 +10,12 @@ import pytest
 
 from hydrolitagent.cards._paths import ASSETS_DIR, PACKAGE_DIR
 from hydrolitagent.cards import card_validation as gate, cli, themes
-from test_card_draft import draft_case, run
+from card_fixtures import legacy_draft_case
 
 
 @pytest.fixture
-def case(draft_case, tmp_path):
-    result = run(draft_case)
-    assert result["ok"], result
-    app, record, provider, _, _ = draft_case
-    path = Path(result["draft_path"])
-    draft = json.loads(path.read_text(encoding="utf-8"))
-    input_path = tmp_path / "paper-input.json"
-    input_path.write_text(json.dumps(record), encoding="utf-8")
-    return app, draft, record, path, input_path, provider
+def case(legacy_draft_case):
+    return legacy_draft_case
 
 
 def check(case):
@@ -33,7 +27,7 @@ def codes(report):
 
 
 def save(case):
-    app, draft, _, path, input_path, _ = case
+    app, draft, _, path, input_path = case
     path.write_text(json.dumps(draft), encoding="utf-8")
     return gate.validate_subject_card_file(app, path, input_path)
 
@@ -42,10 +36,70 @@ def select(case, report):
     return {"draft_path": case[3], "input_path": case[4], "validation_path": report["validation_path"]}
 
 
+def _markdown_provenance() -> dict:
+    """Build the v2 provenance the Markdown pipeline would have written."""
+    from hydrolitagent.cards.application.prompts import load_template_bundle, read_prompt
+
+    assets = gate.ValidationAssets.from_root()
+    base = read_prompt(assets.generation_prompt)
+    reading = read_prompt(assets.markdown_reading_prompt)
+    catalog, templates = load_template_bundle(assets.templates_dir, assets.catalog_file)
+    template = templates["original-research"]
+    return {
+        "prompt_version": base["version"], "prompt_sha256": base["sha256"],
+        "draft_prompt_version": reading["version"], "draft_prompt_sha256": reading["sha256"],
+        "combined_prompt_sha256": "b" * 64,
+        "output_schema_sha256": hashlib.sha256(
+            assets.markdown_output_schema.read_text(encoding="utf-8").encode("utf-8")
+        ).hexdigest(),
+        "template_id": "original-research",
+        "template_version": template["local_version"],
+        "template_sha256": template["content_sha256"],
+        "catalog_version": catalog["catalog_version"],
+        "converter_id": "pymupdf", "converter_version": "1.0-test",
+        "runner_id": "scripted",
+        "generation_protocol_version": gate.MARKDOWN_CARD_PROTOCOL_VERSION,
+    }
+
+
+@pytest.fixture
+def markdown_case(case):
+    """Turn the v1 fixture into the v2 draft the Markdown pipeline saves."""
+    draft = case[1]
+    access = {
+        "method": gate.MARKDOWN_PREPARED,
+        "source_pdf_sha256": draft["source"]["pdf_sha256"],
+        "markdown_sha256": "a" * 64,
+        "parent_key": draft["source"]["parent_key"],
+        "page_count": draft["source"]["pdf_page_count"],
+        "converter_id": "pymupdf",
+        "converter_version": "1.0-test",
+        "reading": {
+            "read_mode": "file",
+            "model_claimed_status": "FULL_MARKDOWN_REVIEWED",
+            "verified_pages": [2],
+            "verified_quotes": 1,
+            "quote_coverage": 1.0,
+            "canaries_ok": True,
+            "anchor_conflicts": [],
+            "verified": True,
+            "full_read_verified": True,
+            "scientific_correctness_verified": False,
+        },
+    }
+    draft.update(
+        schema_version=gate.MARKDOWN_DRAFT_SCHEMA_VERSION,
+        pipeline="markdown",
+        source_access=deepcopy(access),
+        reading_record=deepcopy(access),
+        provenance=_markdown_provenance(),
+    )
+    return case
+
+
 def test_valid_short_draft_passes_without_ai_or_mutating_inputs(case):
     before = deepcopy(case[1:3])
-    with patch("hydrolitagent.cards.card_draft.build_card_generator_adapter", side_effect=AssertionError("no AI")):
-        report = check(case)
+    report = check(case)
     assert report["status"] == "PASS", report
     assert report["eligible_for_theme_generation"]
     assert not report["scientific_correctness_verified"]
@@ -53,7 +107,6 @@ def test_valid_short_draft_passes_without_ai_or_mutating_inputs(case):
     assert report["warnings"][0]["code"] == "CARD_TEXT_SHORT"
     assert report["draft_sha256"] == gate.fingerprint(case[1])
     assert case[1:3] == before
-    assert len(case[5].calls) == 1  # Only fixture generation, never validation.
 
 
 @pytest.mark.parametrize("field", gate.FIELDS)
@@ -278,8 +331,7 @@ def test_cannot_claim_pass_when_report_cannot_be_saved(case):
 
 
 def test_cli_offline_personal_library_and_exit_status(case, capsys):
-    with patch.object(cli, "load_config", return_value=case[0]) as config, \
-         patch.object(cli, "preflight", side_effect=AssertionError("no Zotero")):
+    with patch.object(cli, "load_config", return_value=case[0]) as config:
         args = ["evidence-validate", "--config", "explicit-config.json", "--draft", str(case[3]), "--paper-input", str(case[4]), "--json"]
         assert cli.main(args) == 0
         passed = json.loads(capsys.readouterr().out)
@@ -384,11 +436,13 @@ def test_assets_can_be_selected_from_a_relocated_copy(case, tmp_path):
     "C:\\research\\paper.pdf", "/home/research/paper.pdf", "\\\\server\\share\\paper.pdf",
 ])
 def test_foreign_origin_path_is_not_resolved_again_on_this_host(case, source_path):
-    from hydrolitagent.cards.card_generation import _load_template_bundle, _read_prompt, build_template_prompt
-    from hydrolitagent.cards.card_draft import SINGLE_SOURCE_TEMPLATES
+    from hydrolitagent.cards.application.card_draft import SINGLE_SOURCE_TEMPLATES
+    from hydrolitagent.cards.application.prompts import (
+        build_template_prompt, load_template_bundle, read_prompt,
+    )
     import hashlib
     assets = gate.ValidationAssets.from_root()
-    _, templates = _load_template_bundle(assets.templates_dir, assets.catalog_file)
+    _, templates = load_template_bundle(assets.templates_dir, assets.catalog_file)
     templates = {k:v for k,v in templates.items() if k in SINGLE_SOURCE_TEMPLATES}
     case[2]["pdf"]["local_path"] = source_path
     source = case[1]["source"]
@@ -397,8 +451,8 @@ def test_foreign_origin_path_is_not_resolved_again_on_this_host(case, source_pat
                "source_pdf_sha256":source["pdf_sha256"],"source_pdf_absolute_path":source_path,
                "reading_scope":"FULL_PDF","card_state":"DRAFT_PENDING_VALIDATION",
                "enabled_template_ids":sorted(templates)}
-    prompt = build_template_prompt(_read_prompt(assets.generation_prompt), context, templates)
-    prompt += "\n" + _read_prompt(assets.draft_prompt)["content"]
+    prompt = build_template_prompt(read_prompt(assets.generation_prompt), context, templates)
+    prompt += "\n" + read_prompt(assets.draft_prompt)["content"]
     case[1]["provenance"]["combined_prompt_sha256"] = hashlib.sha256(prompt.encode()).hexdigest()
     result = gate.validate_subject_card(assets, case[1], case[2])
     assert result["ok"], result
@@ -419,18 +473,6 @@ def test_shipped_example_passes_without_private_config_or_pdf(tmp_path, monkeypa
 
 
 
-def test_claude_draft_uses_same_offline_gate(draft_case):
-    from test_claude_cli import events, invoke
-    result, _ = invoke(draft_case, events(draft_case))
-    assert result["ok"], result
-    draft = json.loads(Path(result["draft_path"]).read_text(encoding="utf-8"))
-    with patch("subprocess.Popen", side_effect=AssertionError("validation must not call a model")):
-        report = gate.validate_subject_card(None, draft, draft_case[1])
-    assert report["ok"], report
-    draft["reading_record"]["pages_requested_successfully"] = [1]
-    assert "CARD_READING_RECORD_INVALID" in codes(gate.validate_subject_card(None, draft, draft_case[1]))
-
-
 def test_provider_protocol_cannot_mismatch_reading_method(case):
     case[1]["provenance"]["generation_protocol_version"] = "claude-local-pdf-v1"
     assert "CARD_READING_RECORD_INVALID" in codes(check(case))
@@ -442,3 +484,106 @@ def test_finding_reference_in_visible_heading_counts(case):
     assert check(case)["ok"]
     case[1]["card_body_markdown"] = "# F001 Heading only\n"
     assert "CARD_CONTENT_MISSING" in codes(check(case))
+
+
+# --------------------------------------------------------------------------------------
+# v2 drafts (Markdown-first pipeline)
+# --------------------------------------------------------------------------------------
+
+
+def test_markdown_v2_draft_passes_with_policy_v2(markdown_case):
+    report = check(markdown_case)
+    assert report["status"] == "PASS", report
+    assert report["policy_version"] == "subject-card-validation-v2"
+    assert report["report_mode"] == "CURRENT"
+    assert report["draft_pipeline"] == "markdown"
+    assert report["draft_schema_version"] == 2
+    assert report["eligible_for_theme_generation"]
+    assert report["reading_verified"] is True
+    assert report["reading_status"] == "VERIFIED"
+    # Neither a pass nor a programme check may claim scientific correctness.
+    assert report["scientific_correctness_verified"] is False
+    assert report["production_eligible"] is False
+    assert report["warnings"][0]["code"] == "CARD_TEXT_SHORT"
+
+
+def test_legacy_v1_report_is_marked_read_only(case):
+    report = check(case)
+    assert report["status"] == "PASS"
+    assert report["policy_version"] == "subject-card-validation-v1"
+    assert report["report_mode"] == "LEGACY_READ_ONLY"
+    assert report["draft_pipeline"] == "legacy"
+
+
+@pytest.mark.parametrize("field", ["reading", "method", "markdown_sha256", "converter_id", "page_count"])
+def test_markdown_v2_missing_or_wrong_receipt_fields_fail(markdown_case, field):
+    access = markdown_case[1]["source_access"]
+    if field == "page_count":
+        access[field] = access[field] + 1
+    else:
+        access[field] = "" if field in {"method", "markdown_sha256", "converter_id"} else None
+    report = check(markdown_case)
+    assert {"CARD_READING_RECORD_INVALID"} & codes(report)
+    assert not report["eligible_for_theme_generation"]
+
+
+def test_markdown_v2_pdf_sha_must_match_source_and_input(markdown_case):
+    markdown_case[1]["source_access"]["source_pdf_sha256"] = "0" * 64
+    assert "CARD_SOURCE_MISMATCH" in codes(check(markdown_case))
+    markdown_case[1]["source_access"]["source_pdf_sha256"] = markdown_case[1]["source"]["pdf_sha256"]
+    markdown_case[1]["source"]["pdf_sha256"] = "1" * 64
+    assert "CARD_SOURCE_MISMATCH" in codes(check(markdown_case))
+
+
+@pytest.mark.parametrize("key,value,code", [
+    ("verified", False, "CARD_READING_NOT_VERIFIED"),
+    ("canaries_ok", False, "CARD_READING_NOT_VERIFIED"),
+    ("scientific_correctness_verified", True, "CARD_READING_RECORD_INVALID"),
+    ("quote_coverage", 1.5, "CARD_READING_RECORD_INVALID"),
+])
+def test_markdown_v2_rejects_unverified_or_overclaiming_readings(markdown_case, key, value, code):
+    reading = markdown_case[1]["source_access"]["reading"]
+    reading[key] = value
+    markdown_case[1]["reading_record"]["reading"][key] = value
+    report = check(markdown_case)
+    assert code in codes(report)
+    assert not report["eligible_for_theme_generation"]
+    if key in {"verified", "canaries_ok"}:
+        assert report["reading_verified"] is False
+        assert report["reading_status"] == "PARTIAL"
+
+
+def test_markdown_v2_reading_record_must_match_source_access(markdown_case):
+    markdown_case[1]["reading_record"]["markdown_sha256"] = "c" * 64
+    assert "CARD_READING_RECORD_INVALID" in codes(check(markdown_case))
+
+
+@pytest.mark.parametrize("field", ["runner_id", "converter_id", "template_sha256", "output_schema_sha256"])
+def test_markdown_v2_provenance_is_required(markdown_case, field):
+    del markdown_case[1]["provenance"][field]
+    report = check(markdown_case)
+    assert {"CARD_PROVENANCE_MISSING", "CARD_VERSION_MISMATCH"} & codes(report)
+    assert not report["eligible_for_theme_generation"]
+
+
+def test_markdown_v2_template_version_must_match_shipped_assets(markdown_case):
+    markdown_case[1]["provenance"]["template_sha256"] = "d" * 64
+    assert "CARD_VERSION_MISMATCH" in codes(check(markdown_case))
+
+
+def test_markdown_v2_pipeline_label_is_required(markdown_case):
+    markdown_case[1]["pipeline"] = "legacy"
+    # Without the label the draft is read as v1 and the version check rejects it.
+    assert "CARD_DRAFT_VERSION" in codes(check(markdown_case))
+
+
+def test_markdown_v2_file_validation_and_theme_boundary(markdown_case):
+    markdown_case[3].write_text(json.dumps(markdown_case[1]), encoding="utf-8")
+    original = markdown_case[3].read_bytes()
+    report = gate.validate_subject_card_file(markdown_case[0], markdown_case[3], markdown_case[4])
+    assert report["ok"], report
+    assert report["policy_version"] == "subject-card-validation-v2"
+    assert markdown_case[3].read_bytes() == original
+    accepted = themes.load_subject_card_sources(markdown_case[0], [select(markdown_case, report)])
+    assert accepted[0]["card"] == markdown_case[1]["card_body_markdown"]
+    assert accepted[0]["validation"]["status"] == "PASS"

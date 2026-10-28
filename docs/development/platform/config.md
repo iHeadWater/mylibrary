@@ -10,20 +10,7 @@
 
 `paths.project_root` 相对于 `config.json` 所在目录解析；其余路径相对于 `project_root` 解析。因此，从仓库外部工作目录调用程序时，产物仍会写入正确项目。为避免误写，所有项目路径必须位于 `project_root` 内，运行状态和原始日志还必须位于 `runtime_dir` 内。当前 `paths.project_root` 为 `../../../..`，即仓库根目录。
 
-**唯一例外是科研产物根 `paths.artifact_root`**（证据卡 / 主题 / 运行记录 / 文献链接的落点）。它默认解析到工作区根（仓库根）。若要指向仓库外的共享位置（共享盘、OneDrive 等），必须同时显式写出 `paths.artifact_root_external = true`。这样外部位置是写明的意图，而不是被 `../outside` 这类相对路径悄悄带出去的。归属也随之划分：**产物根在项目内 = 平台所有**（正常写入、可清理）；**产物根在项目外 = 操作者所有**（平台只写不清理，不管理其生命周期）。
-
-科研产物根字段：
-
-| 字段 | 当前含义 | 默认值 | 规则 |
-|---|---|---|---|
-| `paths.artifact_root` | 科研产物总落点（证据卡、主题、运行记录、文献链接的共同父目录） | `../`，即工作区根（仓库根） | 位于 `project_root` 之外时必须显式开启下一行的开关 |
-| `paths.artifact_root_external` | 是否允许产物根位于项目之外（共享盘场景） | `false`（本仓库配置为 `true`） | 布尔值；未开启时产物根超出 `project_root` 直接报错 |
-| `paths.evidence_cards_dir` | 证据卡目录 | `证据卡` | 必须位于 `artifact_root` 内 |
-| `paths.themes_vault_dir` | 主题档案目录 | `主题` | 必须位于 `artifact_root` 内 |
-| `paths.run_records_dir` | 主题工作流运行账目录 | `运行记录` | 必须位于 `artifact_root` 内 |
-| `paths.literature_index_dir` | 来源链接索引目录 | `文献链接` | 必须位于 `artifact_root` 内 |
-
-四个子目录必须同属一个 `artifact_root`：证据卡与主题之间存在交叉引用，只把其中一个挪到别处会让相对定位失效。
+科研产物根只有一处：项目级 `configs/paths.toml` 解析出的 `paths.literature_root`（详见本节末尾「科研产物路径：一个根，其余派生」）。cards 配置里的其余路径都不允许逃出 `project_root`。旧平台的 `paths.artifact_root`、`artifact_root_external` 及其四个子目录字段（证据卡 / 主题 / 运行记录 / 文献链接）已随本次清理删除，不再解析。
 
 证据卡模板路径：
 
@@ -32,9 +19,7 @@
 | `paths.templates_dir` | 所有公共模板的根目录 | 必须位于项目根目录内 |
 | `paths.evidence_card_templates_dir` | 九类证据卡 Markdown 模板目录 | 必须位于 `templates_dir` 内 |
 | `paths.evidence_card_template_catalog_file` | 模板来源、版本和内容哈希清单 | 必须位于证据卡模板目录内 |
-| `paths.evidence_card_generation_prompt_file` | 正式制卡提示词 | 必须位于 `paths.prompts_dir` 内，并声明 `prompt_version` |
-| `paths.card_generation_output_schema_file` | 模型结构化输出约束 | 必须位于 `paths.schemas_dir` 内 |
-| `paths.card_trials_dir` | 制卡试运行结果 | 必须位于 `paths.runtime_dir` 内，不提交 Git |
+| `paths.evidence_card_generation_prompt_file` | 正式制卡提示词 | 必须位于 `paths.project_root` 内，并声明 `prompt_version` |
 
 目录位置可以调整，但不得将证据卡模板或清单配置到项目之外。
 
@@ -48,84 +33,38 @@
 
 ## 制卡字段 card_generator
 
-当前 `card_generator` 字段说明：
+平台只提供**流程**，LLM 动作由两种执行者之一完成，没有第三种：
+
+1. `in_session`（默认）：`cards run prepare` 准备 `paper.md`，当前 agent 写 `response.json`，
+   `cards run finalize` 校验后保存草稿。**不需要任何 API key。**
+2. `direct`：直连 OpenAI 兼容 API，默认 DeepSeek（`base_url=https://api.deepseek.com`、
+   `model=deepseek-chat`、key 取 `DEEPSEEK_API_KEY`）。
 
 | 字段 | 当前含义 | 允许值或规则 |
 |---|---|---|
-| `workflow_mode` | 制卡编排方式 | 当前 `single_agent`；单 Agent 必须移除 `multi_agent_workflow` |
-| `adapter` | Python 调用哪一种制卡运行时适配器 | 当前只能是 `codex_cli`；单篇 `evidence-generate` 另经 `configs/ai.toml` 支持 `claude` |
-| `executable` | 要查找和运行的 Codex CLI 命令名或路径 | 默认为 `codex`；非空字符串 |
-| `auth_mode` | 本阶段能够确认的认证方式 | 当前只能是 `chatgpt_account` |
-| `preflight_timeout_seconds` | 版本和登录状态两项检查各自的最长等待秒数 | 大于 0 |
-| `model` | 单 Agent 制卡模型 | `null` 表示使用 Codex 内置默认；也可填写非空模型名称 |
-| `reasoning_effort` | 单 Agent 思考强度 | `null` 表示使用模型默认；可选 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`，实际支持范围取决于模型 |
-| `generation_timeout_seconds` | 单 Agent 一次模型会话的最长等待秒数 | 大于 0；当前为 1500，即 25 分钟 |
+| `runner` | 执行者 id（注册表名） | `in_session`（默认）或 `direct`；未知值在构建管线时报错 |
+| `model` | 所选执行者的模型名 | `null` 表示使用该执行者的默认值 |
+| `reasoning_effort` | 思考强度 | `null` 或 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`；实际支持范围取决于模型 |
+| `generation_timeout_seconds` | 一次制卡的最长等待秒数 | 大于 0；当前为 1500，即 25 分钟 |
 | `progress.enabled` | 制卡是否显示 stderr 实时进度 | `true` / `false`；默认 `true`；`--no-progress` 可关闭本次显示 |
 | `progress.heartbeat_interval_seconds` | 定期报告等待状态的间隔 | 1–300 秒；默认及当前值为 60；不改变模型超时和重试策略 |
 
 `progress` 在旧配置中整体缺失时使用上述默认值；一旦填写，必须同时提供两个字段。心跳表示本地程序仍在等待，不证明远端模型健康。进度不会写入最终 JSON，也不会回显模型正文、原始工具输出或凭据。
 
-`card_generator.workflow_mode=single_agent` 是当前模式，主提示词 `evidence-card-generation-v8.md`、九类模板。模型、强度和超时直接用上表。程序只检验流程，不校验正文标题、表格、标签、编号或措辞。
+`--ai-provider` / `configs/ai.toml` 的 `provider`（别名 `runner`）会覆盖 `card_generator.runner`；
+单篇 `evidence-generate` 与 `themes-run` 使用同一套选择契约。API key 不是配置项：`direct` 自己从环境变量读取，
+`in_session` 不需要，配置文件从不保存凭据。
 
-例如，使用 GPT-5.6 Sol 和高推理强度：
+单篇制卡的失败只出现在本次 JSON 的 `error` 块（`code` / `message` / 可选 `diagnostic`），不写额外日志文件，也不保存提示词或论文全文；主题轮次的 run report 仍写入 `paths.logs_dir/theme-runs/`，且不提交 Git。
 
-```json
-"model": "gpt-5.6-sol",
-"reasoning_effort": "high"
-```
+## PDF 读取方式
 
-程序会把显式推理强度转换为 Codex CLI 的 `--config model_reasoning_effort="..."` 参数。配置校验只能防止未知档位和拼写错误；账号是否能使用指定模型、该模型是否支持指定档位，必须由真实生成验收。
+单篇制卡与主题定向精读都由 Python 先把 PDF 转成 Markdown（PyMuPDF），执行者阅读 `paper.md` 与图资产。平台自身不调用 `pdfinfo` / `pdftotext` / `pdftoppm`。转换器的选择在 `converter` 配置组，缓存目录在 `paths.project_root` 下。
 
-`card_generator.connection_guard` 是 Python 对每个制卡子进程实施的停止保护，不依赖 CLI 自身的重试次数，也不受 `progress.enabled` 或 `--no-progress` 影响：
-
-| 字段 | 当前配置 / 示例值 | 含义与边界 |
-|---|---|---|
-| `reconnect_stop_enabled` | `false` | 是否因重连次数或恢复超时停止；必须为布尔值。当前关闭，仅记录重连状态 |
-| `reconnect_event_limit` | `10` | 仅在开关为 `true` 时生效：同一角色累计收到第 10 条重连事件时停止 |
-| `recovery_timeout_seconds` | `300` | 仅在开关为 `true` 时生效：每次进入断线状态后等待进展恢复的最长秒数 |
-| `idle_timeout_seconds` | `1500` | 无可识别进展事件的最长秒数；1–3600；当前与单 Agent 总时限同为 25 分钟 |
-| `pdf_tool_call_limit` | `2` | 每个角色的整篇 PDF 工具调用预算；1–5；检测到超额后终止子进程，防止反复整篇回传 |
-
-填写本节时必须包含全部四个限额字段，`reconnect_stop_enabled` 可选；即使关闭也不接受非法限额值。修改后从下一次启动命令生效，不热更新已运行的子进程。这不改变 Codex/ChatGPT 桌面客户端自身的重连行为，也不保证网络恢复。
-
-失败诊断由 CLI 保存到 `paths.logs_dir`（默认 `.runtime/logs`），最终 JSON 的 `diagnostic_log_path` 给出位置。只保存已脱敏的公开错误和上下文，不保存原始事件、提示词或论文全文；日志不提交 Git。日志目录不可写时保留原失败结果并给出 `diagnostic_log_warning`。
-
-## 本地 PDF 读取方式
-
-`card_generator.pdf_reader` 字段说明：
-
-| 字段 | 当前含义 | 允许值或规则 |
-|---|---|---|
-| `adapter` | 原始 PDF 的读取方式 | 当前 `local_path`；与工作流协议版本配套，不自动回退 |
-| `server_name` | 本次调用中注册的 MCP 服务名 | 只能含字母、数字、下划线和连字符（历史字段，`local_path` 下不生效） |
-| `python_executable` | 启动项目内置 MCP 的 Python | `null` 表示复用运行入口的解释器（历史字段） |
-| `server_file` | 项目内置 PDF MCP 服务脚本 | 相对 `paths.project_root` 解析，且必须位于项目内（历史字段） |
-| `pdfinfo_executable` | 获取 PDF 页数的程序 | 命令名、项目相对路径或绝对路径 |
-| `pdftotext_executable` | 逐页提取文字的程序 | 命令名、项目相对路径或绝对路径 |
-| `pdftoppm_executable` | 逐页渲染页面图像的程序 | 命令名、项目相对路径或绝对路径 |
-| `render_dpi` | 页面图像渲染分辨率 | 72–300；当前为 120 |
-| `max_pages_per_call` | 完整读取工具内部每批处理多少页 | 1–10；当前为 4 |
-| `output_token_limit` | 完整 PDF 工具结果的输出预算 | 大于 0 且不超过 200000；当前为 60000 |
-| `startup_timeout_seconds` | MCP 启动超时 | 大于 0（历史字段） |
-| `tool_timeout_seconds` | 单次工具调用及底层 PDF 工具的超时上限 | 大于 0 |
-
-当前配置与示例均使用项目相对工具路径 `.tools/poppler/Library/bin/`，PDF Python 使用仓库根 `.venv`（`.venv/Scripts/python.exe`，相对项目根），由 `uv sync --all-packages` 恢复。也支持明确配置已有工具路径；改目录时须同步对应字段，不需要改 Python 源码。
-
-`card_generator.pdf_direct_trial` 对象名为兼容历史保留，其运行环境字段（`windows_sandbox`、`shell_executable`、`python_executable`、`text_extractor`、`preflight_timeout_seconds`）与正式路径读取共用；该对象中的 `prompt_file`、`schema_file`、`timeout_seconds` 不用于正式制卡。
+`evidence-generate --paper-input` 是受支持的单篇路径；旧证据包栈（`--item-key`、`--pipeline legacy` 与
+启动子进程的 CLI 执行者）已整体移除。历史 v1 草稿仍可由 `evidence-validate` 只读校验。
 
 父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `.runtime/` 或草稿记录。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](variables.md)。
-
-## Codex 子进程独立代理
-
-`card_generator.proxy` 只影响本平台启动的 Codex CLI 子进程环境，不修改 Python 主进程的 `os.environ`、系统/用户环境变量、Windows 系统代理或 Codex 个人配置，也不重启客户端。Zotero 本地 API 与其他独立程序保持原有网络设置。
-
-| 字段 | 含义与修改方法 |
-|---|---|
-| `enabled` | `true`：只对子进程显式设置代理；`false`：恢复原来的环境继承方式，不等于强制直连 |
-| `url` | 本机代理软件的 HTTP/HTTPS 监听地址，须含端口；换端口只改此处。启用时必填；关闭时可为 `null` |
-| `no_proxy` | 额外直连主机名/IP 数组；本机三项始终补齐，避免本地流量外送 |
-
-启用时，程序在传给 Codex 子进程的环境副本中设置大小写两套 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`WS_PROXY`、`WSS_PROXY`，并以本节覆盖该子进程的 `NO_PROXY`。换机请填写新机器的代理端口或设置 `enabled=false`。不要把节点订阅链接、带用户名/密码或令牌的 URL 写入 Git；配置会拒绝这些 URL，错误消息不回显输入。
 
 ## 主题池 theme_pipeline
 
@@ -146,20 +85,30 @@ Qinjiajun 目标库的群组 ID 保存在可复现的 `hydrolitagent/cards/asset
 
 ## 密钥与配置验收边界
 
-Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在本机凭据存储或环境变量中，不得提交到仓库。`config.json` 最多记录所使用的凭据类型或环境变量名称，不能记录秘密本身。
+模型 API key（默认 `DEEPSEEK_API_KEY`）、Zotero API Key、GitHub Token 等秘密只能存放在本机凭据存储或环境变量中，不得提交到仓库。`config.json` 不记录任何凭据，也不记录代理地址。
 
-新增配置字段必须同时具有解析、类型或范围校验、使用该字段的实际代码、自动化测试和中文说明；配置只能选择已经实现并注册的适配器，填写未知适配器时必须启动失败，不能静默回退。
+新增配置字段必须同时具有解析、类型或范围校验、使用该字段的实际代码、自动化测试和中文说明；`runner` 只能选择注册表里已实现并注册的执行者，填写未知执行者时必须启动失败，不能静默回退。
 
-## 科研产物路径与当前边界
+## 科研产物路径：一个根，其余派生
 
-配置同时保留**两组**产物路径：
+**产物根只有一个定义处**：项目级 `configs/paths.toml` 的 `[literature] root`（可用
+`HYDROLITAGENT_LITERATURE_ROOT` 覆盖，`uv run hydrolitagent paths` 可查实际解析结果）。
+cards 的 `config.json` 只写**子目录名**，全部相对这个根解析：
 
-- **单篇流程**写入 `--output-root`（默认仓库 `outputs/`），**主题池**写入 `paths.themes_dir`。
-- `paths.artifact_root` 及其下的 `证据卡/`、`主题/`、`运行记录/`、`文献链接/` **已能解析和校验**，
-  可指向仓库根或显式允许的外部共享位置，但**自动化发布尚未接入这四个目录**。
+| cards 字段 | 值 | 解析结果 |
+|---|---|---|
+| `paths.themes_dir` | `themes` | `<literature_root>/themes` |
+| `paths.evidence_packs_dir` | `evidence-packs` | `<literature_root>/evidence-packs` |
+| 单篇草稿（无配置字段） | — | `<literature_root>/zotero/...` |
+
+`paths.literature_root` 是**可选的显式覆盖**，只用于测试或非常规部署；正常使用不要写它，
+否则又会变成两处定义。**产物根只有 `paths.literature_root` 一处**；旧平台的
+`paths.artifact_root` 及其下的 `证据卡/`、`主题/`、`运行记录/`、`文献链接/` 等 artifact
+路径字段已从代码与配置中移除，不再解析。
+
+代码、模板、`configs/`、`.runtime/`（缓存与日志）仍相对 `paths.project_root` 解析，不属于产物。
+临时输入与 `cards run --run-dir` 放在 `.runtime/` 下。
 
 所有实际科研产物、原始 PDF、Zotero 数据库、`.runtime` 和本机路径均**不进入 Git**。
-目标是在两组目录之间建立明确的准入与发布边界，再把 `artifact_root` 作为 Obsidian 阅读层 ——
-**不应把当前的配置字段理解为两套工作流已经打通**。
 
 相关：[自动化边界](automation.md) · [项目级设计](project-design.md)

@@ -1,0 +1,11 @@
+{
+  "candidate_markdown": "自由格式初版。没有固定标题，也没有固定标签。",
+  "paper_tasks": [
+    {
+      "evidence_id": "EV-ABCD1234",
+      "focus": "尺度差异能否解释结论差别？"
+    }
+  ],
+  "theme_id": "TH-9ab96d5fa9ead3277b13-001",
+  "title": "历史主题一"
+}

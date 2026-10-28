@@ -30,7 +30,7 @@ cd /path/to/mylibrary
 |---|---|
 | **所有**能力 | Git · Python 3.12–3.14 · [uv](https://docs.astral.sh/uv/) · `git clone` + `uv sync --all-packages` |
 | 读 / 写 Zotero 库 | Zotero **API key**（放 `.env`） |
-| **文献卡与主题卡** | Zotero 桌面版开着，并在设置里**允许其他应用通信** · 一个**已登录**的 AI 命令行工具（Codex 或 Claude） · 读论文 PDF 页面用的小工具 [Poppler](https://poppler.freedesktop.org/) |
+| **文献卡与主题卡** | Zotero 桌面版开着，并在设置里**允许其他应用通信** · `DEEPSEEK_API_KEY`（直连 API；也可用 `cards run` 交给当前 agent，不需要 key）。PDF 由 Python 转成 Markdown，**不需要 Poppler** |
 | 论文入库 | 论文 PDF 所在的 GDrive 目录 + Zotero 里对应的「**链接附件根目录**」设置 |
 
 逐条说明与凭据清单见 **[前提与配置](getting-started/installation.md)** —— **配一次就够**。
@@ -50,9 +50,10 @@ cd /path/to/mylibrary
 | 「看看能聚出哪些主题」 | 由已有的文献卡生成候选主题、必要时定向精读并回填 | [统一主题池](user-guide/cards/unified-theme-pool.md) |
 | 「主题池现在什么样」 | 报当前候选与历史版本 | [统一主题池](user-guide/cards/unified-theme-pool.md) |
 | 「当前用哪个模型 / 产物放哪」 | 报模型选择与产物落点，不调模型 | [运行维护](user-guide/cards/runtime-maintenance.md) |
+| 「把产物读成一本书 / 用 Obsidian 打开」 | 生成 `outputs/HOME.md`、卡片索引、阅读版卡片与主题阅读页，并自检链接 | [在 Obsidian 里读产物](user-guide/cards/reading-in-obsidian.md) |
 
-> 前三行是**入库与当期内容**线；后五行是**文献卡与主题卡**线（底层是 `uv run hydrolitagent cards …`
-> 的 5 条子命令）。无论哪条 —— **你不需要读那些详情页**，只在想自己动手或排错时才去。
+> 前三行是**入库与当期内容**线；其余是**文献卡与主题卡**线（底层是 `uv run hydrolitagent cards …`
+> 的 8 条子命令）。无论哪条 —— **你不需要读那些详情页**，只在想自己动手或排错时才去。
 >
 > 付费墙（SD / Wiley / Nature 等）的下载需要浏览器 + 机构会话，见[论文 PDF 下载](user-guide/download-pdf.md)。
 
@@ -66,7 +67,8 @@ cd /path/to/mylibrary
 | Zotero 入库（linked_file） | 已下载 PDF 同步进 Zotero，零云端配额 | [Zotero 入库](user-guide/zotero-sync.md) |
 | Zotero → NotebookLM | 新增论文整理成中文简报 / 音频 / 视频概览 | [Zotero → NotebookLM](user-guide/zotero-notebooklm.md) |
 | 文献深度处理 | Literature CLI：每周综述、公众号发布/润色/配图、B 站上传 | [文献深度处理](user-guide/literature.md) |
-| **文献卡与主题卡** | 自己的 Zotero 论文 → 文献卡 → 候选主题（**Windows-only**） | [文献卡与主题卡](user-guide/cards/index.md) |
+| **文献卡与主题卡** | 自己的 Zotero 论文 → 文献卡 → 候选主题（跨平台，PDF→Markdown，不需要 Poppler） | [文献卡与主题卡](user-guide/cards/index.md) |
+| **产物阅读层** | `cards index`：产物根 → Obsidian vault（HOME、卡片索引、主题阅读页，链接自检） | [在 Obsidian 里读产物](user-guide/cards/reading-in-obsidian.md) |
 | 论文复现 | 复现 AI 驱动水文学关键论文 | `equation_from_data/`、`google_floodhub/` |
 
 ## 项目结构
@@ -78,7 +80,8 @@ cd /path/to/mylibrary
 - **[前提与配置](getting-started/installation.md)** — **先看这个**：公共前提与凭据
 - [5 分钟上手](getting-started/quickstart.md) — 查询文献、添加论文、启动服务
 - [用户指南总览](user-guide/index.md) — 两条能力线各自看哪些页
-- [文献卡与主题卡](user-guide/cards/index.md) — 从自己 Zotero 的论文生成文献卡与主题卡（**Windows-only**）
+- [文献卡与主题卡](user-guide/cards/index.md) — 从自己 Zotero 的论文生成文献卡与主题卡（跨平台，PDF→Markdown）
+- [在 Obsidian 里读产物](user-guide/cards/reading-in-obsidian.md) — 把产物根当 vault 打开，从 `HOME.md` 开始
 - [MCP Server 工具](user-guide/mcp-tools.md) — 12 个 MCP 工具完整参考
 - [论文入库流水线](user-guide/paper-pipeline.md) — DOI 到 Zotero 的完整流程
 - [论文 PDF 下载（机构访问）](user-guide/download-pdf.md) · [Zotero 入库（linked_file）](user-guide/zotero-sync.md) · [Zotero → NotebookLM](user-guide/zotero-notebooklm.md)

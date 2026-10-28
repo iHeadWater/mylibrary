@@ -4,6 +4,14 @@
 
 Accepted
 
+> **注记（2026-10-28）：部分内容已被取代。**
+> 「产物根可配置」这一决定仍然有效（`configs/paths.toml` 的 `[literature] root` +
+> `HYDROLITAGENT_LITERATURE_ROOT`）。但本文中的旧命名 `artifact_root` 与
+> 「运行期间不要用 Obsidian 打开正在同步的产物根」的运维建议，已被**产物阅读层**取代：
+> 现在 `outputs/` 就是可读的 Obsidian vault，入口是 `outputs/HOME.md`（由
+> `uv run hydrolitagent cards index` 生成）。同步盘冲突副本的风险仍在，见
+> [在 Obsidian 里读产物](../user-guide/cards/reading-in-obsidian.md)。
+
 ## Date
 
 2026-09-12

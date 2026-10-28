@@ -71,7 +71,7 @@ PLATFORM_IGNORED_PATHS = (
     "activity/ledger.json",
     "members/README.md",
     ".runtime/tasks.json",
-    ".tools/poppler/Library/bin/pdfinfo.exe",
+    ".tools/local-bin/example.exe",
     "hydrolitagent/cards/assets/config/config.local.json",
 )
 
@@ -85,7 +85,8 @@ PLATFORM_NOT_IGNORED_PATHS = (
 )
 
 # --------------------------------------------------------------------------------------
-# 证据卡与主题综合(原王新宇线)的产物:默认落在仓库根,落点由 paths.artifact_root 决定
+# 证据卡与主题综合(原王新宇线)的历史产物目录:配置层的旧 artifact 根已移除,
+# 但这些默认位置仍需留在 .gitignore 里兜底
 # --------------------------------------------------------------------------------------
 
 ARTIFACT_ROOT_DIRS = ("证据卡", "主题", "运行记录", "文献链接")
@@ -568,8 +569,9 @@ def test_platform_output_dirs_are_ignored() -> None:
 def test_research_workflow_artifacts_are_ignored_and_untracked() -> None:
     """要求:证据卡与主题综合(原王新宇线)的产物默认不入库,且 ignore 规则必须覆盖默认位置。
 
-    落点本身由 ``paths.artifact_root`` 决定(默认仓库根,可指向共享盘),
-    所以这里只守卫**默认位置**:与平台产物同一原则,分两处:
+    这些是旧 artifact 布局的默认位置;产物根已统一到 ``paths.literature_root``,
+    配置层的旧 artifact 根已移除,但默认位置仍需留在 .gitignore 里兜底。
+    这里只守卫**默认位置**:与平台产物同一原则,分两处:
     - OUTCOME:四个默认产物目录下不得有任何被跟踪的文件;
     - MECHANISM:默认位置必须被 ignore 规则命中——否则规则被删掉也要等到
       产物已经被提交才会暴露。
@@ -583,7 +585,7 @@ def test_research_workflow_artifacts_are_ignored_and_untracked() -> None:
     tracked_artifacts = _git_ls_files(*ARTIFACT_ROOT_DIRS)
     assert not tracked_artifacts, (
         "科研产物默认位置仍在被 git 跟踪——它们是运行产物,应只存在于本地或共享盘"
-        "(落点由 paths.artifact_root 决定):\n  " + "\n  ".join(sorted(tracked_artifacts))
+        "(旧 artifact 布局的默认位置):\n  " + "\n  ".join(sorted(tracked_artifacts))
     )
 
     not_ignored = [path for path in ARTIFACT_IGNORED_PATHS if not _is_ignored(path)]

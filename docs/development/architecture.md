@@ -26,8 +26,8 @@ hydrolitagent/
 ├── query/                   # 图查询
 └── scholars/                # 按人/机构统计论文产出、位次与研究方向
 
-hydrolitagent/cards/         # 文献卡与主题卡（⑤ 沉淀成资产；运行时 Windows-only）
-├── cli.py                   # 五条核心命令的注册与分发
+hydrolitagent/cards/         # 文献卡与主题卡（⑤ 沉淀成资产；默认 PDF→Markdown，跨平台）
+├── cli.py                   # 七条核心命令的注册与分发（含 run 的两阶段与 doctor）
 ├── paper_input.py           # 单篇 Zotero 论文输入（个人/群组库）
 ├── card_draft.py            # 单篇主体卡草稿生成
 ├── card_validation.py       # 主体卡确定性代码校验门禁
@@ -182,7 +182,7 @@ Skills 是面向 Agent 的封装层，每个 Skill 包含：
 | 线 | 做什么 | 代码 / 数据 | 用户入口 |
 |---|---|---|---|
 | **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/播客/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（12 个技能） | [MCP Server 工具](../user-guide/mcp-tools.md) |
-| **文献卡与主题卡** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题（**运行时 Windows-only**） | `hydrolitagent/cards/`、`skills/literature-cards/` | [文献卡与主题卡](../user-guide/cards/index.md) |
+| **文献卡与主题卡** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题（默认 PDF→Markdown，跨平台，不需要 Poppler） | `hydrolitagent/cards/`、`skills/literature-cards/` | [文献卡与主题卡](../user-guide/cards/index.md) |
 | **证据卡与主题综合** | 来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、[模板资产](../user-guide/cards/templates.md) | [模板资产](../user-guide/cards/templates.md) |
 
 > **后两支别混用**：**文献卡与主题卡**追求「给定一篇论文，稳定产出可校验的卡片与候选主题」，
@@ -208,7 +208,7 @@ Skills 是面向 Agent 的封装层，每个 Skill 包含：
 | 位置 | 存什么 |
 |---|---|
 | `hydrolitagent/` | Python 包：Zotero MCP Server、下载/入库、文献处理、知识图谱 |
-| `hydrolitagent/cards/` | 文献卡与主题卡：代码 `*.py` 与只读资产 `assets/`（模板 / 提示词 / schema / 示例 / 默认配置），运行产物落仓库根 |
+| `hydrolitagent/cards/` | 文献卡与主题卡：代码 `*.py` 与只读资产 `assets/`（模板 / 提示词 / schema / 示例 / 默认配置）；运行产物落**产物根** `outputs/`（`paths.literature_root`，不入 Git），阅读层由 `cards index` 生成 |
 | `hydrolitagent/scholars/` | 学者与机构论文统计：按人/机构检索 OpenAlex，统计产出、作者位次与研究方向，输出 CSV/JSON/Markdown |
 | `skills/` | 12 个技能：9 个工具链技能 + `literature-cards` + 两个水利科研技能 |
 | `docs/` | 文档站源码（mkdocs） |

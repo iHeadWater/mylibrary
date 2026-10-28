@@ -1,0 +1,26 @@
+{
+  "record": {
+    "binding": {
+      "readings": [
+        {
+          "evidence_id": "EV-ABCD1234",
+          "result_sha256": "4d1338a0a5fe401507830dada6a895072fc7773dafb7241a430daf54bb202eff"
+        }
+      ],
+      "theme_id": "TH-9ab96d5fa9ead3277b13-001",
+      "theme_sha256": "93ca2544e181de6adff4248ff646c5f7f7b38310e0b3fb3882d9fe7904cec375"
+    },
+    "created_at": "2026-10-26T16:32:50.546990+00:00",
+    "execution": {
+      "ephemeral": true,
+      "model": "test-model",
+      "reasoning_effort": "high"
+    },
+    "output": {
+      "revised_markdown": "精读后建议收窄主题，仍是候选。"
+    },
+    "protocol_version": "unified-theme-pool-v1",
+    "scientific_correctness_verified": false
+  },
+  "sha256": "7c4ef47aec8eedc956bd11d02c8a01f5453a59d65908f48034c9a1e7b6145b48"
+}

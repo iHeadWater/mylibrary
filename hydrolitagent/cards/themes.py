@@ -1,7 +1,13 @@
-"""Rough cards -> candidates -> per-paper focused PDF reading -> revised candidates.
+"""Rough cards -> candidates -> per-paper focused reading -> revised candidates.
 
-Only process contracts are enforced. Markdown remains opaque model output.
-Each model result is durably saved before rendering; reruns resume immutable steps.
+The live pipeline reads prepared Markdown: every source PDF is converted once by
+the configured ``PaperConverter``, and a focused reading is accepted only when
+``domain.grounding`` verifies its quotes and canaries against that conversion.
+Model prose remains opaque output; only the process contract is enforced.
+
+Each model result is durably saved before rendering; reruns resume immutable
+steps. Historical PDF-reading batches are read as static fixtures and migrated
+into the pool; they are never regenerated.
 """
 from __future__ import annotations
 
@@ -11,26 +17,32 @@ import os
 import re
 import tempfile
 import time
-from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from hydrolitagent.cards.card_generators.codex_local_pdf import CodexLocalPdfAdapter
-from hydrolitagent.cards.card_generators.codex_text import CodexTextAdapter
 from hydrolitagent.cards.evidence_packages import EvidencePackageError, load_evidence_manifest
 from hydrolitagent.cards.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
 from hydrolitagent.cards.pdf_gate import PdfGateError
-from hydrolitagent.cards.progress import report_progress
 from hydrolitagent.cards.publication import atomic_text, text_hash, validate_saved_package
 from hydrolitagent.cards.tasks import PipelineRunLock, TaskStoreError
 from hydrolitagent.cards.zotero import ZoteroApiError
 
-LEGACY_PROTOCOL = "cards-to-refined-candidates-v1"
 PROTOCOL = "unified-theme-pool-v1"
+# Assets the historical PDF-reading batch used. Kept so legacy batches can be
+# replayed and decoded; the live pipeline does not read them.
 LEGACY_ASSETS = ("discovery.md", "discovery.schema.json", "focused-reading.md",
           "focused-reading.schema.json", "refinement.md", "refinement.schema.json")
 ASSETS = LEGACY_ASSETS + ("pool-discovery.md", "pool-discovery.schema.json")
+# Assets the Markdown-first pipeline actually uses. The focused reading prompt
+# and schema differ from v1: the model reads paper.md and must return a reading
+# receipt, so the output can be grounded instead of trusted.
+READING_ASSETS = ("focused-reading-markdown.md", "focused-reading-markdown.schema.json")
+# The v1 assets stay in the binding even though the live pipeline no longer reads
+# them: a legacy batch's recorded asset hashes are compared against this set, so
+# dropping them would make every migrated pool look stale. They are not used to
+# generate anything.
+PIPELINE_ASSETS = (*ASSETS, *READING_ASSETS)
 SOURCE_FIELDS = ("evidence_id", "group_id", "parent_key", "attachment_key", "pdf_sha256")
 
 
@@ -38,6 +50,19 @@ class ThemeError(RuntimeError):
     def __init__(self, code, message, **details):
         super().__init__(message)
         self.code, self.details = code, details
+
+
+# --- Runner seam ----------------------------------------------------------------------
+# The live theme workflow receives a ``composition.MarkdownPipeline`` (converter,
+# paper store, runner, options). It never names a provider: the runner id is
+# configuration, and the registry decides how to build it.
+
+
+def _default_pipeline(config):
+    """Build the configured Markdown pipeline through the composition root."""
+
+    from hydrolitagent.cards.composition import build_theme_pipeline
+    return build_theme_pipeline(config)
 
 
 def _json(value):
@@ -103,7 +128,21 @@ def _file_sha(path):
     return digest.hexdigest()
 
 
-def _sources(config):
+def _collect_sources(config, literature_root=None):
+    """Return ``(sources, report_fields)`` for one theme run.
+
+    Two kinds of sources share one evidence identity: validated single-paper
+    drafts and legacy rough evidence packs. A pack wins when both describe the
+    same paper, so an old batch keeps its behaviour.
+
+    A draft's focused readings are written under
+    ``<evidence_packs_dir>/draft-readings/<evidence_id>/``: the theme pool's
+    reading references are relative to that root, and the pool's immutable
+    revision rules stay unchanged.
+    """
+
+    from hydrolitagent.cards.application.draft_sources import scan_drafts
+
     result = {}
     root = config.paths.evidence_packs_dir
     for manifest_path in sorted(root.glob("*/manifest.json")):
@@ -118,14 +157,59 @@ def _sources(config):
         if eid in result:
             raise ThemeError("THEME_DUPLICATE_SOURCE", "同一篇文献存在多个证据包；不重复读取", evidence_id=eid)
         card = (pack / "card.md").read_text(encoding="utf-8")
-        result[eid] = {"pack": pack, "card": card, "record": {
+        result[eid] = {"kind": "evidence_pack", "pack": pack, "card": card, "record": {
             **{k: manifest[k] for k in SOURCE_FIELDS}, "card_sha256": text_hash(card),
             "package_directory": pack.name}}
-    return result
+    pack_count = len(result)
+    pack_ids = set(result)
+    scan = scan_drafts(config, literature_root)
+    draft_ids, duplicates = set(), []
+    for item in scan.items:
+        if item.evidence_id in draft_ids:
+            # Two drafts for one paper are ambiguous unless a pack already owns
+            # the identity; a pack-preferred duplicate is recorded, not fatal.
+            if item.evidence_id in pack_ids:
+                continue
+            raise ThemeError("THEME_DUPLICATE_SOURCE",
+                             "同一篇文献存在多个已验证草稿；不任意选择", evidence_id=item.evidence_id)
+        draft_ids.add(item.evidence_id)
+        if item.evidence_id in pack_ids:
+            duplicates.append({"evidence_id": item.evidence_id,
+                               "code": "DUPLICATE_SOURCE_PREFERRED_PACK"})
+            continue
+        result[item.evidence_id] = {
+            "kind": "draft",
+            "pack": _safe_path(root, "draft-readings", item.evidence_id),
+            "card": item.card,
+            "record": item.record,
+            "directory": item.directory,
+            "literature_root": scan.root,
+            "pdf_size_bytes": item.pdf_size_bytes,
+            "converter": (item.converter_id, item.converter_version),
+        }
+    report_fields = {
+        "sources_by_kind": {"evidence_pack": pack_count, "draft": len(result) - pack_count},
+        "source_ids": list(result),
+        "duplicate_sources": duplicates,
+        "rejected_drafts": dict(scan.rejected),
+    }
+    return result, report_fields
 
 
-def _assert_sources(sources):
+def _sources(config, literature_root=None):
+    return _collect_sources(config, literature_root)[0]
+
+
+def _assert_sources(sources, config=None):
+    from hydrolitagent.cards.application.draft_sources import inspect_draft
+
     for source in sources.values():
+        if source.get("kind") == "draft":
+            fresh, _ = inspect_draft(source["directory"], literature_root=source["literature_root"],
+                                     group_id=config.zotero.group_id)
+            if fresh is None or fresh.record != source["record"] or fresh.card != source["card"]:
+                raise ThemeError("THEME_INPUT_CHANGED", "运行过程中草稿来源改变；不混用新旧结果")
+            continue
         manifest = validate_saved_package(source["pack"])
         if manifest is None or any(manifest[k] != source["record"][k] for k in SOURCE_FIELDS):
             raise ThemeError("THEME_INPUT_CHANGED", "运行过程中证据包来源改变；不混用新旧结果")
@@ -182,7 +266,11 @@ def _result_record(path, binding, invoke, report):
         raise ThemeError("THEME_TRANSPORT_INVALID", "模型没有返回可保存的结果对象")
     record = {"protocol_version": binding.get("protocol_version", PROTOCOL), "binding": binding, "output": result["output"],
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "execution": {**{k: result.get(k) for k in ("cli_version", "ephemeral", "usage", "source_access")},
+        # Only the keys the result actually carries are written: a legacy result
+        # keeps its exact previous on-disk shape instead of gaining null fields.
+        "execution": {**{k: result[k] for k in (
+                "cli_version", "ephemeral", "usage", "source_access",
+                "runner_id", "warnings") if k in result},
             "model": result.get("configured_model", result.get("model")),
             "reasoning_effort": result.get("configured_reasoning_effort", result.get("reasoning_effort"))},
         "scientific_correctness_verified": False}
@@ -199,187 +287,22 @@ def _link(path, directory):
         return path.as_posix()
 
 
-def _source_links(tasks, sources, directory, theme_id=None):
-    lines = ["\n\n---\n程序维护的来源引用（不代表独立科学核验）：\n"]
-    for task in tasks:
-        eid = task["evidence_id"]
-        path = sources[eid]["pack"] / "card.md"
-        lines.append(f"- [{eid} 粗读卡](<{_link(path, directory)}>)")
-        if theme_id:
-            reading = sources[eid]["pack"] / "readings" / theme_id / "reading.md"
-            lines[-1] += f" · [本主题定向精读](<{_link(reading, directory)}>)"
-    return "\n".join(lines) + "\n"
-
-
-def _run_legacy(config, report, *, progress, text_adapter, pdf_adapter, delivery_preparer, remaining_seconds):
-    """Historical implementation retained for migration regression fixtures only.
-
-    No CLI, scheduler or production dispatcher selects this path.
-    """
-    sources = _sources(config)
-    report["source_count"] = len(sources)
-    if not sources:
-        report.update(status="NO_ROUGH_CARDS", note="尚无可用于主题生成的正式粗卡；未调用模型")
-        return
-    options = config.theme_pipeline
-    assets_root = options.assets_dir or config.paths.templates_dir / "themes"
-    assets = {name: (assets_root / name).read_text(encoding="utf-8") for name in LEGACY_ASSETS}
-    for name in LEGACY_ASSETS:
-        if name.endswith(".json"):
-            json.loads(assets[name])
-    cg = replace(config.card_generator, model=options.model or config.card_generator.model,
-        reasoning_effort=options.reasoning_effort or config.card_generator.reasoning_effort,
-        generation_timeout_seconds=options.timeout_seconds or config.card_generator.generation_timeout_seconds)
-    if cg.adapter != "codex_cli" or cg.pdf_reader.adapter != "local_path":
-        raise ThemeError("THEME_ADAPTER_UNSUPPORTED", "当前主题流程需要 codex_cli + local_path；暂未实现其他提供商适配")
-    if cg.pdf_direct_trial is None or cg.pdf_direct_trial.reading_prompt_file is None:
-        raise ThemeError("THEME_READING_CONFIG_MISSING", "缺少已配置的本地 PDF 阅读提示词")
-    reading_prompt = cg.pdf_direct_trial.reading_prompt_file
-    binding = {"protocol_version": LEGACY_PROTOCOL, "group_id": config.zotero.group_id,
-        "research_goal": options.research_goal, "sources": [s["record"] for s in sources.values()],
-        "model": cg.model, "reasoning_effort": cg.reasoning_effort,
-        "assets": {k: text_hash(v) for k, v in assets.items()},
-        "pdf_reading_prompt_sha256": text_hash(reading_prompt.read_text(encoding="utf-8"))}
-    batch_id = "BATCH-" + _digest(binding)[:20]
-    batch = _safe_path(config.paths.themes_dir, "candidates", batch_id)
-    report.update(batch_id=batch_id, batch_path=str(batch),
-        note="仅基于本批粗卡的探索性候选；不代表领域全貌；精读回填后仍需人确认才能转正式主题")
-    if report.get("dry_run"):
-        report.update(status="LOCAL_PREVIEW", source_ids=list(sources),
-            discovery_saved=(batch / "discovery-result.json").exists(),
-            batch_completed=(batch / "completion.json").exists())
-        return
-    _publish(_safe_path(batch, "inputs.json"), _json(binding))
-    text_adapter = text_adapter or CodexTextAdapter(cg, progress=progress)
-    pdf_adapter = pdf_adapter or CodexLocalPdfAdapter(cg, progress=progress)
-
-    def invoke(stage, prompt, schema_name, *, source=None):
-        _assert_sources(sources)
-        remaining = remaining_seconds()
-        if remaining < 1:
-            raise ThemeError("RUN_TIME_LIMIT", "本轮时间预算已用完；完成步骤保留，下次继续")
-        report["current_stage"] = stage
-        report_progress(progress, "phase", stage=stage, message=stage)
-        kwargs = {"output_schema_path": assets_root / schema_name,
-                  "timeout_seconds": min(cg.generation_timeout_seconds, remaining), "run_label": stage}
-        if source is None:
-            report["model_call_count"] += 1
-            return text_adapter.generate(prompt, **kwargs)
-        delivery = delivery_preparer(config.zotero, config.pdf_gate, config.tasks,
-            config.paths.tasks_file, config.paths.lock_file, config.paths.evidence_packs_dir,
-            source["record"]["parent_key"], allow_trial_states=True)
-        record = source["record"]
-        if (delivery.pdf_sha256 != record["pdf_sha256"] or delivery.parent_key != record["parent_key"]
-            or delivery.group_id != record["group_id"] or delivery.attachment_key != record["attachment_key"]
-            or _file_sha(delivery.pdf_path) != record["pdf_sha256"]):
-            raise ThemeError("THEME_PDF_MISMATCH", "定向精读 PDF 与粗卡来源不同；未调用模型")
-        report["model_call_count"] += 1
-        result = pdf_adapter.generate(prompt, working_directory=delivery.pdf_path.parent, source_pdf_path=delivery.pdf_path,
-            zotero_parent_key=record["parent_key"], **kwargs)
-        if _file_sha(delivery.pdf_path) != record["pdf_sha256"]:
-            raise ThemeError("THEME_INPUT_CHANGED", "定向精读过程中原始 PDF 改变，未接受结果")
-        return result
-
-    prompt = assets["discovery.md"] + "\n\n输入材料：\n" + _json({"research_goal": options.research_goal,
-        "cards": [{"evidence_id": eid, "markdown": source["card"]} for eid, source in sources.items()]})
-    discovery = _result_record(_safe_path(batch, "discovery-result.json"), binding,
-        lambda: invoke("候选主题：粗卡问题簇与初版", prompt, "discovery.schema.json"), report)
-    themes = _discovery(discovery["output"], sources)
-    _assert_sources(sources)
-    _publish(_safe_path(batch, "problem-clusters.md"), discovery["output"]["problem_clusters_markdown"])
-    index = [f"# 候选主题批次 {batch_id}\n\n状态和来源见各主题 manifest.json。仅为探索性候选，不是正式主题。\n"]
-    for number, theme in enumerate(themes, 1):
-        theme_id = "TH-" + batch_id[6:] + f"-{number:03d}"
-        directory = _safe_path(batch, theme_id)
-        initial = "<!-- CANDIDATE_INITIAL; AI-generated; not independently verified -->\n" + theme["candidate_markdown"]
-        initial += _source_links(theme["paper_tasks"], sources, directory)
-        _publish(_safe_path(directory, "initial.md"), initial)
-        _publish(_safe_path(directory, "plan.json"), _json({"theme_id": theme_id, **theme}))
-        index.append(f"- [{theme['title'].replace(chr(10), ' ')}](<{theme_id}/initial.md>) · [{theme_id} 修订结果](<{theme_id}/revised.md>)")
-    _publish(_safe_path(batch, "index.md"), "\n".join(index) + "\n")
-    report["candidate_count"] = len(themes)
-    for number, theme in enumerate(themes, 1):
-        theme_id = "TH-" + batch_id[6:] + f"-{number:03d}"
-        directory = _safe_path(batch, theme_id)
-        item = {"theme_id": theme_id, "title": theme["title"], "initial_path": str(directory / "initial.md"), "readings": []}
-        report["themes"].append(item)
-        focused = []
-        try:
-            for order, task in enumerate(theme["paper_tasks"], 1):
-                source = sources[task["evidence_id"]]
-                reading_dir = _safe_path(source["pack"], "readings", theme_id)
-                read_binding = {"batch_id": batch_id, "theme_id": theme_id, "source": source["record"],
-                    "theme_sha256": _digest(theme), "focus": task["focus"]}
-                read_prompt = assets["focused-reading.md"] + "\n\n输入材料：\n" + _json({
-                    "theme_id": theme_id, "candidate": theme["candidate_markdown"], "focus": task["focus"],
-                    "evidence_id": task["evidence_id"], "rough_card": source["card"]})
-                stage = f"theme_focused_reading {number}/{len(themes)} {theme_id} 文献 {order}/{len(theme['paper_tasks'])} {task['evidence_id']}"
-                reading = _result_record(_safe_path(reading_dir, "result.json"), read_binding,
-                    lambda: invoke(stage, read_prompt, "focused-reading.schema.json", source=source), report)
-                access = reading["execution"].get("source_access") or {}
-                if (reading["execution"].get("ephemeral") is not True
-                    or access.get("source_sha256") != source["record"]["pdf_sha256"]
-                    or access.get("parent_key") != source["record"]["parent_key"]
-                    or access.get("method") != "local_pdf_path"
-                    or access.get("source_identity_verified") is not True
-                    or access.get("source_unchanged") is not True
-                    or access.get("model_reading_report_accepted") is not True):
-                    raise ThemeError("THEME_READING_PROCESS_INVALID", "缺少原始 PDF 来源及阅读流程记录，不能冒充定向精读")
-                body = _nonempty(reading["output"].get("reading_markdown"), "定向精读正文")
-                _assert_sources(sources)
-                _publish(_safe_path(reading_dir, "reading.md"), "<!-- AI theme-focused reading; not independently verified -->\n" + body)
-                read_manifest = {"status": "FOCUSED_READING_SAVED", **read_binding,
-                    "reading_sha256": text_hash(body), "result_sha256": _digest(reading),
-                    "scientific_correctness_verified": False}
-                _publish(_safe_path(reading_dir, "manifest.json"), _json(read_manifest))
-                focused.append({"evidence_id": task["evidence_id"], "reading_markdown": body,
-                    "result_sha256": _digest(reading)})
-                item["readings"].append({"evidence_id": task["evidence_id"], "path": str(reading_dir / "reading.md")})
-                report_progress(progress, "phase", message=f"定向精读已保存：{reading_dir / 'reading.md'}")
-            revised_binding = {"theme_id": theme_id, "theme_sha256": _digest(theme),
-                "readings": [{"evidence_id": r["evidence_id"], "result_sha256": r["result_sha256"]} for r in focused]}
-            revision_prompt = assets["refinement.md"] + "\n\n输入材料：\n" + _json({"candidate": theme,
-                "research_goal": options.research_goal, "focused_readings": focused})
-            revision = _result_record(_safe_path(directory, "revision-result.json"), revised_binding,
-                lambda: invoke(f"候选主题回填修订 {number}/{len(themes)} {theme_id}", revision_prompt, "refinement.schema.json"), report)
-            revised = _nonempty(revision["output"].get("revised_markdown"), "修订主题正文")
-            revised = "<!-- CANDIDATE_REFINED; NOT CONFIRMED; AI-generated -->\n" + revised
-            revised += _source_links(theme["paper_tasks"], sources, directory, theme_id)
-            _assert_sources(sources)
-            _publish(_safe_path(directory, "revised.md"), revised)
-            _publish(_safe_path(directory, "manifest.json"), _json({"status": "CANDIDATE_REFINED",
-                "formal_confirmation": None, "theme_id": theme_id, "batch_id": batch_id,
-                "initial_sha256": text_hash((directory / "initial.md").read_text(encoding="utf-8")),
-                "revised_sha256": text_hash(revised), "reading_references": [{**r,
-                    "path": _link(sources[r["evidence_id"]]["pack"] / "readings" / theme_id / "reading.md", directory)}
-                    for r in revised_binding["readings"]],
-                "scientific_correctness_verified": False}))
-            item.update(status="CANDIDATE_REFINED", revised_path=str(directory / "revised.md"))
-            report["refined_count"] += 1
-            report_progress(progress, "phase", message=f"修订候选主题已保存：{directory / 'revised.md'}")
-        except (ThemeError, PdfDeliveryError, PdfGateError, ZoteroApiError) as exc:
-            item.update(status="BLOCKED", error={"code": exc.code, "message": str(exc), **getattr(exc, "details", {})})
-            report.update(ok=False, status="COMPLETED_WITH_BLOCKERS")
-            report.setdefault("error", {"code": exc.code, "message": f"{theme_id}：{exc}", "theme_id": theme_id})
-            report_progress(progress, "phase", message=f"{theme_id} 暂停：{exc.code}；已完成步骤保留")
-            # Stop on provider/global failure; other PDF/source-specific blocked themes can still finish.
-            if isinstance(exc, ThemeError) and (exc.code.startswith("CODEX_") or exc.code in {"THEME_PROVIDER_ERROR", "RUN_TIME_LIMIT"}):
-                report["deferred_theme_count"] = len(themes) - number
-                break
-    if report["ok"]:
-        _assert_sources(sources)
-        _publish(_safe_path(batch, "completion.json"), _json({"status": "CANDIDATES_REFINED", "batch_id": batch_id,
-            "theme_ids": [item["theme_id"] for item in report["themes"]], "formal_confirmation": None}))
-        report["status"] = "CANDIDATES_REFINED" if themes else "NO_CANDIDATES"
-
-
 def _run(config, report, **kwargs):
     from hydrolitagent.cards.theme_pool_runner import run
     return run(config, report, **kwargs)
 
 
-def run_themes(config, *, progress=None, dry_run=False, text_adapter=None, pdf_adapter=None,
-               delivery_preparer=None, remaining_seconds=None, migration_only=False):
+def run_themes(config, *, progress=None, dry_run=False,
+               delivery_preparer=None, remaining_seconds=None, migration_only=False,
+               pipeline=None, literature_root=None):
+    """Run the theme pipeline.
+
+    ``pipeline`` is the ``composition.MarkdownPipeline`` (converter, paper store,
+    runner, options). Without it the configured runner is built through
+    ``composition`` on first use, so ``run_themes(config)`` stays callable.
+    ``literature_root`` overrides where validated drafts are scanned; the CLI
+    leaves it unset so the same resolver as the single-paper path applies.
+    """
     started = time.monotonic()
     cap = config.pipeline.max_run_seconds
     remaining_seconds = remaining_seconds or (lambda: float("inf") if cap is None else cap - (time.monotonic() - started))
@@ -390,12 +313,14 @@ def run_themes(config, *, progress=None, dry_run=False, text_adapter=None, pdf_a
         "migration_only": migration_only, "git_modified": False}
     try:
         if dry_run:
-            _run(config, report, progress=progress, text_adapter=text_adapter, pdf_adapter=pdf_adapter,
-                delivery_preparer=delivery_preparer, remaining_seconds=remaining_seconds)
+            _run(config, report, progress=progress,
+                delivery_preparer=delivery_preparer, remaining_seconds=remaining_seconds,
+                pipeline=pipeline, literature_root=literature_root)
         else:
             with PipelineRunLock(config.paths.lock_file.with_name(config.paths.lock_file.name + ".themes")):
-                _run(config, report, progress=progress, text_adapter=text_adapter, pdf_adapter=pdf_adapter,
-                    delivery_preparer=delivery_preparer or prepare_pdf_delivery, remaining_seconds=remaining_seconds)
+                _run(config, report, progress=progress,
+                    delivery_preparer=delivery_preparer or prepare_pdf_delivery, remaining_seconds=remaining_seconds,
+                    pipeline=pipeline, literature_root=literature_root)
     except KeyboardInterrupt:
         report.update(ok=False, status="CANCELLED", error={"code": "CANCELLED", "message": "已中止；保存的候选/精读步骤保留，下次继续"})
     except (ThemeError, EvidencePackageError, PdfDeliveryError, PdfGateError, TaskStoreError, ZoteroApiError) as exc:

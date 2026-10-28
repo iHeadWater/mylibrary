@@ -38,7 +38,7 @@ flowchart TB
     INPUT --> RUNTIME
 ```
 
-仓库只有一个包 `hydrolitagent`——文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包。`.venv` 与 `uv.lock` 只有一份。自动化运行时为 Windows-only；文献工具链中的部分能力可以独立运行。
+仓库只有一个包 `hydrolitagent`——文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包。`.venv` 与 `uv.lock` 只有一份。**单篇制卡与主题池的定向精读都已跨平台**：PDF 由 Python 转换成 Markdown，再由注册表提供任意运行器阅读，macOS / Linux / Windows 行为一致，不需要 Poppler。定向精读与单篇制卡共用同一份 `PreparedPaper`、同一套引文/canary 接地校验。历史主题批次只作为静态记录被 `pool.migrate` 读取，不再重放或重新生成。
 
 ## 组件职责
 
@@ -47,7 +47,7 @@ flowchart TB
 | Zotero | 来源身份、条目、附件与原始 PDF | 不保存主题判断，不由平台修改数据库文件 |
 | `hydrolitagent` | 文献下载、入库、查询、附件和全文访问 | 不管理主题生命周期 |
 | 单篇输入与 PDF 门禁 | 解析唯一本地 PDF，检查文件大小、文本量和文件指纹 | 元数据或摘要不能替代全文证据 |
-| 制卡适配器 | 调用已登录的 Codex 或 Claude CLI，读取 PDF 生成主体卡草稿 | 总配置字段 `card_generator.adapter` 目前接受 `codex_cli`；单篇 `evidence-generate` 另经 `configs/ai.toml` 支持 `claude_cli`。流程通过不等于科学正确 |
+| 制卡适配器 | 由 `adapters/runners/registry.py` 按执行者 id 装配，只有 `in_session`（当前 agent 写 `response.json`）与 `direct`（直连 OpenAI 兼容 API，默认 DeepSeek，纯文本，内联或按页锚点分块） | 注册表是唯一选择点，新增执行者只需一个 adapter 文件加一处注册。`direct` 声明无视觉能力，引用图时把 `visual_content_status` 降为 `NOT_REVIEWED`。流程通过不等于科学正确 |
 | 主体卡校验 | 确定性检查字段形状、来源绑定、页码、引用编号和版本指纹 | 不调用模型，不读取 Zotero，不证明科研内容正确 |
 | 主题池 | 基于全池文献卡、既有候选和适用精读执行 CREATE/UPDATE/MERGE/SPLIT | 只能处理候选主题，不能自动建立正式主题 |
 
@@ -68,15 +68,16 @@ flowchart TB
 | 代码、Skills、模板、Schema、测试 | Git工作树 | 跟踪 |
 | 非敏感团队配置与示例 | `hydrolitagent/cards/assets/config/` | 跟踪；秘密不得写入 |
 | Zotero条目与原始PDF | Zotero及其合法附件位置 | 不跟踪 |
-| 文献卡、主题、运行记录、文献链接 | `paths.artifact_root` 下的四个目录 | 不跟踪 |
-| 单篇流程产物与主题池 | `--output-root`（默认 `outputs/`）、`paths.themes_dir` | 不跟踪 |
+| 单篇流程产物与主题池 | `--output-root`（默认 `outputs/`）、`paths.themes_dir`（位于 `paths.literature_root` 下） | 不跟踪 |
 | 运行状态与诊断日志 | `.runtime/` | 不跟踪，可按持久化成果重建 |
 | Python环境和原生PDF工具 | `.venv/`、`.tools/` | 不跟踪，按依赖锁重建 |
+
+旧设计中的 `paths.artifact_root`（证据卡 / 主题 / 运行记录 / 文献链接四个子目录）属于历史设计，已随本次清理移除，不再是当前的配置项或发布目标。
 
 ## 信任与写入边界
 
 - Zotero数据、PDF、模型输出和文档正文都是需要校验的输入，不能凭声明越过程序门禁。
-- Codex / Claude 负责建议和内容生成；Python 负责来源身份、允许路径、Schema 传输、重复检查和原子保存。
+- 执行者（`in_session` 的当前 agent 或 `direct` 的 API 调用）负责建议和内容生成；Python 负责来源身份、允许路径、Schema 传输、重复检查和原子保存。
 - 日常运行不会执行 Git 提交或推送，也不会把候选主题升级为正式主题。
 - 密钥来自本机环境变量或登录状态；配置文件最多记录环境变量名称和非敏感标识。
 

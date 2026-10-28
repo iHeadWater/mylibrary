@@ -12,6 +12,12 @@ import re
 from pathlib import Path
 
 from hydrolitagent.cards import themes as core
+from hydrolitagent.cards.domain.source_access import (
+    LOCAL_PDF_PATH,
+    MARKDOWN_PREPARED,
+    is_accepted_method,
+    source_access_acceptable,
+)
 from hydrolitagent.cards.publication import atomic_text, text_hash
 
 PROTOCOL = "unified-theme-pool-v1"
@@ -69,12 +75,31 @@ def check_files(directory, hashes):
 
 
 def validate_reading(record, source):
+    """Accept a Markdown-grounded reading or a historical PDF-reading record.
+
+    New readings carry ``method=markdown_prepared`` with a program-computed
+    ``reading`` block; legacy records carry ``method=local_pdf_path`` with the
+    old process flags. Both are validated, but a new artifact is never written
+    with a legacy method. The on-disk shape of an old record is not rewritten:
+    the theme pool's hashes depend on those bytes.
+    """
+
     body = core._nonempty(record["output"].get("reading_markdown"), "定向精读正文")
     access = record["execution"].get("source_access") or {}
-    if (record["execution"].get("ephemeral") is not True
+    method = access.get("method")
+    if not is_accepted_method(method, policy="current"):
+        _fail("THEME_READING_PROCESS_INVALID", "精读缺少可识别的来源阅读记录")
+    if method == MARKDOWN_PREPARED:
+        # One owner for the receipt contract: the same check the single-paper
+        # card path applies, bound to this source's PDF and parent key.
+        if not source_access_acceptable(
+                access, expected_sha256=source["pdf_sha256"],
+                expected_parent_key=source["parent_key"]):
+            _fail("THEME_READING_PROCESS_INVALID", "精读缺少与论文匹配的 Markdown 接地记录")
+    elif (record["execution"].get("ephemeral") is not True
             or access.get("source_sha256") != source["pdf_sha256"]
             or access.get("parent_key") != source["parent_key"]
-            or access.get("method") != "local_pdf_path"
+            or access.get("method") != LOCAL_PDF_PATH
             or access.get("source_identity_verified") is not True
             or access.get("source_unchanged") is not True
             or access.get("model_reading_report_accepted") is not True):
@@ -84,8 +109,20 @@ def validate_reading(record, source):
     return body
 
 
+def normalize_reading_markdown(text):
+    """Turn an escaped line break into a real one.
+
+    A runner that JSON-encodes its Markdown twice returns ``\\\\n`` (two
+    backslashes and an ``n``) where the artifact needs a newline. Only that
+    doubled form is rewritten: LaTeX commands (``\\\\nabla``) and single
+    backslash escapes stay exactly as the model wrote them.
+    """
+
+    return text.replace("\\\\r\\\\n", "\n").replace("\\\\n", "\n")
+
+
 def reading_reference(config, directory, record, source, focus, context):
-    body = validate_reading(record, source)
+    body = normalize_reading_markdown(validate_reading(record, source))
     expected = "<!-- AI theme-focused reading; not independently verified -->\n" + body
     core._publish(core._safe_path(directory, "reading.md"), expected)
     return {"reading_id": "RD-" + core._digest(record), "root": "evidence_packs",
@@ -287,7 +324,11 @@ def migrate(config, binding, *, apply):
     # Multiple historical runs must be considered jointly, not selected by date.
     if len(compatible) == 1:
         old = compatible[0]
-        keys = ("group_id", "sources", "research_goal", "model", "reasoning_effort", "pdf_reading_prompt_sha256")
+        # ``pdf_reading_prompt_sha256`` belongs to the historical PDF-reading
+        # batch. It is deliberately absent from the compared keys: the current
+        # pipeline does not read a PDF, and a migrated pool must not look stale
+        # for a prompt it will never run.
+        keys = ("group_id", "sources", "research_goal", "model", "reasoning_effort")
         old_assets = {k: v for k, v in binding["assets"].items() if k in old["assets"]}
         if all(old.get(k) == binding.get(k) for k in keys) and old_assets == old["assets"]:
             state["last_input"] = core._digest(binding)

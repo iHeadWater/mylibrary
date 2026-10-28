@@ -4,37 +4,53 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Sequence
 
-from hydrolitagent.cards.card_draft import generate_subject_card_draft
+from hydrolitagent.cards.application.card_workflow import (
+    finalize_session_run,
+    generate_markdown_card_draft,
+    prepare_session_run,
+)
+from hydrolitagent.cards.application.reading_layer import (
+    build_reading_layer,
+    failed_refresh,
+    refresh as refresh_reading_layer,
+)
 from hydrolitagent.cards.card_validation import ValidationAssets, validate_subject_card_file
-from hydrolitagent.cards.ai_config import resolve_ai_config, subject_card_config, describe_ai, AIConfigError
-from hydrolitagent.cards.card_generators import build_card_generator_adapter
-from hydrolitagent.cards.card_generation import (
-    CardGenerationError,
-    generate_evidence_card,
+from hydrolitagent.cards.ai_config import (
+    AIConfigError,
+    apply_ai_selection,
+    describe_ai,
+    resolve_ai_config,
+    subject_card_config,
+)
+from hydrolitagent.cards.composition import (
+    build_doctor_report,
+    build_markdown_pipeline,
+    build_session_pipeline,
+    build_theme_pipeline,
 )
 from hydrolitagent.cards.config import ConfigError, load_config
 from hydrolitagent.cards.paper_input_config import load_paper_input_config
-from hydrolitagent.cards.evidence_packages import EvidencePackageError, sync_evidence_packages
-from hydrolitagent.cards.evidence_templates import (
-    EvidenceTemplateError,
-    validate_evidence_templates,
-)
-from hydrolitagent.cards.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
-from hydrolitagent.cards.pdf_gate import PdfGateError, evaluate_pdf_gate
+from hydrolitagent.cards.pdf_gate import PdfGateError
 from hydrolitagent.cards.paper_input import (
     prepare_demo_paper,
     prepare_paper_batch,
     prepare_paper_input,
 )
-from hydrolitagent.cards.failure_records import save_failure_record
 from hydrolitagent.cards.progress import ConsoleProgress
 from hydrolitagent.cards.themes import run_themes
+from hydrolitagent.cards.theme_session import (
+    finalize_theme_session,
+    prepare_theme_session,
+    theme_session_run_dir,
+)
 from hydrolitagent.cards.tasks import TaskStoreError
-from hydrolitagent.cards.zotero import ZoteroApiError, preflight
-from hydrolitagent.cards._paths import DEFAULT_CONFIG_PATH
+from hydrolitagent.cards.zotero import ZoteroApiError
+from hydrolitagent.cards._paths import DEFAULT_CONFIG_PATH, REPO_ROOT
+from hydrolitagent._config import PathConfigError, resolve_literature_root
 
 
 
@@ -60,7 +76,7 @@ def _parser() -> argparse.ArgumentParser:
 
     for name, help_text in (
         ("paper-input", "按题名搜索候选，或按 item key 检查单篇 Zotero 论文输入"),
-        ("evidence-generate", "读取一篇 Zotero PDF 并生成首张粗证据卡"),
+        ("evidence-generate", "读取单篇论文输入记录并生成待校验主体卡草稿"),
         ("evidence-validate", "离线校验主体卡草稿并保存记录，不调用模型、不正式发布"),
         ("themes-run", "粗卡生成候选主题，逐篇定向精读并回填修订；自动续跑、不转正式主题"),
     ):
@@ -72,10 +88,9 @@ def _parser() -> argparse.ArgumentParser:
                   else "总配置文件路径；默认读取项目 config/config.json"),
         )
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
-        if name != "evidence-validate":
+        if name in {"paper-input", "themes-run"}:
             command.add_argument("--base-url", help="覆盖本机 Zotero API 地址")
             command.add_argument("--timeout", type=float, help="请求超时秒数")
-        if name in {"paper-input", "evidence-generate", "themes-run"}:
             command.add_argument("--group-id", help="覆盖目标 Zotero 群组 ID")
         if name == "evidence-validate":
             command.add_argument("--assets-root", help="选择另一份资产根（templates/prompts/schemas）；与 --config 互斥")
@@ -113,20 +128,42 @@ def _parser() -> argparse.ArgumentParser:
         if name == "themes-run":
             command.add_argument("--dry-run", action="store_true", help="只预览本地粗卡输入和配置；不扫描 Zotero、不写文件、不调用模型")
             command.add_argument("--migrate-only", action="store_true", help="仅将已完成旧主题接入统一池；不调用模型、不重新精读")
+            command.add_argument(
+                "--run-dir",
+                help=(
+                    "in_session 分步协议的运行目录；默认 <runtime_dir>/theme-session。"
+                    "重跑同一目录会接着未完成的步骤"
+                ),
+            )
+            # The same selection the single-paper path accepts: a theme run
+            # makes model calls too, so it must not be stuck on the adapter
+            # baked into config.json.
+            command.add_argument("--ai-config", help="模型选择 TOML；默认 configs/ai.toml")
+            command.add_argument(
+                "--ai-provider", metavar="RUNNER",
+                help="制卡运行器 id：direct（直连 API）或 in_session；可用值见 ai-config --json 的 runners",
+            )
+            command.add_argument("--ai-model", help="所选服务可用的模型名")
+            command.add_argument("--ai-timeout", type=float)
+            command.add_argument(
+                "--no-index",
+                action="store_true",
+                help="主题池更新成功后不刷新阅读层（HOME.md / cards/ / reading/）",
+            )
         if name == "evidence-generate":
             command.add_argument("--ai-config", help="模型选择 TOML；默认 configs/ai.toml")
-            command.add_argument("--ai-provider", choices=["codex", "claude"])
+            # The registry, not argparse, owns the list of runner ids: a new
+            # adapter must not require editing this parser.
+            command.add_argument(
+                "--ai-provider", metavar="RUNNER",
+                help="制卡运行器 id：direct（直连 API）或 in_session；可用值见 ai-config --json 的 runners",
+            )
             command.add_argument("--ai-model", help="所选服务可用的模型名")
-            command.add_argument("--ai-executable", help="本机 CLI 可执行文件名或绝对路径")
             command.add_argument("--ai-timeout", type=float)
             command.add_argument("--output-root", help="本次产物根；不传则用默认解析（configs/paths.toml → outputs/）")
-            source = command.add_mutually_exclusive_group(required=True)
-            source.add_argument("--item-key", help="旧证据包流程的 Zotero 父条目 Key")
-            source.add_argument("--paper-input", help="单篇 READY JSON（输入记录）文件，或 - 从 stdin 读取；仅生成待校验草稿")
             command.add_argument(
-                "--retry-quality-failed",
-                action="store_true",
-                help="显式重试一个 QUALITY_FAILED 任务；默认不会自动重试",
+                "--paper-input", required=True,
+                help="单篇 READY JSON（输入记录）文件，或 - 从 stdin 读取；仅生成待校验草稿",
             )
         if name in {"evidence-generate", "themes-run"}:
             command.add_argument(
@@ -134,18 +171,154 @@ def _parser() -> argparse.ArgumentParser:
                 help="关闭 stderr 实时进度，仅保留最终结果",
             )
 
+    run = subparsers.add_parser(
+        "run",
+        help="两阶段制卡：准备材料目录，或收口 agent 写好的 response.json（不调用模型）",
+    )
+    run_sub = run.add_subparsers(dest="run_command", required=True)
+    for run_name, run_help in (
+        ("prepare", "把 paper.md、图资产、schema 与请求写入 --run-dir，不调用模型"),
+        ("finalize", "读取 --run-dir/response.json，校验接地后生成待校验草稿"),
+    ):
+        run_command = run_sub.add_parser(run_name, help=run_help)
+        run_command.add_argument(
+            "--config",
+            default=None,
+            help="总配置文件路径；默认读取项目 config/config.json",
+        )
+        run_command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
+        run_command.add_argument(
+            "--theme",
+            action="store_true",
+            help=(
+                "主题池分步协议：发现 → 每篇精读 → 回填 → 提交；"
+                "每步写入 request.json，agent 写 response.json 后再 finalize"
+            ),
+        )
+        run_command.add_argument(
+            "--paper-input",
+            help="单篇 READY JSON（输入记录）文件，或 - 从 stdin 读取；--theme 模式下不要传",
+        )
+        run_command.add_argument("--run-dir", required=True, help="两阶段协议的运行目录")
+        run_command.add_argument(
+            "--output-root",
+            help="收口时草稿产物根；不传则用默认解析（configs/paths.toml → outputs/）",
+        )
+        if run_name == "finalize":
+            run_command.add_argument(
+                "--no-index",
+                action="store_true",
+                help="收口成功后不刷新阅读层（HOME.md / cards/ / reading/）",
+            )
+
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="只读自查转换器、运行器与存储；不调用模型、不读取用户 PDF",
+    )
+    doctor.add_argument("--config", default=_default_config_path(), help="总配置文件路径")
+    doctor.add_argument("--output-root", help="检查另一个产物根是否可写")
+    doctor.add_argument(
+        "--network", action="store_true", help="额外检查 Zotero Local API；默认不联网"
+    )
+    doctor.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
+
     ai = subparsers.add_parser("ai-config", help="查看模型选择与精读产物根，不运行模型")
     ai.add_argument("--ai-config")
-    ai.add_argument("--ai-provider", choices=["codex", "claude"])
+    ai.add_argument(
+        "--ai-provider", metavar="RUNNER",
+        help="制卡运行器 id：direct 或 in_session；可用值见本命令输出的 runners",
+    )
     ai.add_argument("--ai-model")
-    ai.add_argument("--ai-executable")
     ai.add_argument("--ai-timeout", type=float)
     ai.add_argument("--output-root")
     ai.add_argument("--json", action="store_true")
+
+    index = subparsers.add_parser(
+        "index",
+        help="生成可读的产物阅读层：HOME、卡片索引、阅读版卡片与主题阅读页；不改机器产物",
+    )
+    index.add_argument("--root", help="产物根；默认按 configs/paths.toml 解析（默认 outputs/）")
+    index.add_argument(
+        "--runtime-dir",
+        help="转换缓存根（papers/<pdf_sha256>/...）；默认仓库根 .runtime",
+    )
+    index.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
     return parser
 
 
 def _render_human(result: dict[str, Any]) -> str:
+    if result.get("operation") == "cards_index":
+        broken = result.get("broken_links") or []
+        if result.get("error"):
+            error = result["error"]
+            return f"阅读层生成失败 [{error.get('code')}]：{error.get('message')}"
+        lines = [
+            f"阅读层{'存在断链' if broken else '已生成'}：产物根 {result.get('root')}",
+            f"- 写入 {len(result.get('written') or [])} 个文件；"
+            f"未变 {len(result.get('unchanged') or [])} 个",
+            f"- 卡片 {result.get('card_count', 0)} 张；主题 {result.get('theme_count', 0)} 个",
+            f"- 链接自检：{result.get('links_checked', 0)} 条，断链 {len(broken)} 条",
+        ]
+        for link in broken:
+            lines.append(f"  - {link['file']} -> {link['target']}")
+        if result.get("warnings"):
+            lines.append("- 警告：" + "；".join(result["warnings"]))
+        if not broken:
+            lines.append(f"- 从 {Path(result.get('root', '')) / 'HOME.md'} 开始读")
+        return "\n".join(lines)
+    if result.get("operation") == "doctor":
+        status = "通过" if result.get("ok") else "存在问题"
+        lines = [f"能力自查：{status}（未调用模型）", f"- 平台：{result.get('platform')}"]
+        for check in result.get("checks", []):
+            line = (
+                f"- [{check['status']}] {check['name']}（{check['capability']}）："
+                f"{check['detail']}"
+            )
+            if check.get("fix"):
+                line += f"；修复：{check['fix']}"
+            lines.append(line)
+        return "\n".join(lines)
+    if result.get("operation") == "session_prepare":
+        if not result.get("ok"):
+            error = result.get("error", {})
+            return (
+                f"两阶段准备失败（{result.get('failed_stage', 'input')}）"
+                f"[{error.get('code', 'UNKNOWN')}]：{error.get('message', '未知错误')}"
+            )
+        run_dir = result["run_dir"]
+        return "\n".join(
+            [
+                "已准备两阶段制卡目录；平台未调用模型",
+                f"- 运行目录：{run_dir}",
+                f"- 论文 Markdown：{run_dir}/paper.md（sha256 {result['markdown_sha256']}）",
+                f"- 答案 schema：{result['schema_path']}",
+                f"- 给 agent 的说明：{result['instructions_path']}",
+                (
+                    f"- 页数：{result['page_count']}；"
+                    f"canary：{len(result.get('canaries', []))}；"
+                    f"图：{len(result.get('figures', []))}"
+                ),
+                f"- 写完后运行：cards run finalize --run-dir {run_dir} --paper-input <输入 JSON>",
+            ]
+        )
+    if result.get("operation") == "session_finalize":
+        if not result.get("ok"):
+            error = result.get("error", {})
+            return (
+                f"两阶段收口失败（{result.get('failed_stage', 'input')}）"
+                f"[{error.get('code', 'UNKNOWN')}]：{error.get('message', '未知错误')}"
+            )
+        lines = [
+            "已收口 response.json 并生成待校验主体卡草稿；未通过内容门禁、未正式发布",
+            f"- 正文：{result['card_path']}",
+            f"- 正文、机器字段与来源记录：{result['draft_path']}",
+            f"- 精读产物根：{result['literature_root']}",
+            f"- Markdown 接地校验：{result.get('reading_status') or '未知'}",
+        ]
+        reading_layer = _reading_layer_line(result)
+        if reading_layer:
+            lines.append(reading_layer)
+        return "\n".join(lines)
     if result.get("operation") == "subject_card_validation":
         lines = ["主体卡代码校验：" + result["status"] + "（不代表科研结论正确或正式发布）"]
         lines += [f"- {item['code']} {item['path']}：{item['message']}"
@@ -156,9 +329,15 @@ def _render_human(result: dict[str, Any]) -> str:
     if result.get("operation") == "subject_card_draft":
         if not result.get("ok"):
             return f"主体卡草稿失败（{result.get('failed_stage', 'input')}）：{result['error']['message']}"
-        return ("已生成待校验主体卡草稿；未通过内容门禁、未正式发布"
-                f"\n- 正文：{result['card_path']}\n- 正文、机器字段与来源记录：{result['draft_path']}"
-                f"\n- 精读产物根：{result['literature_root']}")
+        lines = [
+            "已生成待校验主体卡草稿；未通过内容门禁、未正式发布",
+            f"- 正文：{result['card_path']}",
+            f"- 正文、机器字段与来源记录：{result['draft_path']}",
+            f"- 精读产物根：{result['literature_root']}",
+        ]
+        if result.get("pipeline") == "markdown":
+            lines.append(f"- Markdown 接地校验：{result.get('reading_status') or '未知'}")
+        return "\n".join(lines)
     if result.get("operation") == "paper_input_batch":
         lines = [
             f"单篇输入批处理：{result['status']}",
@@ -217,95 +396,79 @@ def _render_human(result: dict[str, Any]) -> str:
                 for candidate in candidates
             )
         return "\n".join(lines)
-    if result.get("operation") == "themes_run":
-        return (f"主题流程：{result['status']}"
-                f"\n- 粗卡：{result.get('source_count', 0)}；候选：{result['candidate_count']}；已回填：{result['refined_count']}"
-                f"\n- 本轮模型调用：{result['model_call_count']}；复用步骤：{result['reused_step_count']}"
-                f"\n- 统一主题入口：{result.get('index_path', '尚未创建')}"
-                "\n- 修订结果仍为候选，不会自动成为正式主题"
-                + (f"\n- 错误：{result['error']['message']}" if result.get("error") else ""))
-        if result.get("operation") == "evidence_generate":
-            if result.get("action") == "SKIPPED_EXISTING_CARD":
-                return (
-                    "跳过：证据包已经存在非占位卡，未调用模型、未覆盖文件"
-                    f"\n- 父条目：{result['parent_key']}"
-                    f"\n- 当前状态：{result.get('card_status') or '未知'}"
-                    f"\n- 卡片：{result['card_path']}"
-                )
+    if result.get("operation") in {"theme_session_prepare", "theme_session_finalize"}:
+        if not result.get("ok"):
+            error = result.get("error", {})
             return (
-                "通过：粗证据卡已生成并写入"
-                f"\n- 父条目：{result['parent_key']}"
-                f"\n- 模板：{result['template_id']} {result['template_version']}"
-                f"\n- 分类置信度：{result['classification_confidence']}"
-                f"\n- 任务状态：{result['task_state']}"
-                f"\n- 卡片：{result['card_path']}"
+                f"主题池分步失败 [{error.get('code', 'UNKNOWN')}]："
+                f"{error.get('message', '未知错误')}"
             )
-        if result.get("component") == "evidence_templates":
+        if result.get("replayed"):
             return (
-                "通过：证据卡模板目录完整"
-                f"\n- 模板总数：{result['template_count']}"
-                f"\n- 已启用：{result['enabled_count']}"
-                f"\n- 目录版本：{result['catalog_version']}"
-                f"\n- 来源提交：{result['source_commit']}"
-                f"\n- 目录：{result['templates_dir']}"
+                f"同一份 response.json 已收口过，未重复推进；当前步骤：{result.get('step')}"
             )
-        if "delivery_status" in result:
-            return (
-                "通过：Zotero 原始 PDF 已复核，可以交给制卡器"
-                f"\n- 父条目：{result['parent_key']}"
-                f"\n- 附件：{result['attachment_key']}"
-                f"\n- PDF：{result['pdf_path']}"
-                f"\n- SHA-256：{result['pdf_sha256']}"
-                f"\n- 证据包：{result['evidence_package_path']}"
-            )
-        if "package_count" in result:
-            return (
-                "通过：证据包骨架已同步"
-                f"\n- 可处理任务：{result['eligible_task_count']}"
-                f"\n- 新建：{result['created_count']}"
-                f"\n- 保持不变：{result['unchanged_count']}"
-                f"\n- 目录：{result['evidence_packs_path']}"
-            )
-        if "task_count" in result:
-            states = ", ".join(
-                f"{name}={count}" for name, count in result.get("state_counts", {}).items()
-            ) or "无任务"
-            return (
-                "通过：任务清单已读取"
-                f"\n- 任务数：{result['task_count']}"
-                f"\n- 状态变化：{result.get('changed_count', 0)}"
-                f"\n- 状态分布：{states}"
-                f"\n- 文件：{result['state_path']}"
-            )
-        if "gate_status" in result:
-            pdf = result.get("pdf") or {}
-            return (
-                f"PDF 门禁：{result['gate_status']} [{result['reason_code']}]"
-                f"\n- 父条目：{result['parent_key']}"
-                f"\n- PDF 数量：{result['pdf_attachment_count']}"
-                f"\n- 附件：{pdf.get('attachment_key') or '无'}"
-                f"\n- 说明：{result['message']}"
-            )
-        if "mode" in result:
-            return (
-                f"通过：Zotero 扫描完成（{result['mode']}）"
-                f"\n- 父条目：{result['counts']['parents']}"
-                f"\n- PDF 附件：{result['counts']['pdf_attachments']}"
-                f"\n- 本次变化：{result['change_count']}"
-            )
-        if "groups" in result:
-            groups = result["groups"]
-            if not groups:
-                return "通过：Zotero 可访问，但当前没有可见群组。"
-            lines = ["通过：发现以下 Zotero 群组："]
-            lines.extend(f"- {group['group_id']}: {group['name'] or '(未命名)'}" for group in groups)
+        if result.get("status") == "UNCHANGED":
+            return "\n".join([
+                "主题池已包含这批来源的最新结果；没有待处理的步骤",
+                f"- 候选主题：{result.get('candidate_count', 0)}；"
+                f"已回填：{result.get('refined_count', 0)}",
+                f"- 统一主题入口：{result.get('index_path', '尚未创建')}",
+                "- 没有调用模型",
+            ])
+        if result.get("status") == "NO_ROUGH_CARDS":
+            return "没有可用的来源草稿或证据包；未写运行目录、未调用模型"
+        if result.get("operation") == "theme_session_prepare":
+            return "\n".join([
+                "已准备主题池当前步骤；平台未调用模型",
+                f"- 运行目录：{result.get('run_dir')}",
+                f"- 步骤：{result.get('step_kind')} · {result.get('step')}"
+                f"（第 {int(result.get('step_index', 0)) + 1} 步；"
+                f"后续 {len(result.get('remaining_steps') or [])} 个）",
+                f"- 材料：request.json / output.schema.json；答案：{result.get('response_file')}",
+                f"- 下一步：{result.get('next_action')}",
+                f"- 写完后运行：cards run finalize --theme --run-dir {result.get('run_dir')}",
+            ])
+        if result.get("status") == "COMPLETED":
+            lines = [
+                "主题池分步已完成；全部步骤通过校验并已提交",
+                f"- 候选主题：{result.get('candidate_count', 0)}；已回填：{result.get('refined_count', 0)}",
+                f"- 动作：{result.get('action')}；复用精读：{result.get('reused_reading_count', 0)}",
+                f"- 运行目录：{result.get('run_dir')}",
+                "- 修订结果仍为候选，不会自动成为正式主题",
+            ]
+            reading_layer = _reading_layer_line(result)
+            if reading_layer:
+                lines.append(reading_layer)
             return "\n".join(lines)
-        return (
-            "通过：目标 Zotero 群组可读取"
-            f"\n- 群组：{result.get('group_name') or result.get('group_id')}"
-            f"\n- 条目数：{result.get('item_count') if result.get('item_count') is not None else '未知'}"
-        )
-
+        return "\n".join([
+            f"已保存步骤 {result.get('step')}；下一步已写入同一运行目录",
+            f"- 下一步骤：{result.get('next_step_kind')} · {result.get('next_step')}"
+            f"（后续 {len(result.get('remaining_steps') or [])} 个）",
+            f"- 下一步：{result.get('next_action')}",
+            f"- 答案文件：{result.get('response_file')}（运行目录 {result.get('run_dir')}）",
+        ])
+    if result.get("operation") == "themes_run":
+        kinds = result.get("sources_by_kind") or {}
+        detail = (f"（证据包 {kinds.get('evidence_pack', 0)} · 已验证草稿 {kinds.get('draft', 0)}）"
+                  if kinds else "")
+        lines = [f"主题流程：{result['status']}",
+                 f"- 文献来源：{result.get('source_count', 0)}{detail}；"
+                 f"候选：{result.get('candidate_count', 0)}；已回填：{result.get('refined_count', 0)}",
+                 f"- 本轮模型调用：{result.get('model_call_count', 0)}；"
+                 f"复用步骤：{result.get('reused_step_count', 0)}",
+                 f"- 统一主题入口：{result.get('index_path', '尚未创建')}",
+                 "- 修订结果仍为候选，不会自动成为正式主题"]
+        if result.get("step"):
+            lines.append(f"- 当前步骤：{result.get('step_kind')} · {result.get('step')}"
+                         f"（运行目录 {result.get('run_dir')}）")
+        if result.get("next_action"):
+            lines.append(f"- 下一步：{result['next_action']}")
+        if result.get("error"):
+            lines.append(f"- 错误：{result['error'].get('message')}")
+        reading_layer = _reading_layer_line(result)
+        if reading_layer:
+            lines.append(reading_layer)
+        return "\n".join(lines)
     error = result.get("error", {})
     return f"失败 [{error.get('code', 'UNKNOWN')}]: {error.get('message', '未知错误')}"
 
@@ -317,9 +480,125 @@ def _emit(result: dict[str, Any], as_json: bool) -> None:
         print(_render_human(result))
 
 
+def _themes_run_session(app_config, run_dir) -> dict[str, Any]:
+    """``themes-run --ai-provider in_session``: stage one step, never call a model.
+
+    The report keeps the ``themes_run`` shape existing consumers read; the new
+    fields say which step is waiting and where its answer file goes.
+    """
+
+    # ``in_session`` runs inside the current agent: there is no configured model,
+    # so naming one would put a false field into the pool's input fingerprint and
+    # into every reading record.
+    session_config = replace(app_config, card_generator=replace(
+        app_config.card_generator, model=None, reasoning_effort=None))
+    prepared = prepare_theme_session(
+        session_config,
+        run_dir=Path(run_dir) if run_dir else theme_session_run_dir(session_config),
+        pipeline=build_session_pipeline(session_config),
+    )
+    view = {
+        "schema_version": 1,
+        "operation": "themes_run",
+        "ok": prepared.get("ok", False),
+        "status": prepared.get("status"),
+        "protocol_version": prepared.get("protocol_version"),
+        "run_id": prepared.get("run_id"),
+        "model_call_count": 0,
+        "model_invoked": False,
+        "saved_step_count": 0,
+        "reused_step_count": prepared.get("reused_step_count", 0),
+        "candidate_count": prepared.get("candidate_count", 0),
+        "refined_count": prepared.get("refined_count", 0),
+        "themes": prepared.get("themes", []),
+        "dry_run": False,
+        "migration_only": False,
+        "git_modified": False,
+        **prepared,
+    }
+    # The platform did not call a model in this mode, whatever the staging did.
+    view.update(operation="themes_run", model_invoked=False, model_call_count=0)
+    return view
+
+
+def _run_index(args) -> dict[str, Any]:
+    """Resolve where the product root is, then generate the reading layer."""
+
+    try:
+        root = resolve_literature_root(root=args.root)
+    except (PathConfigError, OSError, ValueError) as exc:
+        return {
+            "schema_version": 1,
+            "operation": "cards_index",
+            "ok": False,
+            "error": {"code": "READING_ROOT_INVALID", "message": str(exc)},
+        }
+    runtime_dir = Path(args.runtime_dir) if args.runtime_dir else REPO_ROOT / ".runtime"
+    try:
+        return build_reading_layer(root, runtime_dir=runtime_dir)
+    except OSError as exc:
+        return {
+            "schema_version": 1,
+            "operation": "cards_index",
+            "ok": False,
+            "root": str(root),
+            "error": {"code": "READING_LAYER_WRITE_FAILED", "message": str(exc)},
+        }
+
+
+def _reading_layer_roots(result: dict[str, Any], app_config: Any) -> tuple[Path, Path]:
+    """Where the last write landed and which cache holds its figures.
+
+    The report's ``literature_root`` is authoritative when present: it already
+    reflects an explicit ``--output-root``. The conversion cache is what the
+    store used (``converter.cache_dir``), not the reader's default.
+    """
+
+    recorded = result.get("literature_root")
+    root = Path(recorded) if isinstance(recorded, str) and recorded.strip() else Path(
+        app_config.paths.literature_root
+    )
+    converter = getattr(app_config, "converter", None)
+    cache = getattr(converter, "cache_dir", None) or getattr(app_config.paths, "runtime_dir", None)
+    return root, Path(cache) if cache else REPO_ROOT / ".runtime"
+
+
+def _apply_reading_layer(result: dict[str, Any], app_config: Any) -> None:
+    """Attach a ``reading_layer`` report; a refresh failure never fails the command."""
+
+    try:
+        root, runtime = _reading_layer_roots(result, app_config)
+        result["reading_layer"] = refresh_reading_layer(root, runtime_dir=runtime)
+    except Exception as exc:  # noqa: BLE001 - a reader page must not undo a write
+        result["reading_layer"] = failed_refresh(exc)
+
+
+def _reading_layer_line(result: dict[str, Any]) -> str | None:
+    report = result.get("reading_layer")
+    if not isinstance(report, dict):
+        return None
+    if report.get("ok"):
+        return (
+            f"阅读层已刷新：{report.get('written', 0)} 个文件"
+            f"（{report.get('unchanged', 0)} 未变，{report.get('links_checked', 0)} 条链接，"
+            f"{len(report.get('broken_links') or [])} 断链）"
+        )
+    error = report.get("error")
+    if isinstance(error, dict) and error:
+        return f"阅读层未刷新 [{error.get('code', 'UNKNOWN')}]：{error.get('message', '未知错误')}"
+    return (
+        f"阅读层已刷新但存在 {len(report.get('broken_links') or [])} 条断链；"
+        "运行 cards index 查看详情"
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     _configure_stdio()
     args = _parser().parse_args(argv)
+    if args.command == "index":
+        result = _run_index(args)
+        _emit(result, args.json)
+        return 0 if result["ok"] else 3
     if args.command == "evidence-validate":
         try:
             if args.config and args.assets_root:
@@ -333,14 +612,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         _emit(result, args.json)
         return 0 if result["ok"] else 3
-    if getattr(args, "paper_input", None) and getattr(args, "retry_quality_failed", False):
-        _emit({"schema_version": 1, "ok": False, "error": {
-            "code": "CARD_DRAFT_RETRY_UNSUPPORTED", "message": "主体卡草稿为单次调用，不支持任务重试参数"}}, args.json)
-        return 2
-    if args.command == "ai-config" or (args.command == "evidence-generate" and args.paper_input):
+    if args.command in {"ai-config", "evidence-generate"}:
         try:
             selection = resolve_ai_config(args.ai_config, provider=args.ai_provider, model=args.ai_model,
-                         executable=args.ai_executable, timeout_seconds=args.ai_timeout)
+                         timeout_seconds=args.ai_timeout)
             if args.command == "ai-config":
                 result = describe_ai(selection, output_root=args.output_root)
                 print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -351,7 +626,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             record = json.loads(raw)
             with ConsoleProgress(enabled=not args.no_progress, heartbeat_interval_seconds=60,
                                  initial_activity="检查单篇输入与所选模型接口") as progress:
-                result = generate_subject_card_draft(config, record, progress=progress, output_root=args.output_root)
+                built = build_markdown_pipeline(config)
+                result = generate_markdown_card_draft(
+                    config, record, converter=built.converter, store=built.store,
+                    runner=built.runner, options=built.options,
+                    progress=progress, output_root=args.output_root,
+                )
                 progress.finish(result)
         except json.JSONDecodeError:
             result = {"ok": False, "error": {"code": "CARD_DRAFT_INPUT_INVALID", "message": "无法读取单篇论文输入 JSON"}}
@@ -359,6 +639,101 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = {"ok": False, "error": {"code": "CARD_DRAFT_CONFIG_OR_INPUT_INVALID", "message": str(exc)}}
         _emit(result, args.json)
         return 0 if result["ok"] else 3
+    if args.command == "doctor":
+        try:
+            config = load_config(args.config, require_group=False)
+            result = build_doctor_report(
+                config, output_root=args.output_root, network=args.network
+            )
+        except (ConfigError, OSError, ValueError) as exc:
+            result = {
+                "schema_version": 1,
+                "operation": "doctor",
+                "ok": False,
+                "model_invoked": False,
+                "platform": sys.platform,
+                "checks": [
+                    {
+                        "name": "config.load",
+                        "capability": "config.load",
+                        "status": "fail",
+                        "detail": str(exc),
+                        "fix": "检查 --config 指向的配置文件是否存在且为有效 JSON",
+                    }
+                ],
+                "capabilities": {},
+            }
+        _emit(result, args.json)
+        return 0 if result["ok"] else 3
+
+    if args.command == "run":
+        theme = getattr(args, "theme", False)
+        operation = (f"theme_session_{args.run_command}" if theme
+                     else f"session_{args.run_command}")
+        try:
+            if theme and args.paper_input:
+                raise ValueError("--theme 与 --paper-input 不能同时使用")
+            if not theme and not args.paper_input:
+                raise ValueError("单篇两阶段协议需要 --paper-input；主题池用 --theme")
+            if theme:
+                config = load_config(args.config or _default_config_path(), require_group=True)
+                built = build_session_pipeline(config)
+                runner = (prepare_theme_session if args.run_command == "prepare"
+                          else finalize_theme_session)
+                result = runner(config, run_dir=Path(args.run_dir), pipeline=built)
+            else:
+                config = load_config(args.config or _default_config_path(), require_group=False)
+                raw = (
+                    sys.stdin.read()
+                    if args.paper_input == "-"
+                    else Path(args.paper_input).read_text(encoding="utf-8-sig")
+                )
+                record = json.loads(raw)
+                built = build_session_pipeline(config)
+                options = {
+                    "converter": built.converter,
+                    "store": built.store,
+                    "runner": built.runner,
+                    "run_dir": Path(args.run_dir),
+                    "output_root": args.output_root,
+                    "options": built.options,
+                }
+                if args.run_command == "prepare":
+                    result = prepare_session_run(config, record, **options)
+                else:
+                    result = finalize_session_run(config, record, **options)
+        except json.JSONDecodeError:
+            result = {
+                "schema_version": 1,
+                "operation": operation,
+                "ok": False,
+                "error": {
+                    "code": "CARD_DRAFT_INPUT_INVALID",
+                    "message": "无法读取单篇论文输入 JSON",
+                },
+            }
+        except (ConfigError, OSError, ValueError, RuntimeError) as exc:
+            result = {
+                "schema_version": 1,
+                "operation": operation,
+                "ok": False,
+                "error": {
+                    "code": "CARD_DRAFT_CONFIG_OR_INPUT_INVALID",
+                    "message": str(exc),
+                },
+            }
+        # A theme session only has something to read once the pool is committed;
+        # intermediate steps keep writing to the same run directory.
+        if (
+            args.run_command == "finalize"
+            and result.get("ok")
+            and not getattr(args, "no_index", False)
+            and (not theme or result.get("status") == "COMPLETED")
+        ):
+            _apply_reading_layer(result, config)
+        _emit(result, args.json)
+        return 0 if result["ok"] else 3
+
     try:
         config_loader = load_paper_input_config if args.command == "paper-input" else load_config
         app_config = config_loader(
@@ -369,7 +744,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             require_group=(
                 # 只有需要群组库的命令才强制要求 group 配置；
                 # paper-input 走个人库（--user-library / --demo）时不强制。
-                args.command in {"evidence-generate", "themes-run"}
+                args.command == "themes-run"
                 or (
                     args.command == "paper-input"
                     and not getattr(args, "user_library", False)
@@ -419,98 +794,49 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "themes-run":
         try:
             extra = {"migration_only": args.migrate_only}
-            if args.dry_run:
-                result = run_themes(app_config, dry_run=True, **extra)
+            if args.dry_run or args.migrate_only:
+                # A dry run or a migration-only run must not require a working
+                # runner (nor parse the AI selection): it only reports what the
+                # next change would need.
+                result = run_themes(app_config, dry_run=args.dry_run, **extra)
             else:
-                with ConsoleProgress(enabled=app_config.card_generator.progress.enabled and not args.no_progress,
-                    heartbeat_interval_seconds=app_config.card_generator.progress.heartbeat_interval_seconds) as progress:
-                    result = run_themes(app_config, progress=progress, **extra)
-                    progress.finish(result)
+                # Same selection contract as the single-paper path; without it
+                # the theme run would stay on the adapter baked into
+                # config.json and ignore --ai-provider / configs/ai.toml.
+                selection = resolve_ai_config(
+                    args.ai_config, provider=args.ai_provider, model=args.ai_model,
+                    timeout_seconds=args.ai_timeout,
+                )
+                app_config = apply_ai_selection(app_config, selection)
+                if selection["provider"] == "in_session":
+                    # Nothing here may call a model: stage one step at a time and
+                    # let the current agent write response.json.
+                    result = _themes_run_session(app_config, args.run_dir)
+                else:
+                    pipeline = build_theme_pipeline(app_config)
+                    with ConsoleProgress(enabled=app_config.card_generator.progress.enabled and not args.no_progress,
+                        heartbeat_interval_seconds=app_config.card_generator.progress.heartbeat_interval_seconds) as progress:
+                        result = run_themes(app_config, progress=progress, pipeline=pipeline, **extra)
+                        progress.finish(result)
+        except AIConfigError as exc:
+            # A bad provider id must name the choices, not become a generic
+            # local-error message.
+            result = {"schema_version": 1, "ok": False, "error": {
+                "code": "CARD_AI_CONFIG_INVALID", "message": str(exc)}}
         except (TaskStoreError, OSError, ValueError) as exc:
             result = {"schema_version": 1, "ok": False, "error": {
                 "code": getattr(exc, "code", "PIPELINE_LOCAL_ERROR"), "message": "无法读取本地粗卡输入或运行配置"}}
+        if (
+            result.get("ok")
+            and result.get("status") in {"COMPLETED", "CANDIDATES_REFINED"}
+            and not args.dry_run
+            and not args.migrate_only
+            and not args.no_index
+        ):
+            _apply_reading_layer(result, app_config)
         if result.get("status") == "CANCELLED":
             _emit(result, args.json)
             return 130
-    elif args.command == "evidence-generate":
-        progress_config = app_config.card_generator.progress
-        with ConsoleProgress(
-            enabled=progress_config.enabled and not args.no_progress,
-            heartbeat_interval_seconds=progress_config.heartbeat_interval_seconds,
-        ) as progress:
-            try:
-                readiness = preflight(app_config.zotero)
-                if not readiness["ok"]:
-                    result = readiness
-                else:
-                    adapter = build_card_generator_adapter(
-                        app_config.card_generator, progress=progress,
-                    )
-                    result = generate_evidence_card(
-                            app_config.zotero,
-                            app_config.pdf_gate,
-                            app_config.tasks,
-                            app_config.paths.tasks_file,
-                            app_config.paths.lock_file,
-                            app_config.paths.evidence_packs_dir,
-                            app_config.paths.evidence_card_templates_dir,
-                            app_config.paths.evidence_card_template_catalog_file,
-                            app_config.paths.evidence_card_generation_prompt_file,
-                            app_config.paths.card_generation_output_schema_file,
-                            args.item_key,
-                            adapter,
-                            retry_quality_failed=args.retry_quality_failed,
-                        )
-            except (
-                CardGenerationError,
-                PdfDeliveryError,
-                EvidencePackageError,
-                EvidenceTemplateError,
-                TaskStoreError,
-                PdfGateError,
-                ZoteroApiError,
-            ) as exc:
-                error = {"code": exc.code, "message": str(exc)}
-                diagnostic = getattr(exc, "diagnostic", None)
-                if isinstance(diagnostic, dict):
-                    error["diagnostic"] = diagnostic
-                result = {
-                    "schema_version": 1,
-                    "ok": False,
-                    "error": error,
-                }
-            except OSError:
-                result = {
-                    "schema_version": 1, "ok": False,
-                    "error": {"code": "LOCAL_IO_ERROR", "message": "本地文件或程序访问失败，请检查配置路径和读写权限"},
-                }
-            except ValueError as exc:
-                result = {
-                    "schema_version": 1,
-                    "ok": False,
-                    "error": {
-                        "code": "CARD_GENERATOR_ADAPTER_NOT_REGISTERED",
-                        "message": str(exc),
-                    },
-                }
-            except KeyboardInterrupt:
-                result = {
-                    "schema_version": 1, "ok": False,
-                    "error": {"code": "CANCELLED", "message": "用户中止了本次生成"},
-                }
-                progress.finish(result)
-                _emit(result, args.json)
-                return 130
-            if not result.get("ok"):
-                try:
-                    diagnostic_path = save_failure_record(
-                        app_config.paths.logs_dir, args.command, args.item_key, result,
-                    )
-                    result["diagnostic_log_path"] = str(diagnostic_path)
-                    progress({"event": "phase", "message": f"脱敏失败记录已保存：{diagnostic_path}"})
-                except OSError:
-                    result["diagnostic_log_warning"] = "无法保存本地诊断记录，原始失败结果仍保留在本次 JSON 中"
-            progress.finish(result)
     else:
         raise AssertionError(f"未处理的命令：{args.command}")
     _emit(result, args.json)

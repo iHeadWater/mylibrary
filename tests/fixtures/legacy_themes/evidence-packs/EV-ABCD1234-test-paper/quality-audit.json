@@ -1,0 +1,33 @@
+{
+  "quality_report": {
+    "completed_role_count": 6,
+    "gates": {
+      "adversarial_review_passed": true,
+      "critical_analysis_grounded": true,
+      "dual_fact_extraction": true,
+      "fail_closed": true,
+      "full_pdf_access_each_role": true,
+      "isolated_required_roles": true,
+      "source_grounded_adjudication": true
+    },
+    "protocol_version": "rough-card-multi-agent-v1",
+    "required_roles": [
+      "fact_extractor_a",
+      "fact_extractor_b",
+      "fact_adjudicator",
+      "critical_analyst",
+      "card_synthesizer",
+      "adversarial_reviewer"
+    ],
+    "status": "VALIDATED"
+  },
+  "roles": {},
+  "schema_version": 1,
+  "structure_validation": {
+    "content_validation_performed": false,
+    "note": "正文按模型输出保存；程序不检查模板结构、标签、编号、占位词或内容质量",
+    "policy_version": "workflow-only-v1",
+    "scientific_correctness_verified": false,
+    "status": "NOT_CHECKED"
+  }
+}

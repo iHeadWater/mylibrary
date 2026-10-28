@@ -2156,7 +2156,12 @@ class TestAttachmentHelpers:
 
         assert path.endswith("x.pdf")
         assert "我的云端硬盘" in path
-        assert not path.startswith("/G:")
+        # The helper is documented to keep the POSIX form (``/G:/...``) off
+        # Windows: url2pathname has no drive-letter concept there.
+        if os.name == "nt":
+            assert path.startswith("G:")
+        else:
+            assert path.startswith("/G:")
 
     def test_pdf_children_returns_none_when_the_lookup_fails(self):
         """A failed /children is distinguishable from an item with no PDF."""

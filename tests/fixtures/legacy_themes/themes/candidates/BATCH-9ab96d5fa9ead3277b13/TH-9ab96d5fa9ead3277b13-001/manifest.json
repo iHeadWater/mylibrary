@@ -1,0 +1,16 @@
+{
+  "batch_id": "BATCH-9ab96d5fa9ead3277b13",
+  "formal_confirmation": null,
+  "initial_sha256": "24ce4bc1710ff841167a1422d3a4adb6c0116b638b4c396a74491ab5da38f9ee",
+  "reading_references": [
+    {
+      "evidence_id": "EV-ABCD1234",
+      "path": "../../../../evidence-packs/EV-ABCD1234-test-paper/readings/TH-9ab96d5fa9ead3277b13-001/reading.md",
+      "result_sha256": "4d1338a0a5fe401507830dada6a895072fc7773dafb7241a430daf54bb202eff"
+    }
+  ],
+  "revised_sha256": "ac015d6d0bdfc883502d6e71ac09c707bbfb954f2cf1799706025b2dc86490d5",
+  "scientific_correctness_verified": false,
+  "status": "CANDIDATE_REFINED",
+  "theme_id": "TH-9ab96d5fa9ead3277b13-001"
+}
