@@ -64,6 +64,10 @@ _CAPTION_PREFIX_RE = re.compile(
 _MENTION_FIGURE_RE = re.compile(r"(?:Figure|Fig\.?|图)\s*(\d+)", re.IGNORECASE)
 _MENTION_TABLE_RE = re.compile(r"(?:Table|表)\s*(\d+)", re.IGNORECASE)
 _LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+\.)\s")
+# A table rendered as an image: ``page-018-table-1.png`` is table 1. The
+# ``fig-N`` counter in figure filenames is per page ("the Nth crop on that
+# page"), not a figure number, so it must not be read as one.
+_TABLE_IMAGE_STEM_RE = re.compile(r"^page-\d+-table-(\d+)$", re.IGNORECASE)
 
 CaptionKey = tuple[str, int]  # ("figure" | "table", number)
 
@@ -280,6 +284,10 @@ def _figure_block(figure: InlineFigure, key: CaptionKey | None, *, indent: str) 
     text = _caption_text(figure.caption)
     if text:
         lines.append(f"{indent}*{label}：{text}*" if label else f"{indent}*{text}*")
+    elif label:
+        # A synthesised caption ("Table 1") has a number but no prose; keep the
+        # label so the reader still sees "表 1" under the picture.
+        lines.append(f"{indent}*{label}*")
     return lines
 
 
@@ -520,7 +528,13 @@ def _copy_figures(source_dir: Path, target_dir: Path, *, root: Path,
 
 
 def _figure_captions(figures_dir: Path) -> dict[str, str]:
-    """Filename -> caption, from the conversion cache manifest beside ``figures/``."""
+    """Filename -> caption, from the cache manifest plus the filename itself.
+
+    The manifest records figures, not tables: a table with no recoverable
+    Markdown is rendered to ``page-NNN-table-N.png`` and its number survives
+    only in that filename. Synthesising ``Table N`` for those lets a body that
+    cites "（表 1）" find its picture. A manifest caption always wins.
+    """
 
     payload = _load_json(figures_dir.parent / MANIFEST_FILENAME)
     entries = payload.get("figures") if isinstance(payload, dict) else None
@@ -533,6 +547,14 @@ def _figure_captions(figures_dir: Path) -> dict[str, str]:
             caption = item.get("caption")
             if isinstance(path, str) and isinstance(caption, str):
                 captions.setdefault(Path(path).name, caption)
+    try:
+        images = sorted(path for path in figures_dir.iterdir() if path.is_file())
+    except OSError:
+        images = []
+    for path in images:
+        match = _TABLE_IMAGE_STEM_RE.match(path.stem)
+        if match:
+            captions.setdefault(path.name, f"Table {int(match.group(1))}")
     return captions
 
 

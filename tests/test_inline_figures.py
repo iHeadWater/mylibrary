@@ -172,16 +172,17 @@ def _write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def _build_root(tmp_path: Path) -> tuple[Path, Path]:
+def _build_root_with(
+    tmp_path: Path,
+    *,
+    body: str,
+    image_names: tuple[str, ...],
+    manifest_figures: list[dict[str, object]],
+) -> tuple[Path, Path]:
+    """A product root whose conversion cache holds exactly ``image_names``."""
+
     root = tmp_path / "outputs"
     root.mkdir()
-    body = (
-        "# 卡\n"
-        "\n"
-        "正文第一段（Figure 2）。\n"
-        "\n"
-        "第二段没有图。\n"
-    )
     draft = {
         "schema_version": 2,
         "draft_id": "draft-pass",
@@ -200,23 +201,134 @@ def _build_root(tmp_path: Path) -> tuple[Path, Path]:
     paper_dir = tmp_path / ".runtime" / "papers" / SHA / "pymupdf-1.0"
     figures_dir = paper_dir / "figures"
     figures_dir.mkdir(parents=True)
-    (figures_dir / "page-002-fig-1.png").write_bytes(b"\x89PNG\r\n\x1a\nfig")
-    (figures_dir / "page-018-table-1.png").write_bytes(b"\x89PNG\r\n\x1a\ntable")
+    for name in image_names:
+        (figures_dir / name).write_bytes(b"\x89PNG\r\n\x1a\n" + name.encode("utf-8"))
     _write_json(
         paper_dir / "manifest.json",
-        {
-            "manifest_version": 2,
-            "figures": [
-                {
-                    "path": "figures/page-002-fig-1.png",
-                    "caption": "Figure 2. 降雨与径流",
-                },
-                # No caption at all: must land in the appendix.
-                {"path": "figures/page-018-table-1.png", "caption": None},
-            ],
-        },
+        {"manifest_version": 2, "figures": manifest_figures},
     )
     return root, tmp_path / ".runtime"
+
+
+def _build_root(tmp_path: Path) -> tuple[Path, Path]:
+    return _build_root_with(
+        tmp_path,
+        body=(
+            "# 卡\n"
+            "\n"
+            "正文第一段（Figure 2）。\n"
+            "\n"
+            "第二段没有图。\n"
+        ),
+        image_names=("page-002-fig-1.png", "page-018-table-1.png"),
+        manifest_figures=[
+            {
+                "path": "figures/page-002-fig-1.png",
+                "caption": "Figure 2. 降雨与径流",
+            },
+            # No caption at all: must land in the appendix.
+            {"path": "figures/page-018-table-1.png", "caption": None},
+        ],
+    )
+
+
+# --------------------------------------------------------------------------------------
+# Table renders are absent from the manifest (their number lives in the filename)
+# --------------------------------------------------------------------------------------
+
+
+def _card_of(root: Path) -> str:
+    return (root / "cards" / "AAAA1111" / "card.md").read_text(encoding="utf-8")
+
+
+def test_unlisted_table_image_is_inlined_at_its_reference(tmp_path: Path) -> None:
+    # The converter renders a table as page-018-table-1.png without recording
+    # it in manifest.json, so the caption has to come from the filename.
+    root, runtime = _build_root_with(
+        tmp_path,
+        body="# 卡\n\n参数见（表 1）。\n\n后续段落。\n",
+        image_names=("page-018-table-1.png",),
+        manifest_figures=[],
+    )
+
+    report = build_reading_layer(root, runtime_dir=runtime)
+
+    assert report["ok"], report
+    card = _card_of(root)
+    assert "![Table 1](<figures/page-018-table-1.png>)" in card
+    assert card.index("参数见") < card.index("page-018-table-1.png")
+    assert "*表 1*" in card
+    assert "## 未在正文引用的图" not in card
+
+
+def test_english_table_reference_matches_the_numbered_file(tmp_path: Path) -> None:
+    root, runtime = _build_root_with(
+        tmp_path,
+        body="# 卡\n\n结果见（Table 2）。\n",
+        image_names=("page-020-table-2.png",),
+        manifest_figures=[],
+    )
+
+    report = build_reading_layer(root, runtime_dir=runtime)
+
+    assert report["ok"], report
+    card = _card_of(root)
+    assert "![Table 2](<figures/page-020-table-2.png>)" in card
+    assert "## 未在正文引用的图" not in card
+
+
+def test_table_mention_without_a_matching_file_inserts_nothing(tmp_path: Path) -> None:
+    root, runtime = _build_root_with(
+        tmp_path,
+        body="# 卡\n\n见（表 3）。\n",
+        image_names=("page-018-table-1.png",),
+        manifest_figures=[],
+    )
+
+    report = build_reading_layer(root, runtime_dir=runtime)
+
+    assert report["ok"], report
+    card = _card_of(root)
+    assert "![Table 3]" not in card
+    # The unrelated table image still reaches the appendix.
+    appendix = card.split("## 未在正文引用的图", 1)[1]
+    assert "page-018-table-1.png" in appendix
+
+
+def test_page_figure_counter_is_not_a_figure_number(tmp_path: Path) -> None:
+    # page-016-fig-1.png is "the first figure crop on page 16", not Figure 1.
+    root, runtime = _build_root_with(
+        tmp_path,
+        body="# 卡\n\n正文引用了（Figure 1）。\n",
+        image_names=("page-016-fig-1.png",),
+        manifest_figures=[{"path": "figures/page-016-fig-1.png", "caption": None}],
+    )
+
+    report = build_reading_layer(root, runtime_dir=runtime)
+
+    assert report["ok"], report
+    card = _card_of(root)
+    assert "![Figure 1]" not in card
+    appendix = card.split("## 未在正文引用的图", 1)[1]
+    assert "page-016-fig-1.png" in appendix
+
+
+def test_manifest_caption_wins_over_the_filename(tmp_path: Path) -> None:
+    root, runtime = _build_root_with(
+        tmp_path,
+        body="# 卡\n\n参数见（表 1）。\n",
+        image_names=("page-018-table-1.png",),
+        manifest_figures=[
+            {"path": "figures/page-018-table-1.png", "caption": "Table 1. 参数与取值"}
+        ],
+    )
+
+    report = build_reading_layer(root, runtime_dir=runtime)
+
+    assert report["ok"], report
+    card = _card_of(root)
+    assert "*表 1：参数与取值*" in card
+    assert card.count("page-018-table-1.png") == 1
 
 
 def _read_non_machine(root: Path) -> dict[str, bytes]:
