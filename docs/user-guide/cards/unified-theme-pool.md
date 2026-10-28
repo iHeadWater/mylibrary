@@ -49,6 +49,12 @@ uv run hydrolitagent cards run finalize --theme --run-dir <运行目录> --json
 全部完成时提交主题池，返回 `status: COMPLETED` 与候选清单。校验失败返回 `status: FAILED`，
 **保留 `response.json`、不推进**。每步都带 `step` / `step_index` / `remaining_steps` / `next_action`。
 
+**自动刷新阅读层**：只有走到 `COMPLETED`（主题池已提交）时，`finalize --theme` 才会重建
+`HOME.md` / `cards/` / `reading/themes/`，避免每推进一步都全量扫一遍产物根；中间步骤
+（`NEXT_STEP_READY`）不生成阅读层。`themes-run` 一次跑完并落到 `CANDIDATES_REFINED`
+时也会刷新；`--dry-run` 与 `--migrate-only` 不刷新。结果 JSON 的 `reading_layer` 字段与
+单篇路径相同，失败只降级为 `ok:false`、不会让命令失败。加 `--no-index` 可跳过。
+
 细节：重复 `finalize` 同一份答案不会重复提交；重跑 `prepare` 会接着**当前未完成**的步骤；
 `response.json` 收口后归档到 `responses/`，下一步要重新写一份。`themes-run --ai-provider in_session`
 等价于只跑一次 `prepare`：输出 `AWAITING_SESSION_OUTPUT` 并提示用 `run prepare|finalize` 继续。
@@ -74,10 +80,11 @@ outputs/
 三棵产物树统一落在产物根 `outputs/` 下（`configs/paths.toml` 的 `[literature] root`）。
 临时输入与运行目录（`paper-input.json`、`cards run` 的 `--run-dir`）放在 `.runtime/`，不属于产物。
 
-> **怎么看产出**：机器产物（`themes/` 下的版本文件）不保证互链。跑一次
-> `uv run hydrolitagent cards index`，会在产物根（默认 `outputs/`）生成阅读层：
-> `HOME.md`、`cards/INDEX.md`、阅读版卡片与 `reading/themes/`。主题阅读页的
-> 「粗卡 / 定向精读」链接由生成器按**当前布局**重算（历史版本里的旧链接保持原样）。
+> **怎么看产出**：机器产物（`themes/` 下的版本文件）不保证互链。日常不用手动跑索引：
+> `cards run finalize`（单篇或主题走到 `COMPLETED`）与 `themes-run` 成功后会自动刷新阅读层；
+> 首次打开 vault、或想手动重建时才跑 `uv run hydrolitagent cards index`，它会在产物根
+> （默认 `outputs/`）生成 `HOME.md`、`cards/INDEX.md`、阅读版卡片与 `reading/themes/`。
+> 主题阅读页的「粗卡 / 定向精读」链接由生成器按**当前布局**重算（历史版本里的旧链接保持原样）。
 > 用 **Obsidian** 把**产物根**当 vault 打开，从 `HOME.md` 开始即可；链接是标准 Markdown
 > 相对链接，不是 `[[双向链接]]`。细节见[在 Obsidian 里读产物](reading-in-obsidian.md)。
 >

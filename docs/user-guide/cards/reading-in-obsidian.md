@@ -4,13 +4,18 @@
 当 vault 打开，从 `HOME.md` 出发就能点到当前文献卡、来源、图、相关主题与定向精读。
 
 ```bash
-uv run hydrolitagent cards index          # 生成/更新阅读层
+uv run hydrolitagent cards index          # 首次打开或手动重建时生成/更新阅读层
 uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检）
 ```
 
+**日常不用手动跑**：`cards run finalize` 成功（主题流程要走到 `COMPLETED`）与 `themes-run`
+成功之后，平台会自动刷新同一层阅读物；`--no-index` 可关掉。手动跑 `cards index` 的场合是：
+第一次把产物根当 vault 打开、清理过产物、或想强制重建。阅读层永远可以从机器原稿重建。
+
 ## 打开步骤（照做即可）
 
-1. 先在仓库根跑一次 `uv run hydrolitagent cards index`。
+1. 首次打开时先在仓库根跑一次 `uv run hydrolitagent cards index`（之后由 finalize /
+   themes-run 自动维护；也可以随时手动重建）。
 2. 打开 Obsidian → **Open folder as vault**（打开文件夹作为仓库）。
 3. 选择**产物根**本身 —— 默认是仓库下的 `outputs/`，**不是**仓库根，也不要点进 `outputs/zotero/`。
 4. 在文件列表最外层打开 `HOME.md`；需要的话在设置里把它设为起始页。

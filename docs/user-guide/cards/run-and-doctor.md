@@ -81,6 +81,23 @@ uv run hydrolitagent cards run finalize \
 失败时返回结构化 `error.code` 与 `error.diagnostic`，**不偷偷重试、不改写你的 `response.json`**。
 `response.json` 与 `paper.md` 都保留在现场，便于人工核对 agent 实际看到了什么。
 
+### 收口后自动刷新阅读层
+
+`finalize` 成功后会自动重建产物根下的阅读层（`HOME.md`、`cards/`、`reading/themes/`），
+把刚写入的草稿直接挂进可点击的 Obsidian 路径，**不需要再手动跑一次 `cards index`**。
+
+- JSON 结果里新增 `reading_layer` 字段（只增不减）：
+  `{"ok": true, "written": 2, "unchanged": 1, "links_checked": 5, "broken_links": [], "error": null}`。
+  `written` / `unchanged` 是文件数，`links_checked` 是自检过的相对链接数。
+- 人类可读输出多一行：`阅读层已刷新：2 个文件（1 未变，5 条链接，0 断链）`。
+- **刷新失败不会让命令失败**：权限、路径、磁盘等异常只降级为 `reading_layer.ok=false`
+  （带 `error.code`），草稿照常保存，命令仍按原结果返回退出码。
+- 不想刷新就加 `--no-index`（默认开启）。阅读层是生成物，随时可用
+  `uv run hydrolitagent cards index` 重建。
+
+`--output-root` 指向别的产物根时，阅读层也跟着刷新到那里；插图缓存取自配置的
+`converter.cache_dir`（默认 `paths.runtime_dir`）。
+
 ## 失败排查
 
 | 错误码 | 含义 | 怎么办 |

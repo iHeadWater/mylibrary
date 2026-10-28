@@ -13,7 +13,11 @@ from hydrolitagent.cards.application.card_workflow import (
     generate_markdown_card_draft,
     prepare_session_run,
 )
-from hydrolitagent.cards.application.reading_layer import build_reading_layer
+from hydrolitagent.cards.application.reading_layer import (
+    build_reading_layer,
+    failed_refresh,
+    refresh as refresh_reading_layer,
+)
 from hydrolitagent.cards.card_validation import ValidationAssets, validate_subject_card_file
 from hydrolitagent.cards.ai_config import (
     AIConfigError,
@@ -141,6 +145,11 @@ def _parser() -> argparse.ArgumentParser:
             )
             command.add_argument("--ai-model", help="所选服务可用的模型名")
             command.add_argument("--ai-timeout", type=float)
+            command.add_argument(
+                "--no-index",
+                action="store_true",
+                help="主题池更新成功后不刷新阅读层（HOME.md / cards/ / reading/）",
+            )
         if name == "evidence-generate":
             command.add_argument("--ai-config", help="模型选择 TOML；默认 configs/ai.toml")
             # The registry, not argparse, owns the list of runner ids: a new
@@ -195,6 +204,12 @@ def _parser() -> argparse.ArgumentParser:
             "--output-root",
             help="收口时草稿产物根；不传则用默认解析（configs/paths.toml → outputs/）",
         )
+        if run_name == "finalize":
+            run_command.add_argument(
+                "--no-index",
+                action="store_true",
+                help="收口成功后不刷新阅读层（HOME.md / cards/ / reading/）",
+            )
 
     doctor = subparsers.add_parser(
         "doctor",
@@ -293,15 +308,17 @@ def _render_human(result: dict[str, Any]) -> str:
                 f"两阶段收口失败（{result.get('failed_stage', 'input')}）"
                 f"[{error.get('code', 'UNKNOWN')}]：{error.get('message', '未知错误')}"
             )
-        return "\n".join(
-            [
-                "已收口 response.json 并生成待校验主体卡草稿；未通过内容门禁、未正式发布",
-                f"- 正文：{result['card_path']}",
-                f"- 正文、机器字段与来源记录：{result['draft_path']}",
-                f"- 精读产物根：{result['literature_root']}",
-                f"- Markdown 接地校验：{result.get('reading_status') or '未知'}",
-            ]
-        )
+        lines = [
+            "已收口 response.json 并生成待校验主体卡草稿；未通过内容门禁、未正式发布",
+            f"- 正文：{result['card_path']}",
+            f"- 正文、机器字段与来源记录：{result['draft_path']}",
+            f"- 精读产物根：{result['literature_root']}",
+            f"- Markdown 接地校验：{result.get('reading_status') or '未知'}",
+        ]
+        reading_layer = _reading_layer_line(result)
+        if reading_layer:
+            lines.append(reading_layer)
+        return "\n".join(lines)
     if result.get("operation") == "subject_card_validation":
         lines = ["主体卡代码校验：" + result["status"] + "（不代表科研结论正确或正式发布）"]
         lines += [f"- {item['code']} {item['path']}：{item['message']}"
@@ -412,13 +429,17 @@ def _render_human(result: dict[str, Any]) -> str:
                 f"- 写完后运行：cards run finalize --theme --run-dir {result.get('run_dir')}",
             ])
         if result.get("status") == "COMPLETED":
-            return "\n".join([
+            lines = [
                 "主题池分步已完成；全部步骤通过校验并已提交",
                 f"- 候选主题：{result.get('candidate_count', 0)}；已回填：{result.get('refined_count', 0)}",
                 f"- 动作：{result.get('action')}；复用精读：{result.get('reused_reading_count', 0)}",
                 f"- 运行目录：{result.get('run_dir')}",
                 "- 修订结果仍为候选，不会自动成为正式主题",
-            ])
+            ]
+            reading_layer = _reading_layer_line(result)
+            if reading_layer:
+                lines.append(reading_layer)
+            return "\n".join(lines)
         return "\n".join([
             f"已保存步骤 {result.get('step')}；下一步已写入同一运行目录",
             f"- 下一步骤：{result.get('next_step_kind')} · {result.get('next_step')}"
@@ -444,6 +465,9 @@ def _render_human(result: dict[str, Any]) -> str:
             lines.append(f"- 下一步：{result['next_action']}")
         if result.get("error"):
             lines.append(f"- 错误：{result['error'].get('message')}")
+        reading_layer = _reading_layer_line(result)
+        if reading_layer:
+            lines.append(reading_layer)
         return "\n".join(lines)
     error = result.get("error", {})
     return f"失败 [{error.get('code', 'UNKNOWN')}]: {error.get('message', '未知错误')}"
@@ -520,6 +544,52 @@ def _run_index(args) -> dict[str, Any]:
             "root": str(root),
             "error": {"code": "READING_LAYER_WRITE_FAILED", "message": str(exc)},
         }
+
+
+def _reading_layer_roots(result: dict[str, Any], app_config: Any) -> tuple[Path, Path]:
+    """Where the last write landed and which cache holds its figures.
+
+    The report's ``literature_root`` is authoritative when present: it already
+    reflects an explicit ``--output-root``. The conversion cache is what the
+    store used (``converter.cache_dir``), not the reader's default.
+    """
+
+    recorded = result.get("literature_root")
+    root = Path(recorded) if isinstance(recorded, str) and recorded.strip() else Path(
+        app_config.paths.literature_root
+    )
+    converter = getattr(app_config, "converter", None)
+    cache = getattr(converter, "cache_dir", None) or getattr(app_config.paths, "runtime_dir", None)
+    return root, Path(cache) if cache else REPO_ROOT / ".runtime"
+
+
+def _apply_reading_layer(result: dict[str, Any], app_config: Any) -> None:
+    """Attach a ``reading_layer`` report; a refresh failure never fails the command."""
+
+    try:
+        root, runtime = _reading_layer_roots(result, app_config)
+        result["reading_layer"] = refresh_reading_layer(root, runtime_dir=runtime)
+    except Exception as exc:  # noqa: BLE001 - a reader page must not undo a write
+        result["reading_layer"] = failed_refresh(exc)
+
+
+def _reading_layer_line(result: dict[str, Any]) -> str | None:
+    report = result.get("reading_layer")
+    if not isinstance(report, dict):
+        return None
+    if report.get("ok"):
+        return (
+            f"阅读层已刷新：{report.get('written', 0)} 个文件"
+            f"（{report.get('unchanged', 0)} 未变，{report.get('links_checked', 0)} 条链接，"
+            f"{len(report.get('broken_links') or [])} 断链）"
+        )
+    error = report.get("error")
+    if isinstance(error, dict) and error:
+        return f"阅读层未刷新 [{error.get('code', 'UNKNOWN')}]：{error.get('message', '未知错误')}"
+    return (
+        f"阅读层已刷新但存在 {len(report.get('broken_links') or [])} 条断链；"
+        "运行 cards index 查看详情"
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -652,6 +722,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "message": str(exc),
                 },
             }
+        # A theme session only has something to read once the pool is committed;
+        # intermediate steps keep writing to the same run directory.
+        if (
+            args.run_command == "finalize"
+            and result.get("ok")
+            and not getattr(args, "no_index", False)
+            and (not theme or result.get("status") == "COMPLETED")
+        ):
+            _apply_reading_layer(result, config)
         _emit(result, args.json)
         return 0 if result["ok"] else 3
 
@@ -747,6 +826,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (TaskStoreError, OSError, ValueError) as exc:
             result = {"schema_version": 1, "ok": False, "error": {
                 "code": getattr(exc, "code", "PIPELINE_LOCAL_ERROR"), "message": "无法读取本地粗卡输入或运行配置"}}
+        if (
+            result.get("ok")
+            and result.get("status") in {"COMPLETED", "CANDIDATES_REFINED"}
+            and not args.dry_run
+            and not args.migrate_only
+            and not args.no_index
+        ):
+            _apply_reading_layer(result, app_config)
         if result.get("status") == "CANCELLED":
             _emit(result, args.json)
             return 130

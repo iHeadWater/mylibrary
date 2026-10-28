@@ -844,4 +844,53 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
     return report
 
 
-__all__ = ["build_reading_layer"]
+# --------------------------------------------------------------------------------------
+# Auto-refresh wrapper
+# --------------------------------------------------------------------------------------
+
+REFRESH_FAILED = "READING_LAYER_REFRESH_FAILED"
+
+
+def failed_refresh(exc: BaseException) -> dict[str, Any]:
+    """The compact report an auto-refresh leaves behind when generation blows up."""
+
+    return {
+        "ok": False,
+        "written": 0,
+        "unchanged": 0,
+        "links_checked": 0,
+        "broken_links": [],
+        "error": {
+            "code": REFRESH_FAILED,
+            "message": f"{type(exc).__name__}: {exc}",
+        },
+    }
+
+
+def refresh(root: Path, *, runtime_dir: Path | None = None) -> dict[str, Any]:
+    """Rebuild the reading layer without ever raising.
+
+    Called after a command has already written its product. A reader-facing
+    page failing to regenerate must not turn a successful ``finalize`` into a
+    failed one, so every IO error becomes a structured report instead of an
+    exception. The counts mirror the fields a caller prints: ``written`` and
+    ``unchanged`` are numbers, ``broken_links`` is the checker's list.
+    """
+
+    try:
+        report = build_reading_layer(root, runtime_dir=runtime_dir)
+    except Exception as exc:  # noqa: BLE001 - reported, never re-raised on this path
+        return failed_refresh(exc)
+    return {
+        "ok": bool(report.get("ok")),
+        "root": report.get("root"),
+        "written": len(report.get("written") or []),
+        "unchanged": len(report.get("unchanged") or []),
+        "links_checked": report.get("links_checked", 0),
+        "broken_links": list(report.get("broken_links") or []),
+        "warnings": list(report.get("warnings") or []),
+        "error": report.get("error"),
+    }
+
+
+__all__ = ["build_reading_layer", "failed_refresh", "refresh"]

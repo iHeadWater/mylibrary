@@ -26,7 +26,7 @@ uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai
 uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 uv run hydrolitagent cards themes-run --json
 uv run hydrolitagent cards ai-config --json          # 看模型选择与产物落点，不调模型
-uv run hydrolitagent cards index --json              # 生成可读的阅读层（HOME / 卡片索引 / 主题阅读页）
+uv run hydrolitagent cards index --json              # 手动生成可读的阅读层（HOME / 卡片索引 / 主题阅读页）
 
 # 任意能读文件、写 JSON 的 agent 也能制卡：先准备，再由 agent 写答案，最后收口
 uv run hydrolitagent cards run prepare --paper-input paper-input.json --run-dir <运行目录> --json
@@ -41,6 +41,12 @@ uv run hydrolitagent cards doctor --json
 ```
 
 完整清单：`uv run hydrolitagent cards --help`（当前 8 个子命令；`run` 含 `prepare` / `finalize` 两个阶段）。
+
+**阅读层自动刷新**：`run finalize` 成功、主题流程走到 `COMPLETED`、以及 `themes-run` 成功
+（`CANDIDATES_REFINED`）之后，平台会自动重建 `HOME.md` / `cards/` / `reading/themes/`；
+`--dry-run` 与 `--migrate-only` 不刷新。想跳过就在这些命令上加 `--no-index`（默认开启）；
+手动重建仍然用 `cards index`。结果 JSON 的 `reading_layer` 字段报出写入/未变文件数、链接
+自检条数与错误；刷新失败只降级为 `ok:false`，不会让命令失败。
 
 ## 自查（不需要你的论文，也不需要模型）
 
