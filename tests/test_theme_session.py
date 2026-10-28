@@ -148,12 +148,14 @@ class ThemeSession:
         result = self.prepare()
         assert result["ok"], result
         seen = []
-        while True:
+        for _ in range(20):
             request = self.respond()
             seen.append((request["step_kind"], request["step"]))
             result = self.finalize()
             if result["status"] != "NEXT_STEP_READY":
                 break
+        else:
+            raise AssertionError("theme session did not converge within 20 steps")
         return result, seen
 
     def state(self, run_dir=None):
@@ -524,7 +526,7 @@ def test_cli_theme_session_walks_to_completed(session):
         assert code == 0, result
         assert result["status"] == "AWAITING_SESSION_OUTPUT"
         assert result["step_kind"] == "theme_discovery"
-        while True:
+        for _ in range(20):
             request = session.respond(run_dir)
             assert request["step"]
             code, result = _cli(["run", "finalize", "--theme",
@@ -533,6 +535,8 @@ def test_cli_theme_session_walks_to_completed(session):
             assert code == 0, result
             if result["status"] != "NEXT_STEP_READY":
                 break
+        else:
+            raise AssertionError("theme session did not converge within 20 steps")
 
     assert result["status"] == "COMPLETED"
     assert result["model_invoked"] is False
