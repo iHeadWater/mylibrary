@@ -56,15 +56,20 @@ uv run hydrolitagent cards run finalize --theme --run-dir <运行目录> --json
 ## 产物长什么样
 
 ```text
-themes/
-  index.md                       给人看的总入口：当前候选、历史主题与版本链接
-  _registry.json                 稳定编号、当前版本、历史版本、合并/拆分关系
-  candidates/TH-编号/versions/CHANGE-编号/
-    initial.md / revised.md      初版与精读回填结果
-    plan.json / manifest.json    变更类型、理由、父主题与来源引用
-  changes/CHANGE-编号/            一次处理的输入、规划与提交记录
-evidence-packs/…/readings/       独立保存的精读结果（主题只引用，不复制）
+outputs/
+  zotero/<文库>-<ID>-<条目Key>/drafts/   单篇主体卡草稿与校验记录
+  themes/                               主题池（paths.themes_dir）
+    index.md                            给人看的总入口：当前候选、历史主题与版本链接
+    _registry.json                      稳定编号、当前版本、历史版本、合并/拆分关系
+    candidates/TH-编号/versions/CHANGE-编号/
+      initial.md / revised.md           初版与精读回填结果
+      plan.json / manifest.json         变更类型、理由、父主题与来源引用
+    changes/CHANGE-编号/                 一次处理的输入、规划与提交记录
+  evidence-packs/…/readings/            独立保存的精读结果（主题只引用，不复制）
 ```
+
+三棵产物树统一落在产物根 `outputs/` 下（`configs/paths.toml` 的 `[literature] root`）。
+临时输入与运行目录（`paper-input.json`、`cards run` 的 `--run-dir`）放在 `.runtime/`，不属于产物。
 
 > **怎么看产出**：卡片与主题都是带 `[[双向链接]]` 的 Markdown ——
 > 用 **Obsidian** 把产物目录（`证据卡/`、`主题/`，落点由 `paths.artifact_root` 决定）

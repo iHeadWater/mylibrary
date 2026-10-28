@@ -61,8 +61,9 @@ uv run python scripts/paper_validate.py \
 **不需要 Poppler**，macOS / Linux / Windows 行为一致。主题流程的 `in_session` 版本是
 `cards run prepare|finalize --theme`（`themes-run --ai-provider in_session` 等价于先跑一次 `prepare`）。
 
-**产物**：单篇流程写到**产物根**（默认仓库 `outputs/`）；主题池写到 `themes/`。
-查主题从 `themes/index.md` 进 —— 那是给人看的总入口。
+**产物**：单篇草稿、主题池与精读记录都写在**产物根**（默认仓库 `outputs/`）下：
+`outputs/zotero/`、`outputs/themes/`、`outputs/evidence-packs/`。
+查主题从 `outputs/themes/index.md` 进 —— 那是给人看的总入口。
 
 ## 边界
 
