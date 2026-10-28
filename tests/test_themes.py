@@ -29,7 +29,7 @@ from hydrolitagent.cards.ports.paper import ConversionOptions
 from hydrolitagent.cards.ports.runner import CardRunError, RunnerDoctor
 from hydrolitagent.cards.tasks import PipelineRunLock
 from hydrolitagent.cards.themes import ThemeError, _publish, _safe_path, run_themes
-from test_card_generation import ATTACHMENT_KEY, GenerationFixture, FakeAdapter, PARENT_KEY
+from card_fixtures import ATTACHMENT_KEY, GenerationFixture, PARENT_KEY
 from test_config import write_config
 from test_markdown_workflow import first_prose_quote, _write_pdf
 
@@ -71,7 +71,7 @@ class ThemeTests(unittest.TestCase):
         self.config = replace(config, theme_pipeline=replace(config.theme_pipeline, enabled=True,
             assets_dir=ROOT / "templates/themes"))
         # Build a real, validated legacy rough pack without a live provider.
-        self.f.generate(FakeAdapter())
+        self.f.complete()
         # A real PDF: the live pipeline converts it with PyMuPDF and caches the
         # Markdown, exactly as production does.
         self.pdf = _write_pdf(self.root / "source.pdf")

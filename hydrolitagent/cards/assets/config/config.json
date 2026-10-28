@@ -74,34 +74,13 @@
     "max_history_entries": 100
   },
   "card_generator": {
-    "proxy": {
-      "enabled": true,
-      "url": "http://127.0.0.1:7897",
-      "no_proxy": [
-        "localhost",
-        "127.0.0.1",
-        "::1"
-      ]
-    },
-    "connection_guard": {
-      "reconnect_stop_enabled": false,
-      "reconnect_event_limit": 10,
-      "recovery_timeout_seconds": 300,
-      "idle_timeout_seconds": 1500,
-      "pdf_tool_call_limit": 2
-    },
+    "runner": "in_session",
     "progress": {
       "enabled": true,
       "heartbeat_interval_seconds": 60
     },
-    "adapter": "codex_cli",
-    "executable": "codex",
-    "auth_mode": "chatgpt_account",
-    "preflight_timeout_seconds": 10,
-    "model": "gpt-5.6-sol",
-    "reasoning_effort": "high",
-    "smoke_test_timeout_seconds": 120,
-    "generation_timeout_seconds": 1500,
-    "workflow_mode": "single_agent"
+    "model": null,
+    "reasoning_effort": null,
+    "generation_timeout_seconds": 1500
   }
 }

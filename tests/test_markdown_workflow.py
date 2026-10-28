@@ -469,21 +469,3 @@ def test_the_same_pdf_is_converted_once(app_config, tmp_path):
         assert result["ok"], result
     assert CountingConverter.calls == 1
     assert len(draft_paths(result)) == 2
-
-
-# --------------------------------------------------------------------------------------
-# CLI switch stays hidden and legacy by default
-# --------------------------------------------------------------------------------------
-
-
-def test_pipeline_flag_is_hidden_and_legacy_is_the_default():
-    from hydrolitagent.cards import cli
-
-    parser = cli._parser()
-    assert "--pipeline" not in parser.format_help()
-    parsed = parser.parse_args(
-        ["evidence-generate", "--paper-input", "input.json", "--pipeline", "markdown"]
-    )
-    assert parsed.pipeline == "markdown"
-    default = parser.parse_args(["evidence-generate", "--paper-input", "input.json"])
-    assert default.pipeline is None

@@ -16,7 +16,7 @@ def test_file_dotenv_environment_and_argument_priority(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("change", [{"provider":"unknown"}, {"timeout_seconds":0}, {"timeout_seconds":float("nan")},
     {"timeout_seconds":True}, {"model":42}, {"provider":"direct","reasoning_effort":"minimal"},
-    {"executable":"claude"}])
+    {"executable":"anything"}])
 def test_invalid_configuration_rejected(change):
     with pytest.raises(config.AIConfigError): config.resolve_ai_config(**change)
 
@@ -33,6 +33,5 @@ def test_selection_never_requires_private_platform_config(monkeypatch, capsys):
 def test_both_selections_use_existing_single_agent_contract():
     for provider in ("direct","in_session"):
         app=config.subject_card_config(config.resolve_ai_config(provider=provider))
-        assert app.card_generator.workflow_mode == "single_agent"
-        assert app.card_generator.adapter == provider
+        assert app.card_generator.runner == provider
         assert app.paths.evidence_card_generation_prompt_file.is_file()

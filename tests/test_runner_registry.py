@@ -238,7 +238,7 @@ def test_subject_card_config_exposes_runner_options() -> None:
     )
     app = ai_config.subject_card_config(selection)
 
-    assert app.card_generator.adapter == "direct"
+    assert app.card_generator.runner == "direct"
     assert app.runner_options == {
         "base_url": "https://api.example.test/v1",
         "max_input_tokens": 1200,

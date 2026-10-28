@@ -11,7 +11,7 @@
 | PDF 门禁与交付 | 缺失、过小、无可用文本、身份变化和越界文件不得进入制卡 | `test_pdf_gate.py`、`test_pdf_delivery.py` | 已有自动测试 |
 | PDF→Markdown 转换 | 页锚点与页数一致、图资产与表格提取、中文/双栏/扫描件的覆盖率与 `CONVERTER_LOW_TEXT` fail-closed、同一 PDF 的 Markdown 哈希稳定 | `test_markdown_conversion.py`、`test_paper_store.py` | 已有自动测试 |
 | 证据卡模板 | 九类模板的来源、版本、front matter 和内容指纹必须一致 | `test_evidence_templates.py` | 已有自动测试 |
-| 单 Agent 制卡 | 来源错误、空输出、非法模板、重复生成和人工改动必须停止保存 | `test_ai_config.py`、`test_card_draft.py`、`test_card_generation.py`、`test_card_saving.py`、`test_single_agent.py` | 已有自动测试 |
+| 单篇主体卡 | 来源错误、空输出、非法模板与引文不接地必须停止保存；旧 v1 草稿仍可只读校验 | `test_ai_config.py`、`test_card_draft.py`、`test_card_validation.py`、`test_markdown_workflow.py`、`test_legacy_removed.py` | 已有自动测试 |
 | 执行者适配器 | `direct` 的 HTTP 契约、`in_session` 两阶段、脚本化替身、旧 CLI 流式解码与连接保护 | `test_direct_runner.py`、`test_in_session.py`、`test_scripted_runner.py`、`test_streaming_decoding.py`、`test_connection_guard.py` | 已有自动测试 |
 | 执行者无关 | 注册表新增执行者只需 adapter + 注册；同一份 `PreparedPaper` 经 `direct` / `in_session` / 脚本化替身产出相同规范化草稿（除 `runner_id`） | `test_runner_registry.py`、`test_runner_agnostic.py`、`test_direct_runner.py`、`test_scripted_runner.py` | 已有自动测试 |
 | 两阶段制卡协议 | 运行目录只含 `paper.md` / 图 / schema / 请求；`response.json` 缺失或非法、`paper.md` 被改动、Markdown 哈希或 canary 不符时结构化拒绝 | `test_in_session.py`、`test_text_only_runner.py` | 已有自动测试 |
@@ -22,7 +22,7 @@
 | 任务与保存完整性 | 完成必须以内容与来源记录为准，不得只凭目录或任务标记；已有卡不得被覆盖 | `test_tasks.py`、`test_completion_records.py`、`test_evidence_packages.py` | 已有自动测试 |
 | 模型预检与进度 | Zotero/模型预检失败可定位，进度心跳不泄漏凭据 | `test_preflight.py`、`test_progress.py` | 已有自动测试 |
 | 仓库结构 | 代码、模板、文档和忽略的科研产物保持预期边界 | `tests/test_repo_structure.py` | 已有自动测试 |
-| 分层边界 | `domain` 不得反向 import `adapters`/`application`/`card_generators` 或 `subprocess`；共享层不得出现 provider 名称；已删除的 PDF 直读工具名不得回到 `hydrolitagent/cards`（`legacy/` 只读解码豁免） | `tests/test_import_boundaries.py` | 已有自动测试 |
+| 分层边界 | `domain` 不得反向 import `adapters`/`application` 或 `subprocess`；共享层不得出现 provider 名称；已删除的 PDF 直读工具名与旧证据包栈不得回到 `hydrolitagent/cards`（`legacy/` 只读解码豁免） | `tests/test_import_boundaries.py`、`tests/test_legacy_removed.py` | 已有自动测试 |
 | CLI 契约快照 | `ai-config` / `paper-input` 的 JSON 字段只增不减、退出码为 0；本机 Zotero 不可用时显式 skip | `tests/test_cli_characterization.py` | 已有自动测试 |
 | 阅读方法策略 | 新产物可使用当前 method（含 `markdown_prepared`）；历史 method 只读可校验，不得写回新产物 | `tests/test_source_access_methods.py` | 已有自动测试 |
 

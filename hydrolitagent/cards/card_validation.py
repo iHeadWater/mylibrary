@@ -10,11 +10,14 @@ from dataclasses import dataclass, fields
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from hydrolitagent.cards.card_draft import KEY, SHA256, PROMPT, SCHEMA, SINGLE_SOURCE_TEMPLATES
-from hydrolitagent.cards._paths import ASSETS_DIR, PROMPTS_DIR, SCHEMAS_DIR
-from hydrolitagent.cards.card_generation import (
-    CardGenerationError, _load_template_bundle, _read_prompt, build_template_prompt,
+from hydrolitagent.cards.application.card_draft import (
+    KEY, PROMPT, SCHEMA, SHA256, SINGLE_SOURCE_TEMPLATES,
 )
+from hydrolitagent.cards._paths import ASSETS_DIR, PROMPTS_DIR, SCHEMAS_DIR
+from hydrolitagent.cards.application.prompts import (
+    build_template_prompt, load_template_bundle, read_prompt,
+)
+from hydrolitagent.cards.domain.errors import CardGenerationError
 from hydrolitagent.cards.evidence_templates import EvidenceTemplateError
 from hydrolitagent.cards.publication import atomic_text
 from hydrolitagent.cards.domain.protocol import MARKDOWN_CARD_PROTOCOL_VERSION
@@ -196,14 +199,14 @@ def _input_identity(record, add):
 
 def _provenance(assets, draft, record, identity, add):
     """Compare recorded versions with the actual configured assets, not a model claim."""
-    catalog, templates = _load_template_bundle(assets.templates_dir, assets.catalog_file)
+    catalog, templates = load_template_bundle(assets.templates_dir, assets.catalog_file)
     templates = {k: v for k, v in templates.items() if k in SINGLE_SOURCE_TEMPLATES}
-    base = _read_prompt(assets.generation_prompt)
-    supplement = _read_prompt(assets.draft_prompt)
+    base = read_prompt(assets.generation_prompt)
+    supplement = read_prompt(assets.draft_prompt)
     recorded = draft.get("provenance")
     protocol = recorded.get("generation_protocol_version") if isinstance(recorded, dict) else None
     claude = protocol == "claude-local-pdf-v1"
-    reading = _read_prompt(assets.claude_reading_prompt if claude else assets.reading_prompt)
+    reading = read_prompt(assets.claude_reading_prompt if claude else assets.reading_prompt)
     access = draft.get("reading_record")
     if isinstance(access, dict) and access.get("method") != (CLAUDE_PDF_READ if claude else LOCAL_PDF_PATH):
         add("CARD_READING_RECORD_INVALID", "/reading_record/method", "阅读记录与所选后端协议不一致")
@@ -410,10 +413,10 @@ def _check_markdown_access(access, source, pages, add):
 
 def _provenance_markdown(assets, draft, add):
     """Compare the v2 provenance record with the assets shipped with this code."""
-    catalog, templates = _load_template_bundle(assets.templates_dir, assets.catalog_file)
+    catalog, templates = load_template_bundle(assets.templates_dir, assets.catalog_file)
     templates = {k: v for k, v in templates.items() if k in SINGLE_SOURCE_TEMPLATES}
-    base = _read_prompt(assets.generation_prompt)
-    supplement = _read_prompt(assets.markdown_reading_prompt)
+    base = read_prompt(assets.generation_prompt)
+    supplement = read_prompt(assets.markdown_reading_prompt)
     provenance = draft.get("provenance")
     if not isinstance(provenance, dict):
         add("CARD_PROVENANCE_MISSING", "/provenance", "缺少转换器、运行器和模板版本信息")

@@ -16,7 +16,7 @@ from hydrolitagent.cards.application.draft_sources import (
 )
 from hydrolitagent.cards.card_validation import fingerprint
 from hydrolitagent.cards.publication import text_hash
-from test_card_generation import ATTACHMENT_KEY, FakeAdapter, GenerationFixture, PARENT_KEY
+from card_fixtures import ATTACHMENT_KEY, GenerationFixture, PARENT_KEY
 from test_config import write_config
 
 GROUP_ID = 42
@@ -214,7 +214,7 @@ class SourceMergeTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.fixture = GenerationFixture(self.root)
-        self.fixture.generate(FakeAdapter())
+        self.fixture.complete()
         from hydrolitagent.cards.config import load_config
 
         self.config = load_config(write_config(self.root))

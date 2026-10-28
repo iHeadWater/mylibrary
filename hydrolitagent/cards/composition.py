@@ -89,7 +89,7 @@ def _default_converter() -> PaperConverter:
     return PymupdfConverter()
 
 
-def _runner_options(app_config: Any, runner_id: str) -> dict[str, Any]:
+def _runner_options(app_config: Any) -> dict[str, Any]:
     """The provider-neutral bag every runner factory receives.
 
     ``runner_options`` comes from the AI selection (endpoint and token budgets).
@@ -99,14 +99,8 @@ def _runner_options(app_config: Any, runner_id: str) -> dict[str, Any]:
 
     card_generator = app_config.card_generator
     runner_options = dict(getattr(app_config, "runner_options", None) or {})
-    # ``card_generator.model`` belongs to the *selected* executor. An old
-    # config.json still names the legacy ``codex_cli`` adapter and a model for
-    # it; handing that model to ``direct`` would pair it with the DeepSeek
-    # endpoint. When no registry executor was selected, let the adapter default.
-    adapter = str(getattr(card_generator, "adapter", "")).strip().casefold()
-    model = getattr(card_generator, "model", None) if adapter in runner_ids() else None
     return {
-        "model": model,
+        "model": getattr(card_generator, "model", None),
         "base_url": runner_options.get("base_url"),
         "max_input_tokens": runner_options.get("max_input_tokens"),
         "max_output_tokens": runner_options.get("max_output_tokens"),
@@ -116,9 +110,9 @@ def _runner_options(app_config: Any, runner_id: str) -> dict[str, Any]:
 def build_markdown_pipeline(app_config: Any) -> MarkdownPipeline:
     """Wire one converter, one store and one runner for a single card run.
 
-    The runner is chosen from the configured adapter name through the registry,
-    not from an environment probe: an unknown name fails here instead of
-    silently falling back to a different provider.
+    The runner is chosen from the configured runner id through the registry, not
+    from an environment probe: an unknown name fails here instead of silently
+    falling back to a different executor.
     """
 
     converter_config = getattr(app_config, "converter", None)
@@ -128,13 +122,14 @@ def build_markdown_pipeline(app_config: Any) -> MarkdownPipeline:
             f"未知的 PDF 转换器：{converter_id!r}；当前支持 {sorted(KNOWN_CONVERTERS)}"
         )
     card_generator = app_config.card_generator
+    runner_id = card_generator.runner
     # ``runner_options`` comes from the AI selection (base_url and token
     # budgets). Everything else is the ordinary card-generator configuration;
     # factories ignore the keys they do not use.
     try:
-        runner = create(card_generator.adapter, **_runner_options(app_config, card_generator.adapter))
+        runner = create(runner_id, **_runner_options(app_config))
     except RegistryError as exc:
-        raise ConfigError(f"未注册的制卡运行器：{card_generator.adapter!r}；{exc}") from exc
+        raise ConfigError(f"未注册的制卡运行器：{runner_id!r}；{exc}") from exc
     return MarkdownPipeline(
         converter=_default_converter(),
         store=PaperStore(_cache_dir(app_config)),
@@ -195,7 +190,7 @@ def _runner_doctors(app_config: Any) -> list[RunnerDoctor]:
     reports: list[RunnerDoctor] = []
     for runner_id in runner_ids():
         try:
-            runner = create(runner_id, **_runner_options(app_config, runner_id))
+            runner = create(runner_id, **_runner_options(app_config))
             report = runner.doctor()
             # Report the registry id the operator can pass to --ai-provider; the
             # adapter's internal id is an implementation detail.

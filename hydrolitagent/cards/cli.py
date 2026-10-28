@@ -12,7 +12,6 @@ from hydrolitagent.cards.application.card_workflow import (
     generate_markdown_card_draft,
     prepare_session_run,
 )
-from hydrolitagent.cards.card_draft import generate_subject_card_draft
 from hydrolitagent.cards.card_validation import ValidationAssets, validate_subject_card_file
 from hydrolitagent.cards.ai_config import (
     AIConfigError,
@@ -21,36 +20,24 @@ from hydrolitagent.cards.ai_config import (
     resolve_ai_config,
     subject_card_config,
 )
-from hydrolitagent.cards.card_generators import build_card_generator_adapter
-from hydrolitagent.cards.card_generation import (
-    CardGenerationError,
-    generate_evidence_card,
-)
 from hydrolitagent.cards.composition import (
     build_doctor_report,
     build_markdown_pipeline,
     build_session_pipeline,
     build_theme_pipeline,
 )
-from hydrolitagent.cards.config import ConfigError, load_config, resolve_pipeline_mode
+from hydrolitagent.cards.config import ConfigError, load_config
 from hydrolitagent.cards.paper_input_config import load_paper_input_config
-from hydrolitagent.cards.evidence_packages import EvidencePackageError
-from hydrolitagent.cards.evidence_templates import (
-    EvidenceTemplateError,
-    validate_evidence_templates,
-)
-from hydrolitagent.cards.pdf_delivery import PdfDeliveryError
-from hydrolitagent.cards.pdf_gate import PdfGateError, evaluate_pdf_gate
+from hydrolitagent.cards.pdf_gate import PdfGateError
 from hydrolitagent.cards.paper_input import (
     prepare_demo_paper,
     prepare_paper_batch,
     prepare_paper_input,
 )
-from hydrolitagent.cards.failure_records import save_failure_record
 from hydrolitagent.cards.progress import ConsoleProgress
 from hydrolitagent.cards.themes import run_themes
 from hydrolitagent.cards.tasks import TaskStoreError
-from hydrolitagent.cards.zotero import ZoteroApiError, preflight
+from hydrolitagent.cards.zotero import ZoteroApiError
 from hydrolitagent.cards._paths import DEFAULT_CONFIG_PATH
 
 
@@ -77,7 +64,7 @@ def _parser() -> argparse.ArgumentParser:
 
     for name, help_text in (
         ("paper-input", "按题名搜索候选，或按 item key 检查单篇 Zotero 论文输入"),
-        ("evidence-generate", "读取一篇 Zotero PDF 并生成首张粗证据卡"),
+        ("evidence-generate", "读取单篇论文输入记录并生成待校验主体卡草稿"),
         ("evidence-validate", "离线校验主体卡草稿并保存记录，不调用模型、不正式发布"),
         ("themes-run", "粗卡生成候选主题，逐篇定向精读并回填修订；自动续跑、不转正式主题"),
     ):
@@ -89,10 +76,9 @@ def _parser() -> argparse.ArgumentParser:
                   else "总配置文件路径；默认读取项目 config/config.json"),
         )
         command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
-        if name != "evidence-validate":
+        if name in {"paper-input", "themes-run"}:
             command.add_argument("--base-url", help="覆盖本机 Zotero API 地址")
             command.add_argument("--timeout", type=float, help="请求超时秒数")
-        if name in {"paper-input", "evidence-generate", "themes-run"}:
             command.add_argument("--group-id", help="覆盖目标 Zotero 群组 ID")
         if name == "evidence-validate":
             command.add_argument("--assets-root", help="选择另一份资产根（templates/prompts/schemas）；与 --config 互斥")
@@ -151,19 +137,9 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--ai-model", help="所选服务可用的模型名")
             command.add_argument("--ai-timeout", type=float)
             command.add_argument("--output-root", help="本次产物根；不传则用默认解析（configs/paths.toml → outputs/）")
-            # The default comes from CARD_PIPELINE (``markdown`` since stage 3b);
-            # the hidden override exists for one release as a rollback.
             command.add_argument(
-                "--pipeline", choices=["legacy", "markdown"], default=None,
-                help=argparse.SUPPRESS,
-            )
-            source = command.add_mutually_exclusive_group(required=True)
-            source.add_argument("--item-key", help="旧证据包流程的 Zotero 父条目 Key")
-            source.add_argument("--paper-input", help="单篇 READY JSON（输入记录）文件，或 - 从 stdin 读取；仅生成待校验草稿")
-            command.add_argument(
-                "--retry-quality-failed",
-                action="store_true",
-                help="显式重试一个 QUALITY_FAILED 任务；默认不会自动重试",
+                "--paper-input", required=True,
+                help="单篇 READY JSON（输入记录）文件，或 - 从 stdin 读取；仅生成待校验草稿",
             )
         if name in {"evidence-generate", "themes-run"}:
             command.add_argument(
@@ -362,88 +338,6 @@ def _render_human(result: dict[str, Any]) -> str:
                 f"\n- 统一主题入口：{result.get('index_path', '尚未创建')}"
                 "\n- 修订结果仍为候选，不会自动成为正式主题"
                 + (f"\n- 错误：{result['error']['message']}" if result.get("error") else ""))
-        if result.get("operation") == "evidence_generate":
-            if result.get("action") == "SKIPPED_EXISTING_CARD":
-                return (
-                    "跳过：证据包已经存在非占位卡，未调用模型、未覆盖文件"
-                    f"\n- 父条目：{result['parent_key']}"
-                    f"\n- 当前状态：{result.get('card_status') or '未知'}"
-                    f"\n- 卡片：{result['card_path']}"
-                )
-            return (
-                "通过：粗证据卡已生成并写入"
-                f"\n- 父条目：{result['parent_key']}"
-                f"\n- 模板：{result['template_id']} {result['template_version']}"
-                f"\n- 分类置信度：{result['classification_confidence']}"
-                f"\n- 任务状态：{result['task_state']}"
-                f"\n- 卡片：{result['card_path']}"
-            )
-        if result.get("component") == "evidence_templates":
-            return (
-                "通过：证据卡模板目录完整"
-                f"\n- 模板总数：{result['template_count']}"
-                f"\n- 已启用：{result['enabled_count']}"
-                f"\n- 目录版本：{result['catalog_version']}"
-                f"\n- 来源提交：{result['source_commit']}"
-                f"\n- 目录：{result['templates_dir']}"
-            )
-        if "delivery_status" in result:
-            return (
-                "通过：Zotero 原始 PDF 已复核，可以交给制卡器"
-                f"\n- 父条目：{result['parent_key']}"
-                f"\n- 附件：{result['attachment_key']}"
-                f"\n- PDF：{result['pdf_path']}"
-                f"\n- SHA-256：{result['pdf_sha256']}"
-                f"\n- 证据包：{result['evidence_package_path']}"
-            )
-        if "package_count" in result:
-            return (
-                "通过：证据包骨架已同步"
-                f"\n- 可处理任务：{result['eligible_task_count']}"
-                f"\n- 新建：{result['created_count']}"
-                f"\n- 保持不变：{result['unchanged_count']}"
-                f"\n- 目录：{result['evidence_packs_path']}"
-            )
-        if "task_count" in result:
-            states = ", ".join(
-                f"{name}={count}" for name, count in result.get("state_counts", {}).items()
-            ) or "无任务"
-            return (
-                "通过：任务清单已读取"
-                f"\n- 任务数：{result['task_count']}"
-                f"\n- 状态变化：{result.get('changed_count', 0)}"
-                f"\n- 状态分布：{states}"
-                f"\n- 文件：{result['state_path']}"
-            )
-        if "gate_status" in result:
-            pdf = result.get("pdf") or {}
-            return (
-                f"PDF 门禁：{result['gate_status']} [{result['reason_code']}]"
-                f"\n- 父条目：{result['parent_key']}"
-                f"\n- PDF 数量：{result['pdf_attachment_count']}"
-                f"\n- 附件：{pdf.get('attachment_key') or '无'}"
-                f"\n- 说明：{result['message']}"
-            )
-        if "mode" in result:
-            return (
-                f"通过：Zotero 扫描完成（{result['mode']}）"
-                f"\n- 父条目：{result['counts']['parents']}"
-                f"\n- PDF 附件：{result['counts']['pdf_attachments']}"
-                f"\n- 本次变化：{result['change_count']}"
-            )
-        if "groups" in result:
-            groups = result["groups"]
-            if not groups:
-                return "通过：Zotero 可访问，但当前没有可见群组。"
-            lines = ["通过：发现以下 Zotero 群组："]
-            lines.extend(f"- {group['group_id']}: {group['name'] or '(未命名)'}" for group in groups)
-            return "\n".join(lines)
-        return (
-            "通过：目标 Zotero 群组可读取"
-            f"\n- 群组：{result.get('group_name') or result.get('group_id')}"
-            f"\n- 条目数：{result.get('item_count') if result.get('item_count') is not None else '未知'}"
-        )
-
     error = result.get("error", {})
     return f"失败 [{error.get('code', 'UNKNOWN')}]: {error.get('message', '未知错误')}"
 
@@ -471,11 +365,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         _emit(result, args.json)
         return 0 if result["ok"] else 3
-    if getattr(args, "paper_input", None) and getattr(args, "retry_quality_failed", False):
-        _emit({"schema_version": 1, "ok": False, "error": {
-            "code": "CARD_DRAFT_RETRY_UNSUPPORTED", "message": "主体卡草稿为单次调用，不支持任务重试参数"}}, args.json)
-        return 2
-    if args.command == "ai-config" or (args.command == "evidence-generate" and args.paper_input):
+    if args.command in {"ai-config", "evidence-generate"}:
         try:
             selection = resolve_ai_config(args.ai_config, provider=args.ai_provider, model=args.ai_model,
                          timeout_seconds=args.ai_timeout)
@@ -489,16 +379,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             record = json.loads(raw)
             with ConsoleProgress(enabled=not args.no_progress, heartbeat_interval_seconds=60,
                                  initial_activity="检查单篇输入与所选模型接口") as progress:
-                pipeline = resolve_pipeline_mode() if args.pipeline is None else args.pipeline
-                if pipeline == "markdown":
-                    built = build_markdown_pipeline(config)
-                    result = generate_markdown_card_draft(
-                        config, record, converter=built.converter, store=built.store,
-                        runner=built.runner, options=built.options,
-                        progress=progress, output_root=args.output_root,
-                    )
-                else:
-                    result = generate_subject_card_draft(config, record, progress=progress, output_root=args.output_root)
+                built = build_markdown_pipeline(config)
+                result = generate_markdown_card_draft(
+                    config, record, converter=built.converter, store=built.store,
+                    runner=built.runner, options=built.options,
+                    progress=progress, output_root=args.output_root,
+                )
                 progress.finish(result)
         except json.JSONDecodeError:
             result = {"ok": False, "error": {"code": "CARD_DRAFT_INPUT_INVALID", "message": "无法读取单篇论文输入 JSON"}}
@@ -589,7 +475,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             require_group=(
                 # 只有需要群组库的命令才强制要求 group 配置；
                 # paper-input 走个人库（--user-library / --demo）时不强制。
-                args.command in {"evidence-generate", "themes-run"}
+                args.command == "themes-run"
                 or (
                     args.command == "paper-input"
                     and not getattr(args, "user_library", False)
@@ -669,85 +555,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         if result.get("status") == "CANCELLED":
             _emit(result, args.json)
             return 130
-    elif args.command == "evidence-generate":
-        progress_config = app_config.card_generator.progress
-        with ConsoleProgress(
-            enabled=progress_config.enabled and not args.no_progress,
-            heartbeat_interval_seconds=progress_config.heartbeat_interval_seconds,
-        ) as progress:
-            try:
-                readiness = preflight(app_config.zotero)
-                if not readiness["ok"]:
-                    result = readiness
-                else:
-                    adapter = build_card_generator_adapter(
-                        app_config.card_generator, progress=progress,
-                    )
-                    result = generate_evidence_card(
-                            app_config.zotero,
-                            app_config.pdf_gate,
-                            app_config.tasks,
-                            app_config.paths.tasks_file,
-                            app_config.paths.lock_file,
-                            app_config.paths.evidence_packs_dir,
-                            app_config.paths.evidence_card_templates_dir,
-                            app_config.paths.evidence_card_template_catalog_file,
-                            app_config.paths.evidence_card_generation_prompt_file,
-                            app_config.paths.card_generation_output_schema_file,
-                            args.item_key,
-                            adapter,
-                            retry_quality_failed=args.retry_quality_failed,
-                        )
-            except (
-                CardGenerationError,
-                PdfDeliveryError,
-                EvidencePackageError,
-                EvidenceTemplateError,
-                TaskStoreError,
-                PdfGateError,
-                ZoteroApiError,
-            ) as exc:
-                error = {"code": exc.code, "message": str(exc)}
-                diagnostic = getattr(exc, "diagnostic", None)
-                if isinstance(diagnostic, dict):
-                    error["diagnostic"] = diagnostic
-                result = {
-                    "schema_version": 1,
-                    "ok": False,
-                    "error": error,
-                }
-            except OSError:
-                result = {
-                    "schema_version": 1, "ok": False,
-                    "error": {"code": "LOCAL_IO_ERROR", "message": "本地文件或程序访问失败，请检查配置路径和读写权限"},
-                }
-            except ValueError as exc:
-                result = {
-                    "schema_version": 1,
-                    "ok": False,
-                    "error": {
-                        "code": "CARD_GENERATOR_ADAPTER_NOT_REGISTERED",
-                        "message": str(exc),
-                    },
-                }
-            except KeyboardInterrupt:
-                result = {
-                    "schema_version": 1, "ok": False,
-                    "error": {"code": "CANCELLED", "message": "用户中止了本次生成"},
-                }
-                progress.finish(result)
-                _emit(result, args.json)
-                return 130
-            if not result.get("ok"):
-                try:
-                    diagnostic_path = save_failure_record(
-                        app_config.paths.logs_dir, args.command, args.item_key, result,
-                    )
-                    result["diagnostic_log_path"] = str(diagnostic_path)
-                    progress({"event": "phase", "message": f"脱敏失败记录已保存：{diagnostic_path}"})
-                except OSError:
-                    result["diagnostic_log_warning"] = "无法保存本地诊断记录，原始失败结果仍保留在本次 JSON 中"
-            progress.finish(result)
     else:
         raise AssertionError(f"未处理的命令：{args.command}")
     _emit(result, args.json)

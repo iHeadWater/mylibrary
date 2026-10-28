@@ -10,19 +10,12 @@ import pytest
 
 from hydrolitagent.cards._paths import ASSETS_DIR, PACKAGE_DIR
 from hydrolitagent.cards import card_validation as gate, cli, themes
-from test_card_draft import draft_case, run
+from card_fixtures import legacy_draft_case
 
 
 @pytest.fixture
-def case(draft_case, tmp_path):
-    result = run(draft_case)
-    assert result["ok"], result
-    app, record, provider, _, _ = draft_case
-    path = Path(result["draft_path"])
-    draft = json.loads(path.read_text(encoding="utf-8"))
-    input_path = tmp_path / "paper-input.json"
-    input_path.write_text(json.dumps(record), encoding="utf-8")
-    return app, draft, record, path, input_path, provider
+def case(legacy_draft_case):
+    return legacy_draft_case
 
 
 def check(case):
@@ -34,7 +27,7 @@ def codes(report):
 
 
 def save(case):
-    app, draft, _, path, input_path, _ = case
+    app, draft, _, path, input_path = case
     path.write_text(json.dumps(draft), encoding="utf-8")
     return gate.validate_subject_card_file(app, path, input_path)
 
@@ -45,12 +38,12 @@ def select(case, report):
 
 def _markdown_provenance() -> dict:
     """Build the v2 provenance the Markdown pipeline would have written."""
-    from hydrolitagent.cards.card_generation import _load_template_bundle, _read_prompt
+    from hydrolitagent.cards.application.prompts import load_template_bundle, read_prompt
 
     assets = gate.ValidationAssets.from_root()
-    base = _read_prompt(assets.generation_prompt)
-    reading = _read_prompt(assets.markdown_reading_prompt)
-    catalog, templates = _load_template_bundle(assets.templates_dir, assets.catalog_file)
+    base = read_prompt(assets.generation_prompt)
+    reading = read_prompt(assets.markdown_reading_prompt)
+    catalog, templates = load_template_bundle(assets.templates_dir, assets.catalog_file)
     template = templates["original-research"]
     return {
         "prompt_version": base["version"], "prompt_sha256": base["sha256"],
@@ -106,8 +99,7 @@ def markdown_case(case):
 
 def test_valid_short_draft_passes_without_ai_or_mutating_inputs(case):
     before = deepcopy(case[1:3])
-    with patch("hydrolitagent.cards.card_draft.build_card_generator_adapter", side_effect=AssertionError("no AI")):
-        report = check(case)
+    report = check(case)
     assert report["status"] == "PASS", report
     assert report["eligible_for_theme_generation"]
     assert not report["scientific_correctness_verified"]
@@ -115,7 +107,6 @@ def test_valid_short_draft_passes_without_ai_or_mutating_inputs(case):
     assert report["warnings"][0]["code"] == "CARD_TEXT_SHORT"
     assert report["draft_sha256"] == gate.fingerprint(case[1])
     assert case[1:3] == before
-    assert len(case[5].calls) == 1  # Only fixture generation, never validation.
 
 
 @pytest.mark.parametrize("field", gate.FIELDS)
@@ -340,8 +331,7 @@ def test_cannot_claim_pass_when_report_cannot_be_saved(case):
 
 
 def test_cli_offline_personal_library_and_exit_status(case, capsys):
-    with patch.object(cli, "load_config", return_value=case[0]) as config, \
-         patch.object(cli, "preflight", side_effect=AssertionError("no Zotero")):
+    with patch.object(cli, "load_config", return_value=case[0]) as config:
         args = ["evidence-validate", "--config", "explicit-config.json", "--draft", str(case[3]), "--paper-input", str(case[4]), "--json"]
         assert cli.main(args) == 0
         passed = json.loads(capsys.readouterr().out)
@@ -446,11 +436,13 @@ def test_assets_can_be_selected_from_a_relocated_copy(case, tmp_path):
     "C:\\research\\paper.pdf", "/home/research/paper.pdf", "\\\\server\\share\\paper.pdf",
 ])
 def test_foreign_origin_path_is_not_resolved_again_on_this_host(case, source_path):
-    from hydrolitagent.cards.card_generation import _load_template_bundle, _read_prompt, build_template_prompt
-    from hydrolitagent.cards.card_draft import SINGLE_SOURCE_TEMPLATES
+    from hydrolitagent.cards.application.card_draft import SINGLE_SOURCE_TEMPLATES
+    from hydrolitagent.cards.application.prompts import (
+        build_template_prompt, load_template_bundle, read_prompt,
+    )
     import hashlib
     assets = gate.ValidationAssets.from_root()
-    _, templates = _load_template_bundle(assets.templates_dir, assets.catalog_file)
+    _, templates = load_template_bundle(assets.templates_dir, assets.catalog_file)
     templates = {k:v for k,v in templates.items() if k in SINGLE_SOURCE_TEMPLATES}
     case[2]["pdf"]["local_path"] = source_path
     source = case[1]["source"]
@@ -459,8 +451,8 @@ def test_foreign_origin_path_is_not_resolved_again_on_this_host(case, source_pat
                "source_pdf_sha256":source["pdf_sha256"],"source_pdf_absolute_path":source_path,
                "reading_scope":"FULL_PDF","card_state":"DRAFT_PENDING_VALIDATION",
                "enabled_template_ids":sorted(templates)}
-    prompt = build_template_prompt(_read_prompt(assets.generation_prompt), context, templates)
-    prompt += "\n" + _read_prompt(assets.draft_prompt)["content"]
+    prompt = build_template_prompt(read_prompt(assets.generation_prompt), context, templates)
+    prompt += "\n" + read_prompt(assets.draft_prompt)["content"]
     case[1]["provenance"]["combined_prompt_sha256"] = hashlib.sha256(prompt.encode()).hexdigest()
     result = gate.validate_subject_card(assets, case[1], case[2])
     assert result["ok"], result
@@ -479,18 +471,6 @@ def test_shipped_example_passes_without_private_config_or_pdf(tmp_path, monkeypa
     monkeypatch.chdir(tmp_path)
     assert gate.validate_subject_card(None, draft, record)["ok"]
 
-
-
-def test_claude_draft_uses_same_offline_gate(draft_case):
-    from test_claude_cli import events, invoke
-    result, _ = invoke(draft_case, events(draft_case))
-    assert result["ok"], result
-    draft = json.loads(Path(result["draft_path"]).read_text(encoding="utf-8"))
-    with patch("subprocess.Popen", side_effect=AssertionError("validation must not call a model")):
-        report = gate.validate_subject_card(None, draft, draft_case[1])
-    assert report["ok"], report
-    draft["reading_record"]["pages_requested_successfully"] = [1]
-    assert "CARD_READING_RECORD_INVALID" in codes(gate.validate_subject_card(None, draft, draft_case[1]))
 
 
 def test_provider_protocol_cannot_mismatch_reading_method(case):

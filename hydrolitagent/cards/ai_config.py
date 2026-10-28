@@ -12,11 +12,7 @@ from hydrolitagent.cards.adapters.runners.registry import (
     ids as runner_ids,
     planned_ids as planned_runner_ids,
 )
-from hydrolitagent.cards.config import (
-    CardGeneratorConfig,
-    ConnectionGuardConfig,
-    resolve_pipeline_mode,
-)
+from hydrolitagent.cards.config import CardGeneratorConfig
 from hydrolitagent.cards._paths import PROMPTS_DIR, TEMPLATES_DIR, REPO_ROOT
 
 
@@ -132,7 +128,7 @@ def apply_ai_selection(app_config, selection):
     cfg = app_config.card_generator
     updated = replace(
         cfg,
-        adapter=selection["provider"],
+        runner=selection["provider"],
         model=selection["model"] or None,
         # The direct runner performs one completion; a "reasoning effort" knob
         # from the CLI era would be silently ignored, so it is cleared.
@@ -157,14 +153,15 @@ def subject_card_config(selection, *, base_config=None):
     if base_config is not None:
         cfg = base_config.card_generator
     else:
-        # Executable/auth fields remain in the dataclass for the legacy
-        # evidence-package path, but the Markdown pipeline never launches a CLI.
-        cfg = CardGeneratorConfig("direct", "", "none", 10, None, None, 120, 1500,
-                  workflow_mode="single_agent", runtime_dir=REPO_ROOT / ".runtime",
-                  connection_guard=ConnectionGuardConfig(reconnect_stop_enabled=False, idle_timeout_seconds=1500))
-    cfg = replace(cfg, adapter=selection["provider"],
+        # No on-disk configuration is needed for one paper: the defaults name
+        # the in-session executor and an empty runtime root.
+        cfg = CardGeneratorConfig(model=None, reasoning_effort=None,
+                                  generation_timeout_seconds=1500,
+                                  runner="in_session",
+                                  runtime_dir=REPO_ROOT / ".runtime")
+    cfg = replace(cfg, runner=selection["provider"],
           model=selection["model"] or None, reasoning_effort=None,
-          generation_timeout_seconds=selection["timeout_seconds"], workflow_mode="single_agent", multi_agent_workflow=None)
+          generation_timeout_seconds=selection["timeout_seconds"])
     paths = base_config.paths if base_config is not None else SimpleNamespace(
           evidence_card_generation_prompt_file=PROMPTS_DIR / "evidence-card-generation-v8.md",
           evidence_card_templates_dir=TEMPLATES_DIR / "evidence-cards",
@@ -181,8 +178,6 @@ def subject_card_config(selection, *, base_config=None):
 
 
 def describe_ai(selection, *, output_root=None):
-    # ``pipeline`` is data, not a provider choice: it tells the operator which
-    # single-paper path the next ``evidence-generate`` run will take.
     ai = {
         **selection,
         # ``provider`` keeps its historical name and values; ``runner`` is the
@@ -195,7 +190,6 @@ def describe_ai(selection, *, output_root=None):
             "max_input_tokens": selection.get("max_input_tokens"),
             "max_output_tokens": selection.get("max_output_tokens"),
         },
-        "pipeline": resolve_pipeline_mode(),
     }
     return {"ok": True, "operation": "ai_config", "ai": ai,
             "literature_root": str(resolve_literature_root(root=output_root)),

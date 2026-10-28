@@ -17,7 +17,7 @@ import json
 import pytest
 
 from hydrolitagent.cards import cli
-from hydrolitagent.cards.config import DEFAULT_PIPELINE_MODE, ConfigError
+from hydrolitagent.cards.config import ConfigError
 from hydrolitagent.cards.paper_input_config import load_paper_input_config
 from hydrolitagent.cards.zotero import ZoteroApiError, ZoteroClient
 
@@ -41,8 +41,6 @@ AI_CONFIG_AI_KEYS_REQUIRED = {
 # Documented upper bound. Stage 6a removed the Poppler fields and the PDF-reader
 # overrides; any *new* field still fails this test until it is registered here.
 AI_CONFIG_AI_KEYS_DOCUMENTED = AI_CONFIG_AI_KEYS_REQUIRED | {
-    # Stage 3b: which single-paper pipeline the next run would take.
-    "pipeline",
     # Stage 4a: runner registry alias, the ids it can build, and the HTTP
     # runner's token budgets. All additive; nothing above was removed.
     "runner",
@@ -128,8 +126,8 @@ def test_ai_config_json_contract(capsys, monkeypatch) -> None:
         "ai-config 出现未登记的新字段："
         f"{sorted(ai_keys - AI_CONFIG_AI_KEYS_DOCUMENTED)}"
     )
-    assert result["ai"]["pipeline"] == DEFAULT_PIPELINE_MODE == "markdown", (
-        "ai-config 必须显示下一次单篇制卡实际使用的管线"
+    assert "pipeline" not in result["ai"], (
+        "旧管线选择已删除：ai-config 只报告两种执行者"
     )
     # Stage 4a: ``runner`` is an alias, ``runners`` comes from the registry and
     # ``runner_limits`` bounds the HTTP runner. All three are additive.

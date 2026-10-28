@@ -16,8 +16,8 @@ uv run hydrolitagent cards run prepare --paper-input paper-input.json --run-dir 
 
 - `paper-input.json` 是上一页产出的 READY 记录。**不能**传搜索候选列表，也**不能**传批处理的外层结果。
 - 也支持 `--paper-input -` 从 stdin 读。
-- 用 `uv run hydrolitagent cards ai-config --json` 可以确认当前默认管线（`ai.pipeline` 为
-  `markdown` 或显式回退的 `legacy`）。
+- 用 `uv run hydrolitagent cards ai-config --json` 可以确认当前默认执行者（`ai.provider`）
+  与两个可用运行器（`ai.runners`）。
 
 **前提**：两种执行者之一。`direct` 需要 `DEEPSEEK_API_KEY`（可换其它 OpenAI 兼容 endpoint）；
 `in_session` 不需要 key，改用[两阶段制卡](run-and-doctor.md)。

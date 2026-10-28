@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 import tempfile
 import unittest
@@ -8,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from hydrolitagent.cards.config import PdfGateConfig, TaskConfig, ZoteroConfig
-from hydrolitagent.cards.evidence_packages import sync_evidence_packages
+from hydrolitagent.cards.evidence_packages import PLACEHOLDER_CARD
 from hydrolitagent.cards.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
 from hydrolitagent.cards.tasks import build_task_id, save_task_registry
 from hydrolitagent.cards.zotero import ApiResponse, ZoteroApiError
@@ -126,15 +127,31 @@ class PdfDeliveryTests(unittest.TestCase):
         return task_path, lock_path, evidence_root
 
     def _create_package(self, root: Path) -> None:
-        task_path, lock_path, evidence_root = self._paths(root)
-        sync_evidence_packages(
-            GROUP_ID,
-            self.tasks,
-            task_path,
-            lock_path,
-            evidence_root,
-            now=self.now,
+        """Write the placeholder package ``packages-sync`` used to create."""
+
+        task_path, _, evidence_root = self._paths(root)
+        task = json.loads(task_path.read_text(encoding="utf-8"))["tasks"][PARENT_KEY]
+        package = evidence_root / f"EV-{PARENT_KEY}-test-paper"
+        package.mkdir(parents=True, exist_ok=True)
+        (package / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "evidence_id": f"EV-{PARENT_KEY}",
+                    "group_id": GROUP_ID,
+                    "parent_key": PARENT_KEY,
+                    "attachment_key": task["input"]["attachment_key"],
+                    "pdf_sha256": task["input"]["pdf_sha256"],
+                    "source_task_id": task["task_id"],
+                    "title": task["title"],
+                    "card_status": "PLACEHOLDER",
+                    "created_at": "2026-09-05T04:00:00Z",
+                    "updated_at": "2026-09-05T04:00:00Z",
+                }
+            ),
+            encoding="utf-8",
         )
+        (package / "card.md").write_text(PLACEHOLDER_CARD, encoding="utf-8")
 
     def test_returns_verified_original_pdf_without_copying_or_mutating_task(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

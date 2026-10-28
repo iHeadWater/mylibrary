@@ -48,67 +48,38 @@
 
 ## 制卡字段 card_generator
 
-当前 `card_generator` 字段说明：
+平台只提供**流程**，LLM 动作由两种执行者之一完成，没有第三种：
+
+1. `in_session`（默认）：`cards run prepare` 准备 `paper.md`，当前 agent 写 `response.json`，
+   `cards run finalize` 校验后保存草稿。**不需要任何 API key。**
+2. `direct`：直连 OpenAI 兼容 API，默认 DeepSeek（`base_url=https://api.deepseek.com`、
+   `model=deepseek-chat`、key 取 `DEEPSEEK_API_KEY`）。
 
 | 字段 | 当前含义 | 允许值或规则 |
 |---|---|---|
-| `workflow_mode` | 制卡编排方式 | 当前 `single_agent`；单 Agent 必须移除 `multi_agent_workflow` |
-| `adapter` | 旧版证据包管线的适配器名（兼容键） | 当前只能是 `codex_cli`；Markdown 管线不看这个字段，执行者由 `configs/ai.toml` 的 `provider`（别名 `runner`，取值 `direct` / `in_session`）经注册表选择 |
-| `executable` | 旧版 CLI 路径（兼容键，Markdown 管线已不使用） | 非空字符串；保留是为了旧配置文件仍能加载 |
-| `auth_mode` | 本阶段能够确认的认证方式 | 当前只能是 `chatgpt_account` |
-| `preflight_timeout_seconds` | 版本和登录状态两项检查各自的最长等待秒数 | 大于 0 |
-| `model` | 单 Agent 制卡模型 | `null` 表示使用 Codex 内置默认；也可填写非空模型名称 |
-| `reasoning_effort` | 单 Agent 思考强度 | `null` 表示使用模型默认；可选 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`，实际支持范围取决于模型 |
-| `generation_timeout_seconds` | 单 Agent 一次模型会话的最长等待秒数 | 大于 0；当前为 1500，即 25 分钟 |
+| `runner` | 执行者 id（注册表名） | `in_session`（默认）或 `direct`；未知值在构建管线时报错 |
+| `model` | 所选执行者的模型名 | `null` 表示使用该执行者的默认值 |
+| `reasoning_effort` | 思考强度 | `null` 或 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`；实际支持范围取决于模型 |
+| `generation_timeout_seconds` | 一次制卡的最长等待秒数 | 大于 0；当前为 1500，即 25 分钟 |
 | `progress.enabled` | 制卡是否显示 stderr 实时进度 | `true` / `false`；默认 `true`；`--no-progress` 可关闭本次显示 |
 | `progress.heartbeat_interval_seconds` | 定期报告等待状态的间隔 | 1–300 秒；默认及当前值为 60；不改变模型超时和重试策略 |
 
 `progress` 在旧配置中整体缺失时使用上述默认值；一旦填写，必须同时提供两个字段。心跳表示本地程序仍在等待，不证明远端模型健康。进度不会写入最终 JSON，也不会回显模型正文、原始工具输出或凭据。
 
-`card_generator.workflow_mode=single_agent` 是当前模式，主提示词 `evidence-card-generation-v8.md`、九类模板。模型、强度和超时直接用上表。程序只检验流程，不校验正文标题、表格、标签、编号或措辞。
+`--ai-provider` / `configs/ai.toml` 的 `provider`（别名 `runner`）会覆盖 `card_generator.runner`；
+单篇 `evidence-generate` 与 `themes-run` 使用同一套选择契约。API key 不是配置项：`direct` 自己从环境变量读取，
+`in_session` 不需要，配置文件从不保存凭据。
 
-例如，使用 GPT-5.6 Sol 和高推理强度：
-
-```json
-"model": "gpt-5.6-sol",
-"reasoning_effort": "high"
-```
-
-程序会把显式推理强度转换为 Codex CLI 的 `--config model_reasoning_effort="..."` 参数。配置校验只能防止未知档位和拼写错误；账号是否能使用指定模型、该模型是否支持指定档位，必须由真实生成验收。
-
-`card_generator.connection_guard` 是旧版子进程（`card_generators/streaming.py`，仅 `--item-key` 证据包路径与 `--pipeline legacy` 回退使用）的停止保护；Markdown 管线的两个执行者都不启动子进程，因此这些限额对它们无效：
-
-| 字段 | 当前配置 / 示例值 | 含义与边界 |
-|---|---|---|
-| `reconnect_stop_enabled` | `false` | 是否因重连次数或恢复超时停止；必须为布尔值。当前关闭，仅记录重连状态 |
-| `reconnect_event_limit` | `10` | 仅在开关为 `true` 时生效：同一角色累计收到第 10 条重连事件时停止 |
-| `recovery_timeout_seconds` | `300` | 仅在开关为 `true` 时生效：每次进入断线状态后等待进展恢复的最长秒数 |
-| `idle_timeout_seconds` | `1500` | 无可识别进展事件的最长秒数；1–3600；当前与单 Agent 总时限同为 25 分钟 |
-| `pdf_tool_call_limit` | `2` | 每个角色的整篇 PDF 工具调用预算；1–5；检测到超额后终止子进程，防止反复整篇回传 |
-
-填写本节时必须包含全部四个限额字段，`reconnect_stop_enabled` 可选；即使关闭也不接受非法限额值。修改后从下一次启动命令生效，不热更新已运行的子进程。这不改变 Codex/ChatGPT 桌面客户端自身的重连行为，也不保证网络恢复。
-
-失败诊断由 CLI 保存到 `paths.logs_dir`（默认 `.runtime/logs`），最终 JSON 的 `diagnostic_log_path` 给出位置。只保存已脱敏的公开错误和上下文，不保存原始事件、提示词或论文全文；日志不提交 Git。日志目录不可写时保留原失败结果并给出 `diagnostic_log_warning`。
+单篇制卡的失败只出现在本次 JSON 的 `error` 块（`code` / `message` / 可选 `diagnostic`），不写额外日志文件，也不保存提示词或论文全文；主题轮次的 run report 仍写入 `paths.logs_dir/theme-runs/`，且不提交 Git。
 
 ## PDF 读取方式
 
-单篇制卡与主题定向精读都由 Python 先把 PDF 转成 Markdown（PyMuPDF），运行器阅读 `paper.md` 与图资产。**不再有 `card_generator.pdf_reader` 或 `card_generator.pdf_direct_trial` 配置**，平台自身也不调用 `pdfinfo` / `pdftotext` / `pdftoppm`。转换器的选择在 `converter` 配置组，缓存目录在 `paths.project_root` 下。
+单篇制卡与主题定向精读都由 Python 先把 PDF 转成 Markdown（PyMuPDF），执行者阅读 `paper.md` 与图资产。平台自身不调用 `pdfinfo` / `pdftotext` / `pdftoppm`。转换器的选择在 `converter` 配置组，缓存目录在 `paths.project_root` 下。
 
-旧的 Codex 本地 PDF 直读适配器已移除；`evidence-generate --paper-input` 是受支持的单篇路径。历史草稿仍可由 `evidence-validate` 只读校验。
+`evidence-generate --paper-input` 是受支持的单篇路径；旧证据包栈（`--item-key`、`--pipeline legacy` 与
+启动子进程的 CLI 执行者）已整体移除。历史 v1 草稿仍可由 `evidence-validate` 只读校验。
 
 父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `.runtime/` 或草稿记录。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](variables.md)。
-
-## 旧版子进程代理（仅兼容）
-
-Markdown 管线的 `direct` 执行者只做一次 HTTP 补全，不启动子进程；`in_session` 更是完全不调用模型。`card_generator.proxy` 因此不再影响任何生产路径，只为让旧配置文件继续加载而保留校验，代理实现（`card_generators/proxy.py`）已无调用方。Zotero 本地 API 与其他独立程序保持原有网络设置。
-
-| 字段 | 含义与修改方法 |
-|---|---|
-| `enabled` | `true`：只对子进程显式设置代理；`false`：恢复原来的环境继承方式，不等于强制直连 |
-| `url` | 本机代理软件的 HTTP/HTTPS 监听地址，须含端口；换端口只改此处。启用时必填；关闭时可为 `null` |
-| `no_proxy` | 额外直连主机名/IP 数组；本机三项始终补齐，避免本地流量外送 |
-
-启用时，程序在传给 Codex 子进程的环境副本中设置大小写两套 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`WS_PROXY`、`WSS_PROXY`，并以本节覆盖该子进程的 `NO_PROXY`。换机请填写新机器的代理端口或设置 `enabled=false`。不要把节点订阅链接、带用户名/密码或令牌的 URL 写入 Git；配置会拒绝这些 URL，错误消息不回显输入。
 
 ## 主题池 theme_pipeline
 
@@ -129,9 +100,9 @@ Qinjiajun 目标库的群组 ID 保存在可复现的 `hydrolitagent/cards/asset
 
 ## 密钥与配置验收边界
 
-Codex 登录凭据、Zotero API Key、GitHub Token 等秘密只能存放在本机凭据存储或环境变量中，不得提交到仓库。`config.json` 最多记录所使用的凭据类型或环境变量名称，不能记录秘密本身。
+模型 API key（默认 `DEEPSEEK_API_KEY`）、Zotero API Key、GitHub Token 等秘密只能存放在本机凭据存储或环境变量中，不得提交到仓库。`config.json` 不记录任何凭据，也不记录代理地址。
 
-新增配置字段必须同时具有解析、类型或范围校验、使用该字段的实际代码、自动化测试和中文说明；配置只能选择已经实现并注册的适配器，填写未知适配器时必须启动失败，不能静默回退。
+新增配置字段必须同时具有解析、类型或范围校验、使用该字段的实际代码、自动化测试和中文说明；`runner` 只能选择注册表里已实现并注册的执行者，填写未知执行者时必须启动失败，不能静默回退。
 
 ## 科研产物路径与当前边界
 

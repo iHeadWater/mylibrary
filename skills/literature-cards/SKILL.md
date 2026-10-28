@@ -40,7 +40,7 @@ YOU MUST 记住平台**不自动同步 Git、不自动登录、不唤醒关机�
 uv sync --all-packages      # 从仓库根执行
 ```
 
-**不要**手工创建或复制别人的 `.venv`；换机后重新 `uv sync` 并重新登录所选模型 CLI。
+**不要**手工创建或复制别人的 `.venv`；换机后重新 `uv sync`，并在 `.env` 里配好所选执行者需要的变量（`direct` 用 `DEEPSEEK_API_KEY`，`in_session` 不需要 key）。
 
 ## 单篇主体卡草稿（#30）
 
@@ -50,7 +50,7 @@ uv sync --all-packages      # 从仓库根执行
 uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider direct --json
 ~~~
 
-此入口要求 single_agent + local_path；个人库和群组库均可使用，无需再次扫描 Zotero。
+此入口执行者由 `--ai-provider` 决定（`direct` 直连 API，或改用 `cards run prepare|finalize` 的 `in_session`）；个人库和群组库均可使用，无需再次扫描 Zotero。
 一次调用同时生成详细正文和固定机器字段。输出仅为 DRAFT_PENDING_VALIDATION，
 不代表 #31 校验通过，不自动执行 #32 修正或 #35 正式保存，不触发主题或 idea。
 文件按 #27 的统一规则写入精读产物根下 zotero/<文库类型>-<文库ID>-<父条目key>/drafts/<草稿ID>/。
@@ -90,7 +90,7 @@ PASS 只表示当前代码规则通过，不能声称科学结论正确或正式
 
 ## 结果怎么读
 
-平台的 JSON 结果里，**保存成功只表示流程通过，不代表科学正确性已被机器独立验证**。证据包的 `quality-audit.json` 同理。
+平台的 JSON 结果里，**保存成功只表示流程通过，不代表科学正确性已被机器独立验证**。历史证据包的 `quality-audit.json` 同理。
 
 - `ok: true` + `model_invoked: false` 的 `--dry-run` 结果**不代表**最新文献已被发现。
 - 正式主题受保护，**不会**被自动覆盖；候选主题可以自动更新、合并、拆分。

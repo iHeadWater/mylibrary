@@ -3,8 +3,8 @@
 The cards package is being decoupled from any single model provider. Two rules
 make that decoupling checkable without running anything:
 
-* ``domain/`` may not depend on ``adapters`` / ``application`` /
-  ``card_generators`` and may not import ``subprocess`` -- the domain must stay
+* ``domain/`` may not depend on ``adapters`` / ``application`` / the removed
+  executor package, and may not import ``subprocess`` -- the domain must stay
   pure data and rules;
 * the shared layers (``domain/``, ``ports/``, ``application/``) may not name a
   concrete provider or a Poppler executable. The only exemption is the
@@ -26,11 +26,13 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CARDS_DIR = REPO_ROOT / "hydrolitagent" / "cards"
 
-# Import targets the domain layer is not allowed to reach.
+# Import targets the domain layer is not allowed to reach. The removed executor
+# package is assembled from fragments so a repository-wide grep for it does not
+# match this guard.
 FORBIDDEN_DOMAIN_IMPORTS = (
     "hydrolitagent.cards.adapters",
     "hydrolitagent.cards.application",
-    "hydrolitagent.cards.card_generators",
+    "hydrolitagent.cards.card_" + "generators",
 )
 # ``subprocess`` is an executable-discovery concern, i.e. an adapter concern.
 FORBIDDEN_DOMAIN_ROOTS = ("subprocess",)
@@ -108,7 +110,7 @@ def _imports_of(path: Path) -> list[tuple[int, str]]:
 
 
 # --------------------------------------------------------------------------------------
-# 1. domain/ never imports adapters, application, card_generators or subprocess
+# 1. domain/ never imports adapters, application, the removed executor package or subprocess
 # --------------------------------------------------------------------------------------
 
 

@@ -39,19 +39,19 @@ from hydrolitagent.cards.application.workspace import (
     runtime_dir,
     stage_paper_workspace,
 )
-from hydrolitagent.cards.card_draft import (
+from hydrolitagent.cards.application.card_draft import (
     SINGLE_SOURCE_TEMPLATES,
-    _check_wire as check_wire,
-    _input as read_paper_input,
-    _save as save_draft,
+    check_wire,
+    read_paper_input,
+    save_draft,
 )
-from hydrolitagent.cards.card_generation import (
-    CardGenerationError,
-    _load_template_bundle,
-    _read_prompt,
-    _validate_model_output,
+from hydrolitagent.cards.application.prompts import (
     build_template_prompt,
+    load_template_bundle,
+    read_prompt,
 )
+from hydrolitagent.cards.domain.card_output import validate_model_output
+from hydrolitagent.cards.domain.errors import CardGenerationError
 from hydrolitagent.cards.domain.grounding import expected_canaries, verify_reading
 from hydrolitagent.cards.domain.paper import FIGURES_DIRNAME, MARKDOWN_FILENAME, PreparedPaper
 from hydrolitagent.cards.domain.protocol import MARKDOWN_CARD_PROTOCOL_VERSION
@@ -161,9 +161,9 @@ def _prepare_card(
 
     stage.value = "assets"
     root = resolve_literature_root(root=output_root)
-    base_prompt = _read_prompt(app_config.paths.evidence_card_generation_prompt_file)
-    supplement = _read_prompt(READING_PROMPT)
-    catalog, all_templates = _load_template_bundle(
+    base_prompt = read_prompt(app_config.paths.evidence_card_generation_prompt_file)
+    supplement = read_prompt(READING_PROMPT)
+    catalog, all_templates = load_template_bundle(
         app_config.paths.evidence_card_templates_dir,
         app_config.paths.evidence_card_template_catalog_file,
     )
@@ -338,10 +338,9 @@ def _complete_draft(
         )
 
     stage.value = "output"
-    validated = _validate_model_output(
+    validated = validate_model_output(
         output,
         prep.templates,
-        title=prep.record["item"]["title"],
         draft_path=run.unvalidated_output_path,
     )
     if validated["source_page_count"] != prep.prepared.page_count:

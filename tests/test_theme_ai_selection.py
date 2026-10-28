@@ -88,9 +88,7 @@ def test_themes_run_applies_the_cli_ai_provider(tmp_path, monkeypatch):
     assert code == 0
     pipeline_config = captured["config"]
     assert captured["dry_run"] is False
-    assert pipeline_config.card_generator.adapter == "direct"
-    # The provider choice does not rewrite the legacy CLI fields in config.json.
-    assert pipeline_config.card_generator.executable == "codex"
+    assert pipeline_config.card_generator.runner == "direct"
     assert pipeline_config.card_generator.model == "deepseek-chat"
     assert pipeline_config.card_generator.generation_timeout_seconds == 90
     assert pipeline_config.card_generator.reasoning_effort is None
@@ -133,8 +131,8 @@ def test_themes_run_without_a_provider_reads_the_ai_config_file(tmp_path, monkey
 
     assert code == 0
     card_generator = captured["config"].card_generator
-    # config.json still says codex_cli; the AI selection file decides instead.
-    assert card_generator.adapter == "direct"
+    # The AI selection file decides the runner, whatever config.json says.
+    assert card_generator.runner == "direct"
     assert card_generator.model == "from-toml"
 
 
@@ -149,7 +147,7 @@ def test_themes_run_reads_the_ai_config_from_the_environment(tmp_path, monkeypat
     code, captured = _run_themes_cli(monkeypatch, config_path, [])
 
     assert code == 0
-    assert captured["config"].card_generator.adapter == "in_session"
+    assert captured["config"].card_generator.runner == "in_session"
 
 
 @pytest.mark.parametrize("flag", ["--dry-run", "--migrate-only"])
@@ -190,8 +188,8 @@ def test_apply_ai_selection_is_the_only_mutation(tmp_path):
     updated = ai_config.apply_ai_selection(loaded, selection)
 
     assert updated is not loaded
-    assert loaded.card_generator.adapter == "codex_cli"  # input untouched
-    assert updated.card_generator.adapter == "direct"
+    assert loaded.card_generator.runner == "in_session"  # input untouched
+    assert updated.card_generator.runner == "direct"
     assert updated.card_generator.model == "deepseek-chat"
     assert updated.card_generator.generation_timeout_seconds == 42
     assert updated.card_generator.reasoning_effort is None

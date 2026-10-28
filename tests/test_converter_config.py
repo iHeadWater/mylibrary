@@ -1,8 +1,7 @@
-"""Configuration contract for the stage-2 converter.
+"""Configuration contract for the PDF→Markdown converter.
 
-Stage 2 must not change behaviour: the shipped config has no active converter
-(``converter_id="none"``), the pipeline selector defaults to ``legacy`` and the
-new ``converter`` section is validated rather than silently accepted.
+The shipped config has no active converter (``converter_id="none"``) and the
+``converter`` section is validated rather than silently accepted.
 """
 
 from __future__ import annotations
@@ -12,12 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from hydrolitagent.cards.config import (
-    ConfigError,
-    ConverterConfig,
-    load_config,
-    resolve_pipeline_mode,
-)
+from hydrolitagent.cards.config import ConfigError, ConverterConfig, load_config
 
 ASSETS_CONFIG = (
     Path(__file__).resolve().parent.parent / "hydrolitagent" / "cards" / "assets" / "config"
@@ -48,18 +42,6 @@ def test_shipped_config_keeps_the_legacy_pipeline() -> None:
         assert config.converter.table_mode == "markdown"
         assert config.converter.min_text_coverage == 0.6
         assert config.converter.cache_dir == config.paths.runtime_dir
-
-
-def test_pipeline_mode_defaults_to_markdown(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CARD_PIPELINE", raising=False)
-    assert resolve_pipeline_mode() == "markdown"
-    assert resolve_pipeline_mode({"CARD_PIPELINE": "markdown"}) == "markdown"
-    assert resolve_pipeline_mode({"CARD_PIPELINE": " LEGACY "}) == "legacy"
-
-
-def test_unknown_pipeline_mode_is_rejected() -> None:
-    with pytest.raises(ConfigError, match="CARD_PIPELINE"):
-        resolve_pipeline_mode({"CARD_PIPELINE": "pdf"})
 
 
 def test_converter_section_accepts_explicit_values(tmp_path: Path) -> None:
