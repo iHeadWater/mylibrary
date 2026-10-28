@@ -7,12 +7,15 @@ claims. This module implements those rules as pure functions over text.
 
 Deliberate limits:
 
-* matching is exact after NFKC, whitespace folding and Markdown-marker removal;
-  it is not fuzzy, so a paraphrase fails instead of sliding through;
-* exactly one layout artifact is forgiven: a word hyphenated across a line
-  break (``Typ-`` / ``ically``). Both sides are rejoined the same way and a
-  hyphen in the quote may stand for a hyphen that the join removed, so this
-  tolerance cannot turn a paraphrase into a match;
+* matching is exact after NFKC, case folding, whitespace folding and
+  Markdown-marker removal; it is not fuzzy, so a paraphrase fails instead of
+  sliding through;
+* two layout artifacts are forgiven, because neither changes a word: a word
+  hyphenated across a line break (``Typ-`` / ``ically``), and a sentence cut by
+  a page break (the page marker and the next page's running header sit inside
+  it). Both are repaired symmetrically on both sides of a match, and a quote
+  may straddle at most one page break, so neither tolerance can turn a
+  paraphrase into a match;
 * a quote that only matches a heading, a running header or a HTML comment is
   treated as too weak, because such text is easy to guess without reading;
 * canaries are found in the Markdown itself, not in a model-supplied list.
@@ -104,7 +107,9 @@ def _quote_pattern(normalized: str) -> re.Pattern[str]:
     A hyphen in the quote may stand for no hyphen at all, because a genuine
     compound broken across a line (``rainfall-`` / ``runoff``) is rejoined to
     ``rainfallrunoff`` in the page text. Every other character stays literal, so
-    a paraphrase still cannot pass.
+    a paraphrase still cannot pass. Case is ignored: a model that lifts a
+    fragment out of the middle of a sentence capitalises its first letter, and
+    that is not a content difference.
     """
 
     parts: list[str] = []
@@ -115,7 +120,7 @@ def _quote_pattern(normalized: str) -> re.Pattern[str]:
             parts.append(" ")
         else:
             parts.append(re.escape(character))
-    return re.compile("".join(parts))
+    return re.compile("".join(parts), re.IGNORECASE)
 
 
 def is_quote_too_short(normalized: str) -> bool:
@@ -148,6 +153,9 @@ class _PageText:
     # Normalised prose: comments and empty lines removed, remaining lines joined
     # by a space so a quote spanning a line break still matches.
     joined: str
+    # Heading lines dropped. A running header ("Article") sits at the top of
+    # every page, so only this text can be joined with the next page's.
+    prose: str
     # (normalised line, is_heading) for single-line hits.
     lines: tuple[tuple[str, bool], ...]
 
@@ -163,7 +171,35 @@ class PageIndex:
         self.pages: tuple[_PageText, ...] = tuple(
             self._page_text(markdown, anchor) for anchor in anchors
         )
-        self._normalized_all = search_form(_COMMENT.sub(" ", markdown))
+        # A sentence that crosses a page break is split by the page marker and
+        # by the running header of the next page, so it matches no single page.
+        # Joining each adjacent pair of prose texts restores exactly one such
+        # boundary; a quote that needs more than one page is still rejected.
+        # ``boundary`` is where the left page's prose ends, in the joined text:
+        # repairing a hyphen across the break shifts the right side by at most
+        # two characters, which ``match.start() < boundary <= match.end()``
+        # still brackets correctly.
+        self._spans: tuple[tuple[int, int, str, int], ...] = tuple(
+            (
+                left.page,
+                right.page,
+                search_form(f"{left.prose} {right.prose}"),
+                len(left.prose),
+            )
+            for left, right in zip(self.pages, self.pages[1:])
+            if left.prose and right.prose
+        )
+        # Whole-document text for the "exists but not on this page" check.
+        # Heading lines are dropped: a running header repeats at the top of
+        # every page and would otherwise sit inside a sentence that crosses a
+        # page break, making a present quote look invented.
+        self._normalized_all = search_form(
+            " ".join(
+                line
+                for line in _COMMENT.sub(" ", markdown).splitlines()
+                if not _HEADING.match(line)
+            )
+        )
 
     @staticmethod
     def _page_text(markdown: str, anchor: PageAnchor) -> _PageText:
@@ -181,6 +217,9 @@ class PageIndex:
             page=anchor.page,
             # Join first, then repair: the hyphenation artifact spans two lines.
             joined=search_form(" ".join(normalized for normalized, _ in prose_lines)),
+            prose=search_form(
+                " ".join(normalized for normalized, is_heading in prose_lines if not is_heading)
+            ),
             lines=tuple(prose_lines),
         )
 
@@ -202,6 +241,27 @@ class PageIndex:
             # is therefore treated as prose.
             heading_only = bool(single_line_hits) and all(single_line_hits)
             found.append((page.page, not heading_only))
+        return tuple(found)
+
+    def span_pages(self, normalized_quote: str) -> tuple[tuple[int, int], ...]:
+        """(left, right) for each adjacent pair the quote genuinely straddles.
+
+        A match lying wholly inside one side proves nothing about the page
+        break: it would be a page-local quote interrupted by a heading, which
+        ``locations`` already refused. Only a match that starts on the left page
+        and ends on the right one crosses the boundary.
+        """
+
+        if not normalized_quote:
+            return ()
+        pattern = _quote_pattern(normalized_quote)
+        found: list[tuple[int, int]] = []
+        for left, right, text, boundary in self._spans:
+            if any(
+                match.start() < boundary <= match.end()
+                for match in pattern.finditer(text)
+            ):
+                found.append((left, right))
         return tuple(found)
 
     def contains_anywhere(self, normalized_quote: str) -> bool:
@@ -231,6 +291,12 @@ def _verify_quote(index: PageIndex, quote: Any) -> QuoteVerdict:
         return QuoteVerdict(True, None, prose_pages[0], prose_pages)
     if locations:
         return QuoteVerdict(False, "QUOTE_TOO_WEAK", locations[0][0])
+    spans = index.span_pages(searchable)
+    if spans:
+        # The quote is verbatim but crosses one page break. Both pages carry
+        # part of it, so a claim of either page is satisfied.
+        left, right = spans[0]
+        return QuoteVerdict(True, None, left, (left, right))
     if index.contains_anywhere(searchable):
         # Present in the document but outside every page range: the reading
         # order or the anchor map is wrong, not the model's quote.

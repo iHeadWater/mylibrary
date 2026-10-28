@@ -156,9 +156,11 @@ class ReadingReceipt:
 class QuoteVerdict:
     """Outcome of checking one quote against the prepared Markdown.
 
-    ``pages`` lists every page whose prose contains the quote. A sentence can
-    legitimately repeat (abstract and body, results and conclusion), so a page
-    claim is satisfied when the declared page is *one of* them.
+    ``pages`` lists every page the quote can be attributed to: the pages whose
+    prose contains it, or both sides of a page break the quote straddles. A
+    sentence can legitimately repeat (abstract and body, results and
+    conclusion), so a page claim is satisfied when the declared page is *one of*
+    them.
     """
 
     ok: bool

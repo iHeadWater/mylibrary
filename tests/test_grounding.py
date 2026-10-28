@@ -166,6 +166,46 @@ def test_quote_spanning_a_line_break_still_matches() -> None:
     assert verdict.page == 2
 
 
+def test_quote_that_only_differs_in_letter_case_is_grounded() -> None:
+    """A model that lifts a fragment mid-sentence capitalises its first letter."""
+
+    markdown, anchors = make_document()
+    verdict = verify_quote(
+        # The page says "We find that the proposed model reduces peak error ...".
+        "Reduces peak error by 18 percent overall.",
+        markdown,
+        anchors,
+    )
+    assert verdict.ok is True
+    assert verdict.reason is None
+    assert verdict.page == 2
+
+
+def test_quote_spanning_two_consecutive_pages_is_grounded() -> None:
+    """A sentence cut by a page break is still verbatim text from the paper."""
+
+    pages = (
+        "# A study of flood forecasting\n\nAbstract placeholder text long enough to quote.",
+        "## Results\n\nWe find that the proposed model reduces peak error by 18 percent overall "
+        "and that the gain holds across every catchment in the",
+        "## Discussion\n\nvalidation set, including the four smallest basins with sparse gauges.",
+    )
+    markdown, anchors = make_document(
+        pages, roles={1: "front_matter", 2: "body", 3: "body"}
+    )
+    verdict = verify_quote(
+        "reduces peak error by 18 percent overall and that the gain holds "
+        "across every catchment in the validation set",
+        markdown,
+        anchors,
+    )
+    assert verdict.ok is True
+    assert verdict.reason is None
+    # The quote occupies both pages, so either declared page is acceptable.
+    assert verdict.page == 2
+    assert verdict.pages == (2, 3)
+
+
 def test_absent_quote_is_not_grounded() -> None:
     markdown, anchors = make_document()
     verdict = verify_quote(
@@ -196,6 +236,56 @@ def test_quote_inside_a_canary_comment_is_not_content() -> None:
     verdict = verify_quote("reading-canary: c-00000001", markdown, anchors)
     assert verdict.ok is False
     assert verdict.reason == "QUOTE_NOT_FOUND"
+
+
+def test_cross_page_quote_with_a_changed_word_is_still_rejected() -> None:
+    """Straddling a page break forgives layout, never a changed word."""
+
+    pages = (
+        "# A study of flood forecasting\n\nAbstract placeholder text long enough to quote.",
+        "## Results\n\nWe find that the proposed model reduces peak error by 18 percent overall "
+        "and that the gain holds across every catchment in the",
+        "## Discussion\n\nvalidation set, including the four smallest basins with sparse gauges.",
+    )
+    markdown, anchors = make_document(
+        pages, roles={1: "front_matter", 2: "body", 3: "body"}
+    )
+    verdict = verify_quote(
+        # "every" became "each": the layout artefact is the same, the words are not.
+        "reduces peak error by 18 percent overall and that the gain holds "
+        "across each catchment in the validation set",
+        markdown,
+        anchors,
+    )
+    assert verdict.ok is False
+    assert verdict.reason == "QUOTE_NOT_FOUND"
+
+
+def test_quote_split_by_a_midpage_heading_is_an_anchor_mismatch() -> None:
+    """The text exists, but no page (or page pair) holds it contiguously.
+
+    Reporting ``QUOTE_NOT_FOUND`` here would accuse the model of fabricating a
+    sentence that is in fact in the paper.
+    """
+
+    pages = (
+        "# A study of flood forecasting\n\nAbstract placeholder text long enough to quote.",
+        "## Results\n\nWe find that the proposed model reduces peak error by 18 percent "
+        "overall.\n\n## Discussion\n\nThe improvement holds across all five catchments "
+        "in the validation set.",
+        "## References\n\nSmith and Jones, A reference entry that is long enough to quote.",
+    )
+    markdown, anchors = make_document(
+        pages, roles={1: "front_matter", 2: "body", 3: "references"}
+    )
+    verdict = verify_quote(
+        "reduces peak error by 18 percent overall. The improvement holds across "
+        "all five catchments",
+        markdown,
+        anchors,
+    )
+    assert verdict.ok is False
+    assert verdict.reason == "ANCHOR_MISMATCH"
 
 
 def test_text_between_page_ranges_is_an_anchor_mismatch() -> None:
@@ -423,6 +513,26 @@ def test_hyphen_tolerance_does_not_forgive_other_differences() -> None:
         markdown,
         anchors,
     )
+    assert verdict.ok is False
+    assert verdict.reason == "QUOTE_NOT_FOUND"
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        # "hence" dropped from the source sentence.
+        "We find that the proposed model reduces peak error by 18 percent.",
+        # A word inserted: "peak" became "the peak".
+        "We find that the proposed model reduces the peak error by 18 percent overall.",
+        # The number changed: 18 percent became 80 percent.
+        "We find that the proposed model reduces peak error by 80 percent overall.",
+    ],
+)
+def test_case_folding_does_not_forgive_word_changes(quote: str) -> None:
+    """Case is ignored; a changed word, number or a gap is still a paraphrase."""
+
+    markdown, anchors = make_document()
+    verdict = verify_quote(quote, markdown, anchors)
     assert verdict.ok is False
     assert verdict.reason == "QUOTE_NOT_FOUND"
 
