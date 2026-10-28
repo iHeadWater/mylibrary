@@ -4,7 +4,7 @@
 
 | 类型 | 示例 | 保存位置 | 是否进入 Git |
 |---|---|---|---|
-| 团队级可调整配置 | 项目目录、运行区、证据卡模板与清单路径、**科研产物根（证据卡/主题/运行记录/文献链接的落点，可指向共享盘）**、Zotero 群组 ID、超时、PDF 门禁阈值、制卡适配器及运行参数 | `hydrolitagent/cards/assets/config/config.json` | 是 |
+| 团队级可调整配置 | 项目目录、运行区、证据卡模板与清单路径、Zotero 群组 ID、超时、PDF 门禁阈值、制卡适配器及运行参数 | `hydrolitagent/cards/assets/config/config.json` | 是 |
 | 本机覆盖配置 | 本机临时路径或不同端口 | `hydrolitagent/cards/assets/config/config.local.json` | 否 |
 | 运行时状态 | 运行区、锁、原始日志和可删除的临时处理文件 | `paths.runtime_dir` 指向的目录 | 否 |
 | 证据事实 | 父条目/附件 Key、PDF 哈希、读取方式、来源检查、模型阅读声明、生成审计、版本与时间 | 草稿记录与 `validation.json` | 是 |
@@ -17,14 +17,14 @@
 
 1. `paths.project_root` 相对于总配置文件所在目录解析，也可以填写绝对路径；
 2. 其余项目路径相对于 `project_root` 解析，也可以填写位于项目根目录内的绝对路径；
-3. 除下述第 8 条的科研产物根外，所有项目路径不得逃出 `project_root`；
-4. `lock_file`、`logs_dir` 和 `card_trials_dir` 必须位于 `runtime_dir`；
+3. 所有项目路径不得逃出 `project_root`；
+4. `lock_file`、`logs_dir` 必须位于 `runtime_dir`；
 5. `evidence_card_templates_dir` 必须位于 `templates_dir`，`evidence_card_template_catalog_file` 必须位于证据卡模板目录；
 6. 配置中的环境变量会在启动时展开，但密钥不得通过路径配置间接写入仓库；
 7. 所有路径字段必须显式存在；程序不会用散落在源码里的路径默认值补齐漏项；
-8. `artifact_root` 是科研产物（证据卡 / 主题 / 运行记录 / 文献链接）的总落点，**默认解析到工作区根（仓库根）**。它若位于 `project_root` 之外，必须同时显式写出 `artifact_root_external = true`，否则加载即报错；
-9. `evidence_cards_dir`、`themes_vault_dir`、`run_records_dir`、`literature_index_dir` 均相对 `artifact_root` 解析，且必须位于 `artifact_root` 内。四者必须同属一个产物根——证据卡与主题互相引用，只挪其一会让相对定位失效；
-10. 归属随位置划分：产物根在项目内 = 平台所有（可清理）；产物根在项目外（共享盘等）= 操作者所有，平台只写不清理。
+8. 产物根只有 `paths.literature_root` 一处，由项目级 `configs/paths.toml` 定义（`themes_dir`、`evidence_packs_dir` 等只写子目录名）。旧平台的 `artifact_root` 及其四个子目录字段已移除。
+
+归属随位置划分：产物根在项目内 = 平台所有（可清理）；产物根在项目外（共享盘等）= 操作者所有，平台只写不清理。`literature_root` 指向仓库外由项目级 `configs/paths.toml` 的 `[literature] external = true` 显式声明。
 
 相对可执行程序路径基于项目根目录，裸命令名按 PATH 查找。PDF 由 Python（PyMuPDF）转换，不再需要外部 PDF 工具路径。[字段与默认值](config.md)。
 
@@ -32,7 +32,7 @@
 
 | 名称 | 使用者 / 范围 | 来源与更新 | 风险与处理 |
 |---|---|---|---|
-| `paths.*`、模板与清单路径 | 本机 Python | 总配置；迁移目录时同步 | 越界路径必须报错，不能逃出项目根或产物根 |
+| `paths.*`、模板与清单路径 | 本机 Python | 总配置；迁移目录时同步 | 越界路径必须报错，不能逃出项目根或 `literature_root` |
 | `zotero.group_id/base_url` | 本机 Python | 总配置 | 错库/数据源风险；再次核对源身份，群组 ID 不是认证 |
 | `card_generator.*` | 本机适配器 | 总配置；变更后检查 | 外部处理方/额度改变；不能填写未实现适配器 |
 | LLM API key | 环境变量 / `.env` | 过期或泄露后轮换 | 不放 JSON/提示词/命令参数；诊断文本经脱敏 |

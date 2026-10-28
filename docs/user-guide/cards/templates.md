@@ -79,7 +79,7 @@ Markdown 摘要与全部 canary，并给出可核对的逐字引文，否则该�
 > **只有达到 L2 / L3 且完成来源核对的 Claim**，才能支撑正式主题结论。自动化**不做**这一步。
 
 > **怎么看产出**：卡片与主题都是带 `[[双向链接]]` 的 Markdown ——
-> 用 **Obsidian** 把产物目录（`证据卡/`、`主题/`，落点由 `paths.artifact_root` 决定）
+> 用 **Obsidian** 把产物根（默认 `outputs/`，其下 `themes/` 等；落点由 `paths.literature_root` 决定）
 > 当 vault 打开，就能沿链接读、按目录导航。**今天就能这样用。**
 >
 > 另一件**尚未实现**的事：让平台受控地搜索 / 写入你的 Obsidian（Vault 接入选型见

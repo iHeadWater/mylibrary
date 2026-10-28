@@ -4,8 +4,8 @@
 
 | 交付边界 | 内容 |
 | --- | --- |
-| 当前已经实现 | Zotero 文献入库与查询、单篇论文输入、PDF 全文门禁、Markdown 优先制卡（`in_session` / `direct` 两种执行者）、九类证据卡模板、主体卡代码校验、统一候选主题池、`artifact_root` 路径解析与校验 |
-| 已完成设计、尚待实现 | 自动化产物到 `artifact_root` 的统一发布、Codex 与 Obsidian 的正式集成、候选主题人工确认闭环、稳定的主题层级与卡片—主题关系、主题到 research idea 的生成与评审 |
+| 当前已经实现 | Zotero 文献入库与查询、单篇论文输入、PDF 全文门禁、Markdown 优先制卡（`in_session` / `direct` 两种执行者）、九类证据卡模板、主体卡代码校验、统一候选主题池、`paths.literature_root` 产物根派生 |
+| 已完成设计、尚待实现 | 自动化产物到 Obsidian Vault 的统一发布、Codex 与 Obsidian 的正式集成、候选主题人工确认闭环、稳定的主题层级与卡片—主题关系、主题到 research idea 的生成与评审 |
 
 ## 1. 总体架构
 
@@ -20,7 +20,7 @@ flowchart LR
     C --> P
     H --> P
     P --> A[当前产物<br/>文献卡、候选主题、运行记录]
-    P -. 目标：准入后统一发布 .-> V[artifact_root<br/>证据卡、正式主题、运行记录、文献链接]
+    P -. 目标：准入后统一发布 .-> V[Obsidian Vault 目标结构<br/>证据卡、正式主题、运行记录、文献链接]
     V --> O[Obsidian Vault<br/>阅读、导航、人工审核]
     O --> U
     C -. 目标设计：受控搜索与写入 .-> OA[Obsidian Adapter]
@@ -30,7 +30,7 @@ flowchart LR
     G --> P
 ```
 
-当前分支已经实现 Zotero、单篇处理链路和 Markdown 优先制卡，Markdown 产物也可以被 Obsidian 直接打开；但自动化产物写入 `--output-root`（默认 `outputs/`）与 `paths.themes_dir`。`artifact_root` 下四个科研目录目前只完成配置解析与路径校验，尚未成为自动发布目标。目标架构需要新增独立的 Obsidian Adapter：后台搜索和读取优先使用文件型 MCP，桌面打开和差异复核使用 Obsidian 官方 CLI，需要访问当前活动笔记时再启用 Local REST API。三种接口不得同时写同一个文件。
+当前分支已经实现 Zotero、单篇处理链路和 Markdown 优先制卡，Markdown 产物也可以被 Obsidian 直接打开；自动化产物写入 `--output-root`（默认 `outputs/`）与 `paths.themes_dir`（位于 `paths.literature_root` 下）。旧设计的 `artifact_root` 及其四个科研目录字段已从配置与代码中移除，属于历史设计。目标架构需要新增独立的 Obsidian Adapter：后台搜索和读取优先使用文件型 MCP，桌面打开和差异复核使用 Obsidian 官方 CLI，需要访问当前活动笔记时再启用 Local REST API。三种接口不得同时写同一个文件。
 
 正式主题和 research idea 都属于需要人类决策的科研对象。自动化可以提出候选、整理证据和生成草稿，但不能越过人工确认门直接建立正式主题，也不能把“当前文献中尚未发现”自动解释为学术创新。
 
@@ -82,7 +82,7 @@ flowchart LR
 1. 安装并启动 Zotero，确认目标文库和 PDF 可以从本机访问。
 2. 克隆 `mylibrary`，使用 uv 安装整个 workspace。
 3. 配置模型与产物目录：设置 `DEEPSEEK_API_KEY`（`direct`），或直接用 `cards run`（`in_session`）。PDF 由 Python 转成 Markdown，不需要 Poppler。
-4. 核对当前产物目录与 `artifact_root` 的实际解析路径。在统一发布实现前，用户可以用 Obsidian 打开相应 Markdown 目录，但不应依赖修改 `artifact_root` 来自动搬运现有文献卡和候选主题。
+4. 核对当前产物目录（`--output-root` 与 `paths.literature_root`）的实际解析路径。用户可以用 Obsidian 打开相应 Markdown 目录，但不应依赖修改路径配置来自动搬运现有文献卡和候选主题。
 
 ### 日常研究
 
@@ -126,9 +126,9 @@ flowchart LR
 | `card_generator` | 旧版 CLI 兼容字段、模型、超时；执行者由 `configs/ai.toml` 的 `provider` 选择 |
 | `theme_pipeline` | 主题管线、研究目标、模型继承和主题模板目录 |
 
-`paths` 中存在两组产物契约。单篇流程写入 `--output-root`（默认 `outputs/`），主题池写入 `paths.themes_dir`，它们相对 `project_root` 解析。`artifact_root` 下的 `evidence_cards_dir`、`themes_vault_dir`、`run_records_dir` 和 `literature_index_dir` 已能安全解析，但当前代码未将前者发布到后一组。
+`paths` 只有一套产物契约：单篇流程写入 `--output-root`（默认 `outputs/`），主题池写入 `paths.themes_dir`，两者都相对 `paths.literature_root` 解析（产物根默认来自项目级 `configs/paths.toml`）。旧设计的 `artifact_root` 及 `evidence_cards_dir`、`themes_vault_dir`、`run_records_dir`、`literature_index_dir` 已移除，不再是配置项。
 
-目标设计将 `artifact_root` 作为 Obsidian 阅读与人工审核层的共同父目录，四类产物必须同根以避免相互引用失效。如果使用已有 Vault，应放在一个明确的项目子目录中；在发布器实现前，不应让两套流程同时写同一文件。
+目标设计将 Obsidian Vault 作为阅读与人工审核层的共同父目录，四类产物必须同根以避免相互引用失效。如果使用已有 Vault，应放在一个明确的项目子目录中；在发布器实现前，不应让两套流程同时写同一文件。
 
 下面是 Obsidian 接入的**拟议配置契约**，当前程序尚不读取这些字段。字段名称在实现时可以调整，但权限语义和验收规则不得被省略。
 

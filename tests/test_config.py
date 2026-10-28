@@ -17,30 +17,17 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
         "paths": {
             "project_root": "..",
             "literature_root": ".",
-            "artifact_root": "../",
-            "artifact_root_external": True,
-            "evidence_cards_dir": "证据卡",
-            "themes_vault_dir": "主题",
-            "run_records_dir": "运行记录",
-            "literature_index_dir": "文献链接",
             "runtime_dir": ".runtime",
             "snapshot_file": ".runtime/zotero-snapshot.json",
             "tasks_file": ".runtime/tasks.json",
             "lock_file": ".runtime/worker.lock",
             "logs_dir": ".runtime/logs",
-            "card_trials_dir": ".runtime/card-trials",
             "evidence_packs_dir": "evidence-packs",
             "templates_dir": "templates",
             "evidence_card_templates_dir": "templates/evidence-cards",
             "evidence_card_template_catalog_file": "templates/evidence-cards/_catalog.json",
             "evidence_card_generation_prompt_file": "automation/prompts/evidence-card-generation-v4.md",
-            "card_generation_output_schema_file": "automation/schemas/card-generation-output.schema.json",
             "themes_dir": "themes",
-            "members_dir": "members",
-            "activity_dir": "activity",
-            "reports_dir": "reports",
-            "prompts_dir": "automation/prompts",
-            "schemas_dir": "automation/schemas",
         },
         "zotero": {
             "base_url": "http://127.0.0.1:23119",
@@ -105,10 +92,6 @@ class ConfigTests(unittest.TestCase):
                 config.paths.evidence_card_generation_prompt_file,
                 root / "automation" / "prompts" / "evidence-card-generation-v4.md",
             )
-            self.assertEqual(
-                config.paths.card_generation_output_schema_file,
-                root / "automation" / "schemas" / "card-generation-output.schema.json",
-            )
 
     def test_rejects_path_outside_project_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -119,89 +102,6 @@ class ConfigTests(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(ConfigError, "evidence_packs_dir"):
-                load_config(config_path)
-
-    def test_artifact_root_defaults_to_workspace_root(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_path = write_config(root)
-
-            config = load_config(config_path)
-
-            workspace = root.parent
-            self.assertEqual(config.paths.artifact_root, workspace)
-            self.assertTrue(config.paths.artifact_root_external)
-            self.assertEqual(config.paths.evidence_cards_dir, workspace / "证据卡")
-            self.assertEqual(config.paths.themes_vault_dir, workspace / "主题")
-            self.assertEqual(config.paths.run_records_dir, workspace / "运行记录")
-            self.assertEqual(config.paths.literature_index_dir, workspace / "文献链接")
-
-    def test_artifact_root_accepts_external_path_with_opt_in(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            shared = (root.parent / "shared-artifacts").resolve()
-            config_path = write_config(
-                root,
-                {
-                    "paths": {
-                        "artifact_root": str(shared),
-                        "artifact_root_external": True,
-                    }
-                },
-            )
-
-            config = load_config(config_path)
-
-            self.assertEqual(config.paths.artifact_root, shared)
-            self.assertTrue(config.paths.artifact_root_external)
-            self.assertEqual(config.paths.evidence_cards_dir, shared / "证据卡")
-            self.assertEqual(config.paths.themes_vault_dir, shared / "主题")
-
-    def test_rejects_external_artifact_root_without_opt_in(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_path = write_config(
-                root,
-                {
-                    "paths": {
-                        "artifact_root": "../shared-artifacts",
-                        "artifact_root_external": False,
-                    }
-                },
-            )
-
-            with self.assertRaisesRegex(ConfigError, "artifact_root_external"):
-                load_config(config_path)
-
-    def test_rejects_non_boolean_artifact_root_external(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_path = write_config(
-                root, {"paths": {"artifact_root_external": "yes"}}
-            )
-
-            with self.assertRaisesRegex(ConfigError, "artifact_root_external"):
-                load_config(config_path)
-
-    def test_rejects_artifact_subdir_outside_artifact_root(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_path = write_config(
-                root, {"paths": {"evidence_cards_dir": "../../outside-cards"}}
-            )
-
-            with self.assertRaisesRegex(ConfigError, "evidence_cards_dir"):
-                load_config(config_path)
-
-    def test_rejects_missing_artifact_subdir(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_path = write_config(root)
-            data = json.loads(config_path.read_text(encoding="utf-8"))
-            del data["paths"]["run_records_dir"]
-            config_path.write_text(json.dumps(data), encoding="utf-8")
-
-            with self.assertRaisesRegex(ConfigError, "run_records_dir"):
                 load_config(config_path)
 
     def test_rejects_theme_assets_dir_outside_project_root(self) -> None:
@@ -251,36 +151,6 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "evidence_card_templates_dir"):
                 load_config(config_path)
 
-    def test_rejects_generation_prompt_outside_prompt_directory(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_path = write_config(
-                root,
-                {
-                    "paths": {
-                        "evidence_card_generation_prompt_file": "templates/prompt.md"
-                    }
-                },
-            )
-
-            with self.assertRaisesRegex(ConfigError, "prompts_dir"):
-                load_config(config_path)
-
-    def test_rejects_generation_schema_outside_schema_directory(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve()
-            config_path = write_config(
-                root,
-                {
-                    "paths": {
-                        "card_generation_output_schema_file": "automation/output.json"
-                    }
-                },
-            )
-
-            with self.assertRaisesRegex(ConfigError, "schemas_dir"):
-                load_config(config_path)
-
     def test_allows_custom_loopback_port(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -298,10 +168,10 @@ class ConfigTests(unittest.TestCase):
             root = Path(directory).resolve()
             config_path = write_config(root)
             data = json.loads(config_path.read_text(encoding="utf-8"))
-            del data["paths"]["reports_dir"]
+            del data["paths"]["templates_dir"]
             config_path.write_text(json.dumps(data), encoding="utf-8")
 
-            with self.assertRaisesRegex(ConfigError, "reports_dir"):
+            with self.assertRaisesRegex(ConfigError, "templates_dir"):
                 load_config(config_path)
 
     def test_loads_explicit_model(self) -> None:

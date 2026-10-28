@@ -96,27 +96,12 @@ class PathConfig:
     tasks_file: Path
     lock_file: Path
     logs_dir: Path
-    card_trials_dir: Path
     evidence_packs_dir: Path
     templates_dir: Path
     evidence_card_templates_dir: Path
     evidence_card_template_catalog_file: Path
     evidence_card_generation_prompt_file: Path
-    card_generation_output_schema_file: Path
     themes_dir: Path
-    members_dir: Path
-    activity_dir: Path
-    reports_dir: Path
-    prompts_dir: Path
-    schemas_dir: Path
-    # 科研产物根：证据卡 / 主题 / 运行记录 / 文献链接的落点。
-    # 默认在工作区根（仓库根），也可指向仓库外的共享位置（见 artifact_root_external）。
-    artifact_root: Path
-    artifact_root_external: bool
-    evidence_cards_dir: Path
-    themes_vault_dir: Path
-    run_records_dir: Path
-    literature_index_dir: Path
 
 
 @dataclass(frozen=True)
@@ -181,17 +166,10 @@ PATH_FIELDS = (
     "tasks_file",
     "lock_file",
     "logs_dir",
-    "card_trials_dir",
     "templates_dir",
     "evidence_card_templates_dir",
     "evidence_card_template_catalog_file",
     "evidence_card_generation_prompt_file",
-    "card_generation_output_schema_file",
-    "members_dir",
-    "activity_dir",
-    "reports_dir",
-    "prompts_dir",
-    "schemas_dir",
 )
 
 # 产物根下的子目录。它们相对 literature_root 解析，且不得离开产物根。
@@ -200,17 +178,8 @@ LITERATURE_PATH_FIELDS = (
     "themes_dir",
 )
 
-# 产物根下的子目录。它们相对 paths.artifact_root 解析，且不得离开产物根。
-ARTIFACT_PATH_FIELDS = (
-    "evidence_cards_dir",
-    "themes_vault_dir",
-    "run_records_dir",
-    "literature_index_dir",
-)
-
 
 __all__ = [
-    "ARTIFACT_PATH_FIELDS",
     "AppConfig",
     "CardGeneratorConfig",
     "ConfigError",

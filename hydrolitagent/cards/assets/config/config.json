@@ -25,30 +25,17 @@
   },
   "paths": {
     "project_root": "../../../..",
-    "artifact_root": ".",
-    "artifact_root_external": false,
-    "evidence_cards_dir": "证据卡",
-    "themes_vault_dir": "主题",
-    "run_records_dir": "运行记录",
-    "literature_index_dir": "文献链接",
     "runtime_dir": ".runtime",
     "snapshot_file": ".runtime/zotero-snapshot.json",
     "tasks_file": ".runtime/tasks.json",
     "lock_file": ".runtime/worker.lock",
     "logs_dir": ".runtime/logs",
-    "card_trials_dir": ".runtime/card-trials",
     "evidence_packs_dir": "evidence-packs",
     "templates_dir": "hydrolitagent/cards/assets/templates",
     "evidence_card_templates_dir": "hydrolitagent/cards/assets/templates/evidence-cards",
     "evidence_card_template_catalog_file": "hydrolitagent/cards/assets/templates/evidence-cards/_catalog.json",
     "evidence_card_generation_prompt_file": "hydrolitagent/cards/assets/prompts/evidence-card-generation-v8.md",
-    "card_generation_output_schema_file": "hydrolitagent/cards/assets/schemas/card-generation-output.schema.json",
-    "themes_dir": "themes",
-    "members_dir": "members",
-    "activity_dir": "activity",
-    "reports_dir": "reports",
-    "prompts_dir": "hydrolitagent/cards/assets/prompts",
-    "schemas_dir": "hydrolitagent/cards/assets/schemas"
+    "themes_dir": "themes"
   },
   "zotero": {
     "startup": {

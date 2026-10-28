@@ -72,7 +72,7 @@ outputs/
 临时输入与运行目录（`paper-input.json`、`cards run` 的 `--run-dir`）放在 `.runtime/`，不属于产物。
 
 > **怎么看产出**：卡片与主题都是带 `[[双向链接]]` 的 Markdown ——
-> 用 **Obsidian** 把产物目录（`证据卡/`、`主题/`，落点由 `paths.artifact_root` 决定）
+> 用 **Obsidian** 把产物根（默认 `outputs/`，其下 `themes/` 等；落点由 `paths.literature_root` 决定）
 > 当 vault 打开，就能沿链接读、按目录导航。**今天就能这样用。**
 >
 > 另一件**尚未实现**的事：让平台受控地搜索 / 写入你的 Obsidian（Vault 接入选型见

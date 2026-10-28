@@ -10,20 +10,7 @@
 
 `paths.project_root` 相对于 `config.json` 所在目录解析；其余路径相对于 `project_root` 解析。因此，从仓库外部工作目录调用程序时，产物仍会写入正确项目。为避免误写，所有项目路径必须位于 `project_root` 内，运行状态和原始日志还必须位于 `runtime_dir` 内。当前 `paths.project_root` 为 `../../../..`，即仓库根目录。
 
-**唯一例外是科研产物根 `paths.artifact_root`**（证据卡 / 主题 / 运行记录 / 文献链接的落点）。它默认解析到工作区根（仓库根）。若要指向仓库外的共享位置（共享盘、OneDrive 等），必须同时显式写出 `paths.artifact_root_external = true`。这样外部位置是写明的意图，而不是被 `../outside` 这类相对路径悄悄带出去的。归属也随之划分：**产物根在项目内 = 平台所有**（正常写入、可清理）；**产物根在项目外 = 操作者所有**（平台只写不清理，不管理其生命周期）。
-
-科研产物根字段：
-
-| 字段 | 当前含义 | 默认值 | 规则 |
-|---|---|---|---|
-| `paths.artifact_root` | 科研产物总落点（证据卡、主题、运行记录、文献链接的共同父目录） | `../`，即工作区根（仓库根） | 位于 `project_root` 之外时必须显式开启下一行的开关 |
-| `paths.artifact_root_external` | 是否允许产物根位于项目之外（共享盘场景） | `false`（本仓库配置为 `true`） | 布尔值；未开启时产物根超出 `project_root` 直接报错 |
-| `paths.evidence_cards_dir` | 证据卡目录 | `证据卡` | 必须位于 `artifact_root` 内 |
-| `paths.themes_vault_dir` | 主题档案目录 | `主题` | 必须位于 `artifact_root` 内 |
-| `paths.run_records_dir` | 主题工作流运行账目录 | `运行记录` | 必须位于 `artifact_root` 内 |
-| `paths.literature_index_dir` | 来源链接索引目录 | `文献链接` | 必须位于 `artifact_root` 内 |
-
-四个子目录必须同属一个 `artifact_root`：证据卡与主题之间存在交叉引用，只把其中一个挪到别处会让相对定位失效。
+科研产物根只有一处：项目级 `configs/paths.toml` 解析出的 `paths.literature_root`（详见本节末尾「科研产物路径：一个根，其余派生」）。cards 配置里的其余路径都不允许逃出 `project_root`。旧平台的 `paths.artifact_root`、`artifact_root_external` 及其四个子目录字段（证据卡 / 主题 / 运行记录 / 文献链接）已随本次清理删除，不再解析。
 
 证据卡模板路径：
 
@@ -32,9 +19,7 @@
 | `paths.templates_dir` | 所有公共模板的根目录 | 必须位于项目根目录内 |
 | `paths.evidence_card_templates_dir` | 九类证据卡 Markdown 模板目录 | 必须位于 `templates_dir` 内 |
 | `paths.evidence_card_template_catalog_file` | 模板来源、版本和内容哈希清单 | 必须位于证据卡模板目录内 |
-| `paths.evidence_card_generation_prompt_file` | 正式制卡提示词 | 必须位于 `paths.prompts_dir` 内，并声明 `prompt_version` |
-| `paths.card_generation_output_schema_file` | 模型结构化输出约束 | 必须位于 `paths.schemas_dir` 内 |
-| `paths.card_trials_dir` | 制卡试运行结果 | 必须位于 `paths.runtime_dir` 内，不提交 Git |
+| `paths.evidence_card_generation_prompt_file` | 正式制卡提示词 | 必须位于 `paths.project_root` 内，并声明 `prompt_version` |
 
 目录位置可以调整，但不得将证据卡模板或清单配置到项目之外。
 
@@ -117,8 +102,9 @@ cards 的 `config.json` 只写**子目录名**，全部相对这个根解析：
 | 单篇草稿（无配置字段） | — | `<literature_root>/zotero/...` |
 
 `paths.literature_root` 是**可选的显式覆盖**，只用于测试或非常规部署；正常使用不要写它，
-否则又会变成两处定义。`paths.artifact_root` 及其下的 `证据卡/`、`主题/`、`运行记录/`、`文献链接/`
-是旧平台的发布目标，**当前自动化未接入**，保留解析与校验仅为兼容。
+否则又会变成两处定义。**产物根只有 `paths.literature_root` 一处**；旧平台的
+`paths.artifact_root` 及其下的 `证据卡/`、`主题/`、`运行记录/`、`文献链接/` 等 artifact
+路径字段已从代码与配置中移除，不再解析。
 
 代码、模板、`configs/`、`.runtime/`（缓存与日志）仍相对 `paths.project_root` 解析，不属于产物。
 临时输入与 `cards run --run-dir` 放在 `.runtime/` 下。

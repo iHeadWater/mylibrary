@@ -21,7 +21,6 @@ from .loading import (
     load_config,
 )
 from .models import (
-    ARTIFACT_PATH_FIELDS,
     DEFAULT_BASE_URL,
     DEFAULT_PROCESS_TIMEOUT_SECONDS,
     DEFAULT_TIMEOUT_SECONDS,
@@ -47,8 +46,6 @@ from .models import (
 from .paths import (
     _path_value,
     _require_inside,
-    _resolve_artifact_path,
-    _resolve_artifact_root,
     _resolve_project_path,
     _resolve_project_root,
 )
@@ -66,7 +63,6 @@ from .validators import (
 
 __all__ = [
     # Models and defaults
-    "ARTIFACT_PATH_FIELDS",
     "AppConfig",
     "CardGeneratorConfig",
     "ConfigError",

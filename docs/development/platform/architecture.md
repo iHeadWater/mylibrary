@@ -68,10 +68,11 @@ flowchart TB
 | 代码、Skills、模板、Schema、测试 | Git工作树 | 跟踪 |
 | 非敏感团队配置与示例 | `hydrolitagent/cards/assets/config/` | 跟踪；秘密不得写入 |
 | Zotero条目与原始PDF | Zotero及其合法附件位置 | 不跟踪 |
-| 文献卡、主题、运行记录、文献链接 | `paths.artifact_root` 下的四个目录 | 不跟踪 |
-| 单篇流程产物与主题池 | `--output-root`（默认 `outputs/`）、`paths.themes_dir` | 不跟踪 |
+| 单篇流程产物与主题池 | `--output-root`（默认 `outputs/`）、`paths.themes_dir`（位于 `paths.literature_root` 下） | 不跟踪 |
 | 运行状态与诊断日志 | `.runtime/` | 不跟踪，可按持久化成果重建 |
 | Python环境和原生PDF工具 | `.venv/`、`.tools/` | 不跟踪，按依赖锁重建 |
+
+旧设计中的 `paths.artifact_root`（证据卡 / 主题 / 运行记录 / 文献链接四个子目录）属于历史设计，已随本次清理移除，不再是当前的配置项或发布目标。
 
 ## 信任与写入边界
 

@@ -14,7 +14,6 @@ from typing import Any
 
 from .executables import _resolve_executable
 from .models import (
-    ARTIFACT_PATH_FIELDS,
     LITERATURE_PATH_FIELDS,
     PATH_FIELDS,
     SUPPORTED_REASONING_EFFORTS,
@@ -34,8 +33,6 @@ from .models import (
 from .paths import (
     _path_value,
     _require_inside,
-    _resolve_artifact_path,
-    _resolve_artifact_root,
     _resolve_literature_path,
     _resolve_literature_root,
     _resolve_project_path,
@@ -139,7 +136,6 @@ def load_config(
         raise ConfigError("paths 必须是 JSON 对象")
     project_root = _resolve_project_root(raw_paths, config_file)
     literature_root = _resolve_literature_root(raw_paths, project_root)
-    artifact_root, artifact_root_external = _resolve_artifact_root(raw_paths, project_root)
     path_config = PathConfig(
         project_root=project_root,
         literature_root=literature_root,
@@ -151,19 +147,12 @@ def load_config(
             name: _resolve_literature_path(raw_paths, name, literature_root)
             for name in LITERATURE_PATH_FIELDS
         },
-        artifact_root=artifact_root,
-        artifact_root_external=artifact_root_external,
-        **{
-            name: _resolve_artifact_path(raw_paths, name, artifact_root)
-            for name in ARTIFACT_PATH_FIELDS
-        },
     )
     for name in (
         "snapshot_file",
         "tasks_file",
         "lock_file",
         "logs_dir",
-        "card_trials_dir",
     ):
         _require_inside(
             getattr(path_config, name),
@@ -182,18 +171,6 @@ def load_config(
         path_config.evidence_card_templates_dir,
         name="evidence_card_template_catalog_file",
         parent_name="evidence_card_templates_dir",
-    )
-    _require_inside(
-        path_config.evidence_card_generation_prompt_file,
-        path_config.prompts_dir,
-        name="evidence_card_generation_prompt_file",
-        parent_name="prompts_dir",
-    )
-    _require_inside(
-        path_config.card_generation_output_schema_file,
-        path_config.schemas_dir,
-        name="card_generation_output_schema_file",
-        parent_name="schemas_dir",
     )
 
     raw_zotero = data.get("zotero", {})
