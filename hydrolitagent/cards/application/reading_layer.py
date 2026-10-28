@@ -26,7 +26,9 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
+
+from hydrolitagent.cards.domain.paper import MANIFEST_FILENAME
 
 SCHEMA_VERSION = 1
 OPERATION = "cards_index"
@@ -49,6 +51,34 @@ THEME_BODY_MARKER = "\n---\n程序维护的来源引用"
 _IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp", ".svg"})
 _LINK_RE = re.compile(r"\]\((?:<([^>]+)>|([^)\s]+))\)")
 _COMMENT_RE = re.compile(r"^<!--.*?-->\s*", re.DOTALL)
+
+# Figure/table numbers come from two places: a caption starts with its label
+# ("Figure 6. ...", "图 6：..."), while the body cites it in passing
+# ("（Figure 6）", "Table 1", "Figure 6a"). Both use the same label vocabulary.
+_TABLE_LABEL_RE = re.compile(r"^\s*(?:Table|表)\s*(\d+)", re.IGNORECASE)
+_FIGURE_LABEL_RE = re.compile(r"^\s*(?:Figure|Fig\.?|图)\s*(\d+)", re.IGNORECASE)
+_CAPTION_PREFIX_RE = re.compile(
+    r"^\s*(?:Figure|Fig\.?|图|Table|表)\s*\d+[A-Za-z]?\s*[.．:：|｜–—-]?\s*",
+    re.IGNORECASE,
+)
+_MENTION_FIGURE_RE = re.compile(r"(?:Figure|Fig\.?|图)\s*(\d+)", re.IGNORECASE)
+_MENTION_TABLE_RE = re.compile(r"(?:Table|表)\s*(\d+)", re.IGNORECASE)
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]|\d+\.)\s")
+
+CaptionKey = tuple[str, int]  # ("figure" | "table", number)
+
+
+@dataclass(frozen=True)
+class InlineFigure:
+    """A figure file and the caption that tells the reader what it shows.
+
+    ``path`` is relative to the card page (``figures/page-016-fig-1.png``);
+    ``caption`` may be ``None`` when the conversion cache recorded no caption,
+    in which case the figure can only go to the appendix.
+    """
+
+    path: str
+    caption: str | None = None
 
 
 # --------------------------------------------------------------------------------------
@@ -172,6 +202,151 @@ def _write_text(path: Path, text: str, *, root: Path,
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
     written.append(relative)
+
+
+# --------------------------------------------------------------------------------------
+# Inline figures
+# --------------------------------------------------------------------------------------
+
+
+def _caption_key(caption: str | None) -> CaptionKey | None:
+    """``(kind, number)`` parsed from a caption's label, or ``None``."""
+
+    if not isinstance(caption, str):
+        return None
+    text = caption.lstrip()
+    match = _TABLE_LABEL_RE.match(text)
+    if match:
+        return ("table", int(match.group(1)))
+    match = _FIGURE_LABEL_RE.match(text)
+    if match:
+        return ("figure", int(match.group(1)))
+    return None
+
+
+def _caption_text(caption: str | None) -> str:
+    """The caption without its ``Figure N.`` / ``表 N：`` prefix."""
+
+    if not isinstance(caption, str):
+        return ""
+    return _CAPTION_PREFIX_RE.sub("", caption, count=1).strip()
+
+
+def _mentions(line: str) -> list[CaptionKey]:
+    """Figure/table keys cited in ``line``, in the order they appear."""
+
+    found = [(match.start(), ("figure", int(match.group(1))))
+             for match in _MENTION_FIGURE_RE.finditer(line)]
+    found += [(match.start(), ("table", int(match.group(1))))
+              for match in _MENTION_TABLE_RE.finditer(line)]
+    found.sort(key=lambda item: item[0])
+    return [key for _, key in found]
+
+
+def _paragraph_end(lines: list[str], index: int) -> int:
+    """Last line index of the block that owns ``lines[index]``.
+
+    A bullet owns only its own line (plus indented continuations) so the embed
+    stays inside the list item; a prose paragraph runs to the next blank line,
+    code fence or table row.
+    """
+
+    if _LIST_ITEM_RE.match(lines[index]):
+        position = index + 1
+        while (position < len(lines) and lines[position].strip()
+               and lines[position][:1].isspace()
+               and not _LIST_ITEM_RE.match(lines[position])):
+            position += 1
+        return position - 1
+    position = index + 1
+    while position < len(lines) and lines[position].strip():
+        stripped = lines[position].lstrip()
+        if stripped.startswith("```") or stripped.startswith("|"):
+            break
+        position += 1
+    return position - 1
+
+
+def _figure_block(figure: InlineFigure, key: CaptionKey | None, *, indent: str) -> list[str]:
+    """The two Markdown lines that put one figure into the page."""
+
+    if key is not None and key[0] == "table":
+        alt, label = f"Table {key[1]}", f"表 {key[1]}"
+    elif key is not None:
+        alt, label = f"Figure {key[1]}", f"图 {key[1]}"
+    else:
+        alt, label = Path(figure.path).stem, ""
+    lines = [f"{indent}![{alt}](<{figure.path}>)"]
+    text = _caption_text(figure.caption)
+    if text:
+        lines.append(f"{indent}*{label}：{text}*" if label else f"{indent}*{text}*")
+    return lines
+
+
+def inline_figures(body: str, figures: Sequence[InlineFigure]) -> tuple[str, list[InlineFigure]]:
+    """Insert each cited figure after the paragraph that first mentions it.
+
+    Returns ``(new_body, unreferenced)`` where ``unreferenced`` holds the
+    figures that never got inlined -- no parseable number, never cited, or only
+    cited inside a code fence/table row. The caller renders those as an
+    appendix. `body` is left untouched when nothing can be inserted.
+    """
+
+    if not figures:
+        return body, []
+
+    grouped: dict[CaptionKey, list[InlineFigure]] = {}
+    for figure in figures:
+        key = _caption_key(figure.caption)
+        if key is not None:
+            grouped.setdefault(key, []).append(figure)
+    if not grouped:
+        return body, list(figures)
+
+    lines = body.split("\n")
+    placed: set[CaptionKey] = set()
+    # paragraph-end line index -> figures to write after it
+    insertions: dict[int, list[tuple[CaptionKey, list[InlineFigure], bool]]] = {}
+    in_code = False
+    for index, line in enumerate(lines):
+        stripped = line.lstrip()
+        if stripped.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code or stripped.startswith("|"):
+            continue
+        for key in _mentions(line):
+            if key in placed or key not in grouped:
+                continue
+            placed.add(key)
+            end = _paragraph_end(lines, index)
+            insertions.setdefault(end, []).append(
+                (key, grouped[key], bool(_LIST_ITEM_RE.match(line)))
+            )
+
+    if not insertions:
+        return body, list(figures)
+
+    out: list[str] = []
+    for index, line in enumerate(lines):
+        out.append(line)
+        entries = insertions.get(index)
+        if not entries:
+            continue
+        out.append("")
+        for position, (key, group, is_list) in enumerate(entries):
+            if position:
+                out.append("")
+            indent = "    " if is_list else ""
+            for figure in group:
+                out.extend(_figure_block(figure, key, indent=indent))
+        following = lines[index + 1] if index + 1 < len(lines) else ""
+        if following.strip():
+            out.append("")
+
+    unreferenced = [figure for figure in figures
+                    if _caption_key(figure.caption) not in placed]
+    return "\n".join(out), unreferenced
 
 
 # --------------------------------------------------------------------------------------
@@ -344,6 +519,23 @@ def _copy_figures(source_dir: Path, target_dir: Path, *, root: Path,
     return copied
 
 
+def _figure_captions(figures_dir: Path) -> dict[str, str]:
+    """Filename -> caption, from the conversion cache manifest beside ``figures/``."""
+
+    payload = _load_json(figures_dir.parent / MANIFEST_FILENAME)
+    entries = payload.get("figures") if isinstance(payload, dict) else None
+    captions: dict[str, str] = {}
+    if isinstance(entries, list):
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+            path = item.get("path")
+            caption = item.get("caption")
+            if isinstance(path, str) and isinstance(caption, str):
+                captions.setdefault(Path(path).name, caption)
+    return captions
+
+
 # --------------------------------------------------------------------------------------
 # Theme pool and readings
 # --------------------------------------------------------------------------------------
@@ -514,19 +706,14 @@ def _reading_links_text(entry: dict[str, Any], path: Path) -> str:
     return "\n".join(lines)
 
 
-def _figures_text(entry: dict[str, Any], path: Path) -> str:
-    if not entry["figures"]:
-        if entry["figure_warning"]:
-            return (
-                f"> 警告：{entry['figure_warning']} —— 转换缓存里没有这篇论文的插图，"
-                "本页没有内嵌图。"
-            )
-        return "> 转换缓存中没有插图。"
-    lines = [
-        f"![{_md_text(figure.stem)}](<{_relative(figure, path.parent)}>)"
-        for figure in entry["figures"]
+def _appendix_text(figures: list[InlineFigure]) -> str:
+    """The trailing gallery: only the figures the body never cited."""
+
+    blocks = [
+        "\n".join(_figure_block(figure, _caption_key(figure.caption), indent=""))
+        for figure in figures
     ]
-    return "\n".join(lines)
+    return "\n\n".join(blocks)
 
 
 def _card_page(entry: dict[str, Any], path: Path,
@@ -562,11 +749,20 @@ def _card_page(entry: dict[str, Any], path: Path,
         "",
         readings or "- 暂无定向精读记录",
         "",
-        "## 图",
-        "",
-        _figures_text(entry, path),
-        "",
     ]
+    if entry["unreferenced"]:
+        lines.extend([
+            "## 未在正文引用的图",
+            "",
+            _appendix_text(entry["unreferenced"]),
+            "",
+        ])
+    elif entry["figure_warning"]:
+        lines.extend([
+            f"> 警告：{entry['figure_warning']} —— 转换缓存里没有这篇论文的插图，"
+            "本页没有内嵌图。",
+            "",
+        ])
     return "\n".join(lines)
 
 
@@ -777,6 +973,18 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
         readings = [path for path in ordered if path.is_file()]
         readings.extend(path for path in remaining if path.is_file())
 
+        captions = _figure_captions(source_figures) if source_figures is not None else {}
+        figure_assets = [
+            InlineFigure(
+                path=f"{FIGURE_DIRNAME}/{path.name}",
+                caption=captions.get(path.name),
+            )
+            for path in copied
+        ]
+        body, unreferenced = inline_figures(
+            _strip_banner(data.get("card_body_markdown") or ""), figure_assets
+        )
+
         entry = {
             "parent_key": parent_key,
             "draft_id": chosen.draft_id,
@@ -802,8 +1010,8 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
             ),
             "tags": tags,
             "theme_ids": tags,
-            "body": _strip_banner(data.get("card_body_markdown") or ""),
-            "figures": copied,
+            "body": body,
+            "unreferenced": unreferenced,
             "figure_warning": warning,
             "readings": readings,
         }
@@ -893,4 +1101,4 @@ def refresh(root: Path, *, runtime_dir: Path | None = None) -> dict[str, Any]:
     }
 
 
-__all__ = ["build_reading_layer", "failed_refresh", "refresh"]
+__all__ = ["InlineFigure", "build_reading_layer", "failed_refresh", "inline_figures", "refresh"]
