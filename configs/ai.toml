@@ -1,8 +1,13 @@
 # 提交公开默认值；个人用参数、环境变量或 .env 覆盖。不要写 API key。
 # uv run hydrolitagent cards ai-config --json
+#
+# provider 只有两种：
+#   direct      —— 直连 OpenAI 兼容 API（默认 DeepSeek），key 取 DEEPSEEK_API_KEY
+#   in_session  —— 由当前 agent 读 paper.md 写 response.json（cards run），不需要 key
 [ai]
-provider = "codex"
-model = "" # 空值沿用所选 CLI 的默认模型
-executable = "" # 空值在 PATH 中寻找 codex 或 claude；也可指定本机原生程序路径
-reasoning_effort = ""
+provider = "direct"
+model = "deepseek-chat"
+base_url = "https://api.deepseek.com"
 timeout_seconds = 1500
+max_input_tokens = 60000
+max_output_tokens = 16000

@@ -21,7 +21,7 @@ import pytest
 from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.adapters.pdf.pymupdf_converter import PymupdfConverter
 from hydrolitagent.cards.adapters.storage.paper_store import PaperStore
-from hydrolitagent.cards.adapters.runners.markdown import ScriptedRunner
+from hydrolitagent.cards.adapters.runners.scripted import ScriptedRunner
 from hydrolitagent.cards.application.card_workflow import generate_markdown_card_draft
 from hydrolitagent.cards.config import load_config
 from hydrolitagent.cards.domain.grounding import expected_canaries, markdown_sha256

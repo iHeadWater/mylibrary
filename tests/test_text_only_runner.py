@@ -19,10 +19,8 @@ from hydrolitagent.cards.adapters.runners.in_session import (
     RUN_REQUEST_FILENAME,
     InSessionRunner,
 )
-from hydrolitagent.cards.adapters.runners.markdown import ScriptedRunner
-from hydrolitagent.cards.adapters.runners.openai_compatible import (
-    OpenAICompatibleRunner,
-)
+from hydrolitagent.cards.adapters.runners.scripted import ScriptedRunner
+from hydrolitagent.cards.adapters.runners.direct import DirectRunner
 from hydrolitagent.cards.ports.runner import CardRunRequest
 
 SCHEMA = {
@@ -47,7 +45,7 @@ def text_request(workspace: Path, *, role: str = "theme_discovery") -> CardRunRe
     )
 
 
-def test_openai_runner_sends_the_prompt_and_no_paper(tmp_path):
+def test_direct_runner_sends_the_prompt_and_no_paper(tmp_path):
     seen: list[dict] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -57,7 +55,7 @@ def test_openai_runner_sends_the_prompt_and_no_paper(tmp_path):
                                      "content": json.dumps(ANSWER, ensure_ascii=False)}}],
         })
 
-    runner = OpenAICompatibleRunner(
+    runner = DirectRunner(
         base_url="https://api.example.test/v1",
         api_key="sk-test-key-123456",
         model="test-model",

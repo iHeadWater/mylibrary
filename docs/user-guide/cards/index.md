@@ -22,7 +22,7 @@ agent 走的是这条链路：
 
 ```bash
 uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json
-uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
+uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider direct --json
 uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 uv run hydrolitagent cards themes-run --json
 uv run hydrolitagent cards ai-config --json          # 看模型选择与产物落点，不调模型
@@ -52,8 +52,8 @@ uv run python scripts/paper_validate.py \
 
 ## 前提与产物
 
-**前提**：Zotero 里该论文**已附好可读的 PDF**；一种运行器可用 —— 已登录的模型 CLI（Codex 或 Claude），
-或配置好的 OpenAI 兼容接口，或会话内 agent（`cards run`）。默认路径是 **PDF→Markdown**（Python + PyMuPDF），
+**前提**：Zotero 里该论文**已附好可读的 PDF**；一个执行者可用 —— `direct`（直连 API，读 `DEEPSEEK_API_KEY`），
+或会话内 agent（`in_session`，用 `cards run`，不需要 key）。默认路径是 **PDF→Markdown**（Python + PyMuPDF），
 **不需要 Poppler**，macOS / Linux / Windows 行为一致。
 
 **产物**：单篇流程写到**产物根**（默认仓库 `outputs/`）；主题池写到 `themes/`。

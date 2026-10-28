@@ -34,12 +34,12 @@ from hydrolitagent.cards.composition import (
 )
 from hydrolitagent.cards.config import ConfigError, load_config, resolve_pipeline_mode
 from hydrolitagent.cards.paper_input_config import load_paper_input_config
-from hydrolitagent.cards.evidence_packages import EvidencePackageError, sync_evidence_packages
+from hydrolitagent.cards.evidence_packages import EvidencePackageError
 from hydrolitagent.cards.evidence_templates import (
     EvidenceTemplateError,
     validate_evidence_templates,
 )
-from hydrolitagent.cards.pdf_delivery import PdfDeliveryError, prepare_pdf_delivery
+from hydrolitagent.cards.pdf_delivery import PdfDeliveryError
 from hydrolitagent.cards.pdf_gate import PdfGateError, evaluate_pdf_gate
 from hydrolitagent.cards.paper_input import (
     prepare_demo_paper,
@@ -136,10 +136,9 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--ai-config", help="模型选择 TOML；默认 configs/ai.toml")
             command.add_argument(
                 "--ai-provider", metavar="RUNNER",
-                help="制卡运行器 id，例如 codex、claude、openai_compatible；可用值见 ai-config --json 的 runners",
+                help="制卡运行器 id：direct（直连 API）或 in_session；可用值见 ai-config --json 的 runners",
             )
             command.add_argument("--ai-model", help="所选服务可用的模型名")
-            command.add_argument("--ai-executable", help="本机 CLI 可执行文件名或绝对路径")
             command.add_argument("--ai-timeout", type=float)
         if name == "evidence-generate":
             command.add_argument("--ai-config", help="模型选择 TOML；默认 configs/ai.toml")
@@ -147,10 +146,9 @@ def _parser() -> argparse.ArgumentParser:
             # adapter must not require editing this parser.
             command.add_argument(
                 "--ai-provider", metavar="RUNNER",
-                help="制卡运行器 id，例如 codex、claude、openai_compatible；可用值见 ai-config --json 的 runners",
+                help="制卡运行器 id：direct（直连 API）或 in_session；可用值见 ai-config --json 的 runners",
             )
             command.add_argument("--ai-model", help="所选服务可用的模型名")
-            command.add_argument("--ai-executable", help="本机 CLI 可执行文件名或绝对路径")
             command.add_argument("--ai-timeout", type=float)
             command.add_argument("--output-root", help="本次产物根；不传则用默认解析（configs/paths.toml → outputs/）")
             # The default comes from CARD_PIPELINE (``markdown`` since stage 3b);
@@ -215,10 +213,9 @@ def _parser() -> argparse.ArgumentParser:
     ai.add_argument("--ai-config")
     ai.add_argument(
         "--ai-provider", metavar="RUNNER",
-        help="制卡运行器 id；可用值见本命令输出的 runners",
+        help="制卡运行器 id：direct 或 in_session；可用值见本命令输出的 runners",
     )
     ai.add_argument("--ai-model")
-    ai.add_argument("--ai-executable")
     ai.add_argument("--ai-timeout", type=float)
     ai.add_argument("--output-root")
     ai.add_argument("--json", action="store_true")
@@ -481,7 +478,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "ai-config" or (args.command == "evidence-generate" and args.paper_input):
         try:
             selection = resolve_ai_config(args.ai_config, provider=args.ai_provider, model=args.ai_model,
-                         executable=args.ai_executable, timeout_seconds=args.ai_timeout)
+                         timeout_seconds=args.ai_timeout)
             if args.command == "ai-config":
                 result = describe_ai(selection, output_root=args.output_root)
                 print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -653,7 +650,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 # config.json and ignore --ai-provider / configs/ai.toml.
                 selection = resolve_ai_config(
                     args.ai_config, provider=args.ai_provider, model=args.ai_model,
-                    executable=args.ai_executable, timeout_seconds=args.ai_timeout,
+                    timeout_seconds=args.ai_timeout,
                 )
                 app_config = apply_ai_selection(app_config, selection)
                 pipeline = build_theme_pipeline(app_config)

@@ -1,26 +1,19 @@
 from __future__ import annotations
 
-import io
 import json
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, replace
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.card_generators.connection_guard import ConnectionGuard
-from hydrolitagent.cards.adapters.runners.codex import CodexCliAdapter, _terminal_failure_events
-from hydrolitagent.cards.adapters.runners.diagnostics import safe_exec_diagnostic as _safe_exec_diagnostic
 from hydrolitagent.cards.card_generators.streaming import ExecutionStopped, run_streaming_prompt
-from hydrolitagent.cards.cli import main
 from hydrolitagent.cards.config import ConfigError, ConnectionGuardConfig, load_config
-from hydrolitagent.cards.failure_records import save_failure_record
-import test_card_generator as fixtures
 import test_config as config_fixtures
 
 RECONNECT = {"type": "error", "message": "Reconnecting... 1/5 (stream disconnected)"}
@@ -214,7 +207,7 @@ class GuardProcessTests(unittest.TestCase):
         script = f"print({json.dumps(RECONNECT)!r}); print({json.dumps(COMPLETED)!r})"
         result = run_streaming_prompt([sys.executable, "-u", "-c", script], "", 5)
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(_terminal_failure_events([json.loads(line) for line in result.stdout.splitlines()]), [])
+        self.assertIn('"turn.completed"', result.stdout)
 
     def test_relaxed_profile_completes_after_nine_reconnects(self):
         events = [RECONNECT] * 9 + [COMPLETED]
@@ -224,7 +217,7 @@ class GuardProcessTests(unittest.TestCase):
             connection_guard=ConnectionGuardConfig(10, 300, 900, 2),
         )
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(_terminal_failure_events([json.loads(line) for line in result.stdout.splitlines()]), [])
+        self.assertIn('"turn.completed"', result.stdout)
 
     def test_disabled_reconnect_stop_allows_more_than_ten_retries_then_completion(self):
         events = [RECONNECT] * 20 + [COMPLETED]
@@ -234,7 +227,7 @@ class GuardProcessTests(unittest.TestCase):
             connection_guard=ConnectionGuardConfig(reconnect_stop_enabled=False),
         )
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(_terminal_failure_events([json.loads(line) for line in result.stdout.splitlines()]), [])
+        self.assertIn('"turn.completed"', result.stdout)
 
     def test_disabled_reconnect_stop_keeps_total_deadline_and_cleans_up_child(self):
         script = f"import time; print({json.dumps(RECONNECT)!r}, flush=True); time.sleep(20)"

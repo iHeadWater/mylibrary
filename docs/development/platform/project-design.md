@@ -4,7 +4,7 @@
 
 | 交付边界 | 内容 |
 | --- | --- |
-| 当前已经实现 | Zotero 文献入库与查询、单篇论文输入、PDF 全文门禁、Codex / Claude 单 Agent 制卡、九类证据卡模板、主体卡代码校验、统一候选主题池、`artifact_root` 路径解析与校验、CLI 基础设施 |
+| 当前已经实现 | Zotero 文献入库与查询、单篇论文输入、PDF 全文门禁、Markdown 优先制卡（`in_session` / `direct` 两种执行者）、九类证据卡模板、主体卡代码校验、统一候选主题池、`artifact_root` 路径解析与校验 |
 | 已完成设计、尚待实现 | 自动化产物到 `artifact_root` 的统一发布、Codex 与 Obsidian 的正式集成、候选主题人工确认闭环、稳定的主题层级与卡片—主题关系、主题到 research idea 的生成与评审 |
 
 ## 1. 总体架构
@@ -30,7 +30,7 @@ flowchart LR
     G --> P
 ```
 
-当前分支已经实现 Zotero、单篇处理链路和 Codex / Claude CLI 制卡，Markdown 产物也可以被 Obsidian 直接打开；但自动化产物写入 `--output-root`（默认 `outputs/`）与 `paths.themes_dir`。`artifact_root` 下四个科研目录目前只完成配置解析与路径校验，尚未成为自动发布目标。目标架构需要新增独立的 Obsidian Adapter：后台搜索和读取优先使用文件型 MCP，桌面打开和差异复核使用 Obsidian 官方 CLI，需要访问当前活动笔记时再启用 Local REST API。三种接口不得同时写同一个文件。
+当前分支已经实现 Zotero、单篇处理链路和 Markdown 优先制卡，Markdown 产物也可以被 Obsidian 直接打开；但自动化产物写入 `--output-root`（默认 `outputs/`）与 `paths.themes_dir`。`artifact_root` 下四个科研目录目前只完成配置解析与路径校验，尚未成为自动发布目标。目标架构需要新增独立的 Obsidian Adapter：后台搜索和读取优先使用文件型 MCP，桌面打开和差异复核使用 Obsidian 官方 CLI，需要访问当前活动笔记时再启用 Local REST API。三种接口不得同时写同一个文件。
 
 正式主题和 research idea 都属于需要人类决策的科研对象。自动化可以提出候选、整理证据和生成草稿，但不能越过人工确认门直接建立正式主题，也不能把“当前文献中尚未发现”自动解释为学术创新。
 
@@ -81,7 +81,7 @@ flowchart LR
 
 1. 安装并启动 Zotero，确认目标文库和 PDF 可以从本机访问。
 2. 克隆 `mylibrary`，使用 uv 安装整个 workspace。
-3. 配置模型与产物目录，安装并登录一种 CLI（Codex 或 Claude）。PDF 由 Python 转成 Markdown，不需要 Poppler。
+3. 配置模型与产物目录：设置 `DEEPSEEK_API_KEY`（`direct`），或直接用 `cards run`（`in_session`）。PDF 由 Python 转成 Markdown，不需要 Poppler。
 4. 核对当前产物目录与 `artifact_root` 的实际解析路径。在统一发布实现前，用户可以用 Obsidian 打开相应 Markdown 目录，但不应依赖修改 `artifact_root` 来自动搬运现有文献卡和候选主题。
 
 ### 日常研究
@@ -103,7 +103,7 @@ flowchart LR
 | --- | --- | --- |
 | Zotero | 保存来源、附件、元数据与原始 PDF | 不保存正式主题判断，不承担知识综合 |
 | `hydrolitagent` | 文献入库、Zotero 查询、全文与附件访问、其他文献工具 | 不决定主题生命周期，不替代人工审核 |
-| `hydrolitagent/cards/` | 单篇论文输入、PDF 门禁、Codex / Claude 调用、主体卡校验、候选主题池 | 不把自动聚类直接宣布为正式主题或 idea |
+| `hydrolitagent/cards/` | 单篇论文输入、PDF 门禁、执行者调用（`in_session` / `direct`）、主体卡校验、候选主题池 | 不把自动聚类直接宣布为正式主题或 idea |
 | 证据卡 Skill | 定义来源分类、阅读深度、Claim、定位、推断边界与卡片验收 | 不决定某张卡必须归入哪个正式主题 |
 | 主题 Skill | 候选主题发现、人工筛选门、正式主题综合、反馈和补证据工作流 | 不修改原始来源，不允许模型独立建立正式主题 |
 | 科研产物目录 | 保存证据卡、主题、运行记录和文献链接，并维持相对引用 | 不保存密钥，不代替 Git 管理代码和模板 |
@@ -123,7 +123,7 @@ flowchart LR
 | `paths` | 项目、运行区、模板、Schema 及科研产物目录 |
 | `zotero` | 本地 API、文库/群组、请求超时 |
 | `pdf_gate` | PDF 可用性门禁 |
-| `card_generator` | Codex CLI、模型、推理强度、超时、代理和 PDF 读取方式 |
+| `card_generator` | 旧版 CLI 兼容字段、模型、超时；执行者由 `configs/ai.toml` 的 `provider` 选择 |
 | `theme_pipeline` | 主题管线、研究目标、模型继承和主题模板目录 |
 
 `paths` 中存在两组产物契约。单篇流程写入 `--output-root`（默认 `outputs/`），主题池写入 `paths.themes_dir`，它们相对 `project_root` 解析。`artifact_root` 下的 `evidence_cards_dir`、`themes_vault_dir`、`run_records_dir` 和 `literature_index_dir` 已能安全解析，但当前代码未将前者发布到后一组。
@@ -191,7 +191,7 @@ uv run hydrolitagent cards ai-config --json
 
 ```powershell
 uv run python scripts/paper_input.py --user-library --item-key ABCD1234 --output paper-input.json
-uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
+uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider direct --json
 uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 ```
 

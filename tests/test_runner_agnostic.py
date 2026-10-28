@@ -28,9 +28,7 @@ import pytest
 
 from hydrolitagent.cards.adapters.pdf.pymupdf_converter import PymupdfConverter
 from hydrolitagent.cards.adapters.runners.in_session import InSessionRunner
-from hydrolitagent.cards.adapters.runners.openai_compatible import (
-    OpenAICompatibleRunner,
-)
+from hydrolitagent.cards.adapters.runners.direct import DirectRunner
 from hydrolitagent.cards.adapters.storage.paper_store import PaperStore
 from hydrolitagent.cards.application.card_workflow import (
     finalize_session_run,
@@ -51,7 +49,7 @@ from test_markdown_workflow import (  # noqa: F401 - imported fixture
 )
 
 
-class _CapturingApiRunner(OpenAICompatibleRunner):
+class _CapturingDirectRunner(DirectRunner):
     """Remembers the request so the fake endpoint can answer from the paper."""
 
     request = None
@@ -161,7 +159,7 @@ def test_the_same_prepared_paper_yields_the_same_draft_for_each_runner(
             },
         )
 
-    api = _CapturingApiRunner(
+    api = _CapturingDirectRunner(
         base_url="https://api.example.test/v1",
         api_key="sk-test-key-123456",
         model="test-model",
@@ -187,7 +185,7 @@ def test_the_same_prepared_paper_yields_the_same_draft_for_each_runner(
     assert api_draft["source_access"]["reading"]["verified"] is True
 
     assert scripted_draft["provenance"]["runner_id"] == "scripted"
-    assert api_draft["provenance"]["runner_id"] == "openai_compatible"
+    assert api_draft["provenance"]["runner_id"] == "direct"
     assert api_draft["usage"]["total_tokens"] == 150
 
     assert _normalize(api_draft) == _normalize(scripted_draft)
@@ -196,7 +194,7 @@ def test_the_same_prepared_paper_yields_the_same_draft_for_each_runner(
 def test_the_same_prepared_paper_yields_the_same_draft_for_in_session(
     app_config, tmp_path
 ):
-    """The file-based runner goes through the same gates as a CLI or HTTP one."""
+    """The file-based runner goes through the same gates as a direct API one."""
 
     pdf = _write_pdf(tmp_path / "paper.pdf")
     record = _record(pdf)

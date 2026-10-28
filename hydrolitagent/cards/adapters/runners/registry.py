@@ -1,21 +1,24 @@
 """Runner registry: a runner id is data, construction is one lookup.
 
-Every executor that can read a prepared paper and answer with JSON is a
-*candidate*, not a branch in shared code. Adding one means:
+The platform offers exactly two executors:
 
-1. write an adapter that implements ``ports.runner.CardRunner``;
-2. register a factory for it here (one line).
+* ``in_session`` -- the current agent reads ``paper.md`` and writes
+  ``response.json``; ``cards run prepare|finalize`` needs no API key;
+* ``direct`` -- one direct call to an OpenAI-compatible API (DeepSeek by
+  default), for when you want the card without an agent in the loop.
 
-Import contract: importing this module must not import any provider
-implementation. Each factory imports its adapter inside the function body, so
-``cards --help`` and ``cards ai-config`` stay fast and provider-free, and the
-dependency arrow stays *adapters → registry*, never the other way at import
-time.
+Adding another one means: write an adapter that implements
+``ports.runner.CardRunner``, then register a factory here (one line).
+
+Import contract: importing this module must not import any implementation. Each
+factory imports its adapter inside the function body, so ``cards --help`` and
+``cards ai-config`` stay fast and provider-free, and the dependency arrow stays
+*adapters → registry*, never the other way at import time.
 
 Factory contract: a factory receives keyword arguments and picks the ones it
-understands (``executable``, ``connection_guard``, ``base_url`` …). Unknown
-keywords are ignored on purpose so ``composition`` can pass one fixed bag of
-dependencies to every runner without growing a per-runner branch.
+understands. Unknown keywords are ignored on purpose so ``composition`` can pass
+one fixed bag of dependencies to every runner without growing a per-runner
+branch.
 """
 from __future__ import annotations
 
@@ -26,14 +29,8 @@ from hydrolitagent.cards.ports.runner import CardRunner
 
 RunnerFactory = Callable[..., CardRunner]
 
-# The adapter-name suffix used by the legacy on-disk config; it names the same
-# runner, so ``claude_cli`` and ``claude`` resolve to one id.
-_ADAPTER_SUFFIX = "_cli"
-
 # Documented ids that cannot be built yet. They live outside ``ids()`` so the
-# listing never promises a runner that ``create`` would reject. The mapping is
-# currently empty: ``in_session`` became buildable in stage 4b, and a planned id
-# must be a real commitment, not a placeholder kept alive for tests.
+# listing never promises a runner that ``create`` would reject.
 _PLANNED: dict[str, str] = {}
 
 _FACTORIES: dict[str, RunnerFactory] = {}
@@ -46,10 +43,7 @@ class RegistryError(ValueError):
 def _normalize(runner_id: str) -> str:
     if not isinstance(runner_id, str) or not runner_id.strip():
         raise RegistryError("runner id 不能为空")
-    name = runner_id.strip().casefold()
-    if name.endswith(_ADAPTER_SUFFIX) and len(name) > len(_ADAPTER_SUFFIX):
-        name = name[: -len(_ADAPTER_SUFFIX)]
-    return name
+    return runner_id.strip().casefold()
 
 
 def _available_text() -> str:
@@ -116,33 +110,10 @@ def create(runner_id: str, **kwargs: Any) -> CardRunner:
 # --------------------------------------------------------------------------------------
 
 
-def _claude_runner(**options: Any) -> CardRunner:
-    from hydrolitagent.cards.adapters.runners.markdown import ClaudeMarkdownRunner
+def _direct_runner(**options: Any) -> CardRunner:
+    from hydrolitagent.cards.adapters.runners.direct import DirectRunner
 
-    return ClaudeMarkdownRunner(
-        options["executable"],
-        connection_guard=options.get("connection_guard"),
-    )
-
-
-def _codex_runner(**options: Any) -> CardRunner:
-    from hydrolitagent.cards.adapters.runners.codex.proxy import codex_proxy_environment
-    from hydrolitagent.cards.adapters.runners.markdown import CodexMarkdownRunner
-
-    proxy = options.get("proxy")
-    return CodexMarkdownRunner(
-        options["executable"],
-        environment=codex_proxy_environment(proxy) if proxy is not None else None,
-        connection_guard=options.get("connection_guard"),
-    )
-
-
-def _openai_compatible_runner(**options: Any) -> CardRunner:
-    from hydrolitagent.cards.adapters.runners.openai_compatible import (
-        OpenAICompatibleRunner,
-    )
-
-    return OpenAICompatibleRunner(
+    return DirectRunner(
         base_url=options.get("base_url"),
         api_key=options.get("api_key"),
         model=options.get("model"),
@@ -160,10 +131,8 @@ def _in_session_runner(**options: Any) -> CardRunner:
     return InSessionRunner()
 
 
-register("claude", _claude_runner)
-register("codex", _codex_runner)
+register("direct", _direct_runner)
 register("in_session", _in_session_runner)
-register("openai_compatible", _openai_compatible_runner)
 
 
 __all__ = [

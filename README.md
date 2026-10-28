@@ -33,7 +33,7 @@ cd /path/to/mylibrary
 |---|---|
 | **所有**能力 | Git · Python 3.12–3.14 · [uv](https://docs.astral.sh/uv/) · `uv sync --all-packages` |
 | 读 / 写 Zotero 库 | Zotero **API key**（放 `.env`） |
-| **文献卡与主题卡** | Zotero 桌面版开着，并在设置里**允许其他应用通信** · 一个**已登录**的 AI 命令行工具（Codex 或 Claude）。PDF 由 Python 转成 Markdown，**不需要 Poppler** |
+| **文献卡与主题卡** | Zotero 桌面版开着，并在设置里**允许其他应用通信** · `DEEPSEEK_API_KEY`（直连 API；也可用 `cards run` 交给当前 agent，不需要 key）。PDF 由 Python 转成 Markdown，**不需要 Poppler** |
 | 论文入库 | 论文 PDF 所在的 GDrive 目录 + Zotero 里对应的「**链接附件根目录**」设置 |
 
 逐条说明与凭据清单见 **[前提与配置](docs/getting-started/installation.md)** —— **配一次就够**。
@@ -87,7 +87,7 @@ uv run python scripts/paper_validate.py --draft hydrolitagent/cards/assets/examp
 
 ```bash
 uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json
-uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
+uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider direct --json
 uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 uv run hydrolitagent cards themes-run --json
 uv run hydrolitagent cards ai-config --json          # 看模型选择与产物落点
@@ -95,8 +95,9 @@ uv run hydrolitagent cards run prepare --paper-input paper-input.json --run-dir 
 uv run hydrolitagent cards doctor --json             # 只读自查转换器、运行器与存储
 ```
 
-`--ai-provider` 选的是**运行器**，不是模型厂家；可用值以 `ai-config --json` 的 `runners` 为准
-（当前含 `claude`、`codex`、`openai_compatible`、`in_session`）。默认路径是 PDF→Markdown（Python + PyMuPDF），
+`--ai-provider` 选的是**执行者**，只有两种：`direct`（直连 OpenAI 兼容 API，默认 DeepSeek，
+读 `DEEPSEEK_API_KEY`）与 `in_session`（当前 agent 读 `paper.md` 写 `response.json`，不需要 key）。
+可用值以 `ai-config --json` 的 `runners` 为准。默认路径是 PDF→Markdown（Python + PyMuPDF），
 macOS / Linux / Windows 行为一致，**不需要 Poppler**。
 详见[文献卡与主题卡](docs/user-guide/cards/index.md)（**你通常不需要读它**）。
 

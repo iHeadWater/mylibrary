@@ -1,9 +1,16 @@
-"""Card runner for any OpenAI-compatible ``/chat/completions`` endpoint.
+"""Card runner for a directly-called LLM API (default: DeepSeek).
 
-This runner exists to prove the port is not tied to a local CLI: it receives the
-same ``CardRunRequest`` (a ``PreparedPaper``, a prompt and a JSON schema), sends
-the prepared Markdown as text, and returns the model's JSON object. Python still
-decides whether the answer is grounded -- this module never relaxes a check.
+This is the "type a command and get a card" executor. It is not an agent: it
+receives the same ``CardRunRequest`` (a ``PreparedPaper``, a prompt and a JSON
+schema), sends the prepared Markdown as text to one ``/chat/completions``
+endpoint, and returns the model's JSON object. Python still decides whether the
+answer is grounded -- this module never relaxes a check.
+
+Defaults target DeepSeek (``https://api.deepseek.com``, ``deepseek-chat``,
+``DEEPSEEK_API_KEY``). Another OpenAI-compatible endpoint can be selected with
+the ``base_url`` / ``model`` configuration fields, or with the
+``DIRECT_LLM_BASE_URL`` / ``DIRECT_LLM_MODEL`` / ``DIRECT_LLM_API_KEY``
+environment variables. There is no fallback to a CLI and no credential file.
 
 Deliberate limits:
 
@@ -49,8 +56,19 @@ from hydrolitagent.cards.ports.runner import (
 )
 from hydrolitagent.cards.progress import report_progress
 
+# Default endpoint: DeepSeek's OpenAI-compatible API.
+DEFAULT_BASE_URL = "https://api.deepseek.com"
+DEFAULT_MODEL = "deepseek-chat"
 DEFAULT_MAX_INPUT_TOKENS = 60_000
 DEFAULT_MAX_OUTPUT_TOKENS = 16_000
+
+# Credential and overrides. ``DEEPSEEK_API_KEY`` is the documented key; the
+# ``DIRECT_LLM_*`` names let the same runner point at another compatible
+# endpoint without editing the selection file.
+API_KEY_ENV = "DEEPSEEK_API_KEY"
+API_KEY_OVERRIDE_ENV = "DIRECT_LLM_API_KEY"
+BASE_URL_OVERRIDE_ENV = "DIRECT_LLM_BASE_URL"
+MODEL_OVERRIDE_ENV = "DIRECT_LLM_MODEL"
 
 CHUNKED_READING = "CHUNKED_READING"
 JSON_SCHEMA_UNSUPPORTED = "JSON_SCHEMA_UNSUPPORTED"
@@ -313,10 +331,16 @@ def _failure(
     )
 
 
-class OpenAICompatibleRunner:
+NOT_CONFIGURED_FIX = (
+    f"设置环境变量 {API_KEY_ENV}（例如 export {API_KEY_ENV}=sk-...），"
+    "或改用 in_session：cards run prepare / cards run finalize 不需要任何 key"
+)
+
+
+class DirectRunner:
     """Text-only HTTP runner implementing ``ports.runner.CardRunner``."""
 
-    runner_id = "openai_compatible"
+    runner_id = "direct"
     # Declared capability, not a branch in shared code: this runner never
     # receives images, so it may not claim to have reviewed them.
     vision = False
@@ -331,9 +355,16 @@ class OpenAICompatibleRunner:
         max_output_tokens: int | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
-        self.base_url = (base_url or os.environ.get("OPENAI_BASE_URL") or "").strip()
-        self.api_key = (api_key or os.environ.get("OPENAI_API_KEY") or "").strip()
-        self.model = (model or "").strip() or None
+        self.base_url = (
+            base_url or os.environ.get(BASE_URL_OVERRIDE_ENV) or DEFAULT_BASE_URL
+        ).strip()
+        self.api_key = (
+            api_key
+            or os.environ.get(API_KEY_OVERRIDE_ENV)
+            or os.environ.get(API_KEY_ENV)
+            or ""
+        ).strip()
+        self.model = (model or os.environ.get(MODEL_OVERRIDE_ENV) or DEFAULT_MODEL).strip()
         self.max_input_tokens = int(
             DEFAULT_MAX_INPUT_TOKENS if max_input_tokens is None else max_input_tokens
         )
@@ -347,54 +378,38 @@ class OpenAICompatibleRunner:
     # -- doctor ------------------------------------------------------------------
 
     def doctor(self) -> RunnerDoctor:
-        missing = [
-            name
-            for name, value in (("OPENAI_BASE_URL", self.base_url), ("OPENAI_API_KEY", self.api_key))
-            if not value
-        ]
-        if missing:
+        if not self.api_key:
             return RunnerDoctor(
                 runner_id=self.runner_id,
                 available=False,
-                detail="缺少 " + "、".join(missing),
-                fix="设置 OPENAI_BASE_URL 与 OPENAI_API_KEY（可用 HYDROLITAGENT_CARDS_AI_BASE_URL 覆盖地址）",
+                detail=(
+                    f"缺少 API key（{API_KEY_ENV}）；默认端点={self.base_url}；"
+                    "不读取本机登录、不调用模型"
+                ),
+                fix=NOT_CONFIGURED_FIX,
             )
         return RunnerDoctor(
             runner_id=self.runner_id,
             available=True,
             detail=(
-                f"base_url={self.base_url}；api_key=已设置；"
+                f"base_url={self.base_url}；model={self.model}；api_key=已设置；"
                 f"输入预算={self.max_input_tokens} tokens；视觉=不发图片"
             ),
-            fix="补充 ai.toml 的 model 或传 --ai-model 才能实际调用" if not self.model else None,
         )
 
     # -- run ---------------------------------------------------------------------
 
     def run(self, request: CardRunRequest) -> CardRunResult:
         started = time.monotonic()
-        missing = [
-            name
-            for name, value in (("OPENAI_BASE_URL", self.base_url), ("OPENAI_API_KEY", self.api_key))
-            if not value
-        ]
-        if missing:
+        if not self.api_key:
             return _failure(
                 self.runner_id,
                 "RUNNER_NOT_CONFIGURED",
-                "API 运行器缺少 " + "、".join(missing),
+                NOT_CONFIGURED_FIX,
                 model_invoked=False,
                 started=started,
             )
         model = self.model or request.model
-        if not model:
-            return _failure(
-                self.runner_id,
-                "RUNNER_MODEL_REQUIRED",
-                "API 运行器需要模型名：请在 ai.toml 设置 model 或传 --ai-model",
-                model_invoked=False,
-                started=started,
-            )
 
         warnings: list[str] = []
         usage: dict[str, int] = {}
@@ -411,7 +426,7 @@ class OpenAICompatibleRunner:
                 request.progress,
                 "phase",
                 message=(
-                    "API 运行器正在阅读 paper.md（"
+                    "直连 API 正在阅读 paper.md（"
                     + ("分块读取" if chunked else "内联全文")
                     + "）"
                 ),
@@ -460,7 +475,7 @@ class OpenAICompatibleRunner:
             return _failure(
                 self.runner_id,
                 "RUNNER_TIMEOUT",
-                "API 运行器调用超时；本次不重试",
+                "直连 API 调用超时；本次不重试",
                 model_invoked=invoked,
                 started=started,
                 warnings=warnings,
@@ -469,9 +484,7 @@ class OpenAICompatibleRunner:
             return _failure(
                 self.runner_id,
                 "RUNNER_CONNECTION_FAILED",
-                sanitize_diagnostic_text(
-                    f"无法连接 API 运行器（{type(exc).__name__}）"
-                ),
+                sanitize_diagnostic_text(f"无法连接直连 API（{type(exc).__name__}）"),
                 model_invoked=invoked,
                 started=started,
                 warnings=warnings,
@@ -480,7 +493,7 @@ class OpenAICompatibleRunner:
             return _failure(
                 self.runner_id,
                 "RUNNER_IO_ERROR",
-                f"API 运行器执行失败（{type(exc).__name__}）",
+                f"直连 API 执行失败（{type(exc).__name__}）",
                 model_invoked=invoked,
                 started=started,
                 warnings=warnings,
@@ -689,7 +702,7 @@ class OpenAICompatibleRunner:
             report_progress(
                 request.progress,
                 "phase",
-                message=f"API 分块阅读 {index}/{len(ranges)}（字符 {start}-{end}）",
+                message=f"直连分块阅读 {index}/{len(ranges)}（字符 {start}-{end}）",
             )
             pages = _pages_in_range(request.paper.page_anchors, start, end)
             messages = [
@@ -779,11 +792,14 @@ class OpenAICompatibleRunner:
 
 
 __all__ = [
+    "API_KEY_ENV",
     "CHUNKED_READING",
+    "DEFAULT_BASE_URL",
     "DEFAULT_MAX_INPUT_TOKENS",
     "DEFAULT_MAX_OUTPUT_TOKENS",
+    "DEFAULT_MODEL",
+    "DirectRunner",
     "JSON_SCHEMA_UNSUPPORTED",
-    "OpenAICompatibleRunner",
     "VISUAL_CONTENT_NOT_REVIEWED",
     "estimate_tokens",
     "plan_chunks",

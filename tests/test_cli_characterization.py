@@ -30,12 +30,12 @@ AI_CONFIG_TOP_LEVEL_KEYS = {
     "literature_root",
     "credentials",
 }
-# Fields that survive every planned migration stage.
+# Fields that survive every planned migration stage. The CLI-executable fields
+# (``executable`` / ``reasoning_effort``) were removed with the claude/codex
+# runners: the remaining executors do not launch a local program.
 AI_CONFIG_AI_KEYS_REQUIRED = {
     "provider",
     "model",
-    "executable",
-    "reasoning_effort",
     "timeout_seconds",
 }
 # Documented upper bound. Stage 6a removed the Poppler fields and the PDF-reader
@@ -134,7 +134,7 @@ def test_ai_config_json_contract(capsys, monkeypatch) -> None:
     # Stage 4a: ``runner`` is an alias, ``runners`` comes from the registry and
     # ``runner_limits`` bounds the HTTP runner. All three are additive.
     assert result["ai"]["runner"] == result["ai"]["provider"]
-    assert "codex" in result["ai"]["runners"]
+    assert result["ai"]["runners"] == ["direct", "in_session"]
     assert set(result["ai"]["runner_limits"]) == {
         "max_input_tokens",
         "max_output_tokens",

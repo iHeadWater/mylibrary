@@ -44,7 +44,7 @@ uv sync --all-packages
 | **读 Zotero 库**（MCP 12 个工具） | Zotero **Web API key** | `.env`：`ZOTERO_API_KEY` · `ZOTERO_LIBRARY_ID` |
 | **下载 + 入 Zotero**（入库） | 上面那条 + **GDrive 论文目录** + Zotero 里对应的「**链接附件根目录**」设置 | `.env`：`GDRIVE_PAPERS_PATH` |
 | **机构访问下载 PDF** | **Playwright 浏览器**（首机一次 `uv run playwright install chromium`）+ 任意有订阅的机构会话 | 见 [论文 PDF 下载](../user-guide/download-pdf.md) |
-| **文献卡与主题卡** | Zotero Desktop **正在运行**且**允许其他应用通信**；一种**已登录**的模型 CLI（Codex 或 Claude）。PDF 由 Python（PyMuPDF）先转换成 Markdown，**不需要 Poppler** | 模型凭据由**那个 CLI 自己**管 —— **不进本仓库** |
+| **文献卡与主题卡** | Zotero Desktop **正在运行**且**允许其他应用通信**；`direct` 执行者需要 **DeepSeek API key**（或其它 OpenAI 兼容 endpoint）。PDF 由 Python（PyMuPDF）先转换成 Markdown，**不需要 Poppler**；`cards run` 的 `in_session` 路径不需要任何 key | `.env`：`DEEPSEEK_API_KEY`（`direct`）；`in_session` 不需要 —— **都不进 Git** |
 | **深度处理**（精读 / 公众号 / 播客） | 看产出而定：**智谱**（配图）、**微信公众号**（发布）、**NotebookLM** | `.env`：`ZHIPUAI_API_KEY` · `WECHAT_APPID` + `WECHAT_APPSECRET` 等 |
 | **只做离线校验** | **以上额外项都不需要** | — |
 

@@ -19,8 +19,8 @@ description: |
 - **默认路径跨平台，不需要 Poppler。** PDF 先由 Python（PyMuPDF）确定性转换成 Markdown，
   再由注册表中的任意运行器阅读；macOS / Linux / Windows 行为一致。
 - **前置条件**：Zotero 已登录且目标库已同步（`paper-input` 走 Local API 读本地 PDF）；
-  `evidence-generate` 需要所选运行器可用（已登录的 Codex / Claude CLI，或配置好的 OpenAI 兼容接口），
-  或改用 `cards run prepare|finalize` 让任意 agent 读写文件。不满足时命令会明确报错，不会静默降级。
+  `evidence-generate` 需要 `direct` 执行者可用（`DEEPSEEK_API_KEY`，可换其它 OpenAI 兼容 endpoint），
+  或改用 `cards run prepare|finalize`（`in_session`，不需要 key）让当前 agent 读写文件。不满足时命令会明确报错，不会静默降级。
   不确定缺什么时先跑 `uv run hydrolitagent cards doctor --json`。
 - **平台不下载 PDF。** 它只读取共享库中**已经附好**的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`（本仓库另一侧能力）。
 
@@ -47,7 +47,7 @@ uv sync --all-packages      # 从仓库根执行
 收到 #29 的单篇 READY JSON 后，在仓库根运行：
 
 ~~~powershell
-uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
+uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider direct --json
 ~~~
 
 此入口要求 single_agent + local_path；个人库和群组库均可使用，无需再次扫描 Zotero。
@@ -74,7 +74,7 @@ PASS 只表示当前代码规则通过，不能声称科学结论正确或正式
 | 需要做什么 | 命令 |
 |---|---|
 | 查一篇自己的论文（个人库；群组库去掉 `--user-library`） | `uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json` |
-| 从 READY JSON 生成主体卡草稿 | `uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json` |
+| 从 READY JSON 生成主体卡草稿 | `uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider direct --json` |
 | 离线校验主体卡（不调模型） | `uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json` |
 | 从粗卡生成候选主题 | `uv run hydrolitagent cards themes-run --json` |
 | 只读预览主题池与输入变化（不调模型） | `uv run hydrolitagent cards themes-run --dry-run --json` |

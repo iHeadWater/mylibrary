@@ -8,7 +8,7 @@
 | 本机覆盖配置 | 本机临时路径或不同端口 | `hydrolitagent/cards/assets/config/config.local.json` | 否 |
 | 运行时状态 | 运行区、锁、原始日志和可删除的临时处理文件 | `paths.runtime_dir` 指向的目录 | 否 |
 | 证据事实 | 父条目/附件 Key、PDF 哈希、读取方式、来源检查、模型阅读声明、生成审计、版本与时间 | 草稿记录与 `validation.json` | 是 |
-| 本机凭据与密钥 | Codex / Claude CLI 登录凭据、GitHub Token；未来可能使用的大模型 API Key | 凭据存储、环境变量 | 否 |
+| 本机凭据与密钥 | `DEEPSEEK_API_KEY`（`direct` 执行者）、GitHub Token | 环境变量 / `.env` | 否 |
 | 程序协议常量 | Zotero API 路由、事件名称、Schema 版本 | 代码及受版本控制的 Schema | 是 |
 
 ## 路径解析规则
@@ -35,7 +35,7 @@
 | `paths.*`、模板与清单路径 | 本机 Python | 总配置；迁移目录时同步 | 越界路径必须报错，不能逃出项目根或产物根 |
 | `zotero.group_id/base_url` | 本机 Python | 总配置 | 错库/数据源风险；再次核对源身份，群组 ID 不是认证 |
 | `card_generator.*` | 本机适配器 | 总配置；变更后检查 | 外部处理方/额度改变；不能填写未实现适配器 |
-| Codex / Claude 登录信息 | 本机 CLI | 外部凭据存储；过期重新登录，泄露后撤销 | 不放 JSON/提示词/命令参数；项目不复制认证文件 |
+| LLM API key | 环境变量 / `.env` | 过期或泄露后轮换 | 不放 JSON/提示词/命令参数；诊断文本经脱敏 |
 | GitHub 令牌 | 操作者 Git | 外部凭据管理，泄露后轮换 | 日常链路不用、不主动推送；日志不得包含令牌 |
 
 没有浏览器客户端包，不存在密钥打包进前端的路径；仓库、提示词和日志仍是泄露面，不能由此宣称完成秘密扫描。`config.local.json` 是完整替代配置，不是自动合并层。

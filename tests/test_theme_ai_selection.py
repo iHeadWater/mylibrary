@@ -68,10 +68,8 @@ def test_themes_run_applies_the_cli_ai_provider(tmp_path, monkeypatch):
     config_path = write_config(tmp_path)
     ai_file = tmp_path / "ai.toml"
     ai_file.write_text(
-        '[ai]\nprovider = "codex"\nexecutable = "codex"\n', encoding="utf-8"
+        '[ai]\nprovider = "in_session"\n', encoding="utf-8"
     )
-    executable = str(tmp_path / "npm" / "claude.EXE")
-
     code, captured = _run_themes_cli(
         monkeypatch,
         config_path,
@@ -79,11 +77,9 @@ def test_themes_run_applies_the_cli_ai_provider(tmp_path, monkeypatch):
             "--ai-config",
             str(ai_file),
             "--ai-provider",
-            "claude",
+            "direct",
             "--ai-model",
-            "claude-sonnet-4-6",
-            "--ai-executable",
-            executable,
+            "deepseek-chat",
             "--ai-timeout",
             "90",
         ],
@@ -92,11 +88,10 @@ def test_themes_run_applies_the_cli_ai_provider(tmp_path, monkeypatch):
     assert code == 0
     pipeline_config = captured["config"]
     assert captured["dry_run"] is False
-    assert pipeline_config.card_generator.adapter == "claude_cli"
-    # The resolved selection value travels through verbatim; the runner adds
-    # any platform wrapping, not this layer.
-    assert pipeline_config.card_generator.executable == executable
-    assert pipeline_config.card_generator.model == "claude-sonnet-4-6"
+    assert pipeline_config.card_generator.adapter == "direct"
+    # The provider choice does not rewrite the legacy CLI fields in config.json.
+    assert pipeline_config.card_generator.executable == "codex"
+    assert pipeline_config.card_generator.model == "deepseek-chat"
     assert pipeline_config.card_generator.generation_timeout_seconds == 90
     assert pipeline_config.card_generator.reasoning_effort is None
 
@@ -104,12 +99,11 @@ def test_themes_run_applies_the_cli_ai_provider(tmp_path, monkeypatch):
 def test_themes_run_keeps_the_loaded_configuration(tmp_path, monkeypatch):
     config_path = write_config(tmp_path)
     loaded = load_config(config_path)
-    executable = str(tmp_path / "npm" / "claude.EXE")
 
     code, captured = _run_themes_cli(
         monkeypatch,
         config_path,
-        ["--ai-provider", "claude", "--ai-executable", executable],
+        ["--ai-provider", "direct"],
     )
 
     assert code == 0
@@ -130,8 +124,7 @@ def test_themes_run_without_a_provider_reads_the_ai_config_file(tmp_path, monkey
     config_path = write_config(tmp_path)
     ai_file = tmp_path / "ai.toml"
     ai_file.write_text(
-        '[ai]\nprovider = "claude"\nexecutable = "claude"\nmodel = "from-toml"\n',
-        encoding="utf-8",
+        '[ai]\nprovider = "direct"\nmodel = "from-toml"\n', encoding="utf-8"
     )
 
     code, captured = _run_themes_cli(
@@ -141,8 +134,7 @@ def test_themes_run_without_a_provider_reads_the_ai_config_file(tmp_path, monkey
     assert code == 0
     card_generator = captured["config"].card_generator
     # config.json still says codex_cli; the AI selection file decides instead.
-    assert card_generator.adapter == "claude_cli"
-    assert card_generator.executable == "claude"
+    assert card_generator.adapter == "direct"
     assert card_generator.model == "from-toml"
 
 
@@ -150,14 +142,14 @@ def test_themes_run_reads_the_ai_config_from_the_environment(tmp_path, monkeypat
     config_path = write_config(tmp_path)
     ai_file = tmp_path / "ai.toml"
     ai_file.write_text(
-        '[ai]\nprovider = "claude"\nexecutable = "claude"\n', encoding="utf-8"
+        '[ai]\nprovider = "in_session"\n', encoding="utf-8"
     )
     monkeypatch.setenv("HYDROLITAGENT_CARDS_AI_CONFIG", str(ai_file))
 
     code, captured = _run_themes_cli(monkeypatch, config_path, [])
 
     assert code == 0
-    assert captured["config"].card_generator.adapter == "claude_cli"
+    assert captured["config"].card_generator.adapter == "in_session"
 
 
 @pytest.mark.parametrize("flag", ["--dry-run", "--migrate-only"])
@@ -190,9 +182,8 @@ def test_non_model_runs_do_not_resolve_a_provider(tmp_path, monkeypatch, flag):
 def test_apply_ai_selection_is_the_only_mutation(tmp_path):
     loaded = load_config(write_config(tmp_path))
     selection = ai_config.resolve_ai_config(
-        provider="claude",
-        executable=str(tmp_path / "claude.EXE"),
-        model="claude-sonnet-4-6",
+        provider="direct",
+        model="deepseek-chat",
         timeout_seconds=42,
     )
 
@@ -200,14 +191,14 @@ def test_apply_ai_selection_is_the_only_mutation(tmp_path):
 
     assert updated is not loaded
     assert loaded.card_generator.adapter == "codex_cli"  # input untouched
-    assert updated.card_generator.adapter == "claude_cli"
-    assert updated.card_generator.executable == str(tmp_path / "claude.EXE")
-    assert updated.card_generator.model == "claude-sonnet-4-6"
+    assert updated.card_generator.adapter == "direct"
+    assert updated.card_generator.model == "deepseek-chat"
     assert updated.card_generator.generation_timeout_seconds == 42
+    assert updated.card_generator.reasoning_effort is None
     assert updated.paths is loaded.paths
     assert updated.zotero is loaded.zotero
     assert updated.runner_options == {
-        "base_url": None,
+        "base_url": "https://api.deepseek.com",
         "max_input_tokens": 60000,
         "max_output_tokens": 16000,
     }

@@ -90,13 +90,23 @@ def _default_converter() -> PaperConverter:
 
 
 def _runner_options(app_config: Any, runner_id: str) -> dict[str, Any]:
+    """The provider-neutral bag every runner factory receives.
+
+    ``runner_options`` comes from the AI selection (endpoint and token budgets).
+    ``model`` is the ordinary card-generator field. Credentials are never in
+    here: the ``direct`` runner reads its key from the environment.
+    """
+
     card_generator = app_config.card_generator
     runner_options = dict(getattr(app_config, "runner_options", None) or {})
+    # ``card_generator.model`` belongs to the *selected* executor. An old
+    # config.json still names the legacy ``codex_cli`` adapter and a model for
+    # it; handing that model to ``direct`` would pair it with the DeepSeek
+    # endpoint. When no registry executor was selected, let the adapter default.
+    adapter = str(getattr(card_generator, "adapter", "")).strip().casefold()
+    model = getattr(card_generator, "model", None) if adapter in runner_ids() else None
     return {
-        "executable": getattr(card_generator, "executable", None),
-        "model": getattr(card_generator, "model", None),
-        "proxy": getattr(card_generator, "proxy", None),
-        "connection_guard": getattr(card_generator, "connection_guard", None),
+        "model": model,
         "base_url": runner_options.get("base_url"),
         "max_input_tokens": runner_options.get("max_input_tokens"),
         "max_output_tokens": runner_options.get("max_output_tokens"),
@@ -174,27 +184,6 @@ def build_session_pipeline(app_config: Any) -> MarkdownPipeline:
 # --------------------------------------------------------------------------------------
 
 
-def _configured_runner_id(app_config: Any) -> str:
-    configured = str(getattr(app_config.card_generator, "adapter", "")).strip().casefold()
-    if configured.endswith("_cli") and len(configured) > 4:
-        configured = configured[:-4]
-    return configured
-
-
-def _doctor_runner_options(app_config: Any, runner_id: str) -> dict[str, Any]:
-    """Probe each runner with *its own* executable, not the selected one's.
-
-    The configured executable belongs to whichever runner a card run would use.
-    Reusing it for every doctor check made the local-agent checks report the
-    same binary; the others must fall back to their own command name.
-    """
-
-    options = _runner_options(app_config, runner_id)
-    if runner_id != _configured_runner_id(app_config) or not options["executable"]:
-        options["executable"] = runner_id
-    return options
-
-
 def _runner_doctors(app_config: Any) -> list[RunnerDoctor]:
     """Build every registered runner and ask it for a self-report.
 
@@ -206,7 +195,7 @@ def _runner_doctors(app_config: Any) -> list[RunnerDoctor]:
     reports: list[RunnerDoctor] = []
     for runner_id in runner_ids():
         try:
-            runner = create(runner_id, **_doctor_runner_options(app_config, runner_id))
+            runner = create(runner_id, **_runner_options(app_config, runner_id))
             report = runner.doctor()
             # Report the registry id the operator can pass to --ai-provider; the
             # adapter's internal id is an implementation detail.

@@ -47,7 +47,7 @@ flowchart TB
 | Zotero | 来源身份、条目、附件与原始 PDF | 不保存主题判断，不由平台修改数据库文件 |
 | `hydrolitagent` | 文献下载、入库、查询、附件和全文访问 | 不管理主题生命周期 |
 | 单篇输入与 PDF 门禁 | 解析唯一本地 PDF，检查文件大小、文本量和文件指纹 | 元数据或摘要不能替代全文证据 |
-| 制卡适配器 | 由 `adapters/runners/registry.py` 按运行器 id 装配：本地 CLI（读 Python 转换的 `paper.md`）或 OpenAI 兼容 HTTP（纯文本，内联或按页锚点分块） | 注册表是唯一选择点，新增运行器只需一个 adapter 文件加一处注册；`in_session` 尚未实现。`openai_compatible` 声明无视觉能力，引用图时把 `visual_content_status` 降为 `NOT_REVIEWED`。流程通过不等于科学正确 |
+| 制卡适配器 | 由 `adapters/runners/registry.py` 按执行者 id 装配，只有 `in_session`（当前 agent 写 `response.json`）与 `direct`（直连 OpenAI 兼容 API，默认 DeepSeek，纯文本，内联或按页锚点分块） | 注册表是唯一选择点，新增执行者只需一个 adapter 文件加一处注册。`direct` 声明无视觉能力，引用图时把 `visual_content_status` 降为 `NOT_REVIEWED`。流程通过不等于科学正确 |
 | 主体卡校验 | 确定性检查字段形状、来源绑定、页码、引用编号和版本指纹 | 不调用模型，不读取 Zotero，不证明科研内容正确 |
 | 主题池 | 基于全池文献卡、既有候选和适用精读执行 CREATE/UPDATE/MERGE/SPLIT | 只能处理候选主题，不能自动建立正式主题 |
 
@@ -76,7 +76,7 @@ flowchart TB
 ## 信任与写入边界
 
 - Zotero数据、PDF、模型输出和文档正文都是需要校验的输入，不能凭声明越过程序门禁。
-- Codex / Claude 负责建议和内容生成；Python 负责来源身份、允许路径、Schema 传输、重复检查和原子保存。
+- 执行者（`in_session` 的当前 agent 或 `direct` 的 API 调用）负责建议和内容生成；Python 负责来源身份、允许路径、Schema 传输、重复检查和原子保存。
 - 日常运行不会执行 Git 提交或推送，也不会把候选主题升级为正式主题。
 - 密钥来自本机环境变量或登录状态；配置文件最多记录环境变量名称和非敏感标识。
 

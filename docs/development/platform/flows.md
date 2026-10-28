@@ -9,7 +9,7 @@ sequenceDiagram
     actor User as 研究者
     participant CLI as cards CLI
     participant Zotero as Zotero Local API
-    participant Model as Codex / Claude CLI
+    participant Model as direct API / in_session agent
     participant Artifacts as 产物根
 
     User->>CLI: paper-input --user-library --item-key ...
@@ -49,7 +49,7 @@ flowchart LR
 
 ### 首次使用
 
-1. 准备 Zotero Desktop、已下载的 PDF，以及一种已登录的 CLI（Codex 或 Claude）。PDF 由 Python 转换，不需要 Poppler。
+1. 准备 Zotero Desktop、已下载的 PDF，以及一个可用的执行者（`direct` 需要 `DEEPSEEK_API_KEY`；`in_session` 用 `cards run` 不需要 key）。PDF 由 Python 转换，不需要 Poppler。
 2. 克隆仓库并执行 `uv sync --all-packages`。
 3. 按[文献卡与主题卡概述](../../user-guide/cards/index.md)选一篇自己的论文，依次完成输入、生成与校验。
 

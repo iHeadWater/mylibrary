@@ -53,8 +53,8 @@
 | 字段 | 当前含义 | 允许值或规则 |
 |---|---|---|
 | `workflow_mode` | 制卡编排方式 | 当前 `single_agent`；单 Agent 必须移除 `multi_agent_workflow` |
-| `adapter` | 旧版 PDF 直读管线用的适配器名（兼容键） | 当前只能是 `codex_cli`；Markdown 管线的运行器由 `configs/ai.toml` 的 `provider`（别名 `runner`）经注册表选择，不看这个字段 |
-| `executable` | 要查找和运行的 Codex CLI 命令名或路径 | 默认为 `codex`；非空字符串 |
+| `adapter` | 旧版证据包管线的适配器名（兼容键） | 当前只能是 `codex_cli`；Markdown 管线不看这个字段，执行者由 `configs/ai.toml` 的 `provider`（别名 `runner`，取值 `direct` / `in_session`）经注册表选择 |
+| `executable` | 旧版 CLI 路径（兼容键，Markdown 管线已不使用） | 非空字符串；保留是为了旧配置文件仍能加载 |
 | `auth_mode` | 本阶段能够确认的认证方式 | 当前只能是 `chatgpt_account` |
 | `preflight_timeout_seconds` | 版本和登录状态两项检查各自的最长等待秒数 | 大于 0 |
 | `model` | 单 Agent 制卡模型 | `null` 表示使用 Codex 内置默认；也可填写非空模型名称 |
@@ -76,7 +76,7 @@
 
 程序会把显式推理强度转换为 Codex CLI 的 `--config model_reasoning_effort="..."` 参数。配置校验只能防止未知档位和拼写错误；账号是否能使用指定模型、该模型是否支持指定档位，必须由真实生成验收。
 
-`card_generator.connection_guard` 是 Python 对每个制卡子进程实施的停止保护，不依赖 CLI 自身的重试次数，也不受 `progress.enabled` 或 `--no-progress` 影响：
+`card_generator.connection_guard` 是旧版子进程（`card_generators/streaming.py`，仅 `--item-key` 证据包路径与 `--pipeline legacy` 回退使用）的停止保护；Markdown 管线的两个执行者都不启动子进程，因此这些限额对它们无效：
 
 | 字段 | 当前配置 / 示例值 | 含义与边界 |
 |---|---|---|
@@ -98,9 +98,9 @@
 
 父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `.runtime/` 或草稿记录。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](variables.md)。
 
-## Codex 子进程独立代理
+## 旧版子进程代理（仅兼容）
 
-`card_generator.proxy` 只影响本平台启动的 Codex CLI 子进程环境，不修改 Python 主进程的 `os.environ`、系统/用户环境变量、Windows 系统代理或 Codex 个人配置，也不重启客户端。Zotero 本地 API 与其他独立程序保持原有网络设置。
+Markdown 管线的 `direct` 执行者只做一次 HTTP 补全，不启动子进程；`in_session` 更是完全不调用模型。`card_generator.proxy` 因此不再影响任何生产路径，只为让旧配置文件继续加载而保留校验，代理实现（`card_generators/proxy.py`）已无调用方。Zotero 本地 API 与其他独立程序保持原有网络设置。
 
 | 字段 | 含义与修改方法 |
 |---|---|

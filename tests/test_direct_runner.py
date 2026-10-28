@@ -1,8 +1,9 @@
-"""Behaviour of the OpenAI-compatible runner, driven by ``httpx.MockTransport``.
+"""Behaviour of the ``direct`` runner, driven by ``httpx.MockTransport``.
 
 No network, no key, no model: every assertion is about the request the runner
-builds and the result it returns. That is the point of putting HTTP behind a
-port -- the contract can be tested exactly like a local CLI runner.
+builds and the result it returns. The ``direct`` executor is one
+``/chat/completions`` call (DeepSeek by default), so the contract can be tested
+exactly like any other port.
 """
 
 from __future__ import annotations
@@ -15,11 +16,13 @@ from pathlib import Path
 import httpx
 import pytest
 
-from hydrolitagent.cards.adapters.runners.openai_compatible import (
+from hydrolitagent.cards.adapters.runners.direct import (
     CHUNKED_READING,
+    DEFAULT_BASE_URL,
+    DEFAULT_MODEL,
     JSON_SCHEMA_UNSUPPORTED,
     VISUAL_CONTENT_NOT_REVIEWED,
-    OpenAICompatibleRunner,
+    DirectRunner,
     estimate_tokens,
     plan_chunks,
 )
@@ -137,7 +140,7 @@ def request_for(
     workspace.mkdir(exist_ok=True)
     (workspace / MARKDOWN_FILENAME).write_text(markdown, encoding="utf-8")
     return CardRunRequest(
-        run_id="run-openai",
+        run_id="run-direct",
         paper=paper,
         prompt="请按 schema 生成主体卡草稿。",
         output_schema=OUTPUT_SCHEMA,
@@ -194,7 +197,20 @@ def sequence(*responses):
     return handler
 
 
-def runner(endpoint: FakeEndpoint, **overrides) -> OpenAICompatibleRunner:
+@pytest.fixture(autouse=True)
+def _clean_direct_environment(monkeypatch):
+    """A developer's own key or endpoint must not decide what a test observes."""
+
+    for name in (
+        "DEEPSEEK_API_KEY",
+        "DIRECT_LLM_API_KEY",
+        "DIRECT_LLM_BASE_URL",
+        "DIRECT_LLM_MODEL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
+def runner(endpoint: FakeEndpoint, **overrides) -> DirectRunner:
     options = {
         "base_url": "https://api.example.test/v1",
         "api_key": API_KEY,
@@ -204,7 +220,7 @@ def runner(endpoint: FakeEndpoint, **overrides) -> OpenAICompatibleRunner:
         "transport": endpoint.transport,
     }
     options.update(overrides)
-    return OpenAICompatibleRunner(**options)
+    return DirectRunner(**options)
 
 
 # --------------------------------------------------------------------------------------
@@ -350,29 +366,44 @@ def test_connection_failure_is_structured(tmp_path):
     assert result.error.code == "RUNNER_CONNECTION_FAILED"
 
 
-def test_missing_configuration_never_calls_the_endpoint(tmp_path, monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+def test_missing_key_never_calls_the_endpoint_and_names_the_fix(tmp_path):
     endpoint = FakeEndpoint(sequence(completion(ANSWER)))
 
-    result = runner(endpoint, base_url="", api_key="", model="test-model").run(
-        request_for(tmp_path)
-    )
+    result = runner(endpoint, api_key="").run(request_for(tmp_path))
 
     assert result.ok is False
     assert result.error.code == "RUNNER_NOT_CONFIGURED"
     assert result.model_invoked is False
     assert endpoint.payloads == []
+    assert "DEEPSEEK_API_KEY" in result.error.message
+    assert "in_session" in result.error.message
 
 
-def test_missing_model_never_calls_the_endpoint(tmp_path):
+def test_defaults_target_deepseek(tmp_path):
     endpoint = FakeEndpoint(sequence(completion(ANSWER)))
 
-    result = runner(endpoint, model=None).run(request_for(tmp_path))
+    result = DirectRunner(api_key=API_KEY, transport=endpoint.transport).run(
+        request_for(tmp_path)
+    )
 
-    assert result.ok is False
-    assert result.error.code == "RUNNER_MODEL_REQUIRED"
-    assert endpoint.payloads == []
+    assert result.ok, result.error
+    assert endpoint.urls == [DEFAULT_BASE_URL + "/chat/completions"]
+    assert endpoint.payloads[0]["model"] == DEFAULT_MODEL == "deepseek-chat"
+    assert result.model == DEFAULT_MODEL
+
+
+def test_direct_llm_environment_overrides_the_defaults(tmp_path, monkeypatch):
+    monkeypatch.setenv("DIRECT_LLM_BASE_URL", "https://proxy.example.test/v1")
+    monkeypatch.setenv("DIRECT_LLM_MODEL", "another-model")
+    monkeypatch.setenv("DIRECT_LLM_API_KEY", "sk-env-key-123456")
+    endpoint = FakeEndpoint(sequence(completion(ANSWER)))
+
+    result = DirectRunner(transport=endpoint.transport).run(request_for(tmp_path))
+
+    assert result.ok, result.error
+    assert endpoint.urls == ["https://proxy.example.test/v1/chat/completions"]
+    assert endpoint.payloads[0]["model"] == "another-model"
+    assert endpoint.headers[0]["authorization"] == "Bearer sk-env-key-123456"
 
 
 def test_tampered_workspace_is_rejected_before_any_call(tmp_path):
@@ -569,16 +600,26 @@ def test_unreadable_stays_fail_closed_even_when_figures_are_mentioned(tmp_path):
 # --------------------------------------------------------------------------------------
 
 
-def test_doctor_reports_missing_configuration(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+def test_diagnostics_redact_paths_and_keys():
+    from hydrolitagent.cards.adapters.runners.diagnostics import (
+        sanitize_diagnostic_text,
+    )
 
-    missing = OpenAICompatibleRunner(base_url="", api_key="").doctor()
+    redacted = sanitize_diagnostic_text(
+        r"failed to read C:\Users\owen\papers\x.pdf with sk-live-12345678"
+    )
+    assert "%USERPROFILE%\\papers" in redacted
+    assert "sk-live-12345678" not in redacted
+
+
+def test_doctor_reports_missing_key_with_an_actionable_fix():
+    missing = DirectRunner(api_key="").doctor()
     assert missing.available is False
-    assert "OPENAI_API_KEY" in missing.detail
-    assert missing.fix
+    assert "DEEPSEEK_API_KEY" in missing.detail
+    assert missing.fix and "DEEPSEEK_API_KEY" in missing.fix
+    assert "in_session" in missing.fix
 
-    ready = OpenAICompatibleRunner(
+    ready = DirectRunner(
         base_url="https://api.example.test/v1", api_key=API_KEY, model="test-model"
     ).doctor()
     assert ready.available is True

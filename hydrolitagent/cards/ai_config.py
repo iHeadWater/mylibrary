@@ -21,14 +21,14 @@ from hydrolitagent.cards._paths import PROMPTS_DIR, TEMPLATES_DIR, REPO_ROOT
 
 
 DEFAULT_FILE = PROJECT_ROOT / "configs/ai.toml"
-# ``max_input_tokens`` / ``max_output_tokens`` bound the HTTP runner only: a
-# local CLI decides its own output budget, which the platform can observe but
-# not limit.
+# ``max_input_tokens`` / ``max_output_tokens`` bound the ``direct`` runner
+# (page-aligned chunking and one completion). ``base_url`` / ``model`` default
+# to DeepSeek; the API key itself is never part of this selection.
 INTEGER_KEYS = ("max_input_tokens", "max_output_tokens")
 INTEGER_LIMITS = {"max_input_tokens": 10_000_000, "max_output_tokens": 1_000_000}
-DEFAULTS = {"provider": "codex", "model": "", "executable": "", "reasoning_effort": "",
-            "timeout_seconds": 1500, "base_url": "", "max_input_tokens": 60000,
-            "max_output_tokens": 16000}
+DEFAULTS = {"provider": "direct", "model": "deepseek-chat",
+            "base_url": "https://api.deepseek.com", "timeout_seconds": 1500,
+            "max_input_tokens": 60000, "max_output_tokens": 16000}
 
 
 class AIConfigError(ValueError):
@@ -113,10 +113,6 @@ def resolve_ai_config(config_file=None, **overrides):
     if isinstance(values["timeout_seconds"], bool) or not math.isfinite(timeout) or not 1 <= timeout <= 7200:
         raise AIConfigError("timeout_seconds 必须为 1..7200 秒")
     values["timeout_seconds"] = timeout
-    efforts = {"", "low", "medium", "high", "xhigh", "max"} if provider == "claude" else {"", "none", "minimal", "low", "medium", "high", "xhigh", "max"}
-    if values["reasoning_effort"] not in efforts:
-        raise AIConfigError("当前提供方不支持该 reasoning_effort")
-    values["executable"] = values["executable"] or provider
     return values
 
 
@@ -136,10 +132,11 @@ def apply_ai_selection(app_config, selection):
     cfg = app_config.card_generator
     updated = replace(
         cfg,
-        adapter=selection["provider"] + "_cli",
-        executable=selection["executable"],
+        adapter=selection["provider"],
         model=selection["model"] or None,
-        reasoning_effort=selection["reasoning_effort"] or None,
+        # The direct runner performs one completion; a "reasoning effort" knob
+        # from the CLI era would be silently ignored, so it is cleared.
+        reasoning_effort=None,
         generation_timeout_seconds=selection["timeout_seconds"],
     )
     return replace(
@@ -160,11 +157,13 @@ def subject_card_config(selection, *, base_config=None):
     if base_config is not None:
         cfg = base_config.card_generator
     else:
-        cfg = CardGeneratorConfig("codex_cli", "codex", "chatgpt_account", 10, None, None, 120, 1500,
+        # Executable/auth fields remain in the dataclass for the legacy
+        # evidence-package path, but the Markdown pipeline never launches a CLI.
+        cfg = CardGeneratorConfig("direct", "", "none", 10, None, None, 120, 1500,
                   workflow_mode="single_agent", runtime_dir=REPO_ROOT / ".runtime",
                   connection_guard=ConnectionGuardConfig(reconnect_stop_enabled=False, idle_timeout_seconds=1500))
-    cfg = replace(cfg, adapter=selection["provider"] + "_cli", executable=selection["executable"],
-          model=selection["model"] or None, reasoning_effort=selection["reasoning_effort"] or None,
+    cfg = replace(cfg, adapter=selection["provider"],
+          model=selection["model"] or None, reasoning_effort=None,
           generation_timeout_seconds=selection["timeout_seconds"], workflow_mode="single_agent", multi_agent_workflow=None)
     paths = base_config.paths if base_config is not None else SimpleNamespace(
           evidence_card_generation_prompt_file=PROMPTS_DIR / "evidence-card-generation-v8.md",
@@ -191,8 +190,7 @@ def describe_ai(selection, *, output_root=None):
         "runner": selection.get("provider"),
         # Every id ``--ai-provider`` accepts right now, straight from the registry.
         "runners": list(runner_ids()),
-        # Budgets the HTTP runner enforces. Local CLIs decide their own output
-        # budget, so these values bound only the API runner.
+        # Budgets the ``direct`` runner enforces (chunking + one completion).
         "runner_limits": {
             "max_input_tokens": selection.get("max_input_tokens"),
             "max_output_tokens": selection.get("max_output_tokens"),
@@ -201,4 +199,5 @@ def describe_ai(selection, *, output_root=None):
     }
     return {"ok": True, "operation": "ai_config", "ai": ai,
             "literature_root": str(resolve_literature_root(root=output_root)),
-            "credentials": "由所选 CLI 使用本机登录或环境变量；本配置不保存凭据"}
+            "credentials": "direct 运行器只从环境变量读取 key（默认 DEEPSEEK_API_KEY）；"
+                           "in_session 不需要 key；本配置不保存凭据"}

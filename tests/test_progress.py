@@ -17,7 +17,6 @@ from hydrolitagent.cards.card_generators.streaming import _status_event, run_str
 from hydrolitagent.cards.cli import main
 from hydrolitagent.cards.config import ConfigError, ProgressConfig, REQUIRED_CARD_WORKFLOW_ROLES, load_config
 from hydrolitagent.cards.progress import ConsoleProgress
-import test_card_generator as generator_fixtures
 import test_config as config_fixtures
 
 class ProgressTests(unittest.TestCase):

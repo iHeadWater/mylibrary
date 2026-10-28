@@ -7,7 +7,7 @@ Python 只负责准备材料、校验接线和保存草稿，**不调用模型**
 
 ## 为什么分两阶段
 
-`evidence-generate` 由平台自己拉起 CLI，适合一种已登录的模型 CLI。若你想用自己的 agent、或在没有 CLI 的环境里制卡，
+`evidence-generate` 由平台直连 LLM API（默认 DeepSeek）。若你想用当前 agent、或不想配置 API key，
 就让平台先**准备**好材料，agent 在本地**写答案**，平台再**收口**：
 
 ```text
@@ -111,7 +111,7 @@ uv run hydrolitagent cards doctor --json
 | 检查 | 能力 | 说明 |
 |---|---|---|
 | `converter.pymupdf` | `pdf.convert` | PyMuPDF 可 import、版本与能力（文本 / 版面 / 表格 / 图） |
-| `runner.<id>` | `runner.<id>` | 注册表中的运行器：`claude`、`codex`、`openai_compatible`、`in_session` |
+| `runner.<id>` | `runner.<id>` | 注册表中的执行者，只有两个：`direct`、`in_session` |
 | `storage.output_root` | `storage.write` | 产物根能否写入；可用 `--output-root` 检查另一个根 |
 | `storage.runtime_lock` | `storage.lock` | 运行锁能否取得并释放 |
 | `zotero.*` | `zotero.read` | 仅在 `--network` 时检查 Zotero Local API 与目标群组 |

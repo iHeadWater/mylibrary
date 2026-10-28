@@ -15,7 +15,7 @@ from unittest.mock import Mock, patch
 from hydrolitagent.cards import theme_pool as pool
 from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.adapters.pdf.pymupdf_converter import PymupdfConverter
-from hydrolitagent.cards.adapters.runners.markdown import ScriptedRunner
+from hydrolitagent.cards.adapters.runners.scripted import ScriptedRunner
 from hydrolitagent.cards.adapters.storage.paper_store import PaperStore
 from hydrolitagent.cards.application.prepare_paper import prepare_paper
 from hydrolitagent.cards.card_validation import fingerprint
