@@ -136,9 +136,16 @@ def test_save_is_append_only_and_marks_the_draft_pending(record, tmp_path):
     assert Path(first["card_path"]).read_text(encoding="utf-8").endswith(
         saved["card_body_markdown"]
     )
-    # The same draft id may not be written twice.
-    with pytest.raises(FileExistsError):
-        save_draft(root, _draft(record, "a" * 16))
+    # Re-saving the same result is a no-op, not a crash.
+    again = save_draft(root, _draft(record, "a" * 16))
+    assert again["created"] is False
+    assert again["draft_path"] == first["draft_path"]
+    # A different result under the same draft id is a conflict, never an overwrite.
+    conflicting = _draft(record, "a" * 16)
+    conflicting["card_body_markdown"] = "# Fixed paper\n\nF001: another result.\n"
+    with pytest.raises(CardGenerationError) as caught:
+        save_draft(root, conflicting)
+    assert caught.value.code == "CARD_DRAFT_ALREADY_EXISTS"
 
 
 def test_save_uses_group_and_user_paths(record, tmp_path):

@@ -115,8 +115,23 @@ def check_wire(value: Any, schema: dict, path: str = "machine_fields") -> None:
             check_wire(child, schema["items"], f"{path}[{index}]")
 
 
+def _comparable(draft: dict) -> str:
+    """Everything that describes the card, minus the volatile bookkeeping."""
+
+    return json.dumps(
+        {key: value for key, value in draft.items() if key != "created_at"},
+        ensure_ascii=False, sort_keys=True, allow_nan=False,
+    )
+
+
 def save_draft(root: Path, draft: dict) -> dict:
-    """Write previews append-only; draft.json is the last, atomic completion marker."""
+    """Write the preview once; draft.json is the last, atomic completion marker.
+
+    Re-saving the same draft id with the same content returns the existing files
+    instead of raising: finalizing an already-finalized workspace is a no-op, not
+    a crash. A different result under the same draft id is a conflict, because a
+    draft is append-only and never overwritten.
+    """
     source = draft["source"]
     library = source["library"]
     identity = f"{library['type']}-{library['id']}-{source['parent_key']}"
@@ -124,8 +139,19 @@ def save_draft(root: Path, draft: dict) -> dict:
     resolved_root, resolved_dir = root.resolve(), directory.resolve()
     if not resolved_dir.is_relative_to(resolved_root):
         fail("CARD_DRAFT_PATH_INVALID", "草稿子目录不得通过链接逃逸出精读产物根")
-    directory.mkdir(parents=True, exist_ok=False)
     card = directory / "card.md"
+    completed = directory / "draft.json"
+    if resolved_dir.exists():
+        try:
+            current = json.loads(completed.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            current = None
+        if isinstance(current, dict) and _comparable(current) == _comparable(draft):
+            return {"literature_root": str(resolved_root), "draft_path": str(completed),
+                    "card_path": str(card), "created": False}
+        fail("CARD_DRAFT_ALREADY_EXISTS",
+             "同一 draft_id 已存在内容不同的草稿；草稿只追加，不覆盖")
+    directory.mkdir(parents=True, exist_ok=False)
     # A visible status belongs to the preview, never to the model-controlled body.
     card.write_text(
         "> 待校验主体卡草稿；未通过内容门禁，不是正式发布的卡片。\n\n"
@@ -134,9 +160,9 @@ def save_draft(root: Path, draft: dict) -> dict:
     pending = directory / "draft.json.tmp"
     pending.write_text(json.dumps(draft, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
                        encoding="utf-8", newline="\n")
-    pending.replace(directory / "draft.json")
-    return {"literature_root": str(resolved_root), "draft_path": str(directory / "draft.json"),
-            "card_path": str(card)}
+    pending.replace(completed)
+    return {"literature_root": str(resolved_root), "draft_path": str(completed),
+            "card_path": str(card), "created": True}
 
 
 __all__ = [

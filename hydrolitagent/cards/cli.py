@@ -13,6 +13,10 @@ from hydrolitagent.cards.application.card_workflow import (
     generate_markdown_card_draft,
     prepare_session_run,
 )
+from hydrolitagent.cards.application.card_version import (
+    load_card_version,
+    save_card_version,
+)
 from hydrolitagent.cards.application.reading_layer import (
     build_reading_layer,
     failed_refresh,
@@ -33,6 +37,7 @@ from hydrolitagent.cards.composition import (
     build_theme_pipeline,
 )
 from hydrolitagent.cards.config import ConfigError, load_config
+from hydrolitagent.cards.domain.errors import CardGenerationError
 from hydrolitagent.cards.paper_input_config import load_paper_input_config
 from hydrolitagent.cards.pdf_gate import PdfGateError
 from hydrolitagent.cards.paper_input import (
@@ -243,10 +248,55 @@ def _parser() -> argparse.ArgumentParser:
         help="转换缓存根（papers/<pdf_sha256>/...）；默认仓库根 .runtime",
     )
     index.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
+
+    card_save = subparsers.add_parser(
+        "card-save",
+        help="把通过校验的主体卡保存为不可变版本；不调用模型",
+    )
+    card_save.add_argument("--draft", required=True, help="待保存的主体卡草稿 draft.json")
+    card_save.add_argument(
+        "--validation",
+        help="指定校验记录；默认取这份草稿旁最新的一份",
+    )
+    card_save.add_argument("--output-root", help="产物根；默认按 configs/paths.toml 解析")
+    card_save.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
+
+    card_show = subparsers.add_parser(
+        "card-show",
+        help="按 card_id@version_id 读取已保存的主体卡版本；不给 version_id 读当前版本",
+    )
+    card_show.add_argument("--card-id", required=True, help="形如 EV-ABCD1234")
+    card_show.add_argument("--version-id", help="形如 v1、v2；默认当前版本")
+    card_show.add_argument("--output-root", help="产物根；默认按 configs/paths.toml 解析")
+    card_show.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
     return parser
 
 
 def _render_human(result: dict[str, Any]) -> str:
+    if result.get("operation") == "card_version_save":
+        if result.get("error"):
+            error = result["error"]
+            return f"保存版本失败 [{error.get('code')}]：{error.get('message')}"
+        state = "已保存新版本" if result.get("created") else "已存在相同版本，未重复保存"
+        return "\n".join([
+            f"{state}：{result.get('card_id')}@{result.get('version_id')}"
+            f"（第 {result.get('version_number')} 版）",
+            f"- 目录：{result.get('version_directory')}",
+        ])
+    if result.get("operation") == "card_version_show":
+        if result.get("error"):
+            error = result["error"]
+            return f"读取版本失败 [{error.get('code')}]：{error.get('message')}"
+        manifest = result.get("manifest") or {}
+        return "\n".join([
+            f"{result.get('card_id')}@{result.get('version_id')}"
+            f"（第 {result.get('version_number')} 版）",
+            f"- 目录：{(result.get('paths') or {}).get('version_directory')}",
+            f"- 阅读状态：{manifest.get('reading_status')}；"
+            f"可进主题：{'是' if manifest.get('theme_eligible') else '否'}",
+            "",
+            result.get("card") or "",
+        ])
     if result.get("operation") == "cards_index":
         broken = result.get("broken_links") or []
         if result.get("error"):
@@ -599,6 +649,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = _run_index(args)
         _emit(result, args.json)
         return 0 if result["ok"] else 3
+    if args.command in {"card-save", "card-show"}:
+        operation = "card_version_save" if args.command == "card-save" else "card_version_show"
+        try:
+            root = resolve_literature_root(root=args.output_root)
+            if args.command == "card-save":
+                result = save_card_version(root, args.draft, args.validation)
+            else:
+                result = load_card_version(root, args.card_id, args.version_id)
+        except (PathConfigError, OSError, ValueError) as exc:
+            _emit({"schema_version": 1, "operation": operation, "ok": False,
+                   "error": {"code": "CONFIG_ERROR", "message": str(exc)}}, args.json)
+            return 2
+        except CardGenerationError as exc:
+            _emit({"schema_version": 1, "operation": operation, "ok": False,
+                   "error": {"code": exc.code, "message": str(exc),
+                             "diagnostic": exc.diagnostic}}, args.json)
+            return 3
+        _emit(result, args.json)
+        return 0
     if args.command == "evidence-validate":
         try:
             if args.config and args.assets_root:

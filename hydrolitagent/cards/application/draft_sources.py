@@ -97,7 +97,7 @@ def _validated_at(record: dict[str, Any]) -> datetime | None:
     return moment if moment.tzinfo is not None else None
 
 
-def _newest_validation(directory: Path) -> tuple[dict[str, Any] | None, str]:
+def newest_validation(directory: Path) -> tuple[dict[str, Any] | None, str]:
     """Return the newest parseable validation record, or a rejection reason.
 
     A later record always wins: a re-validation that failed must not be masked
@@ -197,7 +197,7 @@ def inspect_draft(
     except (OSError, UnicodeDecodeError):
         return None, "unreadable"
 
-    record, reason = _newest_validation(resolved)
+    record, reason = newest_validation(resolved)
     if record is None:
         return None, reason
     if record.get("status") != "PASS" or record.get("ok") is not True:
