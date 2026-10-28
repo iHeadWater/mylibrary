@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from hydrolitagent.cards.domain.grounding import (
+    audit_reading,
     expected_canaries,
     is_quote_too_short,
     markdown_sha256,
@@ -594,3 +595,119 @@ def test_invalid_min_coverage_is_a_programming_error() -> None:
     markdown, anchors = make_document()
     with pytest.raises(ValueError):
         verify_reading(receipt(markdown), markdown, anchors, min_coverage=1.5)
+
+
+def test_every_rejected_quote_is_reported_not_just_the_first() -> None:
+    """A repair step must see all bad quotes at once, not one per round."""
+
+    markdown, anchors = make_document()
+    locations = body_locations(2, 3)
+    locations.append(
+        {
+            "anchor": "P2",
+            "quote": "Peak error fell by 92 percent under every tested scenario.",
+            "pdf_page": 2,
+            "section": None,
+            "figure": None,
+            "table": None,
+        }
+    )
+    locations.append(
+        {
+            "anchor": "P3",
+            "quote": "The model was calibrated on nine catchments in Brazil.",
+            "pdf_page": 3,
+            "section": None,
+            "figure": None,
+            "table": None,
+        }
+    )
+
+    with pytest.raises(GroundingError) as raised:
+        _verified(markdown, anchors, source_locations=locations)
+
+    reported = raised.value.detail["violations"]
+    assert [item["path"] for item in reported] == ["source_locations[2]", "source_locations[3]"]
+    assert {item["code"] for item in reported} == {"QUOTE_NOT_FOUND"}
+    # The legacy single-violation fields still describe the first one.
+    assert raised.value.code == "QUOTE_NOT_FOUND"
+    assert raised.value.detail["location_index"] == 2
+
+
+def test_coverage_shortfall_rides_along_with_the_rejection() -> None:
+    """Fixing the bad quote alone would still leave the card below the threshold."""
+
+    markdown, anchors = make_document()
+    locations = body_locations(2)
+    locations.append(
+        {
+            "anchor": "P2",
+            "quote": "Peak error fell by 92 percent under every tested scenario.",
+            "pdf_page": 2,
+            "section": None,
+            "figure": None,
+            "table": None,
+        }
+    )
+
+    audit = audit_reading(receipt(markdown, source_locations=locations), markdown, anchors)
+
+    assert audit.ok is False
+    assert audit.reading is None  # a receipt with a bad quote is not evidence
+    assert len(audit.violations) == 1
+    gap = audit.coverage
+    assert gap.covered_pages == (2,)
+    assert gap.missing_pages == (3,)
+    assert gap.required_pages == 2
+    assert gap.quote_coverage == pytest.approx(0.5)
+    assert gap.failed_quotes == 1
+    assert gap.satisfied is False
+
+
+def test_a_clean_audit_reports_no_violations_and_a_satisfied_coverage() -> None:
+    markdown, anchors = make_document()
+
+    audit = audit_reading(receipt(markdown, source_locations=body_locations(2, 3)), markdown, anchors)
+
+    assert audit.ok is True
+    assert audit.violations == ()
+    assert audit.reading is not None and audit.reading.status == "VERIFIED"
+    assert audit.coverage.satisfied is True
+    assert audit.coverage.required_pages == 2
+
+
+def test_unreadable_receipt_stops_before_the_quote_checks() -> None:
+    """Without a usable receipt the quote verdicts would be noise, not evidence."""
+
+    markdown, anchors = make_document()
+
+    audit = audit_reading(None, markdown, anchors)
+
+    assert audit.reading is None
+    assert audit.coverage is None
+    assert [item.code for item in audit.violations] == ["INCOMPLETE_MARKDOWN_READ"]
+    assert audit.violations[0].path == "reading_receipt"
+
+
+def test_a_rejected_quote_is_quoted_back_in_the_violation() -> None:
+    """The report must identify the bad quote, not just its index."""
+
+    markdown, anchors = make_document()
+    locations = body_locations(2)
+    locations.append(
+        {
+            "anchor": "P2",
+            "quote": "Peak error fell by 92 percent under every tested scenario.",
+            "pdf_page": 2,
+            "section": None,
+            "figure": None,
+            "table": None,
+        }
+    )
+
+    with pytest.raises(GroundingError) as raised:
+        _verified(markdown, anchors, source_locations=locations)
+
+    actual = raised.value.detail["violations"][0]["actual"]
+    assert "Peak error fell by 92 percent" in actual
+    assert "未找到" in actual

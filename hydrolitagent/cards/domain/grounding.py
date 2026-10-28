@@ -29,7 +29,7 @@ import hashlib
 import re
 import unicodedata
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from hydrolitagent.cards.domain.paper import PageAnchor
@@ -37,10 +37,12 @@ from hydrolitagent.cards.domain.reading import (
     AnchorConflict,
     GroundingError,
     QuoteVerdict,
+    ReadingCoverage,
     ReadingReceipt,
     SourceLocation,
     VerifiedReading,
 )
+from hydrolitagent.cards.domain.violations import Violation, violation_dicts
 
 # A quote must be long enough that it cannot be a lucky heading match. A CJK
 # character carries much more information than a Latin letter, so the two
@@ -315,18 +317,41 @@ def declared_page(location: SourceLocation) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def verify_reading(
+@dataclass(frozen=True)
+class ReadingAudit:
+    """Every grounding problem in one answer, plus the coverage it reached.
+
+    ``reading`` is ``None`` whenever ``violations`` is non-empty: a receipt with
+    a bad quote is not evidence, and a caller must not be able to read it as one
+    by accident.
+    """
+
+    reading: VerifiedReading | None
+    violations: tuple[Violation, ...] = ()
+    coverage: ReadingCoverage | None = None
+    # Legacy fields of the first violation, so the strict entry point keeps the
+    # detail its callers already read (``location_index``, ``missing_canaries``).
+    detail: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def ok(self) -> bool:
+        return not self.violations
+
+
+def audit_reading(
     receipt: Any,
     markdown: str,
     anchors: Sequence[PageAnchor],
     *,
     min_coverage: float = DEFAULT_MIN_COVERAGE,
-) -> VerifiedReading:
-    """Accept or reject a runner's reading receipt.
+) -> ReadingAudit:
+    """Collect every grounding problem instead of raising on the first one.
 
-    Raises ``GroundingError`` on a hard failure (digest, canaries, any quote).
-    Returns a ``VerifiedReading`` whose ``status`` is ``PARTIAL`` when fewer than
-    ``min_coverage`` of the body pages are backed by a verified quote.
+    A receipt that cannot be parsed, a digest mismatch or missing canaries stop
+    the audit immediately: without them the quotes are checked against the wrong
+    text, so every later result would be noise. Everything else -- each quote
+    and the coverage the answer reaches -- is reported in full, because a repair
+    step has to see all of it in one round.
     """
 
     if not 0.0 <= min_coverage <= 1.0:
@@ -337,59 +362,77 @@ def verify_reading(
         else receipt if isinstance(receipt, ReadingReceipt) else None
     )
     if parsed is None:
-        raise GroundingError(
+        return _preflight(
             "INCOMPLETE_MARKDOWN_READ",
+            "reading_receipt",
             "模型没有返回可解析的阅读回执（reading_receipt）",
         )
     if not anchors:
-        raise GroundingError(
-            "INCOMPLETE_MARKDOWN_READ", "转换结果没有页锚点，无法核对阅读范围"
+        return _preflight(
+            "INCOMPLETE_MARKDOWN_READ", "paper.md", "转换结果没有页锚点，无法核对阅读范围"
         )
     actual_digest = markdown_sha256(markdown)
     if parsed.markdown_sha256 != actual_digest:
-        raise GroundingError(
+        return _preflight(
             "MARKDOWN_SHA_MISMATCH",
+            "reading_receipt.markdown_sha256",
             "模型回显的 paper.md 摘要与本次转换结果不一致",
-            detail={"declared": parsed.markdown_sha256, "actual": actual_digest},
+            actual_digest,
+            parsed.markdown_sha256 or "未提供",
+            {"declared": parsed.markdown_sha256, "actual": actual_digest},
         )
     expected = expected_canaries(markdown)
-    seen = set(parsed.canaries_seen)
     if not expected:
-        raise GroundingError(
+        return _preflight(
             "INCOMPLETE_MARKDOWN_READ",
+            "paper.md",
             "转换结果没有完整性 canary，无法证明模型读到了文档首尾",
         )
+    seen = set(parsed.canaries_seen)
     missing = [token for token in expected if token not in seen]
     if missing:
-        raise GroundingError(
+        return _preflight(
             "INCOMPLETE_MARKDOWN_READ",
+            "reading_receipt.canaries_seen",
             "模型没有回显全部完整性 canary，不能证明读到了全文",
-            detail={"missing_canaries": missing},
+            f"回显全部 {len(expected)} 个",
+            "缺 " + "、".join(missing),
+            {"missing_canaries": missing},
         )
     if not parsed.source_locations:
-        raise GroundingError(
-            "QUOTE_NOT_FOUND", "模型没有给出任何可核对的原文引文"
+        return _preflight(
+            "QUOTE_NOT_FOUND", "source_locations", "模型没有给出任何可核对的原文引文"
         )
 
     index = PageIndex(markdown, anchors)
     verified_pages: set[int] = set()
     conflicts: list[AnchorConflict] = []
+    violations: list[Violation] = []
+    first_detail: dict[str, Any] = {}
     verified_quotes = 0
     for position, location in enumerate(parsed.source_locations):
         # A location without a quote is rejected by ``_verify_quote`` as too
         # weak. Statements with no location simply omit the entry instead.
         verdict = _verify_quote(index, location.quote)
         if not verdict.ok or verdict.page is None:
-            raise GroundingError(
-                verdict.reason or "QUOTE_NOT_FOUND",
-                _quote_message(verdict.reason, position),
-                detail={
+            if not first_detail:
+                first_detail = {
                     "location_index": position,
                     "quote_length": len(normalize_quote(location.quote)),
                     "declared_page": declared_page(location),
                     "found_page": verdict.page,
-                },
+                }
+            expected_text, actual_text = _quote_expectation(verdict, location)
+            violations.append(
+                Violation(
+                    verdict.reason or "QUOTE_NOT_FOUND",
+                    f"source_locations[{position}]",
+                    _quote_message(verdict.reason, position),
+                    expected_text,
+                    actual_text,
+                )
             )
+            continue
         claimed = declared_page(location)
         if claimed is not None and claimed not in verdict.pages:
             # The quote is real but the page label is wrong. It is excluded from
@@ -406,22 +449,145 @@ def verify_reading(
         verified_pages.add(claimed if claimed is not None else verdict.page)
         verified_quotes += 1
 
+    coverage = _coverage(
+        anchors,
+        verified_pages,
+        min_coverage=min_coverage,
+        total_quotes=len(parsed.source_locations),
+        verified_quotes=verified_quotes,
+        failed_quotes=len(violations),
+    )
+    if violations:
+        return ReadingAudit(None, tuple(violations), coverage, first_detail)
+    status = "VERIFIED" if coverage.satisfied else "PARTIAL"
+    return ReadingAudit(
+        VerifiedReading(
+            status=status,
+            read_mode=parsed.read_mode,
+            model_claimed_status=parsed.model_claimed_status,
+            verified_pages=tuple(sorted(verified_pages)),
+            verified_quotes=verified_quotes,
+            quote_coverage=coverage.quote_coverage,
+            canaries_ok=True,
+            min_coverage=min_coverage,
+            anchor_conflicts=tuple(conflicts),
+            self_report=parsed.self_report,
+        ),
+        (),
+        coverage,
+        {},
+    )
+
+
+def verify_reading(
+    receipt: Any,
+    markdown: str,
+    anchors: Sequence[PageAnchor],
+    *,
+    min_coverage: float = DEFAULT_MIN_COVERAGE,
+) -> VerifiedReading:
+    """Accept or reject a runner's reading receipt.
+
+    Raises ``GroundingError`` on a hard failure (digest, canaries, any quote) and
+    carries the full violation list in ``detail["violations"]``. Returns a
+    ``VerifiedReading`` whose ``status`` is ``PARTIAL`` when fewer than
+    ``min_coverage`` of the body pages are backed by a verified quote.
+    """
+
+    audit = audit_reading(receipt, markdown, anchors, min_coverage=min_coverage)
+    if audit.violations:
+        raise _grounding_error(audit)
+    assert audit.reading is not None  # no violations means the audit built one
+    return audit.reading
+
+
+def _preflight(
+    code: str,
+    path: str,
+    message: str,
+    expected: str | None = None,
+    actual: str | None = None,
+    detail: dict[str, Any] | None = None,
+) -> ReadingAudit:
+    """A failure that makes the quote checks meaningless, so they are not run."""
+
+    return ReadingAudit(
+        None, (Violation(code, path, message, expected, actual),), None, detail or {}
+    )
+
+
+def _coverage(
+    anchors: Sequence[PageAnchor],
+    verified_pages: set[int],
+    *,
+    min_coverage: float,
+    total_quotes: int,
+    verified_quotes: int,
+    failed_quotes: int,
+) -> ReadingCoverage:
     body_pages = [anchor.page for anchor in anchors if anchor.role == "body"]
     denominator = body_pages or [anchor.page for anchor in anchors]
-    covered = sum(1 for page in denominator if page in verified_pages)
-    coverage = round(covered / len(denominator), 4) if denominator else 0.0
-    status = "VERIFIED" if coverage >= min_coverage else "PARTIAL"
-    return VerifiedReading(
-        status=status,
-        read_mode=parsed.read_mode,
-        model_claimed_status=parsed.model_claimed_status,
-        verified_pages=tuple(sorted(verified_pages)),
-        verified_quotes=verified_quotes,
-        quote_coverage=coverage,
-        canaries_ok=True,
+    covered = tuple(page for page in denominator if page in verified_pages)
+    # ``required_pages`` is the smallest count that clears the threshold under
+    # the same rounding the status uses, so the number a repair step is told to
+    # reach is exactly the number that flips the status.
+    required = (
+        next(
+            (
+                count
+                for count in range(1, len(denominator) + 1)
+                if round(count / len(denominator), 4) >= min_coverage
+            ),
+            len(denominator),
+        )
+        if denominator
+        else 0
+    )
+    return ReadingCoverage(
         min_coverage=min_coverage,
-        anchor_conflicts=tuple(conflicts),
-        self_report=parsed.self_report,
+        required_pages=required,
+        quote_coverage=round(len(covered) / len(denominator), 4) if denominator else 0.0,
+        covered_pages=covered,
+        missing_pages=tuple(page for page in denominator if page not in verified_pages),
+        total_quotes=total_quotes,
+        verified_quotes=verified_quotes,
+        failed_quotes=failed_quotes,
+    )
+
+
+def _quote_expectation(
+    verdict: QuoteVerdict, location: SourceLocation
+) -> tuple[str, str]:
+    """The comparison a repair step needs to fix one rejected quote.
+
+    The rejected text is quoted back: a model told only "第 32 条找不到" cannot
+    tell which of its forty quotes that is, and a real run showed it answering
+    with the same invented sentence three attempts in a row.
+    """
+
+    quote = normalize_quote(location.quote)
+    snippet = quote[:60] + ("…" if len(quote) > 60 else "")
+    if verdict.reason == "QUOTE_TOO_WEAK":
+        return (
+            f"至少 {MIN_TOTAL_CHARACTERS} 字的正文原文（中文至少 {MIN_CJK_CHARACTERS} 字）",
+            f"{len(quote)} 字，或只命中标题/页眉：{snippet}",
+        )
+    if verdict.reason == "ANCHOR_MISMATCH":
+        return (
+            "引文落在所声称页面的正文范围内",
+            f"文档里有这句但不在任何页锚点内（{len(quote)} 字）：{snippet}",
+        )
+    claimed = declared_page(location)
+    where = f"声明第 {claimed} 页" if claimed else "未声明页"
+    return ("原文中逐字存在的句子", f"未找到（{where}，{len(quote)} 字）：{snippet}")
+
+
+def _grounding_error(audit: ReadingAudit) -> GroundingError:
+    first = audit.violations[0]
+    return GroundingError(
+        first.code,
+        first.message,
+        detail={**audit.detail, "violations": violation_dicts(audit.violations)},
     )
 
 
@@ -439,6 +605,8 @@ def _quote_message(reason: str | None, position: int) -> str:
 
 __all__ = [
     "DEFAULT_MIN_COVERAGE",
+    "ReadingAudit",
+    "audit_reading",
     "MIN_CJK_CHARACTERS",
     "MIN_TOTAL_CHARACTERS",
     "PageIndex",

@@ -235,12 +235,51 @@ class VerifiedReading:
         }
 
 
+@dataclass(frozen=True)
+class ReadingCoverage:
+    """How far the answer's quotes got towards proving a full read.
+
+    Reported even when the run is rejected: a repair step has to know that
+    fixing one quote still leaves the card below ``min_coverage``, otherwise it
+    spends a whole round discovering that.
+    """
+
+    min_coverage: float
+    required_pages: int
+    quote_coverage: float = 0.0
+    covered_pages: tuple[int, ...] = ()
+    missing_pages: tuple[int, ...] = ()
+    total_quotes: int = 0
+    verified_quotes: int = 0
+    failed_quotes: int = 0
+
+    @property
+    def satisfied(self) -> bool:
+        """Reached the threshold with every quote valid -- the only honest pass."""
+
+        return self.failed_quotes == 0 and self.quote_coverage >= self.min_coverage
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "min_coverage": self.min_coverage,
+            "required_pages": self.required_pages,
+            "quote_coverage": self.quote_coverage,
+            "covered_pages": list(self.covered_pages),
+            "missing_pages": list(self.missing_pages),
+            "total_quotes": self.total_quotes,
+            "verified_quotes": self.verified_quotes,
+            "failed_quotes": self.failed_quotes,
+            "satisfied": self.satisfied,
+        }
+
+
 __all__ = [
     "GROUNDING_ERROR_CODES",
     "AnchorConflict",
     "GroundingError",
     "GroundingErrorCode",
     "QuoteVerdict",
+    "ReadingCoverage",
     "ReadingReceipt",
     "ReadingStatus",
     "SourceLocation",

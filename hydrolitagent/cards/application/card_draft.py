@@ -23,6 +23,11 @@ from typing import Any
 
 from hydrolitagent.cards._paths import ASSETS_DIR
 from hydrolitagent.cards.domain.errors import CardGenerationError
+from hydrolitagent.cards.domain.violations import (
+    Violation,
+    describe_value,
+    violation_dicts,
+)
 
 KEY = re.compile(r"[A-Z0-9]{8}")
 SHA256 = re.compile(r"[a-f0-9]{64}")
@@ -88,31 +93,159 @@ def read_paper_input(record: Any) -> tuple[dict, Path]:
     return deepcopy(record), path
 
 
-def check_wire(value: Any, schema: dict, path: str = "machine_fields") -> None:
-    """Only decode the fixed wire shape. Do not judge content, coverage or citations."""
+_JSON_TYPE_LABELS = {
+    "object": "对象",
+    "array": "数组",
+    "string": "字符串",
+    "integer": "整数",
+    "number": "数值",
+    "boolean": "布尔值",
+    "null": "null",
+}
+
+
+def _declared_type(schema: dict) -> str | None:
     types = schema.get("type")
     if isinstance(types, list):
-        if value is None and "null" in types:
-            return
-        types = next(t for t in types if t != "null")
-    valid = {
+        others = [kind for kind in types if kind != "null"]
+        return others[0] if others else "null"
+    return types
+
+
+def _wire_type_ok(value: Any, kind: str) -> bool:
+    return {
         "object": isinstance(value, dict),
         "array": isinstance(value, list),
         "string": isinstance(value, str),
         "integer": type(value) is int,
         "number": type(value) is int or (type(value) is float and math.isfinite(value)),
-    }.get(types, False)
-    if not valid or ("enum" in schema and value not in schema["enum"]):
-        fail("CARD_DRAFT_OUTPUT_INVALID", f"机器字段无法解析：{path}")
-    if types == "object":
-        properties = schema["properties"]
-        if set(value) != set(properties):
-            fail("CARD_DRAFT_OUTPUT_INVALID", f"机器字段缺少或多出键：{path}")
-        for key, child in properties.items():
-            check_wire(value[key], child, f"{path}.{key}")
-    elif types == "array":
+        "boolean": isinstance(value, bool),
+        "null": value is None,
+    }.get(kind, False)
+
+
+def collect_wire_violations(
+    value: Any, schema: dict, path: str = "machine_fields"
+) -> list[Violation]:
+    """Every shape problem under ``path``, including nested array items.
+
+    The old check raised on the first problem, which told a repair step nothing
+    about the other seven; this reports the whole list with a path per entry so
+    a model can be pointed at the exact spot.
+    """
+
+    types = schema.get("type")
+    if isinstance(types, list) and value is None and "null" in types:
+        return []
+    kind = _declared_type(schema)
+    if not _wire_type_ok(value, kind or ""):
+        return [
+            Violation(
+                "CARD_DRAFT_OUTPUT_INVALID",
+                path,
+                "机器字段类型不符合协议",
+                _JSON_TYPE_LABELS.get(kind or "", kind or "未知类型"),
+                describe_value(value),
+            )
+        ]
+    if "enum" in schema and value not in schema["enum"]:
+        return [
+            Violation(
+                "CARD_DRAFT_OUTPUT_INVALID",
+                path,
+                "机器字段取值不在协议枚举内",
+                "、".join(str(item) for item in schema["enum"]),
+                describe_value(value),
+            )
+        ]
+    violations: list[Violation] = []
+    if kind == "object":
+        properties = schema.get("properties") or {}
+        for key in sorted(set(properties) - set(value)):
+            violations.append(
+                Violation(
+                    "CARD_DRAFT_OUTPUT_INVALID",
+                    f"{path}.{key}",
+                    "机器字段缺少该键",
+                    "该键存在",
+                    "未提供",
+                )
+            )
+        for key in sorted(set(value) - set(properties)):
+            violations.append(
+                Violation(
+                    "CARD_DRAFT_OUTPUT_INVALID",
+                    f"{path}.{key}",
+                    "机器字段多出协议外的键",
+                    "只允许协议规定的键",
+                    describe_value(value[key]),
+                )
+            )
+        for key in sorted(set(properties) & set(value)):
+            violations.extend(
+                collect_wire_violations(value[key], properties[key], f"{path}.{key}")
+            )
+    elif kind == "array":
+        items = schema.get("items") or {}
         for index, child in enumerate(value):
-            check_wire(child, schema["items"], f"{path}[{index}]")
+            violations.extend(collect_wire_violations(child, items, f"{path}[{index}]"))
+    return violations
+
+
+def describe_wire_contract(schema: dict, *, depth: int = 2) -> dict[str, Any]:
+    """The key list a repair prompt may quote: names, types, nested item keys.
+
+    ``depth`` is bounded on purpose. One level was not enough in practice: a
+    model handed only ``item_keys`` copied the *top-level* ``source_locations``
+    shape (with ``quote``/``anchor``) into the machine-field one, which allows
+    only ``pdf_page``/``section``/``figure``/``table`` -- fifty violations of one
+    repeated mistake.
+    """
+
+    contract: dict[str, Any] = {}
+    for key, child in sorted((schema.get("properties") or {}).items()):
+        kind = _declared_type(child)
+        entry: dict[str, Any] = {"type": kind}
+        if kind == "array":
+            items = child.get("items") or {}
+            entry["item_type"] = _declared_type(items)
+            if _declared_type(items) == "object":
+                entry["item_keys"] = sorted(items.get("properties") or {})
+                if depth > 0:
+                    nested = {
+                        # Describe the *item* object, not the array wrapper.
+                        name: describe_wire_contract(
+                            grandchild.get("items") or {}, depth=depth - 1
+                        )
+                        for name, grandchild in sorted(
+                            (items.get("properties") or {}).items()
+                        )
+                        if _declared_type(grandchild) == "array"
+                        and _declared_type(grandchild.get("items")) == "object"
+                    }
+                    if nested:
+                        entry["item_arrays"] = nested
+        if "enum" in child:
+            entry["enum"] = list(child["enum"])
+        if child.get("minItems") is not None:
+            entry["min_items"] = child["minItems"]
+        contract[key] = entry
+    return contract
+
+
+def check_wire(value: Any, schema: dict, path: str = "machine_fields") -> None:
+    """Only decode the fixed wire shape. Do not judge content, coverage or citations."""
+
+    violations = collect_wire_violations(value, schema, path)
+    if violations:
+        raise CardGenerationError(
+            "CARD_DRAFT_OUTPUT_INVALID",
+            f"机器字段不符合协议：{len(violations)} 处问题",
+            diagnostic={
+                "violations": violation_dicts(violations),
+                "machine_fields_contract": describe_wire_contract(schema),
+            },
+        )
 
 
 def _comparable(draft: dict) -> str:
@@ -173,6 +306,8 @@ __all__ = [
     "SHA256",
     "SINGLE_SOURCE_TEMPLATES",
     "check_wire",
+    "collect_wire_violations",
+    "describe_wire_contract",
     "digest",
     "fail",
     "read_paper_input",

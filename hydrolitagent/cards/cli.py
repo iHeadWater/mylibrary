@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from hydrolitagent.cards.application.card_workflow import (
+    DEFAULT_MAX_REPAIRS,
+    MAX_REPAIR_CAP,
     finalize_session_run,
     generate_markdown_card_draft,
     prepare_session_run,
@@ -170,6 +172,14 @@ def _parser() -> argparse.ArgumentParser:
                 "--paper-input", required=True,
                 help="单篇 READY JSON（输入记录）文件，或 - 从 stdin 读取；仅生成待校验草稿",
             )
+            command.add_argument(
+                "--max-repairs", type=int, default=DEFAULT_MAX_REPAIRS,
+                choices=range(0, MAX_REPAIR_CAP + 1), metavar=f"0-{MAX_REPAIR_CAP}",
+                help=(
+                    f"校验失败后交回同一模型修正的次数上限（默认 {DEFAULT_MAX_REPAIRS}，"
+                    f"硬上限 {MAX_REPAIR_CAP}；0 表示失败即停）"
+                ),
+            )
         if name in {"evidence-generate", "themes-run"}:
             command.add_argument(
                 "--no-progress", action="store_true",
@@ -272,6 +282,46 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _violation_lines(error: dict[str, Any]) -> list[str]:
+    """The per-problem lines a failure envelope carries, when it carries any.
+
+    A gate reports every problem it found, so the readable form lists them one
+    per line instead of one vague sentence: a "字段不一致" that names no field
+    cannot be acted on by a model or a human.
+    """
+
+    diagnostic = error.get("diagnostic") or {}
+    lines = []
+    for item in diagnostic.get("violations") or []:
+        parts = []
+        if item.get("expected") is not None:
+            parts.append(f"期望 {item['expected']}")
+        if item.get("actual") is not None:
+            parts.append(f"实际 {item['actual']}")
+        detail = f"（{'；'.join(parts)}）" if parts else ""
+        lines.append(
+            f"- [{item.get('code')}] {item.get('path')}：{item.get('message')}{detail}"
+        )
+    return lines
+
+
+def _attempt_lines(result: dict[str, Any]) -> list[str]:
+    """One line per model call, so a repaired run is not silently retried."""
+
+    attempts = result.get("attempts") or []
+    if len(attempts) < 2:
+        return []
+    lines = [f"- 模型调用 {len(attempts)} 次："]
+    for attempt in attempts:
+        state = "通过" if attempt.get("ok") else f"拒绝 {attempt.get('violation_count', 0)} 处"
+        code = attempt.get("error_code")
+        lines.append(
+            f"  - 第 {int(attempt.get('index', 0)) + 1} 次：{state}"
+            + (f"（{code}）" if code else "")
+        )
+    return lines
+
+
 def _render_human(result: dict[str, Any]) -> str:
     if result.get("operation") == "card_version_save":
         if result.get("error"):
@@ -331,9 +381,14 @@ def _render_human(result: dict[str, Any]) -> str:
     if result.get("operation") == "session_prepare":
         if not result.get("ok"):
             error = result.get("error", {})
-            return (
-                f"两阶段准备失败（{result.get('failed_stage', 'input')}）"
-                f"[{error.get('code', 'UNKNOWN')}]：{error.get('message', '未知错误')}"
+            return "\n".join(
+                [
+                    (
+                        f"两阶段准备失败（{result.get('failed_stage', 'input')}）"
+                        f"[{error.get('code', 'UNKNOWN')}]：{error.get('message', '未知错误')}"
+                    ),
+                    *_violation_lines(error),
+                ]
             )
         run_dir = result["run_dir"]
         return "\n".join(
@@ -354,9 +409,14 @@ def _render_human(result: dict[str, Any]) -> str:
     if result.get("operation") == "session_finalize":
         if not result.get("ok"):
             error = result.get("error", {})
-            return (
-                f"两阶段收口失败（{result.get('failed_stage', 'input')}）"
-                f"[{error.get('code', 'UNKNOWN')}]：{error.get('message', '未知错误')}"
+            return "\n".join(
+                [
+                    (
+                        f"两阶段收口失败（{result.get('failed_stage', 'input')}）"
+                        f"[{error.get('code', 'UNKNOWN')}]：{error.get('message', '未知错误')}"
+                    ),
+                    *_violation_lines(error),
+                ]
             )
         lines = [
             "已收口 response.json 并生成待校验主体卡草稿；未通过内容门禁、未正式发布",
@@ -378,7 +438,17 @@ def _render_human(result: dict[str, Any]) -> str:
         return "\n".join(lines)
     if result.get("operation") == "subject_card_draft":
         if not result.get("ok"):
-            return f"主体卡草稿失败（{result.get('failed_stage', 'input')}）：{result['error']['message']}"
+            error = result["error"]
+            return "\n".join(
+                [
+                    (
+                        f"主体卡草稿失败（{result.get('failed_stage', 'input')}）："
+                        f"{error['message']}"
+                    ),
+                    *_violation_lines(error),
+                    *_attempt_lines(result),
+                ]
+            )
         lines = [
             "已生成待校验主体卡草稿；未通过内容门禁、未正式发布",
             f"- 正文：{result['card_path']}",
@@ -387,6 +457,7 @@ def _render_human(result: dict[str, Any]) -> str:
         ]
         if result.get("pipeline") == "markdown":
             lines.append(f"- Markdown 接地校验：{result.get('reading_status') or '未知'}")
+        lines.extend(_attempt_lines(result))
         return "\n".join(lines)
     if result.get("operation") == "paper_input_batch":
         lines = [
@@ -700,6 +771,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     config, record, converter=built.converter, store=built.store,
                     runner=built.runner, options=built.options,
                     progress=progress, output_root=args.output_root,
+                    max_repairs=args.max_repairs,
                 )
                 progress.finish(result)
         except json.JSONDecodeError:

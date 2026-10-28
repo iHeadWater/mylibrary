@@ -131,6 +131,19 @@ class WorkspaceRunner(ScriptedRunner):
         return super().run(request)
 
 
+def _sequence(*builders):
+    """Answer with the first builder, then the second, then keep the last."""
+
+    state = {"index": 0}
+
+    def builder(request):
+        chosen = builders[min(state["index"], len(builders) - 1)]
+        state["index"] += 1
+        return chosen(request)
+
+    return builder
+
+
 def page_section(markdown: str, number: int) -> str:
     markers = list(PAGE_PATTERN.finditer(markdown))
     selected = next(marker for marker in markers if int(marker.group(1)) == number)
@@ -212,7 +225,9 @@ def grounded_output(request, *, quote_page: int = 2, locations=None, **overrides
     return output
 
 
-def run_workflow(app_config, record, runner, *, converter=None, store=None, tmp_path=None):
+def run_workflow(
+    app_config, record, runner, *, converter=None, store=None, tmp_path=None, **kwargs
+):
     converter = converter or PymupdfConverter()
     store = store or PaperStore(tmp_path / "cache")
     return generate_markdown_card_draft(
@@ -222,6 +237,7 @@ def run_workflow(app_config, record, runner, *, converter=None, store=None, tmp_
         store=store,
         runner=runner,
         output_root=tmp_path / "literature",
+        **kwargs,
     )
 
 
@@ -427,6 +443,50 @@ def test_conversion_failure_never_calls_the_runner(app_config, tmp_path):
     assert runner.requests == []
 
 
+def test_grounding_and_wire_problems_are_reported_together(app_config, tmp_path):
+    """One failing answer, one list: a quote problem must not hide a shape problem.
+
+    The repair step gets a single budget, so discovering the machine-field
+    mistakes only after fixing the quote would waste a whole round.
+    """
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+
+    def builder(request):
+        output = grounded_output(request)
+        output["source_locations"] = [
+            {
+                "anchor": "P2",
+                "quote": "Peak error fell by 92 percent under every tested scenario.",
+                "pdf_page": 2,
+                "section": None,
+                "figure": None,
+                "table": None,
+            }
+        ]
+        # A required protocol key is missing; nothing outside the schema is used.
+        output["machine_fields"].pop("boundaries")
+        return output
+
+    result = run_workflow(
+        app_config, _record(pdf), WorkspaceRunner(builder), tmp_path=tmp_path
+    )
+
+    assert result["ok"] is False
+    assert result["failed_stage"] == "grounding"
+    diagnostic = result["error"]["diagnostic"]
+    codes = [item["code"] for item in diagnostic["violations"]]
+    paths = [item["path"] for item in diagnostic["violations"]]
+    assert "QUOTE_NOT_FOUND" in codes
+    assert "CARD_DRAFT_OUTPUT_INVALID" in codes
+    assert "source_locations[0]" in paths
+    assert "machine_fields.boundaries" in paths
+    # The contract and the coverage shortfall travel with the rejection.
+    assert "findings" in diagnostic["machine_fields_contract"]
+    assert diagnostic["coverage"]["failed_quotes"] == 1
+    assert diagnostic["coverage"]["satisfied"] is False
+    assert _no_drafts(tmp_path)
+
+
 def test_model_page_count_must_match_the_prepared_pages(app_config, tmp_path):
     pdf = _write_pdf(tmp_path / "paper.pdf")
 
@@ -437,6 +497,236 @@ def test_model_page_count_must_match_the_prepared_pages(app_config, tmp_path):
 
     assert result["ok"] is False
     assert result["error"]["code"] == "MARKDOWN_PAGE_COUNT_MISMATCH"
+
+
+# --------------------------------------------------------------------------------------
+# repair loop (#32)
+# --------------------------------------------------------------------------------------
+
+
+def _broken_wire(request):
+    output = grounded_output(request)
+    output["machine_fields"].pop("boundaries")
+    return output
+
+
+def test_a_rejected_answer_is_handed_back_and_the_second_attempt_is_saved(
+    app_config, tmp_path
+):
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    runner = WorkspaceRunner(_sequence(_broken_wire, grounded_output))
+
+    result = run_workflow(app_config, _record(pdf), runner, tmp_path=tmp_path)
+
+    assert result["ok"], result
+    assert [attempt["ok"] for attempt in result["attempts"]] == [False, True]
+    first, second = result["attempts"]
+    assert first["error_code"] == "CARD_DRAFT_OUTPUT_INVALID"
+    assert any(
+        violation["path"] == "machine_fields.boundaries"
+        for violation in first["violations"]
+    )
+    assert second["violations"] == []
+    assert len(draft_paths(result)) == 1
+
+
+def test_repair_stops_at_the_cap_and_saves_nothing(app_config, tmp_path):
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    runner = WorkspaceRunner(_broken_wire)
+
+    result = run_workflow(
+        app_config, _record(pdf), runner, tmp_path=tmp_path, max_repairs=1
+    )
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "CARD_DRAFT_OUTPUT_INVALID"
+    assert [attempt["ok"] for attempt in result["attempts"]] == [False, False]
+    assert all(attempt["violation_count"] > 0 for attempt in result["attempts"])
+    assert _no_drafts(tmp_path)
+
+
+def test_the_repair_prompt_carries_the_previous_answer_and_the_contract(
+    app_config, tmp_path
+):
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    runner = WorkspaceRunner(_sequence(_broken_wire, grounded_output))
+
+    result = run_workflow(app_config, _record(pdf), runner, tmp_path=tmp_path)
+
+    assert result["ok"], result
+    repair_prompt = runner.requests[1].prompt
+    # The task itself is unchanged: the base prompt is still the prefix.
+    assert repair_prompt.startswith(runner.requests[0].prompt.rstrip())
+    assert "上一次的回答" in repair_prompt
+    assert "machine_fields.boundaries" in repair_prompt
+    # The contract is quoted from the schema, so the model sees the key names.
+    assert "research_questions" in repair_prompt
+    assert "missing_information" in repair_prompt
+
+
+def test_repair_does_not_loosen_grounding(app_config, tmp_path):
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+
+    def invented_quote(request):
+        return grounded_output(
+            request,
+            locations=[
+                {
+                    "anchor": "P2",
+                    "quote": (
+                        "For a storm event with average rainfall of R 561 mm the model "
+                        "overestimated peak flow by 40 percent."
+                    ),
+                    "pdf_page": 2,
+                    "section": None,
+                    "figure": None,
+                    "table": None,
+                }
+            ],
+        )
+
+    runner = WorkspaceRunner(invented_quote)
+    result = run_workflow(
+        app_config, _record(pdf), runner, tmp_path=tmp_path, max_repairs=2
+    )
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "QUOTE_NOT_FOUND"
+    # Every attempt was rejected by the same gate; nothing was waved through.
+    assert all(attempt["ok"] is False for attempt in result["attempts"])
+    assert len(result["attempts"]) == 3
+    assert _no_drafts(tmp_path)
+
+
+def test_the_repair_prompt_quotes_back_the_rejected_text(app_config, tmp_path):
+    """A rejected quote must come back verbatim, with "do not paraphrase"."""
+
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    invented = (
+        "For a storm event with average rainfall of R 561 mm the model "
+        "overestimated peak flow by 40 percent."
+    )
+
+    def bad_quote(request):
+        return grounded_output(
+            request,
+            locations=[
+                {
+                    "anchor": "P2",
+                    "quote": invented,
+                    "pdf_page": 2,
+                    "section": None,
+                    "figure": None,
+                    "table": None,
+                }
+            ],
+        )
+
+    runner = WorkspaceRunner(_sequence(bad_quote, grounded_output))
+    result = run_workflow(app_config, _record(pdf), runner, tmp_path=tmp_path)
+
+    assert result["ok"], result
+    repair_prompt = runner.requests[1].prompt
+    assert "average rainfall of R 561 mm" in repair_prompt
+    assert "不要改写之后继续用" in repair_prompt
+
+
+def _uncited_body(request):
+    """A verified reading whose body cites no finding id: validator-only failure."""
+
+    output = grounded_output(request)
+    output["card_body_markdown"] = "# Fixed paper\n\n本文给出了结果，但没有编号。\n"
+    return output
+
+
+def test_the_validator_is_part_of_the_repair_loop(app_config, tmp_path):
+    """A card that grounds every quote can still fail evidence-validate.
+
+    The body must cite F001; that rule lives in the validator, not in the
+    generation-time gate, so it has to be repairable too.
+    """
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    runner = WorkspaceRunner(_sequence(_uncited_body, grounded_output))
+
+    result = run_workflow(app_config, _record(pdf), runner, tmp_path=tmp_path)
+
+    assert result["ok"], result
+    first = result["attempts"][0]
+    assert first["ok"] is False
+    assert first["error_code"] == "CARD_FINDING_REFERENCE"
+    assert any(
+        "正文没有引用机器结果 F001" in violation["message"]
+        for violation in first["violations"]
+    )
+    assert [attempt["ok"] for attempt in result["attempts"]] == [False, True]
+    assert len(draft_paths(result)) == 1
+
+
+def test_validator_failures_stop_at_the_cap_too(app_config, tmp_path):
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    runner = WorkspaceRunner(_uncited_body)
+
+    result = run_workflow(
+        app_config, _record(pdf), runner, tmp_path=tmp_path, max_repairs=1
+    )
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "CARD_FINDING_REFERENCE"
+    assert result["failed_stage"] == "validation"
+    assert [attempt["ok"] for attempt in result["attempts"]] == [False, False]
+    assert _no_drafts(tmp_path)
+
+
+def test_a_partial_reading_is_not_gated_by_the_validator(app_config, tmp_path):
+    """Low coverage stays a savable PARTIAL draft, not a validation failure."""
+
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    runner = WorkspaceRunner(lambda request: grounded_output(request, quote_page=1))
+
+    result = run_workflow(app_config, _record(pdf), runner, tmp_path=tmp_path)
+
+    assert result["ok"], result
+    assert result["reading_status"] == "PARTIAL"
+    assert len(draft_paths(result)) == 1
+
+
+def test_max_repairs_zero_keeps_a_single_attempt(app_config, tmp_path):
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    runner = WorkspaceRunner(_broken_wire)
+
+    result = run_workflow(
+        app_config, _record(pdf), runner, tmp_path=tmp_path, max_repairs=0
+    )
+
+    assert result["ok"] is False
+    assert len(result["attempts"]) == 1
+    assert len(runner.requests) == 1
+
+
+def test_a_runner_failure_is_not_retried(app_config, tmp_path):
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    runner = ScriptedRunner(
+        ok=False, error=CardRunError("MARKDOWN_RUNNER_TIMEOUT", "runner 调用超时")
+    )
+
+    result = run_workflow(app_config, _record(pdf), runner, tmp_path=tmp_path)
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "MARKDOWN_RUNNER_TIMEOUT"
+    assert len(runner.requests) == 1
+
+
+def test_an_out_of_range_repair_budget_is_refused(app_config, tmp_path):
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+
+    with pytest.raises(ValueError):
+        run_workflow(
+            app_config,
+            _record(pdf),
+            WorkspaceRunner(grounded_output),
+            tmp_path=tmp_path,
+            max_repairs=99,
+        )
 
 
 # --------------------------------------------------------------------------------------

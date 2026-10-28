@@ -3,7 +3,7 @@
 Pipeline (every arrow is a port or a pure function):
 
     input record → prepare_paper → staged workspace → runner.run
-                 → grounding.verify_reading → output validation → atomic save
+                 → grounding.audit_reading → output validation → atomic save
 
 The application layer owns the artifact shape: the ``source_access`` receipt,
 the draft envelope, the provenance hashes and the append-only write. It never
@@ -41,7 +41,8 @@ from hydrolitagent.cards.application.workspace import (
 )
 from hydrolitagent.cards.application.card_draft import (
     SINGLE_SOURCE_TEMPLATES,
-    check_wire,
+    collect_wire_violations,
+    describe_wire_contract,
     read_paper_input,
     save_draft,
 )
@@ -50,9 +51,16 @@ from hydrolitagent.cards.application.prompts import (
     load_template_bundle,
     read_prompt,
 )
-from hydrolitagent.cards.domain.card_output import validate_model_output
+from hydrolitagent.cards.card_validation import (
+    ValidationAssets,
+    validate_subject_card,
+)
+from hydrolitagent.cards.domain.card_output import (
+    collect_model_output_violations,
+    normalize_model_output,
+)
 from hydrolitagent.cards.domain.errors import CardGenerationError
-from hydrolitagent.cards.domain.grounding import expected_canaries, verify_reading
+from hydrolitagent.cards.domain.grounding import audit_reading, expected_canaries
 from hydrolitagent.cards.domain.paper import FIGURES_DIRNAME, MARKDOWN_FILENAME, PreparedPaper
 from hydrolitagent.cards.domain.protocol import MARKDOWN_CARD_PROTOCOL_VERSION
 from hydrolitagent.cards.domain.reading import (
@@ -64,6 +72,7 @@ from hydrolitagent.cards.domain.source_access import (
     MARKDOWN_PREPARED,
     source_access_acceptable,
 )
+from hydrolitagent.cards.domain.violations import Violation, violation_dicts
 from hydrolitagent.cards.evidence_templates import EvidenceTemplateError
 from hydrolitagent.cards.ports.paper import (
     ConversionFailure,
@@ -78,6 +87,12 @@ from hydrolitagent.cards.progress import ProgressCallback, report_progress
 READING_PROMPT = ASSETS_DIR / "prompts/markdown-reading-v1.md"
 OUTPUT_SCHEMA = ASSETS_DIR / "schemas/subject-card-draft-output-v3.schema.json"
 DRAFT_SCHEMA_VERSION = 2
+# A rejected answer may be handed back to the same model with the reasons, but
+# only a few times: the budget has a hard ceiling so a malformed input cannot
+# burn a night of tokens. The default is the usual budget; the ceiling is what
+# an operator may raise it to for a paper that nearly converges.
+DEFAULT_MAX_REPAIRS = 3
+MAX_REPAIR_CAP = 5
 
 
 def _sha256_text(value: str) -> str:
@@ -245,12 +260,14 @@ def _card_run_request(
     workspace: Path,
     app_config: Any,
     progress: ProgressCallback | None,
+    *,
+    prompt_override: str | None = None,
 ) -> CardRunRequest:
     card_generator = app_config.card_generator
     return CardRunRequest(
         run_id=prep.run_id,
         paper=prep.prepared,
-        prompt=prep.prompt,
+        prompt=prep.prompt if prompt_override is None else prompt_override,
         output_schema=prep.schema,
         workspace=workspace,
         timeout_seconds=card_generator.generation_timeout_seconds,
@@ -312,21 +329,111 @@ def _process_audit(prepared, reading: VerifiedReading, run: CardRunResult) -> di
     }
 
 
+def _validation_violations(report: dict[str, Any]) -> list[Violation]:
+    """``evidence-validate`` errors in the shape a repair step already understands."""
+
+    violations: list[Violation] = []
+    for item in report.get("errors") or ():
+        if not isinstance(item, dict):
+            continue
+        violations.append(
+            Violation(
+                str(item.get("code") or "CARD_VALIDATION_FAILED"),
+                str(item.get("path") or "/"),
+                str(item.get("message") or ""),
+            )
+        )
+    if not violations:  # a FAIL report must still be repairable
+        violations.append(
+            Violation("CARD_VALIDATION_FAILED", "/", "主体卡没有通过代码校验，但没有给出具体原因")
+        )
+    return violations
+
+
+def _card_validation_gate(paper_input: Any):
+    """Run the same validator ``cards evidence-validate`` runs, in memory."""
+
+    assets = ValidationAssets.from_root()
+
+    def gate(draft: dict[str, Any]) -> dict[str, Any]:
+        return validate_subject_card(assets, draft, paper_input)
+
+    return gate
+
+
+def _page_count_violations(output: Any, expected: int) -> list[Violation]:
+    """Only a usable-but-wrong count is a mismatch; a malformed one is a shape error."""
+
+    page_count = output.get("source_page_count") if isinstance(output, dict) else None
+    if type(page_count) is not int or page_count == expected:
+        return []
+    return [
+        Violation(
+            "MARKDOWN_PAGE_COUNT_MISMATCH",
+            "source_page_count",
+            "模型页数与已转换 Markdown 的页锚点数不一致",
+            str(expected),
+            str(page_count),
+        )
+    ]
+
+
 def _complete_draft(
     prep: _Preparation,
     run: CardRunResult,
     output: dict[str, Any],
     *,
     stage: _Stage,
+    gate: Any = None,
 ) -> dict[str, Any]:
     """Ground, validate and save one runner answer; the shared tail of every path."""
 
+    # One answer, one list. Grounding, page count, the answer's shape and the
+    # machine-field wire are all "what the model wrote is wrong", so they are
+    # collected together and reported once. A repair step (or a human) then sees
+    # every problem -- including the coverage shortfall -- in one round instead
+    # of discovering one stage per retry.
     stage.value = "grounding"
-    reading = verify_reading(
+    reading_audit = audit_reading(
         ReadingReceipt.from_output(output),
         prep.markdown,
         prep.prepared.page_anchors,
     )
+    schema_fields = prep.schema["properties"]["machine_fields"]
+    violations = [*reading_audit.violations]
+    violations.extend(collect_model_output_violations(output, prep.templates))
+    violations.extend(_page_count_violations(output, prep.prepared.page_count))
+    violations.extend(
+        collect_wire_violations(
+            output.get("machine_fields") if isinstance(output, dict) else None,
+            schema_fields,
+        )
+    )
+    if violations:
+        stage.value = "grounding" if reading_audit.violations else "output"
+        raise CardGenerationError(
+            violations[0].code,
+            (
+                violations[0].message
+                if len(violations) == 1
+                else f"主体卡输出不符合制卡协议：{len(violations)} 处问题"
+            ),
+            diagnostic={
+                "stage": stage.value,
+                "draft_path": run.unvalidated_output_path,
+                "violations": violation_dicts(violations),
+                # The shape a repair must produce, and how far the quotes got.
+                # Both are advisory: only ``violations`` blocks a draft.
+                "machine_fields_contract": describe_wire_contract(schema_fields),
+                "coverage": (
+                    reading_audit.coverage.as_dict()
+                    if reading_audit.coverage is not None
+                    else None
+                ),
+            },
+        )
+    reading = reading_audit.reading
+    assert reading is not None  # no violations means the audit built one
     pdf = prep.record["pdf"]
     parent = prep.record["item"]["item_key"]
     access = _markdown_source_access(prep.prepared, reading)
@@ -338,18 +445,9 @@ def _complete_draft(
         )
 
     stage.value = "output"
-    validated = validate_model_output(
-        output,
-        prep.templates,
-        draft_path=run.unvalidated_output_path,
-    )
-    if validated["source_page_count"] != prep.prepared.page_count:
-        raise CardGenerationError(
-            "MARKDOWN_PAGE_COUNT_MISMATCH", "模型页数与已转换 Markdown 的页锚点数不一致"
-        )
-    fields = output.get("machine_fields")
-    check_wire(fields, prep.schema["properties"]["machine_fields"])
+    validated = normalize_model_output(output, prep.templates)
     template = prep.templates[validated["template_id"]]
+    fields = output["machine_fields"]
 
     warnings = [*run.warnings]
     if reading.status != "VERIFIED":
@@ -406,6 +504,39 @@ def _complete_draft(
         "usage": run.usage,
         "warnings": warnings,
     }
+    if gate is not None and reading.verified:
+        # A PARTIAL reading is a legitimate draft state (#31/#35: savable, never
+        # theme-eligible), and the validator would reject it for that alone.
+        # Gating it here would turn "low coverage" into "no draft at all".
+        #
+        # For a verified reading the generation-time checks above are weaker
+        # than ``evidence-validate``:
+        # a card can ground every quote and still fail "the body must cite
+        # F001". Running the same validator here means "passed" is the same
+        # thing on both sides, and a fixable failure becomes one more repair
+        # instead of a draft a human has to notice and rerun.
+        stage.value = "validation"
+        report = gate(draft)
+        if not report.get("ok"):
+            late = _validation_violations(report)
+            raise CardGenerationError(
+                late[0].code,
+                (
+                    late[0].message
+                    if len(late) == 1
+                    else f"主体卡没有通过代码校验：{len(late)} 处问题"
+                ),
+                diagnostic={
+                    "stage": "card_validation",
+                    "violations": violation_dicts(late),
+                    "coverage": (
+                        reading_audit.coverage.as_dict()
+                        if reading_audit.coverage is not None
+                        else None
+                    ),
+                },
+            )
+
     stage.value = "save"
     saved = save_draft(prep.root, draft)
     return {
@@ -497,6 +628,121 @@ def _record_failure(result: dict[str, Any], exc: BaseException, stage: _Stage) -
 
 
 # --------------------------------------------------------------------------------------
+# Repair loop: hand a rejected answer back to the same model, with the reasons
+# --------------------------------------------------------------------------------------
+
+
+def _repair_plan(exc: BaseException) -> tuple[list[dict[str, Any]], dict[str, Any]] | None:
+    """The violations and the contract a repair needs, or ``None``.
+
+    Repair is decided by data, not by an allowlist of codes: an error that
+    carries violations is one the model can act on. A runner failure, a timeout
+    or a source-identity mismatch carries none and is never retried.
+    """
+
+    diagnostic = getattr(exc, "diagnostic", None)
+    if not isinstance(diagnostic, dict):
+        return None
+    violations = diagnostic.get("violations")
+    if not isinstance(violations, list) or not violations:
+        return None
+    contract = diagnostic.get("machine_fields_contract")
+    return violations, contract if isinstance(contract, dict) else {}
+
+
+def _render_violation(item: dict[str, Any]) -> str:
+    parts = []
+    if item.get("expected") is not None:
+        parts.append(f"期望 {item['expected']}")
+    if item.get("actual") is not None:
+        parts.append(f"实际 {item['actual']}")
+    detail = f"（{'；'.join(parts)}）" if parts else ""
+    return f"- [{item.get('code')}] {item.get('path')}：{item.get('message')}{detail}"
+
+
+def _repair_prompt(
+    base: str,
+    previous: Any,
+    violations: list[dict[str, Any]],
+    contract: dict[str, Any],
+    coverage: dict[str, Any] | None,
+) -> str:
+    """The next attempt: same task, plus exactly what was rejected and why."""
+
+    lines = [
+        base.rstrip(),
+        "",
+        "## 上一次的回答（已被代码校验拒绝）",
+        "```json",
+        json.dumps(previous, ensure_ascii=False, indent=1, default=str),
+        "```",
+        "",
+        f"## 代码校验发现的问题（共 {len(violations)} 处）",
+        "".join(f"{_render_violation(item)}\n" for item in violations).rstrip(),
+    ]
+    if contract:
+        lines += [
+            "",
+            "## machine_fields 必须使用的键",
+            "照抄下面的键名与类型，不要自造分类，也不要给 source_locations 增加字段：",
+            "```json",
+            json.dumps(contract, ensure_ascii=False, indent=1),
+            "```",
+        ]
+    if coverage and not coverage.get("satisfied", True):
+        covered = coverage.get("covered_pages") or []
+        missing = coverage.get("missing_pages") or []
+        lines += [
+            "",
+            "## 引文覆盖不足",
+            (
+                f"- 已覆盖 {len(covered)} 页，需要 {coverage.get('required_pages')} 页"
+                f"（阈值 {coverage.get('min_coverage')}，正文页共 {len(covered) + len(missing)} 页）"
+            ),
+            f"- 尚未覆盖的页面：{', '.join(str(page) for page in missing)}",
+            "- 为这些页面补上与正文相关的逐字引文；不要把已有引文改标成别页。",
+        ]
+    lines += [
+        "",
+        "只修正上面列出的问题；已经通过校验的内容保持不变。",
+        "如果某条引文在 paper.md 里找不到，不要改写之后继续用：要么换成原文中真实存在的句子，",
+        "要么删掉这条引文，并把依赖它的陈述改成信息缺失（information_status 填 not_reported、",
+        "statement_role 填 information_boundary）。编造或改写的引文一定再次被判失败。",
+        "仍然只输出一个 JSON 对象。",
+    ]
+    return "\n".join(lines)
+
+
+def _attempt_record(
+    index: int,
+    run: CardRunResult,
+    violations: list[dict[str, Any]],
+    *,
+    error: BaseException | None,
+) -> dict[str, Any]:
+    """One entry per runner call, so a failure can be replayed afterwards."""
+
+    digest = (
+        _sha256_text(json.dumps(run.output, ensure_ascii=False, sort_keys=True, default=str))
+        if isinstance(run.output, dict)
+        else None
+    )
+    return {
+        "index": index,
+        "ok": error is None,
+        "error_code": getattr(error, "code", None),
+        "violation_count": len(violations),
+        "violations": violations,
+        "runner_id": run.runner_id,
+        "model": run.model,
+        "duration_seconds": run.duration_seconds,
+        "usage": dict(run.usage or {}),
+        "output_sha256": digest,
+        "unvalidated_output_path": run.unvalidated_output_path,
+    }
+
+
+# --------------------------------------------------------------------------------------
 # Entry points
 # --------------------------------------------------------------------------------------
 
@@ -511,13 +757,28 @@ def generate_markdown_card_draft(
     output_root=None,
     progress: ProgressCallback | None = None,
     options: ConversionOptions | None = None,
+    max_repairs: int = DEFAULT_MAX_REPAIRS,
 ) -> dict:
-    """Return a DRAFT_PENDING_VALIDATION or a structured failure; never retry."""
+    """Return a DRAFT_PENDING_VALIDATION or a structured failure.
+
+    A rejected answer is handed back to the *same* model with the violations the
+    program found, at most ``max_repairs`` times, and every attempt is recorded.
+    A runner failure or an unusable input is never retried; nothing is saved
+    until one attempt passes the whole gate.
+    """
+
+    if (
+        isinstance(max_repairs, bool)
+        or not isinstance(max_repairs, int)
+        or not 0 <= max_repairs <= MAX_REPAIR_CAP
+    ):
+        raise ValueError(f"max_repairs 必须在 0 到 {MAX_REPAIR_CAP} 之间")
 
     result = _base_result("subject_card_draft")
     stage = _Stage()
     workspace: Path | None = None
     run: CardRunResult | None = None
+    attempts: list[dict[str, Any]] = []
     try:
         prep = _prepare_card(
             app_config,
@@ -528,42 +789,88 @@ def generate_markdown_card_draft(
             output_root=output_root,
             stage=stage,
         )
-        stage.value = "workspace"
-        workspace = stage_paper_workspace(
-            prep.prepared,
-            run_id=prep.run_id,
-            root=runtime_dir(app_config),
-            context=prep.context,
-            schema_text=prep.schema_text,
-        )
-        request = _card_run_request(prep, workspace, app_config, progress)
-        stage.value = "generation"
-        report_progress(
-            progress, "phase", message="已把 paper.md 与图资产放入只读运行目录，等待模型读取"
-        )
-        run = runner.run(request)
-        result["model_invoked"] = run.model_invoked is True
-        if not run.ok:
-            error = run.error
-            raise CardGenerationError(
-                error.code if error else "CARD_DRAFT_GENERATION_FAILED",
-                error.message if error else "Markdown 制卡运行器失败",
-                diagnostic={"runner_id": run.runner_id,
-                            "duration_seconds": run.duration_seconds,
-                            **(dict(error.detail) if error and error.detail else {})},
+        # The automated path judges an answer by the same rules
+        # ``cards evidence-validate`` applies, so "passed" means one thing.
+        gate = _card_validation_gate(prep.record)
+        prompt = prep.prompt
+        for index in range(max_repairs + 1):
+            stage.value = "workspace"
+            workspace = stage_paper_workspace(
+                prep.prepared,
+                run_id=prep.run_id,
+                root=runtime_dir(app_config),
+                context=prep.context,
+                schema_text=prep.schema_text,
             )
-        output = run.output
-        if not isinstance(output, dict):
-            raise CardGenerationError(
-                "MARKDOWN_RUNNER_OUTPUT_INVALID", "运行器没有返回 JSON 对象"
+            request = _card_run_request(
+                prep, workspace, app_config, progress, prompt_override=prompt
             )
-        completed = _complete_draft(prep, run, output, stage=stage)
-        # The draft now holds everything the run produced; the staged copy of the
-        # paper is disposable. A failed run keeps its workspace for diagnosis.
-        shutil.rmtree(workspace, ignore_errors=True)
-        workspace = None
-        return {**result, **completed, "ok": True}
+            stage.value = "generation"
+            report_progress(
+                progress,
+                "phase",
+                message=(
+                    "已把 paper.md 与图资产放入只读运行目录，等待模型读取"
+                    if index == 0
+                    else f"第 {index + 1} 次尝试：已把上一次的回答与问题清单放进运行目录"
+                ),
+            )
+            run = runner.run(request)
+            result["model_invoked"] = run.model_invoked is True
+            if not run.ok:
+                error = run.error
+                raise CardGenerationError(
+                    error.code if error else "CARD_DRAFT_GENERATION_FAILED",
+                    error.message if error else "Markdown 制卡运行器失败",
+                    diagnostic={"runner_id": run.runner_id,
+                                "duration_seconds": run.duration_seconds,
+                                **(dict(error.detail) if error and error.detail else {})},
+                )
+            output = run.output
+            if not isinstance(output, dict):
+                raise CardGenerationError(
+                    "MARKDOWN_RUNNER_OUTPUT_INVALID", "运行器没有返回 JSON 对象"
+                )
+            try:
+                completed = _complete_draft(
+                    prep, run, output, stage=stage, gate=gate
+                )
+            except CardGenerationError as exc:
+                plan = _repair_plan(exc)
+                attempts.append(
+                    _attempt_record(
+                        index, run, plan[0] if plan else [], error=exc
+                    )
+                )
+                result["attempts"] = attempts
+                if plan is None or index >= max_repairs:
+                    raise
+                violations, contract = plan
+                prompt = _repair_prompt(
+                    prep.prompt,
+                    output,
+                    violations,
+                    contract,
+                    (exc.diagnostic or {}).get("coverage"),
+                )
+                report_progress(
+                    progress,
+                    "phase",
+                    message=(
+                        f"第 {index + 1} 次回答被拒绝（{len(violations)} 处问题），"
+                        "交回同一模型定向修正"
+                    ),
+                )
+                continue
+            attempts.append(_attempt_record(index, run, [], error=None))
+            # The draft now holds everything the run produced; the staged copy of
+            # the paper is disposable. A failed attempt keeps its workspace for
+            # diagnosis, and ``attempts`` points at it.
+            shutil.rmtree(workspace, ignore_errors=True)
+            workspace = None
+            return {**result, **completed, "ok": True, "attempts": attempts}
     except Exception as exc:  # noqa: BLE001 - mapped below, unknowns re-raised
+        result["attempts"] = attempts
         _record_failure(result, exc, stage)
     if workspace is not None:
         # Kept on purpose: a failed run leaves paper.md and the raw response in
