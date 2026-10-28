@@ -76,6 +76,8 @@ uv run python scripts/paper_validate.py \
 `outputs/cards/INDEX.md`、阅读版卡片与 `outputs/reading/themes/`。把**产物根**当 vault 打开，
 从 `HOME.md` 开始即可。机器原稿不动，细节见[在 Obsidian 里读产物](reading-in-obsidian.md)。
 
+![阅读版卡片：属性、真实状态、正文与内嵌图](../../assets/screenshots/card-inline-figure.png){width=720}
+
 ## 边界
 
 - **通过校验只表示确定性规则通过，不证明科研内容正确。**

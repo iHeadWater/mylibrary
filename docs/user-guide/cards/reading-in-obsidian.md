@@ -36,6 +36,26 @@ uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检
 `cards index` **只写**上面标为阅读层的路径。`zotero/`、`themes/`、`evidence-packs/` 和
 `themes/_registry.json` 属于哈希链，生成器只读不写；主题页里历史版本的「粗卡」链接保持原样。
 
+## 现在的卡片长什么样
+
+下面是用真实产物（`cards/86N8CEZ5`）截的图；在 Obsidian 里打开效果一致，公式由 Obsidian 原生渲染。
+
+**卡片顶部**：YAML 属性、按 `validation.json` 写的真实状态、标题与正文开头。
+
+![卡片顶部](../../assets/screenshots/card-top.png){width=760}
+
+**图在正文里**：正文提到「（图 1）」时，图片出现在**那一段后面**（列表项内自动缩进），图注紧随其下；页尾不再堆图。
+
+![图内联在首次提及处](../../assets/screenshots/card-inline-figure.png){width=760}
+
+**主题阅读页**：`reading/themes/<主题编号>.md`，来源链接按当前布局重新计算。
+
+![主题阅读页](../../assets/screenshots/theme-page.png){width=760}
+
+**卡片索引**：每篇论文只列当前选中的一份草稿，并写明选择依据。
+
+![卡片索引](../../assets/screenshots/cards-index.png){width=760}
+
 ## 阅读层是生成物
 
 - 可以随时删掉 `HOME.md`、`cards/`、`reading/` 重新生成；不要手工编辑，下一次生成会覆盖。
