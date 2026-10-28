@@ -26,6 +26,7 @@ mylibrary 承担**情报汇集之后的深度处理**:
 | **文献深度处理** — Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [文献深度处理](docs/user-guide/literature.md) |
 | **论文复现** — 复现 AI 驱动水文学关键论文 | — | `equation_from_data/`、`google_floodhub/` |
 | **文献卡与主题卡平台** — 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验。**运行时为 Windows-only。** | `uv run hydrolitagent cards ai-config --json` | [平台文档](docs/user-guide/cards/index.md) |
+| **产物阅读层** — `cards index` 把产物根生成成可读的 Obsidian vault:`HOME.md`、卡片索引、阅读版卡片、主题阅读页;链接自检,机器原稿不动 | `uv run hydrolitagent cards index --json` | [在 Obsidian 里读产物](docs/user-guide/cards/reading-in-obsidian.md) |
 
 ## 快速开始
 
@@ -111,12 +112,16 @@ uv run hydrolitagent cards themes-run --dry-run --json
 
 # 只读自查模型与产物根
 uv run hydrolitagent cards ai-config --json
+
+# 生成可读的阅读层(HOME / 卡片索引 / 阅读版卡片 / 主题阅读页),并自检相对链接
+uv run hydrolitagent cards index --json
 ```
 
 - **平台不下载 PDF** —— 只读取自己 Zotero 中已经附好的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`。
 - **运行时为 Windows-only**:本地 CLI 的安装、登录与 PDF 工具准备只在 Windows 上验证过。
 - 生成的产物(文献卡、主题池、运行记录)**不入库** —— 运行时写入,另行共享。仓库里只有代码、模板、提示词与 schema。
-- 完整命令清单:`uv run hydrolitagent cards --help`(5 个子命令)。
+- 完整命令清单:`uv run hydrolitagent cards --help`(8 个子命令)。
+- 用 Obsidian 读产物:跑一次 `cards index`,把**产物根**(默认 `outputs/`)当 vault 打开,从 `HOME.md` 开始。详见[在 Obsidian 里读产物](docs/user-guide/cards/reading-in-obsidian.md)。
 
 ### 学者与机构论文统计
 

@@ -215,11 +215,12 @@ _docx_extract.md
 
 # ── 文献卡与主题卡平台：运行产物一律不入库 ──
 # 代码与**只读资产**在 hydrolitagent/cards/（assets/ 入库）；
-# **运行产物**一律落仓库根，由运行时自建 —— 包目录里不放任何可变状态。
-# 前导 "/" 是必要的：这些目录名必须只锚定仓库根。去掉 "/" 会让 `themes/`
-# 匹配任意深度的同名目录，静默吞掉只读资产
-# `hydrolitagent/cards/assets/templates/themes/**`（那里是主题提示词与 schema，
-# 必须入库）。回归由 tests/test_repo_structure.py 的负向控制钉住。
+# **运行产物**落产物根 `outputs/`（`configs/paths.toml` 的 `[literature] root`，
+# 已被上面的 `outputs/` 规则整体忽略），阅读层 `HOME.md`/`cards/`/`reading/` 也随根忽略。
+# 下面几条根级规则是**旧布局兜底**：产物根被显式指回仓库根、或误写到根目录时
+# 仍然不会入库。前导 "/" 必须保留 —— 去掉它会让 `themes/` 匹配任意深度的同名目录，
+# 静默吞掉只读资产 `hydrolitagent/cards/assets/templates/themes/**`
+# （那里是主题提示词与 schema，必须入库）。回归由 tests/test_repo_structure.py 的负向控制钉住。
 /.runtime/
 /.tools/
 /evidence-packs/

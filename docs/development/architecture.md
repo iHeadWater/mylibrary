@@ -208,7 +208,7 @@ Skills 是面向 Agent 的封装层，每个 Skill 包含：
 | 位置 | 存什么 |
 |---|---|
 | `hydrolitagent/` | Python 包：Zotero MCP Server、下载/入库、文献处理、知识图谱 |
-| `hydrolitagent/cards/` | 文献卡与主题卡：代码 `*.py` 与只读资产 `assets/`（模板 / 提示词 / schema / 示例 / 默认配置），运行产物落仓库根 |
+| `hydrolitagent/cards/` | 文献卡与主题卡：代码 `*.py` 与只读资产 `assets/`（模板 / 提示词 / schema / 示例 / 默认配置）；运行产物落**产物根** `outputs/`（`paths.literature_root`，不入 Git），阅读层由 `cards index` 生成 |
 | `hydrolitagent/scholars/` | 学者与机构论文统计：按人/机构检索 OpenAlex，统计产出、作者位次与研究方向，输出 CSV/JSON/Markdown |
 | `skills/` | 12 个技能：9 个工具链技能 + `literature-cards` + 两个水利科研技能 |
 | `docs/` | 文档站源码（mkdocs） |

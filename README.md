@@ -52,10 +52,11 @@ cd /path/to/mylibrary
 | 「看看能聚出哪些主题」 | 由已有的文献卡生成候选主题、必要时定向精读并回填 | [统一主题池](docs/user-guide/cards/unified-theme-pool.md) |
 | 「主题池现在什么样」 | 报当前候选与历史版本 | [统一主题池](docs/user-guide/cards/unified-theme-pool.md) |
 | 「当前用哪个模型 / 产物放哪」 | 报模型选择与产物落点，不调模型 | [运行维护](docs/user-guide/cards/runtime-maintenance.md) |
+| 「把产物整理成能读的 / 我要用 Obsidian 打开」 | 生成阅读层：`HOME.md`、卡片索引、阅读版卡片、主题阅读页，并自检链接 | [在 Obsidian 里读产物](docs/user-guide/cards/reading-in-obsidian.md) |
 | 「看看某个人/机构在哪些方向有论文」 | 按姓名/ORCID 查 OpenAlex → 统计论文数、第一/通讯、年份与期刊 → 可与本地主题库对照 | [学者与机构论文统计](docs/user-guide/scholars/index.md) |
 
-> 前三行是**入库与当期内容**线；后五行是**文献卡与主题卡**线（底层是 `uv run hydrolitagent cards …`
-> 的 5 条子命令）。无论哪条 —— **你不需要读那些详情页**，只在想自己动手或排错时才去。
+> 前三行是**入库与当期内容**线；其余是**文献卡与主题卡**线（底层是 `uv run hydrolitagent cards …`
+> 的 8 条子命令）。无论哪条 —— **你不需要读那些详情页**，只在想自己动手或排错时才去。
 >
 > 付费墙（SD / Wiley / Nature 等）的下载需要浏览器 + 机构会话，见[论文 PDF 下载](docs/user-guide/download-pdf.md)。
 
@@ -83,7 +84,7 @@ uv run python scripts/paper_validate.py --draft hydrolitagent/cards/assets/examp
 
 ### 文献卡与主题卡
 
-配好之后跟 agent 说「把《某某》这篇做成卡」即可。自己敲是这 7 条：
+配好之后跟 agent 说「把《某某》这篇做成卡」即可。自己敲是这 8 条：
 
 ```bash
 uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json
@@ -91,6 +92,7 @@ uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai
 uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 uv run hydrolitagent cards themes-run --json
 uv run hydrolitagent cards ai-config --json          # 看模型选择与产物落点
+uv run hydrolitagent cards index --json              # 生成阅读层：HOME / 卡片索引 / 主题阅读页
 uv run hydrolitagent cards run prepare --paper-input paper-input.json --run-dir <运行目录> --json
 uv run hydrolitagent cards doctor --json             # 只读自查转换器、运行器与存储
 ```
@@ -100,6 +102,7 @@ uv run hydrolitagent cards doctor --json             # 只读自查转换器、�
 可用值以 `ai-config --json` 的 `runners` 为准。默认路径是 PDF→Markdown（Python + PyMuPDF），
 macOS / Linux / Windows 行为一致，**不需要 Poppler**。
 详见[文献卡与主题卡](docs/user-guide/cards/index.md)（**你通常不需要读它**）。
+产物读法见[在 Obsidian 里读产物](docs/user-guide/cards/reading-in-obsidian.md) —— 把产物根当 vault 打开，从 `HOME.md` 开始。
 
 单篇本地流程**不需要**先填工具链的 Zotero Web API 密钥，也**不需要**启动 MCP Server。
 

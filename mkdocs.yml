@@ -84,6 +84,7 @@ nav:
                   - 既定主题深度综合: user-guide/cards/主题模板/02_既定主题深度综合模板.md
                   - 主题工作流运行账: user-guide/cards/主题模板/03_主题工作流运行账模板.md
           - 统一主题池: user-guide/cards/unified-theme-pool.md
+          - 在 Obsidian 里读产物: user-guide/cards/reading-in-obsidian.md
           - 运行维护: user-guide/cards/runtime-maintenance.md
       - 学者与机构论文统计:
           - 概述: user-guide/scholars/index.md

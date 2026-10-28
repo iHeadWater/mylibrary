@@ -13,6 +13,7 @@ from hydrolitagent.cards.application.card_workflow import (
     generate_markdown_card_draft,
     prepare_session_run,
 )
+from hydrolitagent.cards.application.reading_layer import build_reading_layer
 from hydrolitagent.cards.card_validation import ValidationAssets, validate_subject_card_file
 from hydrolitagent.cards.ai_config import (
     AIConfigError,
@@ -44,7 +45,8 @@ from hydrolitagent.cards.theme_session import (
 )
 from hydrolitagent.cards.tasks import TaskStoreError
 from hydrolitagent.cards.zotero import ZoteroApiError
-from hydrolitagent.cards._paths import DEFAULT_CONFIG_PATH
+from hydrolitagent.cards._paths import DEFAULT_CONFIG_PATH, REPO_ROOT
+from hydrolitagent._config import PathConfigError, resolve_literature_root
 
 
 
@@ -215,10 +217,40 @@ def _parser() -> argparse.ArgumentParser:
     ai.add_argument("--ai-timeout", type=float)
     ai.add_argument("--output-root")
     ai.add_argument("--json", action="store_true")
+
+    index = subparsers.add_parser(
+        "index",
+        help="生成可读的产物阅读层：HOME、卡片索引、阅读版卡片与主题阅读页；不改机器产物",
+    )
+    index.add_argument("--root", help="产物根；默认按 configs/paths.toml 解析（默认 outputs/）")
+    index.add_argument(
+        "--runtime-dir",
+        help="转换缓存根（papers/<pdf_sha256>/...）；默认仓库根 .runtime",
+    )
+    index.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
     return parser
 
 
 def _render_human(result: dict[str, Any]) -> str:
+    if result.get("operation") == "cards_index":
+        broken = result.get("broken_links") or []
+        if result.get("error"):
+            error = result["error"]
+            return f"阅读层生成失败 [{error.get('code')}]：{error.get('message')}"
+        lines = [
+            f"阅读层{'存在断链' if broken else '已生成'}：产物根 {result.get('root')}",
+            f"- 写入 {len(result.get('written') or [])} 个文件；"
+            f"未变 {len(result.get('unchanged') or [])} 个",
+            f"- 卡片 {result.get('card_count', 0)} 张；主题 {result.get('theme_count', 0)} 个",
+            f"- 链接自检：{result.get('links_checked', 0)} 条，断链 {len(broken)} 条",
+        ]
+        for link in broken:
+            lines.append(f"  - {link['file']} -> {link['target']}")
+        if result.get("warnings"):
+            lines.append("- 警告：" + "；".join(result["warnings"]))
+        if not broken:
+            lines.append(f"- 从 {Path(result.get('root', '')) / 'HOME.md'} 开始读")
+        return "\n".join(lines)
     if result.get("operation") == "doctor":
         status = "通过" if result.get("ok") else "存在问题"
         lines = [f"能力自查：{status}（未调用模型）", f"- 平台：{result.get('platform')}"]
@@ -465,9 +497,38 @@ def _themes_run_session(app_config, run_dir) -> dict[str, Any]:
     return view
 
 
+def _run_index(args) -> dict[str, Any]:
+    """Resolve where the product root is, then generate the reading layer."""
+
+    try:
+        root = resolve_literature_root(root=args.root)
+    except (PathConfigError, OSError, ValueError) as exc:
+        return {
+            "schema_version": 1,
+            "operation": "cards_index",
+            "ok": False,
+            "error": {"code": "READING_ROOT_INVALID", "message": str(exc)},
+        }
+    runtime_dir = Path(args.runtime_dir) if args.runtime_dir else REPO_ROOT / ".runtime"
+    try:
+        return build_reading_layer(root, runtime_dir=runtime_dir)
+    except OSError as exc:
+        return {
+            "schema_version": 1,
+            "operation": "cards_index",
+            "ok": False,
+            "root": str(root),
+            "error": {"code": "READING_LAYER_WRITE_FAILED", "message": str(exc)},
+        }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     _configure_stdio()
     args = _parser().parse_args(argv)
+    if args.command == "index":
+        result = _run_index(args)
+        _emit(result, args.json)
+        return 0 if result["ok"] else 3
     if args.command == "evidence-validate":
         try:
             if args.config and args.assets_root:

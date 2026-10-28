@@ -26,6 +26,7 @@ uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai
 uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 uv run hydrolitagent cards themes-run --json
 uv run hydrolitagent cards ai-config --json          # 看模型选择与产物落点，不调模型
+uv run hydrolitagent cards index --json              # 生成可读的阅读层（HOME / 卡片索引 / 主题阅读页）
 
 # 任意能读文件、写 JSON 的 agent 也能制卡：先准备，再由 agent 写答案，最后收口
 uv run hydrolitagent cards run prepare --paper-input paper-input.json --run-dir <运行目录> --json
@@ -39,7 +40,7 @@ uv run hydrolitagent cards run finalize --theme --run-dir <运行目录> --json
 uv run hydrolitagent cards doctor --json
 ```
 
-完整清单：`uv run hydrolitagent cards --help`（当前 7 个子命令；`run` 含 `prepare` / `finalize` 两个阶段）。
+完整清单：`uv run hydrolitagent cards --help`（当前 8 个子命令；`run` 含 `prepare` / `finalize` 两个阶段）。
 
 ## 自查（不需要你的论文，也不需要模型）
 
@@ -65,6 +66,10 @@ uv run python scripts/paper_validate.py \
 `outputs/zotero/`、`outputs/themes/`、`outputs/evidence-packs/`。
 查主题从 `outputs/themes/index.md` 进 —— 那是给人看的总入口。
 
+**在 Obsidian 里读**：跑一次 `cards index` 会生成一层阅读物 —— `outputs/HOME.md`、
+`outputs/cards/INDEX.md`、阅读版卡片与 `outputs/reading/themes/`。把**产物根**当 vault 打开，
+从 `HOME.md` 开始即可。机器原稿不动，细节见[在 Obsidian 里读产物](reading-in-obsidian.md)。
+
 ## 边界
 
 - **通过校验只表示确定性规则通过，不证明科研内容正确。**
@@ -80,6 +85,7 @@ uv run python scripts/paper_validate.py \
 | 单篇：输入 / 草稿 / 校验 | [单篇论文输入](paper-input.md) · [主体卡草稿](subject-card-draft.md) · [主体卡校验](subject-card-validation.md) |
 | 任意 agent 两阶段制卡 / 能力自查 | [两阶段制卡与自查](run-and-doctor.md) |
 | 主题池 | [统一主题池](unified-theme-pool.md) |
+| 在 Obsidian 里读产物（HOME / 卡片索引 / 主题阅读页） | [在 Obsidian 里读产物](reading-in-obsidian.md) |
 | 模板 | [公共模板](templates.md) |
 | 运行维护 | [运行维护](runtime-maintenance.md) |
 | 技术实现（开发者向） | [项目级设计](../../development/platform/project-design.md) · [技术架构](../../development/platform/architecture.md) |

@@ -5,6 +5,12 @@
 - 日期：2026-09-15
 - 说明：本稿尚未经过导师确认，不代表 Issue #20 已完成或可以关闭。
 
+> **注记（2026-10-28）：本文中「共享 `artifact_root`」与「Obsidian 直接读取产物目录」的
+> 实现方式已被取代。** 现在只有一套产物根 `paths.literature_root`（默认 `outputs/`）；
+> 机器产物在 `zotero/`、`themes/`、`evidence-packs/`，另有一层由
+> `uv run hydrolitagent cards index` 生成的阅读层（`HOME.md`、`cards/`、`reading/themes/`），
+> 用 Obsidian 打开产物根即可读。见 [在 Obsidian 里读产物](user-guide/cards/reading-in-obsidian.md)。
+
 ## 1. 产品简介
 
 文献平台帮助课题组把新论文变成可以查证和共享的研究知识。

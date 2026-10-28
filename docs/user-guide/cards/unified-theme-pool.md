@@ -66,14 +66,20 @@ outputs/
       plan.json / manifest.json         变更类型、理由、父主题与来源引用
     changes/CHANGE-编号/                 一次处理的输入、规划与提交记录
   evidence-packs/…/readings/            独立保存的精读结果（主题只引用，不复制）
+  HOME.md                               阅读层入口（cards index 生成，可重建）
+  cards/                                阅读版卡片与索引（生成物）
+  reading/themes/                       主题阅读页（生成物，来源链接按当前布局重算）
 ```
 
 三棵产物树统一落在产物根 `outputs/` 下（`configs/paths.toml` 的 `[literature] root`）。
 临时输入与运行目录（`paper-input.json`、`cards run` 的 `--run-dir`）放在 `.runtime/`，不属于产物。
 
-> **怎么看产出**：卡片与主题都是带 `[[双向链接]]` 的 Markdown ——
-> 用 **Obsidian** 把产物根（默认 `outputs/`，其下 `themes/` 等；落点由 `paths.literature_root` 决定）
-> 当 vault 打开，就能沿链接读、按目录导航。**今天就能这样用。**
+> **怎么看产出**：机器产物（`themes/` 下的版本文件）不保证互链。跑一次
+> `uv run hydrolitagent cards index`，会在产物根（默认 `outputs/`）生成阅读层：
+> `HOME.md`、`cards/INDEX.md`、阅读版卡片与 `reading/themes/`。主题阅读页的
+> 「粗卡 / 定向精读」链接由生成器按**当前布局**重算（历史版本里的旧链接保持原样）。
+> 用 **Obsidian** 把**产物根**当 vault 打开，从 `HOME.md` 开始即可；链接是标准 Markdown
+> 相对链接，不是 `[[双向链接]]`。细节见[在 Obsidian 里读产物](reading-in-obsidian.md)。
 >
 > 另一件**尚未实现**的事：让平台受控地搜索 / 写入你的 Obsidian（Vault 接入选型见
 > [项目级设计](../../development/platform/project-design.md)）。两件事别混。

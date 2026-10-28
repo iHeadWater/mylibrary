@@ -109,8 +109,20 @@ def validate_reading(record, source):
     return body
 
 
+def normalize_reading_markdown(text):
+    """Turn an escaped line break into a real one.
+
+    A runner that JSON-encodes its Markdown twice returns ``\\\\n`` (two
+    backslashes and an ``n``) where the artifact needs a newline. Only that
+    doubled form is rewritten: LaTeX commands (``\\\\nabla``) and single
+    backslash escapes stay exactly as the model wrote them.
+    """
+
+    return text.replace("\\\\r\\\\n", "\n").replace("\\\\n", "\n")
+
+
 def reading_reference(config, directory, record, source, focus, context):
-    body = validate_reading(record, source)
+    body = normalize_reading_markdown(validate_reading(record, source))
     expected = "<!-- AI theme-focused reading; not independently verified -->\n" + body
     core._publish(core._safe_path(directory, "reading.md"), expected)
     return {"reading_id": "RD-" + core._digest(record), "root": "evidence_packs",
