@@ -5,6 +5,9 @@ Python 只负责准备材料、校验接线和保存草稿，**不调用模型**
 
 `cards doctor` 是同一层的只读自查：转换器在不在、运行器可不可用、产物根能不能写。它**不调用模型、不读你的 PDF**。
 
+> 主题池也有同一套两阶段协议：`cards run prepare|finalize --theme`（发现 → 每篇精读 → 回填 → 提交），
+> 不传 `--paper-input`。见[统一文献池与主题池](unified-theme-pool.md)的「在会话里分步跑」一节。
+
 ## 为什么分两阶段
 
 `evidence-generate` 由平台直连 LLM API（默认 DeepSeek）。若你想用当前 agent、或不想配置 API key，

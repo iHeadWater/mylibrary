@@ -17,6 +17,42 @@ uv run hydrolitagent cards themes-run --migrate-only --json  # 只把已有旧�
 **阅读入口是 `themes/index.md`** —— 当前候选、历史主题与版本都在那里。进入某个主题后，
 日常主要看精读回填的 `revised.md`，不必从文件夹猜最新版。
 
+### 在会话里分步跑（`in_session`，不需要 key）
+
+`themes-run --ai-provider direct` 一次跑完三步；`in_session` 不能由平台调用，所以同样的三步
+被写成文件，由当前 agent 逐步回答。**整个过程不调用模型。**
+
+```text
+<运行目录>/
+  state.json          当前步骤、步骤清单、已完成步骤、变更计划
+  request.json        本步的可序列化请求（材料都在里面；精读步另给 paper.md / figures/）
+  output.schema.json  本步必须遵守的 JSON Schema
+  README.md           给 agent 的最短说明
+  response.json       agent 写入的答案；收口通过后归档到 responses/<步骤>.json
+```
+
+```bash
+uv run hydrolitagent cards run prepare --theme --run-dir <运行目录> --json
+# agent 读 request.json（必要时还有 paper.md），写 <运行目录>/response.json
+uv run hydrolitagent cards run finalize --theme --run-dir <运行目录> --json
+```
+
+三种步骤，顺序固定：
+
+| 步骤 | agent 读什么 | 必须产出 |
+|---|---|---|
+| `theme_discovery` | `request.json` 的输入材料：来源粗卡、既有主题、可复用精读 | `problem_clusters_markdown` + `actions` |
+| `focused_reading` | 本目录的 `paper.md` 与 `figures/` | 逐字引文 + `reading_receipt`（回显 `markdown_sha256` 与全部 canary） |
+| `theme_refinement` | `request.json` 的精读结果 | `revised_markdown` |
+
+`finalize` 通过后返回 `status: NEXT_STEP_READY` 并把下一步的 `request.json` 写进**同一个目录**；
+全部完成时提交主题池，返回 `status: COMPLETED` 与候选清单。校验失败返回 `status: FAILED`，
+**保留 `response.json`、不推进**。每步都带 `step` / `step_index` / `remaining_steps` / `next_action`。
+
+细节：重复 `finalize` 同一份答案不会重复提交；重跑 `prepare` 会接着**当前未完成**的步骤；
+`response.json` 收口后归档到 `responses/`，下一步要重新写一份。`themes-run --ai-provider in_session`
+等价于只跑一次 `prepare`：输出 `AWAITING_SESSION_OUTPUT` 并提示用 `run prepare|finalize` 继续。
+
 ## 产物长什么样
 
 ```text

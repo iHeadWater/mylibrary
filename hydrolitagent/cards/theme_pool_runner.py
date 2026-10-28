@@ -195,6 +195,77 @@ def _reading_prompt(prepared):
     }
 
 
+# --------------------------------------------------------------------------------------
+# Step material shared by the one-shot run and the file-based session protocol
+# --------------------------------------------------------------------------------------
+# ``theme_pool_runner.run`` asks a runner for every answer in one process;
+# ``theme_session`` writes the same three kinds of step to files instead. Both
+# must build byte-identical prompts and bindings, otherwise the same answer
+# would be saved under two different fingerprints. These helpers are that one
+# definition.
+
+
+def existing_themes(config, state):
+    """The pool's current themes as discovery input: identity, lineage and body."""
+
+    existing = []
+    for tid, entry in state["themes"].items():
+        directory = pool.root_path(config, entry["current"]["directory"])
+        existing.append({"theme_id": tid, "title": entry["title"], "status": entry["status"],
+            "predecessors": entry["predecessors"], "successors": entry["successors"],
+            "revised_markdown": (directory / "revised.md").read_text(encoding="utf-8")})
+    return existing
+
+
+def available_readings(sources, catalog):
+    """Saved readings whose source record still matches the live source set."""
+
+    return [{"reading_id": r["reading_id"], "evidence_id": r["source"]["evidence_id"],
+        "focus": r["focus"], "context": r["context"], "markdown": r["markdown"]}
+        for r in catalog.values()
+        if r["source"] == sources.get(r["source"]["evidence_id"], {}).get("record")]
+
+
+def discovery_input(config, options, state, sources, catalog):
+    """Input material for one pool-wide discovery step."""
+
+    old_sources = {s["evidence_id"]: s for s in state["observed_sources"]}
+    return {"research_goal": options.research_goal, "existing_themes": existing_themes(config, state),
+        "cards": [{"evidence_id": eid, "markdown": s["card"],
+                   "changed": old_sources.get(eid) != s["record"]} for eid, s in sources.items()],
+        "available_readings": available_readings(sources, catalog)}
+
+
+def discovery_prompt(assets, input_material):
+    return (assets["discovery.md"] + "\n\n" + assets["pool-discovery.md"]
+            + "\n\n输入材料：\n" + core._json(input_material))
+
+
+def reading_prompt(assets, *, candidate, focus, evidence_id, rough_card, reading_parameters):
+    return (assets["focused-reading-markdown.md"] + "\n\n输入材料：\n" + core._json({
+        "candidate": candidate, "focus": focus, "evidence_id": evidence_id,
+        "rough_card": rough_card, "reading_parameters": reading_parameters}))
+
+
+def reading_binding(*, asset_hashes, source, focus, candidate, model, reasoning_effort,
+                    converter):
+    """The fingerprint a saved reading is keyed by, in both execution modes."""
+
+    return {"protocol_version": pool.PROTOCOL, "source": source["record"],
+        "focus": focus, "context": candidate, "model": model,
+        "reasoning_effort": reasoning_effort,
+        "assets": {k: asset_hashes[k] for k in core.READING_ASSETS},
+        "converter": {"id": converter.converter_id,
+                      "version": converter.converter_version}}
+
+
+def refinement_input(options, action, child, focused, existing):
+    parents = [e for e in existing if e["theme_id"] in action["theme_ids"]]
+    return {"candidate": child, "research_goal": options.research_goal,
+        "focused_readings": focused, "previous_themes": parents,
+        "change_kind": action["kind"], "change_reason": action["reason"]}
+
+
 def _reading_access(prepared, output):
     """Ground a focused reading and project it into ``source_access``.
 
@@ -382,25 +453,14 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
             report["last_workspace"] = str(workspace)
             raise
 
-    old_sources = {s["evidence_id"]: s for s in state["observed_sources"]}
-    existing = []
-    for tid, entry in state["themes"].items():
-        directory = pool.root_path(config, entry["current"]["directory"])
-        existing.append({"theme_id": tid, "title": entry["title"], "status": entry["status"],
-            "predecessors": entry["predecessors"], "successors": entry["successors"],
-            "revised_markdown": (directory / "revised.md").read_text(encoding="utf-8")})
-    discovery_prompt = assets["discovery.md"] + "\n\n" + assets["pool-discovery.md"] + "\n\n输入材料：\n" + core._json({
-        "research_goal": options.research_goal, "existing_themes": existing,
-        "cards": [{"evidence_id": eid, "markdown": s["card"],
-                   "changed": old_sources.get(eid) != s["record"]} for eid, s in sources.items()],
-        "available_readings": [{"reading_id": r["reading_id"], "evidence_id": r["source"]["evidence_id"],
-            "focus": r["focus"], "context": r["context"], "markdown": r["markdown"]}
-            for r in catalog.values() if r["source"] == sources.get(r["source"]["evidence_id"], {}).get("record")]})
+    existing = existing_themes(config, state)
+    discovery_prompt_text = discovery_prompt(
+        assets, discovery_input(config, options, state, sources, catalog))
     discovery = core._result_record(change_dir / "discovery-result.json",
         {"protocol_version": pool.PROTOCOL, "base": core._digest(base), "input": binding},
         lambda: run_stage("统一主题池：跨文献关联与候选演化",
                           schema_name="pool-discovery.schema.json",
-                          role="theme_discovery", prompt=discovery_prompt), report)
+                          role="theme_discovery", prompt=discovery_prompt_text), report)
     actions = pool.plan_actions(discovery["output"], state, sources, change_id, catalog)
     unchanged()
     core._publish(change_dir / "plan.json", core._json(actions))
@@ -428,20 +488,18 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
                         report["reused_reading_count"] += 1
                         report["reused_step_count"] += 1
                     else:
-                        read_binding = {"protocol_version": pool.PROTOCOL, "source": source["record"],
-                            "focus": task["focus"], "context": child["candidate_markdown"],
-                            "model": cg.model, "reasoning_effort": cg.reasoning_effort,
-                            "assets": {k: binding["assets"][k] for k in core.READING_ASSETS},
-                            "converter": {"id": pipeline.converter.converter_id,
-                                          "version": pipeline.converter.converter_version}}
+                        read_binding = reading_binding(
+                            asset_hashes=binding["assets"], source=source,
+                            focus=task["focus"], candidate=child["candidate_markdown"],
+                            model=cg.model, reasoning_effort=cg.reasoning_effort,
+                            converter=pipeline.converter)
                         read_dir = core._safe_path(source["pack"], "readings", "RD-" + core._digest(read_binding)[:24])
                         prompt = (lambda prepared, candidate=child["candidate_markdown"],
                                   focus=task["focus"], evidence_id=task["evidence_id"],
-                                  rough_card=source["card"]: assets["focused-reading-markdown.md"]
-                                  + "\n\n输入材料：\n" + core._json({
-                                      "candidate": candidate, "focus": focus,
-                                      "evidence_id": evidence_id, "rough_card": rough_card,
-                                      "reading_parameters": _reading_prompt(prepared)}))
+                                  rough_card=source["card"]: reading_prompt(
+                                      assets, candidate=candidate, focus=focus,
+                                      evidence_id=evidence_id, rough_card=rough_card,
+                                      reading_parameters=_reading_prompt(prepared)))
                         record = core._result_record(read_dir / "result.json", read_binding,
                             lambda: run_stage(f"定向精读 {tid} {task['evidence_id']}",
                                               schema_name="focused-reading-markdown.schema.json",
@@ -456,10 +514,8 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
                         "reuse_reason": task["reuse_reason"]})
                     item["readings"].append({"evidence_id": task["evidence_id"],
                                             "path": str(pool.reading_path(config, ref) / "reading.md")})
-                parents = [e for e in existing if e["theme_id"] in action["theme_ids"]]
-                revision_input = {"candidate": child, "research_goal": options.research_goal,
-                    "focused_readings": focused, "previous_themes": parents,
-                    "change_kind": action["kind"], "change_reason": action["reason"]}
+                revision_input = refinement_input(
+                    options, action, child, focused, existing)
                 revision = core._result_record(directory / "revision-result.json",
                     {"protocol_version": pool.PROTOCOL, "input": revision_input},
                     lambda: run_stage(f"主题回填 {tid}", schema_name="refinement.schema.json",

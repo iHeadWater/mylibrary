@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -36,6 +37,11 @@ from hydrolitagent.cards.paper_input import (
 )
 from hydrolitagent.cards.progress import ConsoleProgress
 from hydrolitagent.cards.themes import run_themes
+from hydrolitagent.cards.theme_session import (
+    finalize_theme_session,
+    prepare_theme_session,
+    theme_session_run_dir,
+)
 from hydrolitagent.cards.tasks import TaskStoreError
 from hydrolitagent.cards.zotero import ZoteroApiError
 from hydrolitagent.cards._paths import DEFAULT_CONFIG_PATH
@@ -116,6 +122,13 @@ def _parser() -> argparse.ArgumentParser:
         if name == "themes-run":
             command.add_argument("--dry-run", action="store_true", help="只预览本地粗卡输入和配置；不扫描 Zotero、不写文件、不调用模型")
             command.add_argument("--migrate-only", action="store_true", help="仅将已完成旧主题接入统一池；不调用模型、不重新精读")
+            command.add_argument(
+                "--run-dir",
+                help=(
+                    "in_session 分步协议的运行目录；默认 <runtime_dir>/theme-session。"
+                    "重跑同一目录会接着未完成的步骤"
+                ),
+            )
             # The same selection the single-paper path accepts: a theme run
             # makes model calls too, so it must not be stuck on the adapter
             # baked into config.json.
@@ -164,9 +177,16 @@ def _parser() -> argparse.ArgumentParser:
         )
         run_command.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
         run_command.add_argument(
+            "--theme",
+            action="store_true",
+            help=(
+                "主题池分步协议：发现 → 每篇精读 → 回填 → 提交；"
+                "每步写入 request.json，agent 写 response.json 后再 finalize"
+            ),
+        )
+        run_command.add_argument(
             "--paper-input",
-            required=True,
-            help="单篇 READY JSON（输入记录）文件，或 - 从 stdin 读取",
+            help="单篇 READY JSON（输入记录）文件，或 - 从 stdin 读取；--theme 模式下不要传",
         )
         run_command.add_argument("--run-dir", required=True, help="两阶段协议的运行目录")
         run_command.add_argument(
@@ -327,17 +347,72 @@ def _render_human(result: dict[str, Any]) -> str:
                 for candidate in candidates
             )
         return "\n".join(lines)
+    if result.get("operation") in {"theme_session_prepare", "theme_session_finalize"}:
+        if not result.get("ok"):
+            error = result.get("error", {})
+            return (
+                f"主题池分步失败 [{error.get('code', 'UNKNOWN')}]："
+                f"{error.get('message', '未知错误')}"
+            )
+        if result.get("replayed"):
+            return (
+                f"同一份 response.json 已收口过，未重复推进；当前步骤：{result.get('step')}"
+            )
+        if result.get("status") == "UNCHANGED":
+            return "\n".join([
+                "主题池已包含这批来源的最新结果；没有待处理的步骤",
+                f"- 候选主题：{result.get('candidate_count', 0)}；"
+                f"已回填：{result.get('refined_count', 0)}",
+                f"- 统一主题入口：{result.get('index_path', '尚未创建')}",
+                "- 没有调用模型",
+            ])
+        if result.get("status") == "NO_ROUGH_CARDS":
+            return "没有可用的来源草稿或证据包；未写运行目录、未调用模型"
+        if result.get("operation") == "theme_session_prepare":
+            return "\n".join([
+                "已准备主题池当前步骤；平台未调用模型",
+                f"- 运行目录：{result.get('run_dir')}",
+                f"- 步骤：{result.get('step_kind')} · {result.get('step')}"
+                f"（第 {int(result.get('step_index', 0)) + 1} 步；"
+                f"后续 {len(result.get('remaining_steps') or [])} 个）",
+                f"- 材料：request.json / output.schema.json；答案：{result.get('response_file')}",
+                f"- 下一步：{result.get('next_action')}",
+                f"- 写完后运行：cards run finalize --theme --run-dir {result.get('run_dir')}",
+            ])
+        if result.get("status") == "COMPLETED":
+            return "\n".join([
+                "主题池分步已完成；全部步骤通过校验并已提交",
+                f"- 候选主题：{result.get('candidate_count', 0)}；已回填：{result.get('refined_count', 0)}",
+                f"- 动作：{result.get('action')}；复用精读：{result.get('reused_reading_count', 0)}",
+                f"- 运行目录：{result.get('run_dir')}",
+                "- 修订结果仍为候选，不会自动成为正式主题",
+            ])
+        return "\n".join([
+            f"已保存步骤 {result.get('step')}；下一步已写入同一运行目录",
+            f"- 下一步骤：{result.get('next_step_kind')} · {result.get('next_step')}"
+            f"（后续 {len(result.get('remaining_steps') or [])} 个）",
+            f"- 下一步：{result.get('next_action')}",
+            f"- 答案文件：{result.get('response_file')}（运行目录 {result.get('run_dir')}）",
+        ])
     if result.get("operation") == "themes_run":
         kinds = result.get("sources_by_kind") or {}
         detail = (f"（证据包 {kinds.get('evidence_pack', 0)} · 已验证草稿 {kinds.get('draft', 0)}）"
                   if kinds else "")
-        return (f"主题流程：{result['status']}"
-                f"\n- 文献来源：{result.get('source_count', 0)}{detail}；"
-                f"候选：{result['candidate_count']}；已回填：{result['refined_count']}"
-                f"\n- 本轮模型调用：{result['model_call_count']}；复用步骤：{result['reused_step_count']}"
-                f"\n- 统一主题入口：{result.get('index_path', '尚未创建')}"
-                "\n- 修订结果仍为候选，不会自动成为正式主题"
-                + (f"\n- 错误：{result['error']['message']}" if result.get("error") else ""))
+        lines = [f"主题流程：{result['status']}",
+                 f"- 文献来源：{result.get('source_count', 0)}{detail}；"
+                 f"候选：{result.get('candidate_count', 0)}；已回填：{result.get('refined_count', 0)}",
+                 f"- 本轮模型调用：{result.get('model_call_count', 0)}；"
+                 f"复用步骤：{result.get('reused_step_count', 0)}",
+                 f"- 统一主题入口：{result.get('index_path', '尚未创建')}",
+                 "- 修订结果仍为候选，不会自动成为正式主题"]
+        if result.get("step"):
+            lines.append(f"- 当前步骤：{result.get('step_kind')} · {result.get('step')}"
+                         f"（运行目录 {result.get('run_dir')}）")
+        if result.get("next_action"):
+            lines.append(f"- 下一步：{result['next_action']}")
+        if result.get("error"):
+            lines.append(f"- 错误：{result['error'].get('message')}")
+        return "\n".join(lines)
     error = result.get("error", {})
     return f"失败 [{error.get('code', 'UNKNOWN')}]: {error.get('message', '未知错误')}"
 
@@ -347,6 +422,47 @@ def _emit(result: dict[str, Any], as_json: bool) -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         print(_render_human(result))
+
+
+def _themes_run_session(app_config, run_dir) -> dict[str, Any]:
+    """``themes-run --ai-provider in_session``: stage one step, never call a model.
+
+    The report keeps the ``themes_run`` shape existing consumers read; the new
+    fields say which step is waiting and where its answer file goes.
+    """
+
+    # ``in_session`` runs inside the current agent: there is no configured model,
+    # so naming one would put a false field into the pool's input fingerprint and
+    # into every reading record.
+    session_config = replace(app_config, card_generator=replace(
+        app_config.card_generator, model=None, reasoning_effort=None))
+    prepared = prepare_theme_session(
+        session_config,
+        run_dir=Path(run_dir) if run_dir else theme_session_run_dir(session_config),
+        pipeline=build_session_pipeline(session_config),
+    )
+    view = {
+        "schema_version": 1,
+        "operation": "themes_run",
+        "ok": prepared.get("ok", False),
+        "status": prepared.get("status"),
+        "protocol_version": prepared.get("protocol_version"),
+        "run_id": prepared.get("run_id"),
+        "model_call_count": 0,
+        "model_invoked": False,
+        "saved_step_count": 0,
+        "reused_step_count": prepared.get("reused_step_count", 0),
+        "candidate_count": prepared.get("candidate_count", 0),
+        "refined_count": prepared.get("refined_count", 0),
+        "themes": prepared.get("themes", []),
+        "dry_run": False,
+        "migration_only": False,
+        "git_modified": False,
+        **prepared,
+    }
+    # The platform did not call a model in this mode, whatever the staging did.
+    view.update(operation="themes_run", model_invoked=False, model_call_count=0)
+    return view
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -420,28 +536,41 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0 if result["ok"] else 3
 
     if args.command == "run":
-        operation = f"session_{args.run_command}"
+        theme = getattr(args, "theme", False)
+        operation = (f"theme_session_{args.run_command}" if theme
+                     else f"session_{args.run_command}")
         try:
-            config = load_config(args.config or _default_config_path(), require_group=False)
-            raw = (
-                sys.stdin.read()
-                if args.paper_input == "-"
-                else Path(args.paper_input).read_text(encoding="utf-8-sig")
-            )
-            record = json.loads(raw)
-            built = build_session_pipeline(config)
-            options = {
-                "converter": built.converter,
-                "store": built.store,
-                "runner": built.runner,
-                "run_dir": Path(args.run_dir),
-                "output_root": args.output_root,
-                "options": built.options,
-            }
-            if args.run_command == "prepare":
-                result = prepare_session_run(config, record, **options)
+            if theme and args.paper_input:
+                raise ValueError("--theme 与 --paper-input 不能同时使用")
+            if not theme and not args.paper_input:
+                raise ValueError("单篇两阶段协议需要 --paper-input；主题池用 --theme")
+            if theme:
+                config = load_config(args.config or _default_config_path(), require_group=True)
+                built = build_session_pipeline(config)
+                runner = (prepare_theme_session if args.run_command == "prepare"
+                          else finalize_theme_session)
+                result = runner(config, run_dir=Path(args.run_dir), pipeline=built)
             else:
-                result = finalize_session_run(config, record, **options)
+                config = load_config(args.config or _default_config_path(), require_group=False)
+                raw = (
+                    sys.stdin.read()
+                    if args.paper_input == "-"
+                    else Path(args.paper_input).read_text(encoding="utf-8-sig")
+                )
+                record = json.loads(raw)
+                built = build_session_pipeline(config)
+                options = {
+                    "converter": built.converter,
+                    "store": built.store,
+                    "runner": built.runner,
+                    "run_dir": Path(args.run_dir),
+                    "output_root": args.output_root,
+                    "options": built.options,
+                }
+                if args.run_command == "prepare":
+                    result = prepare_session_run(config, record, **options)
+                else:
+                    result = finalize_session_run(config, record, **options)
         except json.JSONDecodeError:
             result = {
                 "schema_version": 1,
@@ -539,11 +668,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                     timeout_seconds=args.ai_timeout,
                 )
                 app_config = apply_ai_selection(app_config, selection)
-                pipeline = build_theme_pipeline(app_config)
-                with ConsoleProgress(enabled=app_config.card_generator.progress.enabled and not args.no_progress,
-                    heartbeat_interval_seconds=app_config.card_generator.progress.heartbeat_interval_seconds) as progress:
-                    result = run_themes(app_config, progress=progress, pipeline=pipeline, **extra)
-                    progress.finish(result)
+                if selection["provider"] == "in_session":
+                    # Nothing here may call a model: stage one step at a time and
+                    # let the current agent write response.json.
+                    result = _themes_run_session(app_config, args.run_dir)
+                else:
+                    pipeline = build_theme_pipeline(app_config)
+                    with ConsoleProgress(enabled=app_config.card_generator.progress.enabled and not args.no_progress,
+                        heartbeat_interval_seconds=app_config.card_generator.progress.heartbeat_interval_seconds) as progress:
+                        result = run_themes(app_config, progress=progress, pipeline=pipeline, **extra)
+                        progress.finish(result)
         except AIConfigError as exc:
             # A bad provider id must name the choices, not become a generic
             # local-error message.

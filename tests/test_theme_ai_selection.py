@@ -7,6 +7,7 @@ ignored and the run always tried the adapter baked into the asset config.
 from __future__ import annotations
 
 import io
+import json
 from contextlib import redirect_stdout
 
 import pytest
@@ -137,17 +138,50 @@ def test_themes_run_without_a_provider_reads_the_ai_config_file(tmp_path, monkey
 
 
 def test_themes_run_reads_the_ai_config_from_the_environment(tmp_path, monkeypatch):
+    """The env selection picks ``in_session``: stage a step, never call a model."""
+
     config_path = write_config(tmp_path)
     ai_file = tmp_path / "ai.toml"
     ai_file.write_text(
         '[ai]\nprovider = "in_session"\n', encoding="utf-8"
     )
     monkeypatch.setenv("HYDROLITAGENT_CARDS_AI_CONFIG", str(ai_file))
+    captured: dict[str, object] = {}
 
-    code, captured = _run_themes_cli(monkeypatch, config_path, [])
+    def fake_prepare(app_config, *, run_dir, pipeline=None):
+        captured.update(config=app_config, run_dir=run_dir)
+        return {
+            "schema_version": 1,
+            "operation": "theme_session_prepare",
+            "ok": True,
+            "status": "AWAITING_SESSION_OUTPUT",
+            "model_invoked": False,
+            "model_call_count": 0,
+            "step": "discovery",
+            "step_kind": "theme_discovery",
+        }
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("in_session 主题运行不得构建或调用模型运行器")
+
+    monkeypatch.setattr(cli, "prepare_theme_session", fake_prepare)
+    monkeypatch.setattr(cli, "build_session_pipeline", lambda _config: object())
+    monkeypatch.setattr(cli, "build_theme_pipeline", forbidden)
+    monkeypatch.setattr(cli, "run_themes", forbidden)
+    output = io.StringIO()
+    with redirect_stdout(output):
+        code = cli.main(["themes-run", "--config", str(config_path), "--json"])
 
     assert code == 0
     assert captured["config"].card_generator.runner == "in_session"
+    # No model is involved in this mode; naming one would falsify the fingerprint
+    # of the pool change and of every reading record.
+    assert captured["config"].card_generator.model is None
+    view = json.loads(output.getvalue())
+    assert view["operation"] == "themes_run"
+    assert view["status"] == "AWAITING_SESSION_OUTPUT"
+    assert view["model_invoked"] is False
+    assert view["model_call_count"] == 0
 
 
 @pytest.mark.parametrize("flag", ["--dry-run", "--migrate-only"])

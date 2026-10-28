@@ -31,6 +31,10 @@ uv run hydrolitagent cards ai-config --json          # 看模型选择与产物�
 uv run hydrolitagent cards run prepare --paper-input paper-input.json --run-dir <运行目录> --json
 uv run hydrolitagent cards run finalize --run-dir <运行目录> --paper-input paper-input.json --json
 
+# 主题流程也一样分步：发现 → 每篇精读 → 回填 → 提交（不需要 key，不调用模型）
+uv run hydrolitagent cards run prepare --theme --run-dir <运行目录> --json
+uv run hydrolitagent cards run finalize --theme --run-dir <运行目录> --json
+
 # 只读自查转换器、运行器与存储；不调模型、不读你的 PDF
 uv run hydrolitagent cards doctor --json
 ```
@@ -54,7 +58,8 @@ uv run python scripts/paper_validate.py \
 
 **前提**：Zotero 里该论文**已附好可读的 PDF**；一个执行者可用 —— `direct`（直连 API，读 `DEEPSEEK_API_KEY`），
 或会话内 agent（`in_session`，用 `cards run`，不需要 key）。默认路径是 **PDF→Markdown**（Python + PyMuPDF），
-**不需要 Poppler**，macOS / Linux / Windows 行为一致。
+**不需要 Poppler**，macOS / Linux / Windows 行为一致。主题流程的 `in_session` 版本是
+`cards run prepare|finalize --theme`（`themes-run --ai-provider in_session` 等价于先跑一次 `prepare`）。
 
 **产物**：单篇流程写到**产物根**（默认仓库 `outputs/`）；主题池写到 `themes/`。
 查主题从 `themes/index.md` 进 —— 那是给人看的总入口。
