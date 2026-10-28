@@ -88,6 +88,9 @@ class CardGeneratorConfig:
 @dataclass(frozen=True)
 class PathConfig:
     project_root: Path
+    # 产物根：单篇草稿、主题池、证据包都写在它下面。它来自项目级
+    # configs/paths.toml（或 HYDROLITAGENT_LITERATURE_ROOT），cards 只声明子目录名。
+    literature_root: Path
     runtime_dir: Path
     snapshot_file: Path
     tasks_file: Path
@@ -171,6 +174,7 @@ class AppConfig:
     runner_options: dict[str, Any] | None = None
 
 
+# 相对项目根解析：代码、模板、运行区。
 PATH_FIELDS = (
     "runtime_dir",
     "snapshot_file",
@@ -178,18 +182,22 @@ PATH_FIELDS = (
     "lock_file",
     "logs_dir",
     "card_trials_dir",
-    "evidence_packs_dir",
     "templates_dir",
     "evidence_card_templates_dir",
     "evidence_card_template_catalog_file",
     "evidence_card_generation_prompt_file",
     "card_generation_output_schema_file",
-    "themes_dir",
     "members_dir",
     "activity_dir",
     "reports_dir",
     "prompts_dir",
     "schemas_dir",
+)
+
+# 产物根下的子目录。它们相对 literature_root 解析，且不得离开产物根。
+LITERATURE_PATH_FIELDS = (
+    "evidence_packs_dir",
+    "themes_dir",
 )
 
 # 产物根下的子目录。它们相对 paths.artifact_root 解析，且不得离开产物根。

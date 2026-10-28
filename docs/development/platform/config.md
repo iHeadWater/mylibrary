@@ -104,16 +104,25 @@ Qinjiajun 目标库的群组 ID 保存在可复现的 `hydrolitagent/cards/asset
 
 新增配置字段必须同时具有解析、类型或范围校验、使用该字段的实际代码、自动化测试和中文说明；`runner` 只能选择注册表里已实现并注册的执行者，填写未知执行者时必须启动失败，不能静默回退。
 
-## 科研产物路径与当前边界
+## 科研产物路径：一个根，其余派生
 
-配置同时保留**两组**产物路径：
+**产物根只有一个定义处**：项目级 `configs/paths.toml` 的 `[literature] root`（可用
+`HYDROLITAGENT_LITERATURE_ROOT` 覆盖，`uv run hydrolitagent paths` 可查实际解析结果）。
+cards 的 `config.json` 只写**子目录名**，全部相对这个根解析：
 
-- **单篇流程**写入 `--output-root`（默认仓库 `outputs/`），**主题池**写入 `paths.themes_dir`。
-- `paths.artifact_root` 及其下的 `证据卡/`、`主题/`、`运行记录/`、`文献链接/` **已能解析和校验**，
-  可指向仓库根或显式允许的外部共享位置，但**自动化发布尚未接入这四个目录**。
+| cards 字段 | 值 | 解析结果 |
+|---|---|---|
+| `paths.themes_dir` | `themes` | `<literature_root>/themes` |
+| `paths.evidence_packs_dir` | `evidence-packs` | `<literature_root>/evidence-packs` |
+| 单篇草稿（无配置字段） | — | `<literature_root>/zotero/...` |
+
+`paths.literature_root` 是**可选的显式覆盖**，只用于测试或非常规部署；正常使用不要写它，
+否则又会变成两处定义。`paths.artifact_root` 及其下的 `证据卡/`、`主题/`、`运行记录/`、`文献链接/`
+是旧平台的发布目标，**当前自动化未接入**，保留解析与校验仅为兼容。
+
+代码、模板、`configs/`、`.runtime/`（缓存与日志）仍相对 `paths.project_root` 解析，不属于产物。
+临时输入与 `cards run --run-dir` 放在 `.runtime/` 下。
 
 所有实际科研产物、原始 PDF、Zotero 数据库、`.runtime` 和本机路径均**不进入 Git**。
-目标是在两组目录之间建立明确的准入与发布边界，再把 `artifact_root` 作为 Obsidian 阅读层 ——
-**不应把当前的配置字段理解为两套工作流已经打通**。
 
 相关：[自动化边界](automation.md) · [项目级设计](project-design.md)

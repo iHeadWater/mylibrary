@@ -15,6 +15,7 @@ from typing import Any
 from .executables import _resolve_executable
 from .models import (
     ARTIFACT_PATH_FIELDS,
+    LITERATURE_PATH_FIELDS,
     PATH_FIELDS,
     SUPPORTED_REASONING_EFFORTS,
     AppConfig,
@@ -35,6 +36,8 @@ from .paths import (
     _require_inside,
     _resolve_artifact_path,
     _resolve_artifact_root,
+    _resolve_literature_path,
+    _resolve_literature_root,
     _resolve_project_path,
     _resolve_project_root,
 )
@@ -135,12 +138,18 @@ def load_config(
     if not isinstance(raw_paths, dict):
         raise ConfigError("paths 必须是 JSON 对象")
     project_root = _resolve_project_root(raw_paths, config_file)
+    literature_root = _resolve_literature_root(raw_paths, project_root)
     artifact_root, artifact_root_external = _resolve_artifact_root(raw_paths, project_root)
     path_config = PathConfig(
         project_root=project_root,
+        literature_root=literature_root,
         **{
             name: _resolve_project_path(raw_paths, name, project_root)
             for name in PATH_FIELDS
+        },
+        **{
+            name: _resolve_literature_path(raw_paths, name, literature_root)
+            for name in LITERATURE_PATH_FIELDS
         },
         artifact_root=artifact_root,
         artifact_root_external=artifact_root_external,

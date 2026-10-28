@@ -51,6 +51,43 @@ def _require_inside(path: Path, parent: Path, *, name: str, parent_name: str) ->
         raise ConfigError(f"paths.{name} 必须位于 paths.{parent_name} 内")
 
 
+def _resolve_literature_root(paths: dict[str, Any], project_root: Path) -> Path:
+    """Resolve the product root that ``themes_dir`` / ``evidence_packs_dir`` live under.
+
+    One source of truth for the whole project: the project-level
+    ``configs/paths.toml`` (or ``HYDROLITAGENT_LITERATURE_ROOT``). The cards
+    config only names subdirectories inside it. ``paths.literature_root`` stays
+    available as an explicit override for tests and unusual deployments.
+    """
+    explicit = paths.get("literature_root")
+    if explicit is not None:
+        raw_root = _path_value(explicit, name="literature_root")
+        resolved = (raw_root if raw_root.is_absolute() else project_root / raw_root).resolve()
+        if not resolved.is_relative_to(project_root):
+            raise ConfigError("paths.literature_root 必须位于 paths.project_root 内")
+        return resolved
+
+    from hydrolitagent._config import resolve_literature_root
+
+    return resolve_literature_root(
+        config_path=project_root / "configs" / "paths.toml",
+        warn=False,
+        default=project_root / "outputs",
+    )
+
+
+def _resolve_literature_path(
+    paths: dict[str, Any], name: str, literature_root: Path
+) -> Path:
+    if name not in paths:
+        raise ConfigError(f"缺少 paths.{name}")
+    raw_path = _path_value(paths[name], name=name)
+    resolved = (raw_path if raw_path.is_absolute() else literature_root / raw_path).resolve()
+    if not resolved.is_relative_to(literature_root):
+        raise ConfigError(f"paths.{name} 必须位于 paths.literature_root 内")
+    return resolved
+
+
 def _resolve_artifact_root(
     paths: dict[str, Any], project_root: Path
 ) -> tuple[Path, bool]:
@@ -96,6 +133,8 @@ __all__ = [
     "_require_inside",
     "_resolve_artifact_path",
     "_resolve_artifact_root",
+    "_resolve_literature_path",
+    "_resolve_literature_root",
     "_resolve_project_path",
     "_resolve_project_root",
 ]

@@ -16,6 +16,7 @@ def write_config(root: Path, overrides: dict[str, object] | None = None) -> Path
         "schema_version": 1,
         "paths": {
             "project_root": "..",
+            "literature_root": ".",
             "artifact_root": "../",
             "artifact_root_external": True,
             "evidence_cards_dir": "证据卡",
