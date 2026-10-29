@@ -62,6 +62,11 @@ _ANCHOR_PAGE = re.compile(r"^(?:[Pp](?:age)?|页)?[\s:#_-]*(\d+)$")
 # A hyphen that ends a line: the PDF keeps the hyphen and the line break becomes
 # whitespace downstream. Rejoining it is symmetric for both sides of a match.
 _SOFT_HYPHEN = re.compile(r"(?<=[^\W\d_])-\s+(?=[^\W\d_])")
+# Some publishers spell the same break with U+00AD SOFT HYPHEN, and the space
+# after it may be a line break, a space or nothing at all. This stays a separate
+# rule on purpose: widening the ASCII one to "\s*" would also merge real hyphens
+# ("well-known" into "wellknown"), which is a looser match than this bug.
+_SOFT_HYPHEN_ARTIFACT = re.compile(r"(?<=[^\W\d_])\u00ad\s*(?=[^\W\d_])")
 
 
 def _is_cjk(character: str) -> bool:
@@ -98,9 +103,23 @@ def normalize_quote(text: str) -> str:
 
 
 def search_form(text: str) -> str:
-    """Normalise text and repair a word hyphenated across a line break."""
+    """Normalise text and repair a word hyphenated across a line break.
 
-    return _SOFT_HYPHEN.sub("", normalize_quote(text))
+    Two spellings of the same artifact are repaired: the ASCII hyphen the PDF
+    keeps before a line break, and the U+00AD some publishers emit instead.
+
+    The U+00AD left over after the join is dropped on both sides rather than
+    kept, because a quote may end on the artifact itself: the model copies the
+    Markdown verbatim, and a trailing U+00AD must not become a mismatch.
+    Dropping it can leave whitespace where the artifact stood, so whitespace is
+    folded once more at the end: callers repair text that is already repaired
+    (page text is joined and repaired again, adjacent pages are concatenated and
+    repaired again), so this has to be a fixed point.
+    """
+
+    repaired = _SOFT_HYPHEN.sub("", normalize_quote(text))
+    repaired = _SOFT_HYPHEN_ARTIFACT.sub("", repaired)
+    return _WHITESPACE.sub(" ", repaired.replace("\u00ad", "")).strip()
 
 
 def _quote_pattern(normalized: str) -> re.Pattern[str]:
@@ -158,6 +177,10 @@ class _PageText:
     # Heading lines dropped. A running header ("Article") sits at the top of
     # every page, so only this text can be joined with the next page's.
     prose: str
+    # The same prose before any repair, so two adjacent pages can be joined and
+    # repaired once: a page that ends on a hyphenation artifact would otherwise
+    # lose the marker during its own page-level repair.
+    raw_prose: str
     # (normalised line, is_heading) for single-line hits.
     lines: tuple[tuple[str, bool], ...]
 
@@ -177,15 +200,17 @@ class PageIndex:
         # by the running header of the next page, so it matches no single page.
         # Joining each adjacent pair of prose texts restores exactly one such
         # boundary; a quote that needs more than one page is still rejected.
+        # The join uses the unrepaired prose and repairs once afterwards, so an
+        # artifact sitting on the last line of the left page still rejoins.
         # ``boundary`` is where the left page's prose ends, in the joined text:
-        # repairing a hyphen across the break shifts the right side by at most
-        # two characters, which ``match.start() < boundary <= match.end()``
-        # still brackets correctly.
+        # repairing a hyphen across the break shifts the right side by a few
+        # characters, which ``match.start() < boundary <= match.end()`` still
+        # brackets correctly.
         self._spans: tuple[tuple[int, int, str, int], ...] = tuple(
             (
                 left.page,
                 right.page,
-                search_form(f"{left.prose} {right.prose}"),
+                search_form(f"{left.raw_prose} {right.raw_prose}"),
                 len(left.prose),
             )
             for left, right in zip(self.pages, self.pages[1:])
@@ -207,6 +232,7 @@ class PageIndex:
     def _page_text(markdown: str, anchor: PageAnchor) -> _PageText:
         raw = markdown[anchor.char_start:anchor.char_end]
         prose_lines: list[tuple[str, bool]] = []
+        cleaned_lines: list[tuple[str, bool]] = []
         for line in raw.splitlines():
             if not line.strip() or not _COMMENT.sub("", line).strip():
                 continue
@@ -214,14 +240,20 @@ class PageIndex:
             normalized = search_form(cleaned)
             if not normalized:
                 continue
-            prose_lines.append((normalized, bool(_HEADING.match(line))))
+            is_heading = bool(_HEADING.match(line))
+            prose_lines.append((normalized, is_heading))
+            cleaned_lines.append((cleaned, is_heading))
+        raw_prose = " ".join(
+            text for text, is_heading in cleaned_lines if not is_heading
+        )
         return _PageText(
             page=anchor.page,
-            # Join first, then repair: the hyphenation artifact spans two lines.
-            joined=search_form(" ".join(normalized for normalized, _ in prose_lines)),
-            prose=search_form(
-                " ".join(normalized for normalized, is_heading in prose_lines if not is_heading)
-            ),
+            # Join first, then repair: the hyphenation artifact spans two lines,
+            # so joining already-normalised lines would delete the marker before
+            # the join could use it and leave "be tween" behind.
+            joined=search_form(" ".join(text for text, _ in cleaned_lines)),
+            prose=search_form(raw_prose),
+            raw_prose=raw_prose,
             lines=tuple(prose_lines),
         )
 

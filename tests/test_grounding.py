@@ -518,6 +518,144 @@ def test_hyphen_tolerance_does_not_forgive_other_differences() -> None:
     assert verdict.reason == "QUOTE_NOT_FOUND"
 
 
+def _document_with_soft_hyphen(broken: str) -> tuple[str, tuple[PageAnchor, ...]]:
+    """A body page whose line-break hyphen was written as ``broken``."""
+
+    pages = (
+        PAGE_ONE,
+        "## Study area\n\nGuangzhou lies on the coast; the average annual "
+        "temperature is " + broken + " 21.7 and 23.1 degrees across the year.",
+        PAGE_THREE,
+        PAGE_FOUR,
+    )
+    return make_document(pages)
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        "be\u00ad tween",  # soft hyphen, then a space
+        "be\u00ad\n  tween",  # soft hyphen, then a line break
+        "be\u00adtween",  # soft hyphen and nothing else
+    ],
+)
+def test_soft_hyphen_artifact_still_matches_the_full_word(broken: str) -> None:
+    """Some publishers write the line-break hyphen as U+00AD instead of ``-``.
+
+    The whitespace after it may be a space, a line break or absent; all three
+    rejoin to the word the model quoted, so the quote is verbatim, not invented.
+    """
+
+    markdown, anchors = _document_with_soft_hyphen(broken)
+    assert search_form(broken) == "between"
+    verdict = verify_quote(
+        "the average annual temperature is between 21.7 and 23.1 degrees",
+        markdown,
+        anchors,
+    )
+    assert verdict.ok is True
+    assert verdict.page == 2
+
+
+def test_soft_hyphen_repair_does_not_forgive_a_changed_word() -> None:
+    """Rejoining a broken word must not turn into tolerating edits."""
+
+    markdown, anchors = _document_with_soft_hyphen("be\u00ad tween")
+    verdict = verify_quote(
+        "the average annual temperature is between 23.9 and 23.1 degrees",
+        markdown,
+        anchors,
+    )
+    assert verdict.ok is False
+    assert verdict.reason == "QUOTE_NOT_FOUND"
+
+
+def test_a_quote_that_ends_on_the_soft_hyphen_still_matches() -> None:
+    """A quote may stop right after the artifact.
+
+    The model copies the Markdown verbatim, so its quote can end on the very
+    U+00AD the page text carries. Dropping the artifact on both sides is what
+    keeps that quote verbatim instead of turning it into a mismatch.
+    """
+
+    pages = (
+        PAGE_ONE,
+        "## Study area\n\nIn this study, urban flood disasters, and nat\u00ad\n\n"
+        "mitigation options were compared across the five catchments.",
+        PAGE_THREE,
+        PAGE_FOUR,
+    )
+    markdown, anchors = make_document(pages)
+    verdict = verify_quote(
+        "In this study, urban flood disasters, and nat\u00ad",
+        markdown,
+        anchors,
+    )
+    assert verdict.ok is True
+    assert verdict.page == 2
+
+
+def test_soft_hyphen_at_a_page_break_still_matches() -> None:
+    """The artifact can sit on the last line of a page, not only mid-page.
+
+    Page text is normalised once per page *and* once more after the adjacent
+    pages are joined, so the repair has to survive being applied twice: a
+    per-page pass that already deleted U+00AD would leave "the con nectivity"
+    behind and the page break would become unmatchable.
+    """
+
+    pages = (
+        PAGE_ONE,
+        "## Results\n\nThe network connectivity if the con\u00ad",
+        "nectivity value of the network is what matters for the catchment.",
+        PAGE_FOUR,
+    )
+    markdown, anchors = make_document(pages)
+    verdict = verify_quote(
+        "the network connectivity if the connectivity value of the network",
+        markdown,
+        anchors,
+    )
+    assert verdict.ok is True
+    assert verdict.pages == (2, 3)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "be\u00ad tween",
+        "be\u00ad\n  tween",
+        "be\u00adtween",
+        "Typ- ically",
+        "nat\u00ad",
+        "\u00ad and nat",
+        "well-known",
+        "The average temperature is 21.7 degrees.",
+    ],
+)
+def test_search_form_is_idempotent(text: str) -> None:
+    """Repairing twice must equal repairing once.
+
+    Several call sites normalise text that is already normalised (page text is
+    joined and re-repaired, adjacent pages are concatenated and re-repaired).
+    That is only safe while ``search_form`` is a fixed point.
+    """
+
+    once = search_form(text)
+    assert search_form(once) == once
+
+
+def test_a_real_hyphen_is_not_merged_with_its_neighbour() -> None:
+    """The U+00AD repair stays separate from the ASCII rule on purpose.
+
+    Widening the ``-\\s+`` rule to ``-\\s*`` would have made a genuine compound
+    hyphen equal to no hyphen at all, which is a looser match than the bug needs.
+    """
+
+    assert search_form("well-known") == "well-known"
+    assert search_form("well-known") != search_form("wellknown")
+
+
 @pytest.mark.parametrize(
     "quote",
     [
