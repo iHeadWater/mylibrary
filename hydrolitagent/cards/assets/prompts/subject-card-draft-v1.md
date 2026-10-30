@@ -8,7 +8,9 @@ prompt_version: "subject-card-draft-v1"
 二者使用同一篇 PDF、同一次阅读所得信息。不得再调用 AI 提取比较表，不生成跨论文综合决策卡、候选主题或 research idea。
 仅可从本次提供的八类单篇来源模板中选型。综述论文可总结该综述的内容，但不能冒充独立读取其引用的论文。
 
-## 固定机器字段（schema_version = 1）
+## 固定机器字段（`machine_fields.schema_version` 固定为 `1`）
+
+本块的 `schema_version` 恒为 `1`；`2` 是顶层文档契约（整份回答）的版本，写在本块里会被判违规，两者不是同一个字段。
 
 - research_questions：论文研究问题。
 - study_objects_and_scales：研究对象、样本及时间和空间尺度。

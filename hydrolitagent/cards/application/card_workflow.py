@@ -87,6 +87,14 @@ from hydrolitagent.cards.progress import ProgressCallback, report_progress
 READING_PROMPT = ASSETS_DIR / "prompts/markdown-reading-v1.md"
 OUTPUT_SCHEMA = ASSETS_DIR / "schemas/subject-card-draft-output-v3.schema.json"
 DRAFT_SCHEMA_VERSION = 2
+# Two contracts in one answer carry a ``schema_version``: the whole document and
+# the machine-fields sub-block. The model has read the top-level number into the
+# sub-block in 3 of 56 real answers (and the reverse in 9), so a repair states the
+# relationship instead of repeating the expected value a fourth time.
+MACHINE_FIELDS_VERSION_NOTE = (
+    "`machine_fields.schema_version` 属于机器字段子块，恒为 `1`；"
+    "`2` 是顶层文档契约（整份回答）的版本，两者不是同一个字段。"
+)
 # A rejected answer may be handed back to the same model with the reasons, but
 # only a few times: the budget has a hard ceiling so a malformed input cannot
 # burn a night of tokens. The default is the usual budget; the ceiling is what
@@ -688,6 +696,8 @@ def _repair_prompt(
             "```json",
             json.dumps(contract, ensure_ascii=False, indent=1),
             "```",
+            "",
+            MACHINE_FIELDS_VERSION_NOTE,
         ]
     if coverage and not coverage.get("satisfied", True):
         covered = coverage.get("covered_pages") or []

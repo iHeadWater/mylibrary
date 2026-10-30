@@ -67,8 +67,9 @@ prompt_version: "markdown-reading-v1"
 
 本次新增的读取证据不改变原有声明：
 
-- `schema_version` 保持 `2`；`source_read_status` 是历史字段名，必须在通读全文后写 `FULL_PDF_REVIEWED`；
-  它表示已通读**本次提供的全文**，不代表直接读取了 PDF，也不代表科学结论正确。
+- **顶层** `schema_version` 保持 `2`（这是整份回答文档的契约版本）；`machine_fields.schema_version` 是另一个
+  字段、另一层契约，固定为 `1`，不要跟着写成 `2`；`source_read_status` 是历史字段名，必须在通读全文后写
+  `FULL_PDF_REVIEWED`；它表示已通读**本次提供的全文**，不代表直接读取了 PDF，也不代表科学结论正确。
 - `source_read_evidence`：客观描述阅读范围（读过哪些页、看过哪些图表），不得写日志或命令输出。
 - `visual_content_status`：查看过图上内容写 `REVIEWED`；论文没有图表写 `NOT_PRESENT`；
   本次运行没有图像输入、无法查看图上内容时写 `NOT_REVIEWED`（**不要**声称看过图）；无法看清写
