@@ -188,17 +188,19 @@ def machine_fields(quote_page: int) -> dict:
 
 def grounded_output(request, *, quote_page: int = 2, locations=None, **overrides) -> dict:
     markdown = (Path(request.workspace) / "paper.md").read_text(encoding="utf-8")
-    quote = first_prose_quote(markdown, quote_page)
     if locations is None:
+        # A reading has to cover the pages that carry prose, so the default
+        # answer quotes the abstract page as well as the body page it is about.
         locations = [
             {
-                "anchor": f"P{quote_page}",
-                "quote": quote,
-                "pdf_page": quote_page,
+                "anchor": f"P{page}",
+                "quote": first_prose_quote(markdown, page),
+                "pdf_page": page,
                 "section": None,
                 "figure": None,
                 "table": None,
             }
+            for page in dict.fromkeys((1, quote_page))
         ]
     output = {
         "schema_version": 2,
@@ -209,7 +211,9 @@ def grounded_output(request, *, quote_page: int = 2, locations=None, **overrides
         "template_id": TEMPLATE_ID,
         "classification_confidence": 0.9,
         "classification_reason": "fixture",
-        "card_body_markdown": "# Fixed Markdown fixture paper\n\nF001: fixture result.\n",
+        "card_body_markdown": (
+            f"# Fixed Markdown fixture paper\n\nfixture result（第 {quote_page} 页）.\n"
+        ),
         "machine_fields": machine_fields(quote_page),
         "reading_receipt": {
             "markdown_sha256": markdown_sha256(markdown),
@@ -283,7 +287,9 @@ def test_markdown_pipeline_saves_a_grounded_unvalidated_draft(app_config, tmp_pa
     assert reading["canaries_ok"] is True
     assert reading["full_read_verified"] is True
     assert reading["scientific_correctness_verified"] is False
-    assert reading["verified_pages"] == [2]
+    # Page 1 carries the abstract, page 2 the body; page 3 is a reference list
+    # and does not count towards coverage.
+    assert reading["verified_pages"] == [1, 2]
     assert reading["quote_coverage"] == 1.0
     # The legacy reader field must carry the same receipt.
     assert draft["reading_record"] == access
@@ -398,7 +404,9 @@ def test_missing_canary_is_rejected(app_config, tmp_path):
     assert _no_drafts(tmp_path)
 
 
-def test_quotes_only_on_front_matter_save_a_partial_draft(app_config, tmp_path):
+def test_a_reading_that_covers_too_few_pages_is_rejected(app_config, tmp_path):
+    """Coverage is a requirement of the card, not a note attached to it."""
+
     pdf = _write_pdf(tmp_path / "paper.pdf")
 
     def builder(request):
@@ -406,13 +414,13 @@ def test_quotes_only_on_front_matter_save_a_partial_draft(app_config, tmp_path):
 
     result = run_workflow(app_config, _record(pdf), WorkspaceRunner(builder), tmp_path=tmp_path)
 
-    assert result["ok"], result
-    assert result["reading_status"] == "PARTIAL"
-    draft = json.loads(draft_paths(result)[0].read_text(encoding="utf-8"))
-    assert draft["source_access"]["reading"]["verified"] is False
-    assert draft["source_access"]["reading"]["quote_coverage"] == 0.0
-    assert "GROUNDING_COVERAGE_PARTIAL" in draft["warnings"]
-    assert draft["production_eligible"] is False
+    assert result["ok"] is False
+    assert result["error"]["code"] == "CARD_READING_NOT_VERIFIED"
+    assert result["failed_stage"] in ("validation", "grounding")
+    coverage = result["error"]["diagnostic"]["coverage"]
+    assert coverage["satisfied"] is False
+    assert coverage["missing_pages"] == [2]
+    assert _no_drafts(tmp_path)
 
 
 def test_runner_failure_is_reported_without_a_draft(app_config, tmp_path):
@@ -429,6 +437,70 @@ def test_runner_failure_is_reported_without_a_draft(app_config, tmp_path):
     assert result["model_invoked"] is True
     assert result["error"]["code"] == "MARKDOWN_RUNNER_TIMEOUT"
     assert _no_drafts(tmp_path)
+
+
+class FlakyRunner(WorkspaceRunner):
+    """Fails the first ``failures`` calls, then answers normally."""
+
+    def __init__(self, builder, *, failures, code="RUNNER_OUTPUT_INVALID"):
+        super().__init__(builder)
+        self.failures = failures
+        self.code = code
+
+    def run(self, request):
+        if self.failures > 0:
+            self.failures -= 1
+            self.ok = False
+            self.error = CardRunError(self.code, "模型输出不是有效 JSON（制卡）")
+            try:
+                return super().run(request)
+            finally:
+                self.ok = True
+        return super().run(request)
+
+
+def test_a_truncated_answer_is_retried_instead_of_failing_the_paper(
+    app_config, tmp_path
+):
+    """Nothing was learnt about the card, so asking again is not a repair."""
+
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    runner = FlakyRunner(grounded_output, failures=1)
+
+    result = run_workflow(app_config, _record(pdf), runner, tmp_path=tmp_path)
+
+    assert result["ok"], result
+    assert [attempt["ok"] for attempt in result["attempts"]] == [False, True]
+    assert result["attempts"][0]["error_code"] == "RUNNER_OUTPUT_INVALID"
+    assert len(runner.requests) == 2
+    # The retry asks for the same task again, and says how to make it usable.
+    assert "只输出一个完整的 JSON 对象" in runner.requests[1].prompt
+    assert len(draft_paths(result)) == 1
+
+
+def test_transient_retries_are_capped(app_config, tmp_path):
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    runner = FlakyRunner(grounded_output, failures=9)
+
+    result = run_workflow(app_config, _record(pdf), runner, tmp_path=tmp_path)
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "RUNNER_OUTPUT_INVALID"
+    # One call plus two retries, then the run stops instead of burning the night.
+    assert len(runner.requests) == 3
+    assert len(result["attempts"]) == 3
+    assert _no_drafts(tmp_path)
+
+
+def test_a_rejected_key_is_not_retried(app_config, tmp_path):
+    pdf = _write_pdf(tmp_path / "paper.pdf")
+    runner = FlakyRunner(grounded_output, failures=1, code="RUNNER_AUTH_FAILED")
+
+    result = run_workflow(app_config, _record(pdf), runner, tmp_path=tmp_path)
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "RUNNER_AUTH_FAILED"
+    assert len(runner.requests) == 1
 
 
 def test_conversion_failure_never_calls_the_runner(app_config, tmp_path):
@@ -632,18 +704,18 @@ def test_the_repair_prompt_quotes_back_the_rejected_text(app_config, tmp_path):
 
 
 def _uncited_body(request):
-    """A verified reading whose body cites no finding id: validator-only failure."""
+    """A verified reading whose body points at no page: validator-only failure."""
 
     output = grounded_output(request)
-    output["card_body_markdown"] = "# Fixed paper\n\n本文给出了结果，但没有编号。\n"
+    output["card_body_markdown"] = "# Fixed paper\n\n本文给出了结果，但没有标注页码。\n"
     return output
 
 
 def test_the_validator_is_part_of_the_repair_loop(app_config, tmp_path):
     """A card that grounds every quote can still fail evidence-validate.
 
-    The body must cite F001; that rule lives in the validator, not in the
-    generation-time gate, so it has to be repairable too.
+    The body must point at pages the program verified; that rule lives in the
+    validator, not in the generation-time gate, so it has to be repairable too.
     """
     pdf = _write_pdf(tmp_path / "paper.pdf")
     runner = WorkspaceRunner(_sequence(_uncited_body, grounded_output))
@@ -653,9 +725,9 @@ def test_the_validator_is_part_of_the_repair_loop(app_config, tmp_path):
     assert result["ok"], result
     first = result["attempts"][0]
     assert first["ok"] is False
-    assert first["error_code"] == "CARD_FINDING_REFERENCE"
+    assert first["error_code"] == "CARD_PAGE_CITATION"
     assert any(
-        "正文没有引用机器结果 F001" in violation["message"]
+        "没有标注任何页码" in violation["message"]
         for violation in first["violations"]
     )
     assert [attempt["ok"] for attempt in result["attempts"]] == [False, True]
@@ -671,23 +743,23 @@ def test_validator_failures_stop_at_the_cap_too(app_config, tmp_path):
     )
 
     assert result["ok"] is False
-    assert result["error"]["code"] == "CARD_FINDING_REFERENCE"
+    assert result["error"]["code"] == "CARD_PAGE_CITATION"
     assert result["failed_stage"] == "validation"
     assert [attempt["ok"] for attempt in result["attempts"]] == [False, False]
     assert _no_drafts(tmp_path)
 
 
-def test_a_partial_reading_is_not_gated_by_the_validator(app_config, tmp_path):
-    """Low coverage stays a savable PARTIAL draft, not a validation failure."""
+def test_a_partial_reading_is_gated_too(app_config, tmp_path):
+    """A short reading fails before a draft exists, so no half-card is saved."""
 
     pdf = _write_pdf(tmp_path / "paper.pdf")
     runner = WorkspaceRunner(lambda request: grounded_output(request, quote_page=1))
 
     result = run_workflow(app_config, _record(pdf), runner, tmp_path=tmp_path)
 
-    assert result["ok"], result
-    assert result["reading_status"] == "PARTIAL"
-    assert len(draft_paths(result)) == 1
+    assert result["ok"] is False
+    assert result["error"]["code"] == "CARD_READING_NOT_VERIFIED"
+    assert _no_drafts(tmp_path)
 
 
 def test_max_repairs_zero_keeps_a_single_attempt(app_config, tmp_path):

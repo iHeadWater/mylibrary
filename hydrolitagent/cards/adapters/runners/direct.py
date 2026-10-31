@@ -43,7 +43,9 @@ from hydrolitagent.cards.adapters.runners.workspace import (
     RunnerFailure,
     ensure_workspace_unchanged,
     read_workspace_markdown,
+    read_workspace_numbered,
     record_output,
+    record_raw_response,
     sha256_text,
 )
 from hydrolitagent.cards.domain.grounding import count_cjk, expected_canaries
@@ -268,6 +270,18 @@ def _json_object(content: str, what: str) -> dict[str, Any]:
     return dict(value)
 
 
+def _raw_answer_text(payload: Mapping[str, Any]) -> str:
+    """Whatever the model said, in text form, even when it is unusable."""
+
+    try:
+        return _message_content(payload)
+    except RunnerFailure:
+        try:
+            return json.dumps(payload, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError):
+            return str(payload)
+
+
 def _message_content(payload: Mapping[str, Any]) -> str:
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices:
@@ -416,6 +430,9 @@ class DirectRunner:
         invoked = False
         try:
             markdown = read_workspace_markdown(request)
+            # The model reads the numbered copy (when staged) so it can cite
+            # sentence identifiers; the receipt keeps the converted file's hash.
+            numbered = read_workspace_numbered(request)
             # A synthesis request has no paper to chunk: the whole material is
             # the prompt, and splitting it would break the task's own structure.
             chunked = request.paper is not None and (
@@ -443,7 +460,7 @@ class DirectRunner:
                         warnings.append(CHUNKED_READING)
                 else:
                     output = self._run_single(
-                        client, request, markdown, model, warnings, usage
+                        client, request, markdown, model, warnings, usage, numbered
                     )
 
             self._apply_visual_policy(output, warnings)
@@ -566,7 +583,7 @@ class DirectRunner:
         return payload
 
     def _single_messages(
-        self, request: CardRunRequest, markdown: str
+        self, request: CardRunRequest, markdown: str, body: str | None = None
     ) -> list[dict[str, str]]:
         if request.paper is None:
             return [
@@ -589,8 +606,8 @@ class DirectRunner:
                     + request.prompt
                     + "\n\n## 运行参数（程序提供，不要改写）\n"
                     + _json_block(self._paper_context(markdown, request))
-                    + "\n\n## paper.md 全文\n"
-                    + markdown
+                    + "\n\n## paper 全文（每句前的 ⟨P3-S004⟩ 是句子编号）\n"
+                    + (body or markdown)
                     + "\n\n只输出一个 JSON 对象；reading_receipt.markdown_sha256 与 "
                     "canaries_seen 必须逐字回显运行参数。"
                 ),
@@ -667,16 +684,32 @@ class DirectRunner:
         model: str,
         warnings: list[str],
         usage: dict[str, int],
+        numbered: str | None = None,
     ) -> dict[str, Any]:
         payload = self._payload(
-            self._single_messages(request, markdown),
+            self._single_messages(request, markdown, numbered),
             model,
             request.output_schema,
             _OUTPUT_SCHEMA_NAME,
         )
         data = self._post(client, payload=payload, warnings=warnings)
         _add_usage(usage, data)
-        return _json_object(_message_content(data), "制卡")
+        return self._answer(request, data, "制卡")
+
+    def _answer(
+        self, request: CardRunRequest, data: Mapping[str, Any], what: str
+    ) -> dict[str, Any]:
+        """Decode one answer, keeping its exact text when that fails.
+
+        A truncated or fenced reply is the one failure nobody can diagnose after
+        the fact, so the raw text is written beside the paper before raising.
+        """
+
+        try:
+            return _json_object(_message_content(data), what)
+        except RunnerFailure:
+            record_raw_response(request, _raw_answer_text(data))
+            raise
 
     def _run_chunked(
         self,
@@ -721,7 +754,7 @@ class DirectRunner:
             payload = self._payload(messages, model, _CHUNK_SCHEMA, _CHUNK_SCHEMA_NAME)
             data = self._post(client, payload=payload, warnings=warnings)
             _add_usage(usage, data)
-            parsed = _json_object(_message_content(data), f"分块 {index}")
+            parsed = self._answer(request, data, f"分块 {index}")
             note = parsed.get("notes")
             if isinstance(note, str) and note.strip():
                 notes.append(note.strip())
@@ -763,7 +796,7 @@ class DirectRunner:
         )
         data = self._post(client, payload=payload, warnings=warnings)
         _add_usage(usage, data)
-        output = _json_object(_message_content(data), "分块汇总")
+        output = self._answer(request, data, "分块汇总")
         if not output.get("source_locations") and locations:
             # The final answer omitted the quotes it was given; keep them so the
             # grounding gate checks real text instead of rejecting the run for

@@ -626,5 +626,38 @@ def test_doctor_reports_missing_key_with_an_actionable_fix():
     assert API_KEY not in ready.detail
 
 
+def raw_completion(text: str) -> httpx.Response:
+    """A 200 answer whose content is not JSON at all."""
+
+    return httpx.Response(
+        200,
+        json={"choices": [{"message": {"role": "assistant", "content": text}}]},
+    )
+
+
+def test_an_unparseable_answer_is_kept_next_to_the_paper(tmp_path):
+    """A truncated reply must leave evidence, or nobody can tell what happened."""
+
+    truncated = '{"schema_version": 2, "card_body_markdown": "# Half a card'
+    endpoint = FakeEndpoint(sequence(raw_completion(truncated)))
+
+    result = runner(endpoint).run(request_for(tmp_path))
+
+    assert result.ok is False
+    assert result.error is not None and result.error.code == "RUNNER_OUTPUT_INVALID"
+    kept = (tmp_path / "workspace" / "raw-response.txt").read_text(encoding="utf-8")
+    assert kept == truncated
+    # The parsed-answer file is not written, so the two cannot be confused.
+    assert not (tmp_path / "workspace" / "response.json").exists()
+
+
+def test_a_code_fenced_answer_still_parses(tmp_path):
+    endpoint = FakeEndpoint(
+        sequence(raw_completion("```json\n" + json.dumps(ANSWER) + "\n```"))
+    )
+    result = runner(endpoint).run(request_for(tmp_path))
+    assert result.ok is True
+
+
 if __name__ == "__main__":  # pragma: no cover - manual invocation convenience
     raise SystemExit(pytest.main([__file__]))

@@ -25,7 +25,7 @@ import hashlib
 import json
 import shutil
 import uuid
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -62,6 +62,12 @@ from hydrolitagent.cards.domain.card_output import (
 from hydrolitagent.cards.domain.errors import CardGenerationError
 from hydrolitagent.cards.domain.grounding import audit_reading, expected_canaries
 from hydrolitagent.cards.domain.paper import FIGURES_DIRNAME, MARKDOWN_FILENAME, PreparedPaper
+from hydrolitagent.cards.domain.sentence_index import (
+    annotate,
+    expand,
+    inventory as sentence_inventory,
+    strip_ids,
+)
 from hydrolitagent.cards.domain.protocol import MARKDOWN_CARD_PROTOCOL_VERSION
 from hydrolitagent.cards.domain.reading import (
     GroundingError,
@@ -101,6 +107,18 @@ MACHINE_FIELDS_VERSION_NOTE = (
 # an operator may raise it to for a paper that nearly converges.
 DEFAULT_MAX_REPAIRS = 3
 MAX_REPAIR_CAP = 5
+# A call that produced no usable answer is a different failure from an answer
+# the program rejected: nothing was learnt about the card, so retrying the same
+# question is not a second attempt at fixing it. Two retries per run, outside
+# the repair budget, so a network blip neither fails the paper nor starves the
+# budget a genuinely wrong answer needs (#65).
+MAX_RUNNER_RETRIES = 2
+_RETRYABLE_RUNNER_CODES = frozenset({
+    "RUNNER_OUTPUT_INVALID",          # truncated, wrapped in prose, or not JSON
+    "MARKDOWN_RUNNER_OUTPUT_INVALID",
+    "RUNNER_CONNECTION_FAILED",
+    "RUNNER_IO_ERROR",
+})
 
 
 def _sha256_text(value: str) -> str:
@@ -140,6 +158,10 @@ class _Preparation:
     context: dict[str, Any]
     prompt: str
     root: Path
+    # The same paper with ⟨P1-S002⟩ identifiers, plus {id: {page, kind, text}}.
+    # The model answers with identifiers; the program fills the quote (#65).
+    numbered: str = ""
+    sentences: dict[str, Any] = field(default_factory=dict)
 
 
 class _Stage:
@@ -244,6 +266,26 @@ def _prepare_card(
         + "\n"
         + supplement["content"]
     )
+    numbered, sentences = annotate(markdown)
+    # The server may refuse ``response_format`` (DeepSeek answers
+    # JSON_SCHEMA_UNSUPPORTED), and then the field types live nowhere the model
+    # can read them: a real run answered ``source_read_evidence`` with an object
+    # where the contract says string. The contract goes into the prompt itself.
+    prompt = prompt + (
+        "\n\n## 输出字段（必须严格遵守）\n"
+        "服务端可能不支持结构化输出。下面的 JSON schema 是本次回答的唯一字段依据："
+        "字段名、类型与必填项照抄；字符串字段不要写成对象或数组。\n```json\n"
+        + schema_text.rstrip() + "\n```"
+    )
+    # What can be cited, page by page. Without this the model extrapolates an
+    # identifier onto a page that has none and the whole answer is rejected
+    # (#65): six consecutive attempts died on a single invented P3-S001.
+    prompt = prompt + (
+        "\n\n## 可引用的句子编号（只有这些）\n"
+        "下面按页列出真实存在的编号范围。只能引用这份清单里出现过的编号，"
+        "不要按页码推算。标着“没有可引用的句子”的页只有图，提到其中的图时写（图 N），不要编造页面证据。\n"
+        + sentence_inventory(sentences, prepared.page_count)
+    )
     return _Preparation(
         record=record,
         pdf_path=pdf_path,
@@ -260,6 +302,8 @@ def _prepare_card(
         context=context,
         prompt=prompt,
         root=root,
+        numbered=numbered,
+        sentences=sentences,
     )
 
 
@@ -285,6 +329,36 @@ def _card_run_request(
         reading_mode="file",
         progress=progress,
     )
+
+
+# --------------------------------------------------------------------------------------
+# Sentence identifiers → the document's own text
+# --------------------------------------------------------------------------------------
+
+
+def _all_locations_use_ids(locations: Any) -> bool:
+    """True when every evidence location names sentences instead of quoting text."""
+
+    return (
+        isinstance(locations, list)
+        and bool(locations)
+        and all(isinstance(item, dict) and item.get("sentence_ids") for item in locations)
+    )
+
+
+def _expand_sentence_locations(output: Any, sentences: dict[str, Any]) -> tuple[Any, list[dict[str, Any]]]:
+    """Replace ``sentence_ids`` with the paper's own sentences before any check.
+
+    An answer that still quotes text is returned untouched, so the older contract
+    keeps working; only an answer that uses identifiers is rewritten here.
+    """
+
+    if not isinstance(output, dict) or not sentences:
+        return output, []
+    expanded, problems = expand(output.get("source_locations"), sentences)
+    if problems:
+        return output, problems
+    return {**output, "source_locations": expanded}, []
 
 
 # --------------------------------------------------------------------------------------
@@ -402,10 +476,39 @@ def _complete_draft(
     # every problem -- including the coverage shortfall -- in one round instead
     # of discovering one stage per retry.
     stage.value = "grounding"
+    used_sentence_ids = isinstance(output, dict) and _all_locations_use_ids(output.get("source_locations"))
+    output, id_problems = _expand_sentence_locations(output, prep.sentences)
+    if id_problems:
+        raise CardGenerationError(
+            id_problems[0]["code"],
+            f"主体卡输出的证据编号有 {len(id_problems)} 处问题",
+            diagnostic={
+                "stage": "reading",
+                "draft_path": run.unvalidated_output_path,
+                "violations": [
+                    {
+                        "code": item["code"],
+                        "path": item["path"],
+                        "message": item["message"],
+                        "expected": item.get("expected"),
+                        "actual": item.get("actual"),
+                    }
+                    for item in id_problems
+                ],
+                "machine_fields_contract": describe_wire_contract(
+                    prep.schema["properties"]["machine_fields"]
+                ),
+                "coverage": None,
+            },
+        )
+    # An answer that cited sentence identifiers was already resolved against the
+    # numbered text, so its quotes are the paper's own sentences; searching for
+    # them again would only fail on sentences the converter had rewritten (#65).
     reading_audit = audit_reading(
         ReadingReceipt.from_output(output),
         prep.markdown,
         prep.prepared.page_anchors,
+        quotes_verified=not used_sentence_ids,
     )
     schema_fields = prep.schema["properties"]["machine_fields"]
     violations = [*reading_audit.violations]
@@ -512,17 +615,12 @@ def _complete_draft(
         "usage": run.usage,
         "warnings": warnings,
     }
-    if gate is not None and reading.verified:
-        # A PARTIAL reading is a legitimate draft state (#31/#35: savable, never
-        # theme-eligible), and the validator would reject it for that alone.
-        # Gating it here would turn "low coverage" into "no draft at all".
-        #
-        # For a verified reading the generation-time checks above are weaker
-        # than ``evidence-validate``:
-        # a card can ground every quote and still fail "the body must cite
-        # F001". Running the same validator here means "passed" is the same
-        # thing on both sides, and a fixable failure becomes one more repair
-        # instead of a draft a human has to notice and rerun.
+    if gate is not None:
+        # The same validator ``evidence-validate`` runs, on the same document, so
+        # "generation passed" and "the card can be saved" cannot drift apart.
+        # It runs on a PARTIAL reading too: coverage is a requirement of the
+        # card, not a note attached to it, so a shortfall becomes one more
+        # repair instead of a draft a human has to notice and rerun (#65).
         stage.value = "validation"
         report = gate(draft)
         if not report.get("ok"):
@@ -668,6 +766,45 @@ def _render_violation(item: dict[str, Any]) -> str:
     return f"- [{item.get('code')}] {item.get('path')}：{item.get('message')}{detail}"
 
 
+# How to fix each class of rejection, in the words a model can act on. The
+# message says what is wrong; this says what to change, because the two are not
+# the same thing (a citation error can be fixed by citing or by deleting).
+_REPAIR_NOTES = {
+    "CARD_PAGE_CITATION": (
+        "正文的页码必须对得上证据，两条路选一条：给这一页补上真实存在的句子编号；"
+        "或者删掉正文里的这个页码（改成不带页码的概述）。不要为了凑页码编造编号。"
+    ),
+    "CARD_SENTENCE_ID_UNKNOWN": (
+        "句子编号必须逐字来自 paper.numbered.md。某一页如果只有图、没有正文句子，"
+        "就说明这页不能引用：把正文里对应的页码去掉，而不是编一个编号。"
+    ),
+    "CARD_READING_NOT_VERIFIED": (
+        "证据没覆盖到足够的正文页。按下面列出的缺页补句子编号，每页 1–2 条能支撑正文的即可。"
+    ),
+    "CARD_FINDING_REFERENCE": (
+        "正文不再需要 F 编号；这种情况通常是正文缺了页码标注，给每段补上（第 N 页）。"
+    ),
+}
+
+
+def _retry_prompt(base: str, code: str, message: str) -> str:
+    """The same task again, after a call that returned nothing usable.
+
+    There is no previous answer to correct, so the prompt says only what went
+    wrong and how to make the answer acceptable this time.
+    """
+
+    return "\n".join([
+        base.rstrip(),
+        "",
+        "## 上一次调用没有拿到可用的回答",
+        f"- 失败原因：{code}：{message}",
+        "- 这是同一份任务的再次作答，不是新任务：仍然按上面的全部要求输出。",
+        "- 只输出一个完整的 JSON 对象，不要加解释、前后缀或 Markdown 代码围栏，也不要中途截断。",
+        "- 内容超长时宁可写紧一些，也必须保证 JSON 从头到尾闭合。",
+    ])
+
+
 def _repair_prompt(
     base: str,
     previous: Any,
@@ -688,6 +825,14 @@ def _repair_prompt(
         f"## 代码校验发现的问题（共 {len(violations)} 处）",
         "".join(f"{_render_violation(item)}\n" for item in violations).rstrip(),
     ]
+    notes = [note for code, note in _REPAIR_NOTES.items()
+             if any(item.get("code") == code for item in violations)]
+    if notes:
+        lines += [
+            "",
+            "## 修复要点",
+            "".join(f"- {note}\n" for note in notes).rstrip(),
+        ]
     if contract:
         lines += [
             "",
@@ -710,7 +855,8 @@ def _repair_prompt(
                 f"（阈值 {coverage.get('min_coverage')}，正文页共 {len(covered) + len(missing)} 页）"
             ),
             f"- 尚未覆盖的页面：{', '.join(str(page) for page in missing)}",
-            "- 为这些页面补上与正文相关的逐字引文；不要把已有引文改标成别页。",
+            "- 为这些页面补上与正文相关的证据：从 paper.numbered.md 里选这些页的句子编号，"
+            "写进对应陈述的 source_locations.sentence_ids；不要把已有编号改标成别页。",
         ]
     lines += [
         "",
@@ -803,7 +949,8 @@ def generate_markdown_card_draft(
         # ``cards evidence-validate`` applies, so "passed" means one thing.
         gate = _card_validation_gate(prep.record)
         prompt = prep.prompt
-        for index in range(max_repairs + 1):
+        index = repairs = retries = 0
+        while True:
             stage.value = "workspace"
             workspace = stage_paper_workspace(
                 prep.prepared,
@@ -811,6 +958,7 @@ def generate_markdown_card_draft(
                 root=runtime_dir(app_config),
                 context=prep.context,
                 schema_text=prep.schema_text,
+                numbered_markdown=prep.numbered,
             )
             request = _card_run_request(
                 prep, workspace, app_config, progress, prompt_override=prompt
@@ -829,18 +977,47 @@ def generate_markdown_card_draft(
             result["model_invoked"] = run.model_invoked is True
             if not run.ok:
                 error = run.error
-                raise CardGenerationError(
-                    error.code if error else "CARD_DRAFT_GENERATION_FAILED",
-                    error.message if error else "Markdown 制卡运行器失败",
+                code = error.code if error else "CARD_DRAFT_GENERATION_FAILED"
+                message = error.message if error else "Markdown 制卡运行器失败"
+                failure = CardGenerationError(
+                    code,
+                    message,
                     diagnostic={"runner_id": run.runner_id,
                                 "duration_seconds": run.duration_seconds,
                                 **(dict(error.detail) if error and error.detail else {})},
                 )
+                attempts.append(_attempt_record(index, run, [], error=failure))
+                result["attempts"] = attempts
+                # A truncated or dropped answer is not a wrong answer: asking
+                # the same question again costs one call and routinely works,
+                # while giving up throws away the whole paper (#65).
+                if code not in _RETRYABLE_RUNNER_CODES or retries >= MAX_RUNNER_RETRIES:
+                    raise failure
+                retries += 1
+                index += 1
+                prompt = _retry_prompt(prep.prompt, code, message)
+                report_progress(
+                    progress,
+                    "phase",
+                    message=f"第 {index} 次调用没有拿到完整回答（{code}），重试一次",
+                )
+                continue
             output = run.output
             if not isinstance(output, dict):
-                raise CardGenerationError(
-                    "MARKDOWN_RUNNER_OUTPUT_INVALID", "运行器没有返回 JSON 对象"
+                failure = CardGenerationError(
+                    "MARKDOWN_RUNNER_OUTPUT_INVALID", "运行器没有返回 JSON 对象",
+                    diagnostic={"runner_id": run.runner_id},
                 )
+                attempts.append(_attempt_record(index, run, [], error=failure))
+                result["attempts"] = attempts
+                if retries >= MAX_RUNNER_RETRIES:
+                    raise failure
+                retries += 1
+                index += 1
+                prompt = _retry_prompt(
+                    prep.prompt, failure.code, str(failure)
+                )
+                continue
             try:
                 completed = _complete_draft(
                     prep, run, output, stage=stage, gate=gate
@@ -853,8 +1030,9 @@ def generate_markdown_card_draft(
                     )
                 )
                 result["attempts"] = attempts
-                if plan is None or index >= max_repairs:
+                if plan is None or repairs >= max_repairs:
                     raise
+                repairs += 1
                 violations, contract = plan
                 prompt = _repair_prompt(
                     prep.prompt,
@@ -871,6 +1049,7 @@ def generate_markdown_card_draft(
                         "交回同一模型定向修正"
                     ),
                 )
+                index += 1
                 continue
             attempts.append(_attempt_record(index, run, [], error=None))
             # The draft now holds everything the run produced; the staged copy of

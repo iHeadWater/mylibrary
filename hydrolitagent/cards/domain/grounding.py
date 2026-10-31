@@ -42,6 +42,7 @@ from hydrolitagent.cards.domain.reading import (
     SourceLocation,
     VerifiedReading,
 )
+from hydrolitagent.cards.domain.sentence_index import citable_pages as _citable_pages
 from hydrolitagent.cards.domain.violations import Violation, violation_dicts
 
 # A quote must be long enough that it cannot be a lucky heading match. A CJK
@@ -50,15 +51,28 @@ from hydrolitagent.cards.domain.violations import Violation, violation_dicts
 MIN_CJK_CHARACTERS = 12
 MIN_TOTAL_CHARACTERS = 24
 DEFAULT_MIN_COVERAGE = 0.8
+# A page has to carry this much prose before it counts towards coverage. A
+# full-page figure, a nearly empty page or a reference list cannot be quoted,
+# so demanding a citation there would only push the model to invent one (#65).
+CONTENT_PAGE_MIN_CHARS = 400
 
 _WHITESPACE = re.compile(r"\s+")
 _MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 _MARKDOWN_MARKERS = re.compile(r"[*_`~]")
+# ``⟨P3-S004⟩`` marks a sentence identifier in the numbered paper. It is an
+# address, not content: a quote that carries one still has to match the prose.
+_SENTENCE_MARKER = re.compile(r"⟨\s*P\d+-[ST]\d{3}\s*⟩")
 _COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 _CANARY = re.compile(r"<!--\s*reading-canary:\s*(c-[0-9a-f]{8})\s*-->")
 _PAGE_MARKER = re.compile(r"<!--\s*page:\s*(\d+)\s*-->")
 _HEADING = re.compile(r"^ {0,3}#{1,6}\s+\S")
 _ANCHOR_PAGE = re.compile(r"^(?:[Pp](?:age)?|页)?[\s:#_-]*(\d+)$")
+# How a reader-facing text points at a page. Only these forms count: a bare
+# number in prose ("2021") must never be mistaken for a page.
+_CITED_PAGE_ZH = re.compile(r"第\s*(\d{1,3})\s*(?:[–—\-~～至]\s*(\d{1,3})\s*)?页")
+_CITED_PAGE_EN = re.compile(
+    r"(?:\bpp?\.|\bpages?)\s*(\d{1,3})(?:\s*[–—\-]\s*(\d{1,3}))?", re.IGNORECASE
+)
 # A hyphen that ends a line: the PDF keeps the hyphen and the line break becomes
 # whitespace downstream. Rejoining it is symmetric for both sides of a match.
 _SOFT_HYPHEN = re.compile(r"(?<=[^\W\d_])-\s+(?=[^\W\d_])")
@@ -98,6 +112,7 @@ def normalize_quote(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", text)
     normalized = _MARKDOWN_LINK.sub(r"\1", normalized)
     normalized = _MARKDOWN_MARKERS.sub("", normalized)
+    normalized = _SENTENCE_MARKER.sub(" ", normalized)
     normalized = normalized.replace("\\", "")
     return _WHITESPACE.sub(" ", normalized).strip()
 
@@ -168,6 +183,26 @@ def page_markers(markdown: str) -> tuple[int, ...]:
     return tuple(int(value) for value in _PAGE_MARKER.findall(markdown))
 
 
+def cited_pages(text: str) -> tuple[int, ...]:
+    """Page numbers a human-facing text points at, in first-seen order.
+
+    The card body carries no machine identifiers: it says where a statement
+    comes from in the words a reader understands ("第 3 页", "pp. 3–4"). This
+    reads those mentions back so the caller can check each one against the pages
+    the program actually verified.
+    """
+
+    found: list[int] = []
+    for pattern in (_CITED_PAGE_ZH, _CITED_PAGE_EN):
+        for match in pattern.finditer(text or ""):
+            first, second = match.group(1), match.group(2)
+            candidates = [first, second] if second else [first]
+            for value in candidates:
+                if value is not None:
+                    found.append(int(value))
+    return tuple(dict.fromkeys(found))
+
+
 @dataclass(frozen=True)
 class _PageText:
     page: int
@@ -181,6 +216,8 @@ class _PageText:
     # repaired once: a page that ends on a hyphenation artifact would otherwise
     # lose the marker during its own page-level repair.
     raw_prose: str
+    # Non-space characters in ``raw_prose``: how much text the page really holds.
+    prose_chars: int
     # (normalised line, is_heading) for single-line hits.
     lines: tuple[tuple[str, bool], ...]
 
@@ -196,6 +233,8 @@ class PageIndex:
         self.pages: tuple[_PageText, ...] = tuple(
             self._page_text(markdown, anchor) for anchor in anchors
         )
+        # Parallel to ``pages``: what the converter decided this page is.
+        self.roles: tuple[str, ...] = tuple(anchor.role for anchor in anchors)
         # A sentence that crosses a page break is split by the page marker and
         # by the running header of the next page, so it matches no single page.
         # Joining each adjacent pair of prose texts restores exactly one such
@@ -228,6 +267,25 @@ class PageIndex:
             )
         )
 
+    def content_pages(
+        self, min_chars: int = CONTENT_PAGE_MIN_CHARS, citable: frozenset[int] | None = None
+    ) -> tuple[int, ...]:
+        """Pages that hold enough prose to be quoted, excluding back matter.
+
+        Coverage is measured against these pages only. A reference list or a
+        full-page figure carries nothing a card could quote, and counting it
+        would make the threshold unmeetable except by inventing a citation.
+        """
+
+        pages = [
+            page.page
+            for page, role in zip(self.pages, self.roles)
+            if role in ("body", "front_matter")
+            and page.prose_chars >= min_chars
+            and (citable is None or page.page in citable)
+        ]
+        return tuple(sorted(set(pages)))
+
     @staticmethod
     def _page_text(markdown: str, anchor: PageAnchor) -> _PageText:
         raw = markdown[anchor.char_start:anchor.char_end]
@@ -254,6 +312,7 @@ class PageIndex:
             joined=search_form(" ".join(text for text, _ in cleaned_lines)),
             prose=search_form(raw_prose),
             raw_prose=raw_prose,
+            prose_chars=len("".join(raw_prose.split())),
             lines=tuple(prose_lines),
         )
 
@@ -376,6 +435,7 @@ def audit_reading(
     anchors: Sequence[PageAnchor],
     *,
     min_coverage: float = DEFAULT_MIN_COVERAGE,
+    quotes_verified: bool = True,
 ) -> ReadingAudit:
     """Collect every grounding problem instead of raising on the first one.
 
@@ -442,7 +502,27 @@ def audit_reading(
     violations: list[Violation] = []
     first_detail: dict[str, Any] = {}
     verified_quotes = 0
+    body_pages = {anchor.page for anchor in anchors}
     for position, location in enumerate(parsed.source_locations):
+        if not quotes_verified:
+            # The text came from a sentence identifier the program resolved, so
+            # it is the paper's own text by construction (#65). What still has to
+            # hold: a non-empty quote and a page that exists in this document.
+            page = declared_page(location)
+            if not normalize_quote(location.quote):
+                violations.append(Violation(
+                    "QUOTE_NOT_FOUND", f"source_locations[{position}]",
+                    "第 " + str(position + 1) + " 条证据没有正文", "非空句子", "空"))
+                continue
+            if page is None or page not in body_pages:
+                violations.append(Violation(
+                    "QUOTE_NOT_FOUND", f"source_locations[{position}]",
+                    "第 " + str(position + 1) + " 条证据的页码不在本文范围内",
+                    "1–" + str(max(body_pages) if body_pages else 0), str(page)))
+                continue
+            verified_pages.add(page)
+            verified_quotes += 1
+            continue
         # A location without a quote is rejected by ``_verify_quote`` as too
         # weak. Statements with no location simply omit the entry instead.
         verdict = _verify_quote(index, location.quote)
@@ -488,6 +568,7 @@ def audit_reading(
         total_quotes=len(parsed.source_locations),
         verified_quotes=verified_quotes,
         failed_quotes=len(violations),
+        content_pages=index.content_pages(citable=_citable_pages(markdown)),
     )
     if violations:
         return ReadingAudit(None, tuple(violations), coverage, first_detail)
@@ -504,6 +585,9 @@ def audit_reading(
             min_coverage=min_coverage,
             anchor_conflicts=tuple(conflicts),
             self_report=parsed.self_report,
+            content_pages=tuple(
+                sorted(set(coverage.covered_pages) | set(coverage.missing_pages))
+            ),
         ),
         (),
         coverage,
@@ -556,9 +640,13 @@ def _coverage(
     total_quotes: int,
     verified_quotes: int,
     failed_quotes: int,
+    content_pages: Sequence[int] | None = None,
 ) -> ReadingCoverage:
     body_pages = [anchor.page for anchor in anchors if anchor.role == "body"]
-    denominator = body_pages or [anchor.page for anchor in anchors]
+    all_pages = [anchor.page for anchor in anchors]
+    # Prefer the pages that actually carry prose; fall back to every body page
+    # when the document is too scan-like for that filter to say anything.
+    denominator = list(content_pages or []) or body_pages or all_pages
     covered = tuple(page for page in denominator if page in verified_pages)
     # ``required_pages`` is the smallest count that clears the threshold under
     # the same rounding the status uses, so the number a repair step is told to
@@ -636,12 +724,14 @@ def _quote_message(reason: str | None, position: int) -> str:
 
 
 __all__ = [
+    "CONTENT_PAGE_MIN_CHARS",
     "DEFAULT_MIN_COVERAGE",
     "ReadingAudit",
     "audit_reading",
     "MIN_CJK_CHARACTERS",
     "MIN_TOTAL_CHARACTERS",
     "PageIndex",
+    "cited_pages",
     "count_cjk",
     "declared_page",
     "expected_canaries",

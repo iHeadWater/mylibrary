@@ -25,6 +25,7 @@ from hydrolitagent.cards.ports.runner import CardRunRequest
 
 SCHEMA_FILENAME = "output.schema.json"
 RESPONSE_FILENAME = "response.json"
+RAW_RESPONSE_FILENAME = "raw-response.txt"
 
 
 class RunnerFailure(RuntimeError):
@@ -40,6 +41,21 @@ class RunnerFailure(RuntimeError):
 
 def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def read_workspace_numbered(request: CardRunRequest) -> str | None:
+    """The numbered copy of the paper, when the run staged one (#65).
+
+    It is the same paper with ``⟨P1-S002⟩`` in front of every prose sentence, so
+    the model can cite identifiers instead of retyping the text. It is never the
+    file whose hash the receipt echoes.
+    """
+
+    numbered_name = "paper.numbered.md"
+    if request.paper is None:
+        return None
+    target = Path(request.workspace) / numbered_name
+    return target.read_text(encoding="utf-8") if target.is_file() else None
 
 
 def read_workspace_markdown(request: CardRunRequest) -> str:
@@ -97,13 +113,27 @@ def record_output(request: CardRunRequest, output: Mapping[str, Any]) -> str:
     return str(target)
 
 
+def record_raw_response(request: CardRunRequest, text: str) -> str:
+    """Keep an answer that could not be parsed, exactly as it arrived.
+
+    ``response.json`` only exists when parsing succeeded, so without this file a
+    truncated or fenced answer leaves nothing to look at (#65).
+    """
+
+    target = Path(request.workspace) / RAW_RESPONSE_FILENAME
+    target.write_text(text or "", encoding="utf-8", newline="\n")
+    return str(target)
+
+
 __all__ = [
+    "RAW_RESPONSE_FILENAME",
     "RESPONSE_FILENAME",
     "RunnerFailure",
     "SCHEMA_FILENAME",
     "ensure_workspace_unchanged",
     "read_workspace_markdown",
     "record_output",
+    "record_raw_response",
     "sha256_text",
     "write_schema",
 ]

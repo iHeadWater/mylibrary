@@ -78,6 +78,9 @@ def markdown_case(case):
             "read_mode": "file",
             "model_claimed_status": "FULL_MARKDOWN_REVIEWED",
             "verified_pages": [2],
+            # Pages 2 and 3 carry prose; page 4 is a full-page figure and can be
+            # mentioned without a quote.
+            "content_pages": [2, 3],
             "verified_quotes": 1,
             "quote_coverage": 1.0,
             "canaries_ok": True,
@@ -94,6 +97,8 @@ def markdown_case(case):
         reading_record=deepcopy(access),
         provenance=_markdown_provenance(),
     )
+    # A v2 card is read by a human: it points at pages, not at machine ids.
+    draft["card_body_markdown"] = "# Fixed paper\n\nFixture result（第 2 页）.\n"
     return case
 
 
@@ -507,13 +512,47 @@ def test_markdown_v2_draft_passes_with_policy_v2(markdown_case):
     assert report["warnings"][0]["code"] == "CARD_TEXT_SHORT"
 
 
+def test_markdown_v2_body_must_point_at_a_verified_page(markdown_case):
+    """A page the program never verified cannot be cited as if it had been."""
+
+    markdown_case[1]["card_body_markdown"] = "# Fixed paper\n\nFixture result（第 3 页）.\n"
+    report = check(markdown_case)
+    assert report["status"] == "FAIL"
+    errors = [e for e in report["errors"] if e["code"] == "CARD_PAGE_CITATION"]
+    assert errors and errors[0]["page"] == 3
+    assert not report["eligible_for_theme_generation"]
+
+
+def test_markdown_v2_body_may_point_at_a_figure_only_page(markdown_case):
+    """A page with nothing to quote is not a citation failure."""
+
+    markdown_case[1]["card_body_markdown"] = (
+        "# Fixed paper\n\nFigure 2 maps the catchments（第 4 页）.\n"
+    )
+    report = check(markdown_case)
+    assert "CARD_PAGE_CITATION" not in codes(report)
+
+
+def test_markdown_v2_body_must_cite_some_page(markdown_case):
+    markdown_case[1]["card_body_markdown"] = "# Fixed paper\n\n没有页码的一段叙述。\n"
+    report = check(markdown_case)
+    assert "CARD_PAGE_CITATION" in codes(report)
+
+
+def test_markdown_v2_body_takes_no_machine_ids(markdown_case):
+    """``F001`` in the body is no longer a citation, so it cannot rescue one."""
+
+    markdown_case[1]["card_body_markdown"] = "# Fixed paper\n\nF001: no page given.\n"
+    report = check(markdown_case)
+    assert "CARD_PAGE_CITATION" in codes(report)
+
+
 def test_legacy_v1_report_is_marked_read_only(case):
     report = check(case)
     assert report["status"] == "PASS"
     assert report["policy_version"] == "subject-card-validation-v1"
     assert report["report_mode"] == "LEGACY_READ_ONLY"
     assert report["draft_pipeline"] == "legacy"
-
 
 @pytest.mark.parametrize("field", ["reading", "method", "markdown_sha256", "converter_id", "page_count"])
 def test_markdown_v2_missing_or_wrong_receipt_fields_fail(markdown_case, field):

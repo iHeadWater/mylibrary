@@ -192,6 +192,11 @@ class VerifiedReading:
     min_coverage: float
     anchor_conflicts: tuple[AnchorConflict, ...] = ()
     self_report: str | None = None
+    # Pages that carry quotable prose and therefore count towards coverage. A
+    # page outside this set (a full-page figure, a reference list) can be
+    # mentioned by the card body without evidence, because there is none to
+    # quote there (#65).
+    content_pages: tuple[int, ...] = ()
 
     @property
     def verified(self) -> bool:
@@ -229,6 +234,7 @@ class VerifiedReading:
                 }
                 for conflict in self.anchor_conflicts
             ],
+            "content_pages": list(self.content_pages),
             "verified": self.verified,
             "full_read_verified": self.full_read_verified,
             "scientific_correctness_verified": self.scientific_correctness_verified,

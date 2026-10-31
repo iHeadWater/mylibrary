@@ -18,6 +18,7 @@ from hydrolitagent.cards.application.prompts import (
     build_template_prompt, load_template_bundle, read_prompt,
 )
 from hydrolitagent.cards.domain.errors import CardGenerationError
+from hydrolitagent.cards.domain.grounding import cited_pages
 from hydrolitagent.cards.evidence_templates import EvidenceTemplateError
 from hydrolitagent.cards.publication import atomic_text
 from hydrolitagent.cards.domain.protocol import MARKDOWN_CARD_PROTOCOL_VERSION
@@ -310,11 +311,57 @@ def _validate_machine_fields(schema_path, draft, body, pages, add, warnings):
                     ids.add(fid)
     # Headings are visible references too. Strip them only for the nonempty-body check above.
     reference_text = re.sub(r"<!--.*?-->", "", body, flags=re.S) if isinstance(body, str) else ""
+    if draft.get("pipeline") == "markdown":
+        # A card for a human reader carries no machine identifiers. It says
+        # where a statement comes from in plain words ("第 3 页"), and every such
+        # mention has to point at a page the program verified a quote on --
+        # otherwise "cited" would mean nothing.
+        _check_page_citations(draft, reference_text, pages, add)
+        return
     body_ids = set(re.findall(r"(?<![A-Za-z0-9])F[0-9]{3,}(?![A-Za-z0-9])", reference_text))
     for fid in sorted(ids - body_ids):
         add("CARD_FINDING_REFERENCE", "/card_body_markdown", f"正文没有引用机器结果 {fid}", finding_id=fid)
     for fid in sorted(body_ids - ids):
         add("CARD_FINDING_REFERENCE", "/card_body_markdown", f"正文引用了未定义的结果 {fid}", finding_id=fid)
+
+
+def _check_page_citations(draft, body, pages, add):
+    """Every page the body points at must be one the program verified.
+
+    A page that carries no quotable prose -- a full-page figure, a reference
+    list -- is the exception: the card may say "第 3 页" about a figure there,
+    and no sentence exists to prove it with, so there is nothing to check.
+    Coverage is measured on the pages that do carry prose.
+    """
+    access = draft.get("source_access")
+    reading = access.get("reading") if isinstance(access, dict) else None
+    reading = reading if isinstance(reading, dict) else {}
+    verified = {
+        page for page in reading.get("verified_pages") or [] if type(page) is int
+    }
+    content = {
+        page for page in reading.get("content_pages") or [] if type(page) is int
+    }
+    mentioned = cited_pages(body)
+    fields = draft.get("machine_fields")
+    findings = fields.get("findings") if isinstance(fields, dict) else None
+    if not mentioned:
+        if findings:
+            add("CARD_PAGE_CITATION", "/card_body_markdown",
+                "正文没有标注任何页码；读者无法回到原文核对")
+        return
+    for page in mentioned:
+        if not 1 <= page <= pages:
+            add("CARD_PAGE_CITATION", "/card_body_markdown",
+                f"正文引用了不存在的第 {page} 页", page=page)
+        elif page in verified:
+            continue
+        elif content and page not in content:
+            # Nothing on that page could have been quoted in the first place.
+            continue
+        else:
+            add("CARD_PAGE_CITATION", "/card_body_markdown",
+                f"正文引用了第 {page} 页，但该页没有程序核验过的原文证据", page=page)
 
 
 def _check_body(draft, add, warnings):

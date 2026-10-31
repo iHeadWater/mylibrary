@@ -14,7 +14,13 @@ prompt_version: "markdown-reading-v1"
 - 不得调用命令、写入文件、联网、代理或 MCP；不得为自己创建新的输入。
 - 按本角色任务与给定 JSON schema 一次性返回完整结构化结果。
 
-## paper.md 的结构
+## paper.md 与 paper.numbered.md
+
+运行目录里有两份相同内容的正文：
+
+- `paper.md`：转换结果原文，用来核对页锚点与 canary；
+- `paper.numbered.md`：同一份文本，**每句正文和每行表格前面加上了 `⟨P3-S004⟩` 形式的编号**。
+  证据一律用这份文件里的编号表示（见下文 `source_locations`），不要抄原文。
 
 - `<!-- page: N -->` 是**物理页锚点**，N 与原始 PDF 的页码一致（从 1 开始）。
 - `<!-- reading-canary: c-xxxxxxxx -->` 是完整性标记，分散在文档首、中、尾。
@@ -35,26 +41,28 @@ prompt_version: "markdown-reading-v1"
 
 ### source_locations
 
-顶层 `source_locations` 是本次交付用到的逐字引文，与机器字段里的定位项对应：
+顶层 `source_locations` 是本次交付的证据位置。**不要抄原文**：`paper.md` 里每句正文和每行表格前面都有
+形如 `⟨P3-S004⟩` 的编号，证据用编号表示，原文由程序按编号填。
 
-- `quote`：从 `paper.md` **逐字复制**的原文片段（不要改写、不要翻译、不要拼接不相邻的文字）。
-  中文引文至少 12 个汉字，西文至少 24 个字符；只命中标题、页眉或页脚的短文本会被判为无效。
-  **边界规则**：引文必须从一个完整词开始、在一个完整词结束，且大小写、标点、虚词都与原文一致。
-  不要为了句子通顺补上或删掉开头的 `For example, `、`However, `、`In this study, ` 等成分，
-  也不要把句中的小写改成大写。错误示例：
-  - 原文：`For example, for a storm event with average rainfall of R 5 61 mm …`
-  - 错误引文：`For a storm event with average rainfall of R 5 61 mm …`（删了 `example, for`、改了大写）
-  - 正确引文：`for a storm event with average rainfall of R 5 61 mm …`（从原文的词边界原样开始）
-- `anchor`：形如 `P3`，表示引文所在物理页；`pdf_page` 用同一页号。
+- `sentence_ids`：从 `paper.numbered.md` 中选出的 1–3 个编号，例如 `["P3-S004", "P3-S005"]`。
+  同一处证据的编号必须在同一页；需要跨页就拆成两条。
+  编号必须真实存在——写错编号会被当场拒绝（`CARD_SENTENCE_ID_UNKNOWN`），不要凭记忆编写号。
+  表格行用 `T` 前缀（如 `P7-T012`），允许引用，但正文里要说明这是表格数据。
+- 不要填写 `quote`；如果旧格式的 `quote` 还在，程序会忽略它。
 - `section`、`figure`、`table`：能确定就填，不确定填 `null`；不要编造。
-- 引文必须落在所声称页面的正文范围内。若某个结论是模型推断而非原文陈述，把 `statement_role` 标为
-  `ai_inference` 并且**不要**给它编造引文。
+- 若某个结论是模型推断而非原文陈述，把 `statement_role` 标为 `ai_inference` 并且**不要**给它编号。
+- **覆盖率**：全部证据要覆盖**至少 80% 的正文页**（有实质正文的页；参考文献页、整页图不算）。
+  缺口大会被判为失败（`CARD_READING_NOT_VERIFIED`）并退回重做，所以证据要分布在全文，不要只集中在
+  引言和方法两页；退回时会告诉你缺哪几页，补那几页即可。
 
 ## 与机器字段的耦合
 
-机器字段（`machine_fields`）保持原有七类数组与编号规则：`findings` 每条要有唯一 `finding_id`（例如 F001）。
-正文中出现的 `F###` 集合与 `findings` 定义的集合必须**完全相同**：引用了未定义的编号，或定义了正文从未引用的
-编号，都会被判为失败。
+正文是给人读的：**正文里不出现任何编号**（`F001`、`P3-S012` 都不写），标注出处用页码，例如
+“（第 3 页）”“（第 4–5 页）”。正文提到的每个页码，都必须在 `source_locations` 里有该页的证据；写了
+没有证据的页码会被判为失败（`CARD_PAGE_CITATION`）。
+
+机器字段里的 `findings` 仍然要有唯一 `finding_id`（例如 F001）；它只承担机器引用作用，**不再要求在正文出现**，
+也不要用它替代页码标注。
 
 `information_status` 与 `statement_role` 必须成对，不能各写各的：
 

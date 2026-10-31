@@ -53,6 +53,9 @@ def stage_text_workspace(
     return workspace
 
 
+NUMBERED_MARKDOWN_FILENAME = "paper.numbered.md"
+
+
 def stage_paper_workspace(
     prepared: PreparedPaper,
     *,
@@ -60,14 +63,26 @@ def stage_paper_workspace(
     root: Path,
     context: Mapping[str, Any] | None = None,
     schema_text: str,
+    numbered_markdown: str | None = None,
 ) -> Path:
-    """Create a temporary run directory holding only the prepared material."""
+    """Create a temporary run directory holding only the prepared material.
+
+    ``numbered_markdown`` is the same paper with ``⟨P3-S004⟩`` identifiers in
+    front of every prose sentence and table row. When it is given, that copy is
+    what the model reads, so an answer can cite identifiers instead of retyping
+    the text (#65). The converted file on disk is untouched.
+    """
 
     root.mkdir(parents=True, exist_ok=True)
     workspace = Path(
         tempfile.mkdtemp(prefix=f"markdown-{run_id[:8]}-", dir=str(root))
     )
     shutil.copyfile(prepared.markdown_path, workspace / MARKDOWN_FILENAME)
+    if numbered_markdown is not None:
+        # The converted file stays byte-identical (the receipt echoes its hash);
+        # the numbered copy is the one the model is told to cite from.
+        (workspace / NUMBERED_MARKDOWN_FILENAME).write_text(
+            numbered_markdown, encoding="utf-8", newline="\n")
     for figure in prepared.figures:
         target = workspace / FIGURES_DIRNAME / figure.path.name
         target.parent.mkdir(parents=True, exist_ok=True)

@@ -11,7 +11,9 @@ from __future__ import annotations
 import pytest
 
 from hydrolitagent.cards.domain.grounding import (
+    PageIndex,
     audit_reading,
+    cited_pages,
     expected_canaries,
     is_quote_too_short,
     markdown_sha256,
@@ -733,6 +735,80 @@ def test_invalid_min_coverage_is_a_programming_error() -> None:
     markdown, anchors = make_document()
     with pytest.raises(ValueError):
         verify_reading(receipt(markdown), markdown, anchors, min_coverage=1.5)
+
+
+# --------------------------------------------------------------------------------------
+# coverage is measured on the pages a card could actually quote
+# --------------------------------------------------------------------------------------
+
+LONG_PROSE = "Rainfall and runoff were measured in five nested catchments. " * 12
+FIGURE_PAGE = "## Figure 2\n\nFigure 2. A map of the catchments.\n"
+
+
+def _one_location(quote: str, page: int) -> list[dict]:
+    return [{
+        "anchor": f"P{page}", "quote": quote, "pdf_page": page,
+        "section": None, "figure": None, "table": None,
+    }]
+
+
+def test_content_pages_skip_figure_only_and_reference_pages() -> None:
+    markdown, anchors = make_document(
+        pages=(LONG_PROSE, FIGURE_PAGE, PAGE_FOUR),
+        roles={1: "body", 2: "body", 3: "references"},
+    )
+    # Page 2 holds only a figure caption and page 3 is a reference list; neither
+    # can be quoted, so neither may raise the target a card has to reach.
+    assert PageIndex(markdown, anchors).content_pages() == (1,)
+
+
+def test_a_figure_only_page_does_not_lower_coverage() -> None:
+    markdown, anchors = make_document(
+        pages=(LONG_PROSE, FIGURE_PAGE),
+        roles={1: "body", 2: "body"},
+    )
+    reading = verify_reading(
+        receipt(
+            markdown,
+            source_locations=_one_location(
+                "Rainfall and runoff were measured in five nested catchments.", 1
+            ),
+        ),
+        markdown,
+        anchors,
+    )
+    assert reading.status == "VERIFIED"
+    assert reading.quote_coverage == 1.0
+
+
+def test_the_missing_pages_are_the_content_pages_only() -> None:
+    markdown, anchors = make_document(
+        pages=(LONG_PROSE, LONG_PROSE, FIGURE_PAGE),
+        roles={1: "body", 2: "body", 3: "body"},
+    )
+    audit = audit_reading(
+        receipt(
+            markdown,
+            source_locations=_one_location(
+                "Rainfall and runoff were measured in five nested catchments.", 1
+            ),
+        ),
+        markdown,
+        anchors,
+    )
+    assert audit.coverage is not None
+    assert audit.coverage.missing_pages == (2,)
+    assert audit.coverage.quote_coverage == pytest.approx(0.5)
+
+
+def test_cited_pages_reads_human_page_mentions() -> None:
+    assert cited_pages("结果稳定（第 3 页）。") == (3,)
+    assert cited_pages("见第 4–5 页的方法") == (4, 5)
+    assert cited_pages("as reported (p. 7)") == (7,)
+    assert cited_pages("见 pp. 7-8") == (7, 8)
+    # A bare number is never a page: years, sample sizes and equations are not
+    # claims about where something was read.
+    assert cited_pages("2021 年 561 场洪水，式(3)") == ()
 
 
 def test_every_rejected_quote_is_reported_not_just_the_first() -> None:

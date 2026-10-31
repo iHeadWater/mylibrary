@@ -656,9 +656,6 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "anchor",
-          "quote",
-          "pdf_page",
           "section",
           "figure",
           "table"
@@ -671,7 +668,8 @@
             ]
           },
           "quote": {
-            "type": "string"
+            "type": "string",
+            "description": "旧写法：逐字引文。用 sentence_ids 时不要填"
           },
           "pdf_page": {
             "type": [
@@ -696,8 +694,27 @@
               "string",
               "null"
             ]
+          },
+          "sentence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "从带编号正文中选出的句子编号，如 P3-S004；程序据此填 quote 与页码"
           }
-        }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "sentence_ids"
+            ]
+          },
+          {
+            "required": [
+              "quote"
+            ]
+          }
+        ]
       }
     }
   }
