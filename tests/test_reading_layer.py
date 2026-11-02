@@ -257,6 +257,10 @@ def test_theme_reading_page_recomputes_links(product_root: Path) -> None:
         assert (product_root / "reading" / "themes" / target).is_file()
     # The historical machine link is not copied into the generated page.
     assert "../../../../../outputs/zotero" not in page
+    # The footer is a bibliography a reader can use, not "EV-xxx 粗卡".
+    assert "## 参考" in page
+    assert "作者 等（2020）《论文 A》" in page
+    assert "[EV-AAAA1111 粗卡]" not in page
 
 
 def test_home_links_cards_themes_and_index(product_root: Path) -> None:

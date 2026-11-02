@@ -21,13 +21,20 @@ neither adapters nor a model provider.
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
+from hydrolitagent.cards.application.reading_citations import (
+    EvidenceLabel as _EvidenceLabel,
+    humanize_evidence,
+    labels_for_entries,
+    labels_for_theme,
+)
+from hydrolitagent.cards.application.reading_links import file_link as _file_link
+from hydrolitagent.cards.application.reading_links import relative_path
 from hydrolitagent.cards.domain.paper import MANIFEST_FILENAME
 
 SCHEMA_VERSION = 1
@@ -132,17 +139,7 @@ def _md_text(value: Any) -> str:
     return text
 
 
-def _relative(target: Path, from_dir: Path) -> str:
-    try:
-        return Path(os.path.relpath(target, from_dir)).as_posix()
-    except ValueError:
-        # Windows paths on separate drives: fall back to an absolute path. The
-        # link checker skips absolute targets, and so does this fallback.
-        return target.as_posix()
-
-
-def _file_link(text: str, target: Path, from_dir: Path) -> str:
-    return f"[{text}](<{_relative(target, from_dir)}>)"
+_relative = relative_path
 
 
 def _strip_banner(text: str) -> str:
@@ -186,14 +183,27 @@ def _year_of(item: dict[str, Any]) -> int | None:
     return int(match.group(1)) if match else None
 
 
+# Zero-width and bidi isolates that Zotero wraps around creator names.
+# Zero-width and bidi isolates (U+200B-U+200F, U+2066-U+2069, U+FEFF)
+# that Zotero wraps around creator names.
+_FORMAT_CHARS_RE = re.compile(
+    "[" + chr(0x200B) + "-" + chr(0x200F)
+    + chr(0x2066) + "-" + chr(0x2069) + chr(0xFEFF) + "]"
+)
+
+
 def _authors_of(item: dict[str, Any]) -> str | None:
     creators = item.get("creators")
+    text = None
     if isinstance(creators, list):
-        joined = "；".join(str(value) for value in creators if str(value).strip())
-        return joined or None
-    if isinstance(creators, str) and creators.strip():
-        return creators
-    return None
+        text = "；".join(str(value) for value in creators if str(value).strip()) or None
+    elif isinstance(creators, str) and creators.strip():
+        text = creators
+    # Zotero's creatorSummary carries bidi isolates (⁨Eddin⁩); they show up as
+    # stray boxes in every renderer and mean nothing to a reader. A name that is
+    # *only* isolates has no text left, so treat it as absent.
+    cleaned = _FORMAT_CHARS_RE.sub("", text) if text else ""
+    return cleaned or None
 
 
 def _write_text(path: Path, text: str, *, root: Path,
@@ -625,28 +635,46 @@ def _scan_readings(root: Path) -> dict[str, list[Path]]:
 
 
 def _theme_readings_text(theme: _Theme, root: Path, card_paths: dict[str, Path],
-                         page_dir: Path) -> str:
-    lines: list[str] = []
+                         page_dir: Path, labels: dict[str, _EvidenceLabel],
+                         order: Sequence[str]) -> str:
+    """The bibliography: mentioned sources first, in the order the prose names them."""
+
+    positions = {key: index for index, key in enumerate(order)}
+    ranked: list[tuple[int, dict[str, Any]]] = []
     for ref in theme.readings:
+        source = ref.get("source") or {}
+        parent_key = source.get("parent_key")
+        rank = positions.get(parent_key, len(order)) if isinstance(parent_key, str) else len(order)
+        ranked.append((rank, ref))
+    ranked.sort(key=lambda item: item[0])
+
+    lines: list[str] = []
+    for _, ref in ranked:
         source = ref.get("source") or {}
         evidence_id = source.get("evidence_id")
         parent_key = source.get("parent_key")
         relative = ref.get("directory")
+        label = labels.get(parent_key) if isinstance(parent_key, str) else None
+        heading = label.display if label is not None else evidence_id
+        if not isinstance(heading, str) or not heading:
+            # A malformed ref with no key and no evidence id has nothing to name.
+            continue
+        if label is not None and label.doi:
+            heading = f"{heading}. doi:{label.doi}"
         parts: list[str] = []
         card = card_paths.get(parent_key) if isinstance(parent_key, str) else None
         if card is not None:
-            parts.append(_file_link(f"{evidence_id} 粗卡", card, page_dir))
+            parts.append(_file_link("证据卡", card, page_dir))
         if isinstance(relative, str):
             reading = root / EVIDENCE_DIRNAME / relative / "reading.md"
             if reading.is_file():
                 parts.append(_file_link("定向精读", reading, page_dir))
-        if parts:
-            lines.append("- " + " · ".join(parts))
+        lines.append(f"- {heading}" + (f"\n  {' · '.join(parts)}" if parts else ""))
     return "\n".join(lines)
 
 
 def _theme_page(theme: _Theme, root: Path, card_paths: dict[str, Path],
-                page_dir: Path) -> str:
+                page_dir: Path, labels: dict[str, _EvidenceLabel]) -> str:
     body = _strip_leading_comments(theme.source_file.read_text(encoding="utf-8"))
     marker = body.find(THEME_BODY_MARKER)
     if marker != -1:
@@ -654,8 +682,9 @@ def _theme_page(theme: _Theme, root: Path, card_paths: dict[str, Path],
     body = body.rstrip()
     if not body.startswith("#"):
         body = f"# {theme.title}\n\n{body}"
+    body, order = humanize_evidence(body, labels, page_dir)
     source_note = theme.source_file.relative_to(root).as_posix()
-    links = _theme_readings_text(theme, root, card_paths, page_dir)
+    links = _theme_readings_text(theme, root, card_paths, page_dir, labels, order)
     lines = [
         f"> 本页由 `uv run hydrolitagent cards index` 生成；源文件在 `{source_note}`（机器产物，不要手改）。",
         "",
@@ -663,7 +692,7 @@ def _theme_page(theme: _Theme, root: Path, card_paths: dict[str, Path],
         "",
         "---",
         "",
-        "## 来源（重算的链接）",
+        "## 参考",
         "",
         links or "- 当前版本没有登记来源。",
         "",
@@ -1041,11 +1070,13 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
         card_paths[parent_key] = card_path
 
     # Theme pages need the card path map, so write them after selection.
+    theme_labels = labels_for_entries(entries, card_paths)
     theme_paths: dict[str, Path] = {}
     for theme in themes:
         theme_path = root / READING_DIRNAME / THEMES_DIRNAME / f"{theme.theme_id}.md"
         theme_paths[theme.theme_id] = theme_path
-        _write_text(theme_path, _theme_page(theme, root, card_paths, theme_path.parent),
+        labels = labels_for_theme(theme_labels, theme.readings)
+        _write_text(theme_path, _theme_page(theme, root, card_paths, theme_path.parent, labels),
                     root=root, written=written, unchanged=unchanged)
         generated.append(theme_path)
 
