@@ -6,8 +6,12 @@
 #   in_session  —— 由当前 agent 读 paper.md 写 response.json（cards run），不需要 key
 [ai]
 provider = "direct"
-model = "deepseek-chat"
+model = "deepseek-flash"
 base_url = "https://api.deepseek.com"
 timeout_seconds = 1500
-max_input_tokens = 60000
-max_output_tokens = 16000
+# deepseek-flash (V4.1) 支持 1,048,576 输入 / 393,216 输出；这里留足单篇全文
+# 一次读入的余量（estimate_tokens 保守按字符估），避免长文被切成多块后
+# 模型无法对照完整句子索引，导致 CARD_SENTENCE_ID_UNKNOWN / 页锚点校验失败。
+max_input_tokens = 300000
+# 定向精读要一次性生成整张精读卡，32000 曾把长论文的输出截断成非法 JSON。
+max_output_tokens = 128000

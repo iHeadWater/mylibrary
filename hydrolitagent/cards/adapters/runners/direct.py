@@ -6,7 +6,7 @@ schema), sends the prepared Markdown as text to one ``/chat/completions``
 endpoint, and returns the model's JSON object. Python still decides whether the
 answer is grounded -- this module never relaxes a check.
 
-Defaults target DeepSeek (``https://api.deepseek.com``, ``deepseek-chat``,
+Defaults target DeepSeek (``https://api.deepseek.com``, ``deepseek-flash``,
 ``DEEPSEEK_API_KEY``). Another OpenAI-compatible endpoint can be selected with
 the ``base_url`` / ``model`` configuration fields, or with the
 ``DIRECT_LLM_BASE_URL`` / ``DIRECT_LLM_MODEL`` / ``DIRECT_LLM_API_KEY``
@@ -60,9 +60,11 @@ from hydrolitagent.cards.progress import report_progress
 
 # Default endpoint: DeepSeek's OpenAI-compatible API.
 DEFAULT_BASE_URL = "https://api.deepseek.com"
-DEFAULT_MODEL = "deepseek-chat"
-DEFAULT_MAX_INPUT_TOKENS = 60_000
-DEFAULT_MAX_OUTPUT_TOKENS = 16_000
+# ``deepseek-chat`` is a legacy alias for ``deepseek-flash``; name the current
+# model so a deployment without ai.toml does not depend on the alias surviving.
+DEFAULT_MODEL = "deepseek-flash"
+DEFAULT_MAX_INPUT_TOKENS = 300_000
+DEFAULT_MAX_OUTPUT_TOKENS = 128_000
 
 # Credential and overrides. ``DEEPSEEK_API_KEY`` is the documented key; the
 # ``DIRECT_LLM_*`` names let the same runner point at another compatible

@@ -22,9 +22,9 @@ DEFAULT_FILE = PROJECT_ROOT / "configs/ai.toml"
 # to DeepSeek; the API key itself is never part of this selection.
 INTEGER_KEYS = ("max_input_tokens", "max_output_tokens")
 INTEGER_LIMITS = {"max_input_tokens": 10_000_000, "max_output_tokens": 1_000_000}
-DEFAULTS = {"provider": "direct", "model": "deepseek-chat",
+DEFAULTS = {"provider": "direct", "model": "deepseek-flash",
             "base_url": "https://api.deepseek.com", "timeout_seconds": 1500,
-            "max_input_tokens": 60000, "max_output_tokens": 16000}
+            "max_input_tokens": 300000, "max_output_tokens": 128000}
 
 
 class AIConfigError(ValueError):
