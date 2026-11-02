@@ -31,7 +31,7 @@ from hydrolitagent.cards.tasks import PipelineRunLock
 from hydrolitagent.cards.themes import ThemeError, _publish, _safe_path, run_themes
 from card_fixtures import ATTACHMENT_KEY, GenerationFixture, PARENT_KEY
 from test_config import write_config
-from test_markdown_workflow import first_prose_quote, _write_pdf
+from test_markdown_workflow import _write_pdf, prose_locations
 
 ROOT = ASSETS_DIR
 EID = "EV-" + PARENT_KEY
@@ -124,12 +124,7 @@ class ThemeTests(unittest.TestCase):
                 "model_claimed_pages": list(range(1, prepared.page_count + 1)),
                 "canaries_seen": list(expected_canaries(markdown)),
             },
-            "source_locations": [{
-                "anchor": "P2",
-                "quote": first_prose_quote(markdown, 2),
-                "pdf_page": 2,
-                "section": None, "figure": None, "table": None,
-            }],
+            "source_locations": prose_locations(markdown, prepared.page_count),
         }
 
     def answer(self, request):

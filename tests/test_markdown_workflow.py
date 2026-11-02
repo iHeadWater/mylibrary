@@ -162,6 +162,33 @@ def first_prose_quote(markdown: str, number: int) -> str:
     raise AssertionError(f"第 {number} 页没有足够长的正文可用于 fixture 引文")
 
 
+def prose_locations(markdown: str, page_count: int) -> list[dict]:
+    """One quotable source location per page that carries enough prose.
+
+    Grounding measures quote coverage over content pages only, so a fixture that
+    quotes one page of a two-page paper reaches 0.5 and is rejected as PARTIAL
+    (``THEME_READING_NOT_VERIFIED``). Quoting every page with prose keeps the
+    fixture honest: it is still a synthetic read, but it covers the document the
+    verifier actually counts.
+    """
+
+    locations: list[dict] = []
+    for number in range(1, page_count + 1):
+        try:
+            quote = first_prose_quote(markdown, number)
+        except (AssertionError, StopIteration):
+            continue
+        locations.append({
+            "anchor": f"P{number}",
+            "quote": quote,
+            "pdf_page": number,
+            "section": None,
+            "figure": None,
+            "table": None,
+        })
+    return locations
+
+
 def machine_fields(quote_page: int) -> dict:
     statement = {
         "statement": "Synthetic fixture result; not a scientific claim.",
