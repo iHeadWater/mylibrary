@@ -38,6 +38,21 @@ def atomic_text(path, text):
         Path(name).unlink(missing_ok=True)
 
 
+def atomic_bytes(path, data):
+    """Write bytes through a same-directory temp file and an atomic replace."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(name, path)
+    finally:
+        Path(name).unlink(missing_ok=True)
+
+
 def prepare_publication(lock_path, original_manifest, manifest, card, audit):
     path = publication_path(lock_path, manifest)
     if path.exists():

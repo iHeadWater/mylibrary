@@ -35,7 +35,9 @@ from hydrolitagent.cards.application.reading_citations import (
 )
 from hydrolitagent.cards.application.reading_links import file_link as _file_link
 from hydrolitagent.cards.application.reading_links import relative_path
+from hydrolitagent.cards.card_validation import fingerprint
 from hydrolitagent.cards.domain.paper import MANIFEST_FILENAME
+from hydrolitagent.cards.publication import atomic_bytes, atomic_text
 
 SCHEMA_VERSION = 1
 OPERATION = "cards_index"
@@ -214,7 +216,7 @@ def _write_text(path: Path, text: str, *, root: Path,
         unchanged.append(relative)
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
+    atomic_text(path, data.decode("utf-8"))
     written.append(relative)
 
 
@@ -396,16 +398,36 @@ class _Draft:
         return max(self.validations, key=lambda item: _timestamp(item.get("validated_at")))
 
     @property
+    def latest_bound_validation(self) -> dict[str, Any] | None:
+        """The newest record only if it still describes these draft bytes.
+
+        Mirrors ``draft_sources.inspect_draft``: a newer record always wins, but
+        it is unusable when its ``draft_id`` or ``draft_sha256`` no longer match
+        the draft on disk. A hand-edited draft must not keep advertising PASS.
+        """
+
+        latest = self.latest_validation
+        if latest is None:
+            return None
+        try:
+            current = fingerprint(self.data)
+        except (ValueError, TypeError, OverflowError, RecursionError):
+            return None
+        if latest.get("draft_id") != self.draft_id or latest.get("draft_sha256") != current:
+            return None
+        return latest
+
+    @property
     def created_at(self) -> datetime:
         return _timestamp(self.data.get("created_at"))
 
 
-def _scan_drafts(root: Path, warnings: list[str]) -> list[_Draft]:
+def _scan_drafts(root: Path, warnings: list[str], errors: list[str]) -> list[_Draft]:
     drafts: list[_Draft] = []
     for path in sorted((root / "zotero").glob("*/drafts/*/draft.json")):
         data = _load_json(path)
         if not isinstance(data, dict):
-            warnings.append(f"DRAFT_INVALID:{path.relative_to(root).as_posix()}")
+            errors.append(f"DRAFT_INVALID:{path.relative_to(root).as_posix()}")
             continue
         validations: list[dict[str, Any]] = []
         for validation_path in sorted((path.parent / "validations").glob("*/validation.json")):
@@ -414,7 +436,7 @@ def _scan_drafts(root: Path, warnings: list[str]) -> list[_Draft]:
                 validations.append(record)
         draft = _Draft(directory=path.parent, data=data, validations=tuple(validations))
         if not draft.parent_key:
-            warnings.append(f"DRAFT_SOURCE_MISSING:{path.relative_to(root).as_posix()}")
+            errors.append(f"DRAFT_SOURCE_MISSING:{path.relative_to(root).as_posix()}")
             continue
         drafts.append(draft)
     return drafts
@@ -432,7 +454,7 @@ def _select_current(group: list[_Draft]) -> tuple[_Draft, str]:
 
     eligible = [
         draft for draft in group
-        if (latest := draft.latest_validation) is not None
+        if (latest := draft.latest_bound_validation) is not None
         and latest.get("status") == VALIDATION_PASS
         and latest.get("reading_verified") is True
     ]
@@ -523,7 +545,7 @@ def _copy_figures(source_dir: Path, target_dir: Path, *, root: Path,
             unchanged.append(relative)
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(data)
+            atomic_bytes(target, data)
             written.append(relative)
         copied.append(target)
     # Drop images a previous run copied but the cache no longer has, so the
@@ -583,13 +605,19 @@ class _Theme:
     readings: tuple[dict[str, Any], ...]
 
 
-def _scan_themes(root: Path, warnings: list[str]) -> list[_Theme]:
+def _scan_themes(root: Path, warnings: list[str], errors: list[str]) -> list[_Theme]:
     themes_dir = root / THEMES_DIRNAME
-    payload = _load_json(themes_dir / "_registry.json")
+    registry = themes_dir / "_registry.json"
+    if not registry.is_file():
+        # A vault that has never run the theme pool is normal; a registry that
+        # exists but cannot be read is not, and must not silently drop themes.
+        warnings.append("THEMES_REGISTRY_ABSENT")
+        return []
+    payload = _load_json(registry)
     record = payload.get("record") if isinstance(payload, dict) else None
     entries = record.get("themes") if isinstance(record, dict) else None
     if not isinstance(entries, dict):
-        warnings.append("THEMES_REGISTRY_MISSING")
+        errors.append("THEMES_REGISTRY_INVALID")
         return []
     themes: list[_Theme] = []
     for theme_id in sorted(entries):
@@ -601,14 +629,14 @@ def _scan_themes(root: Path, warnings: list[str]) -> list[_Theme]:
         current = entry.get("current") or {}
         relative = current.get("directory")
         if not isinstance(relative, str):
-            warnings.append(f"THEME_VERSION_MISSING:{theme_id}")
+            errors.append(f"THEME_VERSION_MISSING:{theme_id}")
             continue
         directory = themes_dir / relative
         source_file = directory / "revised.md"
         if not source_file.is_file():
             source_file = directory / "initial.md"
         if not source_file.is_file():
-            warnings.append(f"THEME_VERSION_MISSING:{theme_id}")
+            errors.append(f"THEME_VERSION_MISSING:{theme_id}")
             continue
         readings = current.get("readings")
         title = entry.get("title")
@@ -952,6 +980,7 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
         "written": [],
         "unchanged": [],
         "warnings": [],
+        "errors": [],
         "links_checked": 0,
         "broken_links": [],
         "card_count": 0,
@@ -966,9 +995,19 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
     written: list[str] = report["written"]
     unchanged: list[str] = report["unchanged"]
     warnings: list[str] = report["warnings"]
+    errors: list[str] = report["errors"]
 
-    drafts = _scan_drafts(root, warnings)
-    themes = _scan_themes(root, warnings)
+    drafts = _scan_drafts(root, warnings, errors)
+    themes = _scan_themes(root, warnings, errors)
+    if errors:
+        # Fail closed: a partial scan would silently remove cards or themes from
+        # an otherwise good vault, so keep the previous pages untouched.
+        report["error"] = {
+            "code": "READING_LAYER_SCAN_DEGRADED",
+            "message": "阅读层未重建：有输入无法读取，已保留上一次完整结果",
+            "details": list(errors),
+        }
+        return report
     reading_index = _scan_readings(root)
     theme_titles = {theme.theme_id: theme.title for theme in themes}
     groups = _group_drafts(drafts)
@@ -992,7 +1031,9 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
         data = chosen.data
         source = data.get("source") or {}
         item = source.get("item") if isinstance(source.get("item"), dict) else {}
-        latest = chosen.latest_validation
+        latest = chosen.latest_bound_validation
+        if latest is None and chosen.latest_validation is not None:
+            warnings.append(f"VALIDATION_STALE:{parent_key}")
         status = _status_of(latest)
         evidence_id = f"EV-{parent_key}"
         tags = sorted(set(theme_readings.get(evidence_id, [])))

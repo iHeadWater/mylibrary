@@ -22,6 +22,7 @@ import pytest
 from hydrolitagent.cards import theme_pool as pool
 from hydrolitagent.cards import theme_pool_runner as runner
 from hydrolitagent.cards.application.reading_layer import build_reading_layer
+from hydrolitagent.cards.card_validation import fingerprint
 from hydrolitagent.cards.publication import text_hash
 
 SHA_A = "a" * 64
@@ -87,8 +88,14 @@ def _add_draft(root: Path, library: str, draft: dict, *validations: dict) -> Non
         "> 待校验主体卡草稿；未通过内容门禁，不是正式发布的卡片。\n\n" + draft["card_body_markdown"],
         encoding="utf-8",
     )
+    current = fingerprint(draft)
     for index, validation in enumerate(validations):
-        _write_json(draft_dir / "validations" / f"v{index}" / "validation.json", validation)
+        # A validation record only describes the bytes it hashed; the reader
+        # must not treat an unbound record as PASS.
+        record = dict(validation)
+        record.setdefault("draft_id", draft["draft_id"])
+        record.setdefault("draft_sha256", current)
+        _write_json(draft_dir / "validations" / f"v{index}" / "validation.json", record)
 
 
 def _fixture(root: Path) -> None:
@@ -315,6 +322,12 @@ def test_broken_link_fails_the_report(product_root: Path) -> None:
     draft = json.loads(draft_path.read_text(encoding="utf-8"))
     draft["card_body_markdown"] += "\n\n[缺失图](missing.png)\n"
     _write_json(draft_path, draft)
+    # Re-bind the validation to the edited bytes: this test is about a broken
+    # link, not about a stale record (which has its own test).
+    for validation_path in (draft_path.parent / "validations").glob("*/validation.json"):
+        record = json.loads(validation_path.read_text(encoding="utf-8"))
+        record["draft_sha256"] = fingerprint(draft)
+        _write_json(validation_path, record)
 
     report = build_reading_layer(product_root, runtime_dir=product_root.parent / ".runtime")
 
