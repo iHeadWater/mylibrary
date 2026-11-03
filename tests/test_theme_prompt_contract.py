@@ -64,6 +64,21 @@ def test_prompt_names_every_required_schema_field(prompt_name: str, schema_name:
     assert missing_names(prompt, schema) == set()
 
 
+def test_focused_reading_forbids_caption_quotes() -> None:
+    """Table/figure captions are not prose; quoting them fails QUOTE_TOO_WEAK.
+
+    Pages that hold only an ``Extended Data Table`` heading must not be given
+    a quote at all. ``v2`` said "不要选标题" but the model treated a table
+    caption as body text and blocked the whole run twice.
+    """
+
+    prompt = (THEMES_DIR / "focused-reading-markdown.md").read_text(encoding="utf-8")
+
+    for word in ("表题", "图题", "表头", "Extended Data Table"):
+        assert word in prompt
+    assert "仅含图表" in prompt and "不要提供引文" in prompt
+
+
 def test_check_reports_fields_a_prompt_drops() -> None:
     """Negative control: the guard must fail on the pre-fix prompt shape."""
 
