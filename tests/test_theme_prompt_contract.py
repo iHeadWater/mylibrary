@@ -77,6 +77,9 @@ def test_focused_reading_forbids_caption_quotes() -> None:
     for word in ("表题", "图题", "表头", "Extended Data Table"):
         assert word in prompt
     assert "仅含图表" in prompt and "不要提供引文" in prompt
+    # Two-column PDFs interleave the columns line by line; a reflowed quote is
+    # not verbatim and is rejected as ANCHOR_MISMATCH/QUOTE_NOT_FOUND.
+    assert "连续出现" in prompt and "另一栏" in prompt
 
 
 def test_check_reports_fields_a_prompt_drops() -> None:
