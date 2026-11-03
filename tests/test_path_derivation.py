@@ -10,7 +10,23 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+import hydrolitagent._config as config_mod
 from hydrolitagent.cards.config import load_config
+
+
+@pytest.fixture(autouse=True)
+def _isolate_developer_env(monkeypatch):
+    """Keep the developer's repo ``.env`` out of these assertions.
+
+    ``resolve_literature_root`` reads ``<repo>/.env`` when no ``dotenv`` mapping
+    is injected. A machine that points its own products at a cloud drive would
+    otherwise change the expected temp-project root.
+    """
+    monkeypatch.delenv("HYDROLITAGENT_ROOT", raising=False)
+    monkeypatch.delenv("HYDROLITAGENT_LITERATURE_ROOT", raising=False)
+    monkeypatch.setattr(config_mod, "read_dotenv_values", lambda *args, **kwargs: {})
 
 
 def _write_project(root: Path, *, literature_root: str | None = None,

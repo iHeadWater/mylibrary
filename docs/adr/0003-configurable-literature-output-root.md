@@ -4,6 +4,10 @@
 
 Accepted
 
+> **注记（2026-11-03）：新增统一基座 `HYDROLITAGENT_ROOT`。** 只设它时 graph 与文献
+> 产物落在同一目录；`HYDROLITAGENT_LITERATURE_ROOT` / `HYDROLITAGENT_OUTPUT` 保留为
+> 各子系统的专用覆盖。优先级见 `resolve_literature_root`。
+>
 > **注记（2026-10-28）：部分内容已被取代。**
 > 「产物根可配置」这一决定仍然有效（`configs/paths.toml` 的 `[literature] root` +
 > `HYDROLITAGENT_LITERATURE_ROOT`）。但本文中的旧命名 `artifact_root` 与

@@ -54,7 +54,7 @@ uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai
 一次调用同时生成详细正文和固定机器字段。输出仅为 DRAFT_PENDING_VALIDATION，
 不代表 #31 校验通过，不自动执行 #32 修正或 #35 正式保存，不触发主题或 idea。
 文件按 #27 的统一规则写入精读产物根下 zotero/<文库类型>-<文库ID>-<父条目key>/drafts/<草稿ID>/。
-根目录通过 configs/paths.toml 或 HYDROLITAGENT_LITERATURE_ROOT 配置；默认 outputs/。
+根目录通过 configs/paths.toml、HYDROLITAGENT_ROOT（统一基座）或 HYDROLITAGENT_LITERATURE_ROOT 配置；默认 outputs/。
 输入失败、PDF 不可读或输出不可解析时报告结构化失败，不自动重试模型。
 完整协议及运行前提见 docs/user-guide/cards/subject-card-draft.md。
 

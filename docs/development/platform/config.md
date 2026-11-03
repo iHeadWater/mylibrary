@@ -92,7 +92,8 @@ Qinjiajun 目标库的群组 ID 保存在可复现的 `hydrolitagent/cards/asset
 ## 科研产物路径：一个根，其余派生
 
 **产物根只有一个定义处**：项目级 `configs/paths.toml` 的 `[literature] root`（可用
-`HYDROLITAGENT_LITERATURE_ROOT` 覆盖，`uv run hydrolitagent paths` 可查实际解析结果）。
+`HYDROLITAGENT_LITERATURE_ROOT` 或统一基座 `HYDROLITAGENT_ROOT` 覆盖，
+`uv run hydrolitagent paths` 可查实际解析结果）。
 cards 的 `config.json` 只写**子目录名**，全部相对这个根解析：
 
 | cards 字段 | 值 | 解析结果 |

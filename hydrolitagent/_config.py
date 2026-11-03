@@ -103,6 +103,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PATHS_CONFIG = PROJECT_ROOT / "configs" / "paths.toml"
 DEFAULT_LITERATURE_ROOT = PROJECT_ROOT / "outputs"
 LITERATURE_ROOT_ENV = "HYDROLITAGENT_LITERATURE_ROOT"
+# 统一基座：只设这一个变量，graph 与文献产物落在同一个目录下。两个专用变量
+# （HYDROLITAGENT_OUTPUT / HYDROLITAGENT_LITERATURE_ROOT）仍可分别覆盖。
+ROOT_ENV = "HYDROLITAGENT_ROOT"
 
 # 外部产物根的长度告警线。Windows MAX_PATH 是 260,留 80 字符给产物子树
 # ——`outputs/graph` 那种 229 字符的相对路径会撞墙,而短目录名不会。
@@ -202,8 +205,8 @@ def resolve_literature_root(
     """解析精读产物根。
 
     优先级(高到低):显式 ``root`` → ``HYDROLITAGENT_LITERATURE_ROOT`` →
-    ``configs/paths.toml`` 的 ``[literature].root`` → ``default``（缺省为
-    ``PROJECT_ROOT/outputs``）。
+    ``HYDROLITAGENT_ROOT`` → ``configs/paths.toml`` 的 ``[literature].root`` →
+    ``default``（缺省为 ``PROJECT_ROOT/outputs``）。
 
     ``default`` 让嵌入方（如 cards 平台）在自带 ``configs/paths.toml`` 的
     项目里按该项目根回落，而不是按包的安装位置回落。
@@ -219,6 +222,9 @@ def resolve_literature_root(
     file_values = read_dotenv_values() if dotenv is None else dotenv
     # os.environ 优先:同一套 override=False 语义。
     raw = environ.get(LITERATURE_ROOT_ENV) or file_values.get(LITERATURE_ROOT_ENV)
+    if not raw:
+        # 统一基座：只设 HYDROLITAGENT_ROOT 时，文献产物与 graph 共用同一个落点。
+        raw = environ.get(ROOT_ENV) or file_values.get(ROOT_ENV)
     if raw:
         # env 指向外部路径**本身就是显式 opt-in** —— 再要一个开关,而那个
         # 开关又不能提交进仓库,是自相矛盾。

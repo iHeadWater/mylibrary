@@ -155,7 +155,7 @@ definitions.py       # Shared definitions/constants
 
 ```bash
 # Copy and configure
-cp .env.example .env   # Add your DEEPSEEK_API_KEY, set HYDROLITAGENT_OUTPUT
+cp .env.example .env   # Add your DEEPSEEK_API_KEY, set HYDROLITAGENT_ROOT
 
 # Install
 uv pip install -e .

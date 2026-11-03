@@ -19,6 +19,7 @@ import pytest
 from hydrolitagent import cli
 from hydrolitagent._config import (
     LITERATURE_ROOT_ENV,
+    ROOT_ENV,
     PathConfigError,
     read_dotenv_values,
     resolve_literature_root,
@@ -312,6 +313,67 @@ def test_default_pdf_dir_accepts_explicit_root(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# 统一基座 HYDROLITAGENT_ROOT
+# ---------------------------------------------------------------------------
+
+
+def test_root_env_sets_literature_root(tmp_path):
+    """只设统一基座时，文献产物也落在该目录。"""
+    config = _config(tmp_path, '[literature]\nroot = "outputs"\n')
+    shared = tmp_path / "shared"
+
+    resolved = resolve_literature_root(
+        config_path=config, env={ROOT_ENV: str(shared)}, dotenv={}
+    )
+
+    assert resolved == shared
+
+
+def test_specific_literature_env_wins_over_root_env(tmp_path):
+    """专用变量比基座更具体，优先。"""
+    literature = tmp_path / "literature"
+
+    resolved = resolve_literature_root(
+        config_path=tmp_path / "missing.toml",
+        env={ROOT_ENV: str(tmp_path / "shared"), LITERATURE_ROOT_ENV: str(literature)},
+        dotenv={},
+    )
+
+    assert resolved == literature
+
+
+def test_root_env_from_dotenv_is_honored(tmp_path):
+    """.env 里的基座也生效 —— literature/ 的模块不调用 load_dotenv。"""
+    shared = tmp_path / "shared"
+
+    resolved = resolve_literature_root(
+        config_path=tmp_path / "missing.toml", env={}, dotenv={ROOT_ENV: str(shared)}
+    )
+
+    assert resolved == shared
+
+
+def test_graph_default_follows_root_env(monkeypatch, tmp_path):
+    """graph 的 --output 默认值也跟随统一基座。"""
+    monkeypatch.delenv("HYDROLITAGENT_OUTPUT", raising=False)
+    monkeypatch.setenv(ROOT_ENV, str(tmp_path / "shared"))
+
+    args = cli.build_parser().parse_args(["graph", "papers"])
+
+    assert args.output == str(tmp_path / "shared")
+
+
+def test_graph_output_env_wins_over_root_env(monkeypatch):
+    """graph 专用变量优先于基座。"""
+    monkeypatch.setenv("HYDROLITAGENT_OUTPUT", "graph-out")
+    monkeypatch.setenv(ROOT_ENV, "root-out")
+
+    args = cli.build_parser().parse_args(["graph", "papers"])
+
+    assert args.output == "graph-out"
 
 
 def test_paths_payload_has_every_subdirectory():
