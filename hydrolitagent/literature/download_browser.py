@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 from hydrolitagent.literature.download_pdf import (
-    copernicus_pdf_url,
+    copernicus_pdf_urls,
     curl_download,
     curl_with_cookies,
     is_pdf_file,
@@ -893,9 +893,11 @@ async def download_with_browser(doi: str, meta: dict, out_dir: Path) -> Path | N
 
     # Open access: curl directly, no browser.
     if prefix == "10.5194":
-        url = copernicus_pdf_url(suffix)
-        log(f"  Copernicus curl: {url}")
-        return dest if curl_download(url, dest) else None
+        for url in copernicus_pdf_urls(suffix):
+            log(f"  Copernicus curl: {url}")
+            if curl_download(url, dest):
+                return dest
+        return None
     if prefix == "10.1126":
         article_url = f"https://www.science.org/doi/{doi}"
         pdf_url = f"https://www.science.org/doi/pdf/{doi}?download=true"

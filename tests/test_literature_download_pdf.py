@@ -19,7 +19,7 @@ from hydrolitagent.literature.download_pdf import (
     Publisher,
     _clean_base64,
     classify_input,
-    copernicus_pdf_url,
+    copernicus_pdf_urls,
     decode_base64_file,
     default_pdf_dir,
     detect_publisher,
@@ -485,38 +485,54 @@ def test_is_pdf_file_vs_verify_pdf_semantics(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# copernicus_pdf_url
+# copernicus_pdf_urls
 # ---------------------------------------------------------------------------
 
 
 def test_copernicus_published_article_url():
     """Published 10.5194 suffix maps to the /articles/ URL layout."""
-    assert (
-        copernicus_pdf_url("hess-30-5327-2026")
-        == "https://hess.copernicus.org/articles/30/5327/2026/hess-30-5327-2026.pdf"
-    )
+    assert copernicus_pdf_urls("hess-30-5327-2026") == [
+        "https://hess.copernicus.org/articles/30/5327/2026/hess-30-5327-2026.pdf"
+    ]
 
 
 def test_copernicus_preprint_url_without_year_dir():
     """essd preprint suffix maps to /preprints/<suffix>/ (no year segment)."""
-    assert (
-        copernicus_pdf_url("essd-2026-528")
-        == "https://essd.copernicus.org/preprints/essd-2026-528/essd-2026-528.pdf"
-    )
+    assert copernicus_pdf_urls("essd-2026-528") == [
+        "https://essd.copernicus.org/preprints/essd-2026-528/essd-2026-528.pdf"
+    ]
 
 
 def test_copernicus_preprint_egusphere_needs_year_dir():
-    """egusphere preprints require a year directory segment."""
-    assert (
-        copernicus_pdf_url("egusphere-2026-528")
-        == "https://egusphere.copernicus.org/preprints/2026/egusphere-2026-528/egusphere-2026-528.pdf"
+    """egusphere preprints require a year directory segment (first candidate)."""
+    assert copernicus_pdf_urls("egusphere-2026-528")[0] == (
+        "https://egusphere.copernicus.org/preprints/2026/egusphere-2026-528/egusphere-2026-528.pdf"
     )
+
+
+def test_copernicus_egusphere_preprint_falls_back_to_next_year_dir():
+    """A 2025 preprint filed under /preprints/2026/ is still reachable.
+
+    The DOI keeps the submission year, but Copernicus files the PDF under the
+    directory year in force when it was published; a late-December submission
+    lands in the next year's directory and the DOI-year URL 404s.
+    """
+    assert copernicus_pdf_urls("egusphere-2025-5625") == [
+        "https://egusphere.copernicus.org/preprints/2025/egusphere-2025-5625/egusphere-2025-5625.pdf",
+        "https://egusphere.copernicus.org/preprints/2026/egusphere-2025-5625/egusphere-2025-5625.pdf",
+    ]
+
+
+def test_copernicus_published_and_essd_have_one_candidate():
+    """Only egusphere needs a fallback; the other layouts have a single URL."""
+    assert len(copernicus_pdf_urls("hess-30-5327-2026")) == 1
+    assert len(copernicus_pdf_urls("essd-2026-528")) == 1
 
 
 def test_copernicus_unrecognized_suffix_raises():
     """An unrecognized suffix raises ValueError."""
     with pytest.raises(ValueError, match="Copernicus suffix"):
-        copernicus_pdf_url("not-a-copernicus-suffix")
+        copernicus_pdf_urls("not-a-copernicus-suffix")
 
 
 # ---------------------------------------------------------------------------
