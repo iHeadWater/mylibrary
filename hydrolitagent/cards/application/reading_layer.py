@@ -47,6 +47,7 @@ CARDS_DIRNAME = "cards"
 INDEX_FILENAME = "INDEX.md"
 READING_DIRNAME = "reading"
 THEMES_DIRNAME = "themes"
+LAYER_MANIFEST_FILENAME = ".reading-layer.json"
 EVIDENCE_DIRNAME = "evidence-packs"
 DRAFT_READINGS_DIRNAME = "draft-readings"
 FIGURE_DIRNAME = "figures"
@@ -218,6 +219,83 @@ def _write_text(path: Path, text: str, *, root: Path,
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_text(path, data.decode("utf-8"))
     written.append(relative)
+
+
+def _read_layer_manifest(root: Path) -> list[str]:
+    """Files the previous build owns; an unreadable manifest owns nothing."""
+
+    try:
+        payload = json.loads((root / LAYER_MANIFEST_FILENAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    files = payload.get("files") if isinstance(payload, dict) else None
+    if not isinstance(files, list):
+        return []
+    return [item for item in files if isinstance(item, str)]
+
+
+def _owned_layer_path(root: Path, relative: str) -> Path | None:
+    """Resolve a manifest entry, refusing anything outside the layer's trees."""
+
+    parts = Path(relative).parts
+    if relative == HOME_FILENAME:
+        owned = True
+    elif parts and parts[0] == CARDS_DIRNAME:
+        owned = True
+    elif len(parts) >= 3 and parts[0] == READING_DIRNAME and parts[1] == THEMES_DIRNAME:
+        owned = True
+    else:
+        owned = False
+    if not owned:
+        return None
+    candidate = (root / relative).resolve()
+    try:
+        candidate.relative_to(root.resolve())
+    except ValueError:
+        return None
+    return candidate
+
+
+def _write_layer_manifest(root: Path, files: set[str], *,
+                          written: list[str], unchanged: list[str]) -> None:
+    payload = {"schema_version": 1, "files": sorted(files)}
+    _write_text(
+        root / LAYER_MANIFEST_FILENAME,
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        root=root, written=written, unchanged=unchanged,
+    )
+
+
+def _delete_stale(previous: list[str], current: set[str], root: Path,
+                  deleted: list[str]) -> None:
+    """Remove pages this layer wrote before and no longer generates.
+
+    Only paths recorded in the previous manifest are candidates, so files the
+    user placed under ``cards/`` or ``reading/`` are never touched.
+    """
+
+    for relative in sorted(set(previous) - current):
+        path = _owned_layer_path(root, relative)
+        if path is None or not path.is_file():
+            continue
+        try:
+            path.unlink()
+        except OSError:
+            continue
+        deleted.append(relative)
+    cards = root / CARDS_DIRNAME
+    if not cards.is_dir():
+        return
+    for child in sorted(cards.iterdir(), reverse=True):
+        if not child.is_dir():
+            continue
+        figures = child / FIGURE_DIRNAME
+        if figures.is_dir() and not any(figures.iterdir()):
+            figures.rmdir()
+        try:
+            child.rmdir()
+        except OSError:
+            pass
 
 
 # --------------------------------------------------------------------------------------
@@ -926,6 +1004,7 @@ def _home_page(entries: list[dict[str, Any]], themes: list[_Theme], root: Path) 
         "## 说明",
         "",
         "- 阅读层是**生成物**：重跑 `cards index` 会更新 `HOME.md`、`cards/` 与 `reading/`。",
+        "- 生成清单 `.reading-layer.json` 记录本层写过的文件；已删除草稿或退休主题的旧页会随重建清理。",
         "- 旧目录 `survey-ai-scientist/`、`_archive/` 与其他 vault 杂项**不在**本阅读层。",
         "- 卡片状态取自最新 `validation.json`；`PASS` 只表示确定性规则通过，不证明科学正确。",
         "",
@@ -979,6 +1058,7 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
         "runtime_dir": str(runtime_dir) if runtime_dir is not None else None,
         "written": [],
         "unchanged": [],
+        "deleted": [],
         "warnings": [],
         "errors": [],
         "links_checked": 0,
@@ -1023,6 +1103,7 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
             theme_reading_refs.setdefault(evidence_id, []).append(ref)
 
     generated: list[Path] = []
+    figure_paths: list[Path] = []
     card_paths: dict[str, Path] = {}
     entries: list[dict[str, Any]] = []
 
@@ -1051,6 +1132,7 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
                 source_figures, card_dir / FIGURE_DIRNAME, root=root,
                 written=written, unchanged=unchanged,
             )
+            figure_paths.extend(copied)
 
         required_readings = [
             root / EVIDENCE_DIRNAME / ref["directory"] / "reading.md"
@@ -1142,6 +1224,14 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
     report["broken_links"] = broken
     report["card_count"] = len(entries)
     report["theme_count"] = len(themes)
+
+    # The manifest is the ownership record for stale-page cleanup: only files a
+    # previous build wrote may be deleted, never user notes dropped into the
+    # same trees.
+    current = {path.relative_to(root).as_posix() for path in [*generated, *figure_paths]}
+    _delete_stale(_read_layer_manifest(root), current, root, report["deleted"])
+    _write_layer_manifest(root, current, written=written, unchanged=unchanged)
+
     report["ok"] = not broken
     return report
 

@@ -46,8 +46,9 @@ uv run hydrolitagent cards doctor --json
 `run finalize` 成功、主题流程走到 `COMPLETED`、以及 `themes-run` 成功
 （`CANDIDATES_REFINED` / `NO_CANDIDATES`，含 `--migrate-only`）之后，平台会自动重建
 `HOME.md` / `cards/` / `reading/themes/`；`--dry-run` 不刷新。默认刷新，不想刷新就加
-`--no-index`；手动重建仍然用 `cards index`。结果 JSON 的 `reading_layer` 字段报出写入/未变文件数、链接
-自检条数与错误；刷新失败只降级为 `ok:false`，不会让命令失败。
+`--no-index`；手动重建仍然用 `cards index`。结果 JSON 的 `reading_layer` 字段报出写入/未变
+文件数、删除的旧页（`deleted`）、链接自检条数与错误；刷新失败只降级为 `ok:false`，不会让命令失败。
+扫描到损坏的草稿或注册表时**不覆盖已有 HOME**，而是返回 `READING_LAYER_SCAN_DEGRADED`。
 
 ## 自查（不需要你的论文，也不需要模型）
 

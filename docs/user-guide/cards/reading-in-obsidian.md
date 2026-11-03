@@ -31,11 +31,15 @@ uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检
   cards/<条目Key>/card.md              阅读版卡片（YAML 头 + 状态 + 正文 + 来源/主题/精读/图）
   cards/<条目Key>/figures/*.png        从转换缓存复制的论文插图
   reading/themes/<主题编号>.md          当前主题版本的阅读页（来源链接已按新布局重算）
+  .reading-layer.json                  生成清单：本层写过哪些文件（用于清理旧页）
   zotero/ themes/ evidence-packs/      机器原稿：**不改**
 ```
 
 `cards index` **只写**上面标为阅读层的路径。`zotero/`、`themes/`、`evidence-packs/` 和
 `themes/_registry.json` 属于哈希链，生成器只读不写；主题页里历史版本的「粗卡」链接保持原样。
+
+重建时只删除清单里记录过、这次不再生成的文件（已删除的草稿、已退休的主题）。你在 `cards/`
+或 `reading/` 下自己放的笔记不在清单里，不会被删。
 
 ## 现在的卡片长什么样
 

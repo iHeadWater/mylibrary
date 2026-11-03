@@ -259,8 +259,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     index.add_argument("--root", help="产物根；默认按 configs/paths.toml 解析（默认 outputs/）")
     index.add_argument(
+        "--config",
+        help="可选总配置；用于解析插图缓存（converter.cache_dir / paths.runtime_dir）",
+    )
+    index.add_argument(
         "--runtime-dir",
-        help="转换缓存根（papers/<pdf_sha256>/...）；默认仓库根 .runtime",
+        help="转换缓存根（papers/<pdf_sha256>/...）；优先于配置，默认仓库根 .runtime",
     )
     index.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
 
@@ -652,6 +656,25 @@ def _themes_run_session(app_config, run_dir) -> dict[str, Any]:
     return view
 
 
+def _index_runtime_dir(args: Any) -> Path:
+    """Where the converter cache lives for a manual rebuild.
+
+    ``--runtime-dir`` wins. Otherwise use the same setting the auto-refresh path
+    uses (``converter.cache_dir``, then ``paths.runtime_dir``) so a manual
+    ``cards index`` does not silently lose figures a configured cache holds.
+    """
+
+    if args.runtime_dir:
+        return Path(args.runtime_dir)
+    try:
+        config = load_config(args.config or _default_config_path(), require_group=False)
+    except (ConfigError, OSError, ValueError):
+        return REPO_ROOT / ".runtime"
+    converter = getattr(config, "converter", None)
+    cache = getattr(converter, "cache_dir", None) or getattr(config.paths, "runtime_dir", None)
+    return Path(cache) if cache else REPO_ROOT / ".runtime"
+
+
 def _run_index(args) -> dict[str, Any]:
     """Resolve where the product root is, then generate the reading layer."""
 
@@ -664,9 +687,8 @@ def _run_index(args) -> dict[str, Any]:
             "ok": False,
             "error": {"code": "READING_ROOT_INVALID", "message": str(exc)},
         }
-    runtime_dir = Path(args.runtime_dir) if args.runtime_dir else REPO_ROOT / ".runtime"
     try:
-        return build_reading_layer(root, runtime_dir=runtime_dir)
+        return build_reading_layer(root, runtime_dir=_index_runtime_dir(args))
     except OSError as exc:
         return {
             "schema_version": 1,
@@ -674,6 +696,19 @@ def _run_index(args) -> dict[str, Any]:
             "ok": False,
             "root": str(root),
             "error": {"code": "READING_LAYER_WRITE_FAILED", "message": str(exc)},
+        }
+    except (ValueError, TypeError, AttributeError) as exc:
+        # A malformed theme file or draft shape must come back as an error
+        # envelope, not a traceback: callers parse this JSON.
+        return {
+            "schema_version": 1,
+            "operation": "cards_index",
+            "ok": False,
+            "root": str(root),
+            "error": {
+                "code": "READING_LAYER_FAILED",
+                "message": f"{type(exc).__name__}: {exc}",
+            },
         }
 
 
@@ -876,7 +911,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 built = build_session_pipeline(config)
                 runner = (prepare_theme_session if args.run_command == "prepare"
                           else finalize_theme_session)
-                result = runner(config, run_dir=Path(args.run_dir), pipeline=built)
+                extra = {}
+                if args.output_root:
+                    # The user pointed at a vault; the session and the refresh
+                    # must both use it instead of the configured default root.
+                    extra["literature_root"] = Path(args.output_root)
+                result = runner(config, run_dir=Path(args.run_dir), pipeline=built, **extra)
+                if args.output_root and "literature_root" not in result:
+                    result["literature_root"] = str(Path(args.output_root))
             else:
                 config = load_config(args.config or _default_config_path(), require_group=False)
                 raw = (
