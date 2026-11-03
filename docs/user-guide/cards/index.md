@@ -42,10 +42,11 @@ uv run hydrolitagent cards doctor --json
 
 完整清单：`uv run hydrolitagent cards --help`（当前 8 个子命令；`run` 含 `prepare` / `finalize` 两个阶段）。
 
-**阅读层自动刷新**：`run finalize` 成功、主题流程走到 `COMPLETED`、以及 `themes-run` 成功
-（`CANDIDATES_REFINED`）之后，平台会自动重建 `HOME.md` / `cards/` / `reading/themes/`；
-`--dry-run` 与 `--migrate-only` 不刷新。想跳过就在这些命令上加 `--no-index`（默认开启）；
-手动重建仍然用 `cards index`。结果 JSON 的 `reading_layer` 字段报出写入/未变文件数、链接
+**阅读层自动刷新**：`evidence-validate` 校验通过（`PASS`）、`card-save` 保存成功、
+`run finalize` 成功、主题流程走到 `COMPLETED`、以及 `themes-run` 成功
+（`CANDIDATES_REFINED` / `NO_CANDIDATES`，含 `--migrate-only`）之后，平台会自动重建
+`HOME.md` / `cards/` / `reading/themes/`；`--dry-run` 不刷新。默认刷新，不想刷新就加
+`--no-index`；手动重建仍然用 `cards index`。结果 JSON 的 `reading_layer` 字段报出写入/未变文件数、链接
 自检条数与错误；刷新失败只降级为 `ok:false`，不会让命令失败。
 
 ## 自查（不需要你的论文，也不需要模型）
