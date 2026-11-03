@@ -591,6 +591,15 @@ class ThemeTests(unittest.TestCase):
         with self.assertRaises(ThemeError):
             _publish(path, "two")
 
+    def test_publish_falls_back_when_hard_links_are_unsupported(self):
+        import hydrolitagent.cards.themes as themes_module
+
+        path = self.root / "no-hardlink.md"
+        with patch.object(themes_module.os, "link",
+                          side_effect=OSError(1, "Incorrect function")):
+            _publish(path, "content")
+        self.assertEqual(path.read_text(encoding="utf-8"), "content")
+
 
 class ThemeConfigTests(unittest.TestCase):
     def test_config_inheritance_and_invalid_values(self):

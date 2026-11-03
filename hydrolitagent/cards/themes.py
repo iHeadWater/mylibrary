@@ -116,6 +116,12 @@ def _publish(path, content):
         except FileExistsError:
             if not matches_existing():
                 raise ThemeError("THEME_FILE_CONFLICT", "文件在保存期间发生变化，未覆盖", path=str(path))
+        except OSError:
+            # Some filesystems reject hard links outright: Google Drive's Windows
+            # virtual drive returns WinError 1. The run lock already excludes a
+            # concurrent writer here, so an atomic replace keeps the same
+            # no-overwrite outcome while letting the pipeline run on that vault.
+            os.replace(name, path)
     finally:
         Path(name).unlink(missing_ok=True)
 
