@@ -54,9 +54,10 @@ def _resolve_literature_root(paths: dict[str, Any], project_root: Path) -> Path:
     """Resolve the product root that ``themes_dir`` / ``evidence_packs_dir`` live under.
 
     One source of truth for the whole project: the project-level
-    ``configs/paths.toml`` (or ``HYDROLITAGENT_LITERATURE_ROOT``). The cards
-    config only names subdirectories inside it. ``paths.literature_root`` stays
-    available as an explicit override for tests and unusual deployments.
+    ``configs/paths.toml`` (or ``HYDROLITAGENT_ROOT`` /
+    ``HYDROLITAGENT_LITERATURE_ROOT``). The cards config only names
+    subdirectories inside it. ``paths.literature_root`` stays available as an
+    explicit override for tests and unusual deployments.
     """
     explicit = paths.get("literature_root")
     if explicit is not None:

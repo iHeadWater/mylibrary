@@ -5,7 +5,8 @@
 
 产物根是可配置的(优先级见 ``resolve_literature_root``),默认
 ``<repo>/outputs``。要指到 OneDrive / Google Drive / 坚果云等同步目录,
-设环境变量 ``HYDROLITAGENT_LITERATURE_ROOT``,或改 ``configs/paths.toml``。
+设环境变量 ``HYDROLITAGENT_ROOT``（graph 与文献产物共用）或
+``HYDROLITAGENT_LITERATURE_ROOT``（只改文献产物）,或改 ``configs/paths.toml``。
 用 ``uv run hydrolitagent paths`` 查看实际解析结果。
 """
 

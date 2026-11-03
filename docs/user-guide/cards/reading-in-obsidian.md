@@ -81,7 +81,8 @@ uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检
 ## 外部产物根
 
 产物根由 `configs/paths.toml` 的 `[literature] root` 决定，可用环境变量
-`HYDROLITAGENT_LITERATURE_ROOT` 覆盖。指向仓库之外时配置里要显式写 `external = true`。
+`HYDROLITAGENT_ROOT`（graph 与文献产物共用）或 `HYDROLITAGENT_LITERATURE_ROOT`
+（只改文献产物）覆盖。指向仓库之外时配置里要显式写 `external = true`。
 阅读层跟着产物根走：
 
 ```bash

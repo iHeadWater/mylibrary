@@ -84,8 +84,15 @@ def add_graph_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     parser.add_argument(
         "--output",
-        default=_os.environ.get("HYDROLITAGENT_OUTPUT", "outputs/graph"),
-        help="Output directory for final products (default from HYDROLITAGENT_OUTPUT env or outputs/graph)",
+        default=(
+            _os.environ.get("HYDROLITAGENT_OUTPUT")
+            or _os.environ.get("HYDROLITAGENT_ROOT")
+            or "outputs/graph"
+        ),
+        help=(
+            "Output directory for final products (default from "
+            "HYDROLITAGENT_OUTPUT, then HYDROLITAGENT_ROOT, then outputs/graph)"
+        ),
     )
     parser.add_argument(
         "--update",

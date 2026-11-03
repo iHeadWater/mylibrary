@@ -89,7 +89,8 @@ class CardGeneratorConfig:
 class PathConfig:
     project_root: Path
     # 产物根：单篇草稿、主题池、证据包都写在它下面。它来自项目级
-    # configs/paths.toml（或 HYDROLITAGENT_LITERATURE_ROOT），cards 只声明子目录名。
+    # configs/paths.toml（或 HYDROLITAGENT_ROOT / HYDROLITAGENT_LITERATURE_ROOT），
+    # cards 只声明子目录名。
     literature_root: Path
     runtime_dir: Path
     snapshot_file: Path

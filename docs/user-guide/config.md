@@ -53,9 +53,10 @@ OneDrive / Google Drive / 坚果云等同步目录,让其他人直接打开产�
 
 | 顺序 | 来源 | 用途 |
 |------|------|------|
-| 1 | 环境变量 `HYDROLITAGENT_LITERATURE_ROOT` | 每台机器各自指定 |
-| 2 | `configs/paths.toml` 的 `[literature].root` | 仓库级默认值(提交进 Git) |
-| 3 | 内置默认 `<仓库根>/outputs` | 未配置时 |
+| 1 | 环境变量 `HYDROLITAGENT_LITERATURE_ROOT` | 只让文献产物单独落点时 |
+| 2 | 环境变量 `HYDROLITAGENT_ROOT` | 统一基座：graph 与文献产物同一目录 |
+| 3 | `configs/paths.toml` 的 `[literature].root` | 仓库级默认值(提交进 Git) |
+| 4 | 内置默认 `<仓库根>/outputs` | 未配置时 |
 
 ### 配置文件
 
@@ -74,11 +75,18 @@ external = false     # root 指向仓库外时必须显式设为 true
 
 ```bash
 # 写在 .env(不进 Git),或直接 export
-HYDROLITAGENT_LITERATURE_ROOT=/path/to/mylibrary-products
+# 推荐：一个基座，graph 与文献产物共用
+HYDROLITAGENT_ROOT=/path/to/mylibrary-products
+
+# 可选：只改文献产物（graph 仍按 HYDROLITAGENT_OUTPUT / outputs/graph）
+# HYDROLITAGENT_LITERATURE_ROOT=/path/to/literature-products
 ```
 
 指向仓库外的路径时,**设这个变量本身就是显式 opt-in**,不需要第二个开关——
 那个开关不可能提交进仓库,再要一个只会自相矛盾。
+
+> `HYDROLITAGENT_ROOT` 同时充当 graph 的 `--output` 默认值；要分开时再用
+> `HYDROLITAGENT_OUTPUT`（graph 专用）或 `HYDROLITAGENT_LITERATURE_ROOT`（文献专用）覆盖。
 
 解析出的根超过 180 字符会有告警:Windows 路径上限是 260,较深的产物子树会写不进去。
 
@@ -100,7 +108,8 @@ uv run hydrolitagent paths --json   # 机读(skill 用)
 
 > ⚠️ **`.env` 里有已知的静默失效**:`literature/` 下的模块(`download_pdf` /
 > `bilibili_upload` / `zotero_notebooklm`)不调用 `load_dotenv`。产物根解析器会
-> 自己补读 `.env`,所以 `HYDROLITAGENT_LITERATURE_ROOT` 写在 `.env` 里是生效的;
+> 自己补读 `.env`,所以 `HYDROLITAGENT_ROOT` / `HYDROLITAGENT_LITERATURE_ROOT`
+> 写在 `.env` 里都是生效的;
 > 但 `MYLIBRARY_PDF_ROOT` 和 `NOTEBOOKLM_HOME` 的同款问题还没修 —— 它们写在
 > `.env` 里会被静默忽略,只有 export 到 shell 才生效。
 
