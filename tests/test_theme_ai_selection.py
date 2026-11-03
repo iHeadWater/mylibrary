@@ -231,6 +231,6 @@ def test_apply_ai_selection_is_the_only_mutation(tmp_path):
     assert updated.zotero is loaded.zotero
     assert updated.runner_options == {
         "base_url": "https://api.deepseek.com",
-        "max_input_tokens": 60000,
-        "max_output_tokens": 16000,
+        "max_input_tokens": 300000,
+        "max_output_tokens": 128000,
     }

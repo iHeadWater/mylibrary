@@ -164,7 +164,7 @@ def test_ai_selection_defaults_to_deepseek() -> None:
     selection = ai_config.resolve_ai_config()
 
     assert selection["provider"] == "direct"
-    assert selection["model"] == "deepseek-chat"
+    assert selection["model"] == "deepseek-flash"
     assert selection["base_url"] == "https://api.deepseek.com"
 
 
@@ -198,8 +198,8 @@ def test_ai_config_reports_runners_and_limits_without_credentials() -> None:
     assert ai["runner"] == "direct"
     assert ai["runners"] == list(registry.ids())
     assert ai["runner_limits"] == {
-        "max_input_tokens": 60000,
-        "max_output_tokens": 16000,
+        "max_input_tokens": 300000,
+        "max_output_tokens": 128000,
     }
     # Removed CLI-era fields must not come back through the selection.
     assert "executable" not in ai
@@ -217,7 +217,7 @@ def test_composition_wires_direct_from_the_ai_selection() -> None:
 
     assert built.runner.runner_id == "direct"
     assert built.runner.base_url == "https://api.deepseek.com"
-    assert built.runner.model == "deepseek-chat"
+    assert built.runner.model == "deepseek-flash"
 
 
 def test_composition_wires_in_session_without_any_provider_option() -> None:

@@ -40,7 +40,7 @@ from hydrolitagent.cards.theme_session import (
 
 from card_fixtures import ATTACHMENT_KEY, GenerationFixture, PARENT_KEY
 from test_config import write_config
-from test_markdown_workflow import _write_pdf, first_prose_quote
+from test_markdown_workflow import _write_pdf, prose_locations
 
 EID = "EV-" + PARENT_KEY
 
@@ -115,10 +115,7 @@ class ThemeSession:
                     "model_claimed_pages": list(range(1, request["page_count"] + 1)),
                     "canaries_seen": request["reading_canaries"],
                 },
-                "source_locations": [{
-                    "anchor": "P2", "quote": first_prose_quote(markdown, 2),
-                    "pdf_page": 2, "section": None, "figure": None, "table": None,
-                }],
+                "source_locations": prose_locations(markdown, request["page_count"]),
             }
         return {"revised_markdown": self.revised_markdown}
 

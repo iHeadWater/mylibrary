@@ -388,7 +388,7 @@ def test_defaults_target_deepseek(tmp_path):
 
     assert result.ok, result.error
     assert endpoint.urls == [DEFAULT_BASE_URL + "/chat/completions"]
-    assert endpoint.payloads[0]["model"] == DEFAULT_MODEL == "deepseek-chat"
+    assert endpoint.payloads[0]["model"] == DEFAULT_MODEL == "deepseek-flash"
     assert result.model == DEFAULT_MODEL
 
 
