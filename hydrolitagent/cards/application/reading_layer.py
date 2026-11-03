@@ -1250,6 +1250,8 @@ def failed_refresh(exc: BaseException) -> dict[str, Any]:
         "ok": False,
         "written": 0,
         "unchanged": 0,
+        "deleted": [],
+        "errors": [],
         "links_checked": 0,
         "broken_links": [],
         "error": {
@@ -1278,6 +1280,8 @@ def refresh(root: Path, *, runtime_dir: Path | None = None) -> dict[str, Any]:
         "root": report.get("root"),
         "written": len(report.get("written") or []),
         "unchanged": len(report.get("unchanged") or []),
+        "deleted": list(report.get("deleted") or []),
+        "errors": list(report.get("errors") or []),
         "links_checked": report.get("links_checked", 0),
         "broken_links": list(report.get("broken_links") or []),
         "warnings": list(report.get("warnings") or []),
