@@ -621,27 +621,33 @@ def curl_download(url: str, dest: Path) -> bool:
     return is_pdf_file(dest)
 
 
-def copernicus_pdf_url(suffix: str) -> str:
-    """Parse a 10.5194 suffix into a published-article or preprint PDF URL.
+def copernicus_pdf_urls(suffix: str) -> list[str]:
+    """Parse a 10.5194 suffix into candidate PDF URLs, most likely first.
 
     Published:  hess-30-5327-2026 -> .../articles/30/5327/2026/hess-30-5327-2026.pdf
     Preprint:   essd-2026-528    -> .../preprints/essd-2026-528/essd-2026-528.pdf
+
+    egusphere preprints carry a year directory segment. That directory is the
+    year the preprint was *filed* under, not necessarily the year in the DOI:
+    a submission made late in 2025 can live under ``/preprints/2026/``. The
+    DOI year alone therefore 404s for those, so both years are candidates.
     """
     m = re.fullmatch(r"([a-z]+)-(\d+)-(\d+)-(\d{4})", suffix)
     if m:
         journal, vol, page, year = m.groups()
-        return (
+        return [
             f"https://{journal}.copernicus.org/articles/{vol}/{page}/{year}/{suffix}.pdf"
-        )
+        ]
     m = re.fullmatch(r"([a-z]+)-(\d{4})-(\d+)", suffix)
     if m:
-        journal, year = m.group(1), m.group(2)
+        journal, year = m.group(1), int(m.group(2))
         # egusphere requires a year directory segment; essd/hess do not
         if journal == "egusphere":
-            return (
-                f"https://{journal}.copernicus.org/preprints/{year}/{suffix}/{suffix}.pdf"
-            )
-        return f"https://{journal}.copernicus.org/preprints/{suffix}/{suffix}.pdf"
+            return [
+                f"https://{journal}.copernicus.org/preprints/{y}/{suffix}/{suffix}.pdf"
+                for y in (year, year + 1)
+            ]
+        return [f"https://{journal}.copernicus.org/preprints/{suffix}/{suffix}.pdf"]
     raise ValueError(f"Unrecognized Copernicus suffix: {suffix}")
 
 
