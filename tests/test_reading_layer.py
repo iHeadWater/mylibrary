@@ -228,6 +228,33 @@ def test_selects_pass_verified_draft_and_writes_reading_edition(product_root: Pa
     assert "`draft-fail`" not in index
 
 
+def test_card_body_escapes_bare_html_like_tokens(tmp_path: Path) -> None:
+    """A model placeholder must not switch Obsidian into an HTML block."""
+
+    root = tmp_path / "outputs"
+    root.mkdir()
+    _add_draft(
+        root,
+        "user-0-CCCC3333",
+        _draft(
+            draft_id="draft-escape", parent_key="CCCC3333", title="转义",
+            date="2024", doi="10.1/c", attachment="ATTACH03", sha=SHA_A,
+            body="# 卡\n\n参数为 <CLASS>，行内代码 `[<PAD>]` 不动。",
+            created_at="2026-01-05T00:00:00Z",
+        ),
+        _validation(status="PASS", validated_at="2026-01-06T00:00:00+00:00",
+                    reading_verified=True),
+    )
+
+    report = build_reading_layer(root, runtime_dir=root.parent / "absent")
+
+    assert report["ok"], report
+    card = (root / "cards" / "CCCC3333" / "card.md").read_text(encoding="utf-8")
+    assert "&lt;CLASS&gt;" in card
+    assert "<CLASS>" not in card
+    assert "`[<PAD>]`" in card
+
+
 def test_copies_figures_and_embeds_them(product_root: Path) -> None:
     report = build_reading_layer(product_root, runtime_dir=product_root.parent / ".runtime")
 

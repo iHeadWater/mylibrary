@@ -32,6 +32,9 @@ _LITERAL_RE = re.compile(
     r"|!?\[[^\]]*\]\((?:<[^>]*>|[^)\s]*)\)"    # a finished Markdown link/image
     r"|https?://[^\s)>\]}]+"                   # a bare URL
 )
+# Public name for the same pattern: ``markdown_safety`` protects literal spans
+# with it too, and two copies of this regex would drift apart.
+LITERAL_RE = _LITERAL_RE
 SHORT_TITLE_LIMIT = 48
 TITLE_OVERLAP_MIN = 8
 
@@ -201,13 +204,18 @@ def humanize_evidence(body: str, labels: dict[str, EvidenceLabel],
     return "\n".join(lines), order
 
 
-def _fence_marker(stripped: str) -> str | None:
+def fence_marker(stripped: str) -> str | None:
     """The CommonMark fence that opens this line (triple backtick or tilde)."""
 
     for marker in ("```", "~~~"):
         if stripped.startswith(marker):
             return marker
     return None
+
+
+# The call sites in this module predate the public export; the alias keeps one
+# implementation rather than a fork.
+_fence_marker = fence_marker
 
 
 def _humanize_line(line: str, labels: dict[str, EvidenceLabel],
