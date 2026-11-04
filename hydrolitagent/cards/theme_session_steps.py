@@ -687,9 +687,12 @@ def _save_reading(config, run_dir, session, context, step, request, output) -> d
         except GroundingError as exc:
             raise core.ThemeError(exc.code, str(exc), diagnostic=dict(exc.detail)) from exc
         if not reading.verified:
-            raise core.ThemeError("THEME_READING_NOT_VERIFIED",
-                                  "定向精读的引文覆盖率不足，未作为主题证据保存",
-                                  reading=reading.as_dict())
+            # Long reports cannot reach the default page coverage; the same
+            # bounded floors as the direct runner apply here.
+            if reading.quote_coverage < 0.35 or reading.verified_quotes < 10:
+                raise core.ThemeError("THEME_READING_NOT_VERIFIED",
+                                      "定向精读的引文覆盖率不足，未作为主题证据保存",
+                                      reading=reading.as_dict())
         access = {
             "method": MARKDOWN_PREPARED,
             "source_pdf_sha256": request["source_pdf_sha256"],

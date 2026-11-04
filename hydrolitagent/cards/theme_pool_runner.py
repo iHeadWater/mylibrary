@@ -266,6 +266,14 @@ def refinement_input(options, action, child, focused, existing):
         "change_kind": action["kind"], "change_reason": action["reason"]}
 
 
+# A long technical report can hold dozens of prose pages; demanding the default
+# 80% page coverage makes a focused reading impossible even when the model read
+# broadly. These floors accept such a reading as partial evidence, never as a
+# full-coverage pass.
+THEME_PARTIAL_MIN_COVERAGE = 0.35
+THEME_PARTIAL_MIN_QUOTES = 10
+
+
 def _reading_access(prepared, output):
     """Ground a focused reading and project it into ``source_access``.
 
@@ -300,11 +308,19 @@ def _reading_access(prepared, output):
         raise core.ThemeError(audit.violations[0].code, audit.violations[0].message,
                               diagnostic=detail)
     reading = audit.reading
-    if reading is None or not reading.verified:
+    warnings: list[str] = []
+    if reading is None:
         raise core.ThemeError("THEME_READING_NOT_VERIFIED",
                               "定向精读的引文覆盖率不足，未作为主题证据保存",
-                              reading=reading.as_dict() if reading else None)
-    return {
+                              reading=None)
+    if not reading.verified:
+        if (reading.quote_coverage < THEME_PARTIAL_MIN_COVERAGE
+                or reading.verified_quotes < THEME_PARTIAL_MIN_QUOTES):
+            raise core.ThemeError("THEME_READING_NOT_VERIFIED",
+                                  "定向精读的引文覆盖率不足，未作为主题证据保存",
+                                  reading=reading.as_dict())
+        warnings.append(f"THEME_READING_PARTIAL:{reading.quote_coverage}")
+    return ({
         "method": MARKDOWN_PREPARED,
         "source_pdf_sha256": prepared.source.pdf_sha256,
         "markdown_sha256": prepared.markdown_sha256,
@@ -314,7 +330,7 @@ def _reading_access(prepared, output):
         "converter_version": prepared.converter_version,
         "reading": reading.as_dict(),
         "excluded_quote_count": len(audit.excluded),
-    }
+    }, warnings)
 
 
 # --------------------------------------------------------------------------------------
@@ -451,8 +467,9 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
                 "warnings": list(result.warnings),
             }
             if prepared is not None:
-                access = _reading_access(prepared, payload["output"])
+                access, access_warnings = _reading_access(prepared, payload["output"])
                 payload["source_access"] = access
+                payload["warnings"].extend(access_warnings)
                 if access.get("excluded_quote_count"):
                     payload["warnings"].append(
                         f"QUOTE_UNVERIFIED_TOLERATED:{access['excluded_quote_count']}"
