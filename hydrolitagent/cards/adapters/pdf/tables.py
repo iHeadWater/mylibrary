@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from .anchors import Box
 from .captions import caption_label
@@ -352,16 +352,20 @@ def detect_text_table(
     *,
     gutter: float | None = None,
 ) -> TextTable | None:
-    """Recover a borderless table that starts at ``caption``.
+    """Recover a borderless table anchored at ``caption``.
 
     ``gutter`` is the detected column boundary. A caption that sits entirely in
     one column must not pick up lines from the other column; a full-width
     caption ignores the gutter.
 
-    Returns ``None`` when no table body follows the caption at all. When the
-    body exists but cannot be trusted as a grid, the result carries
-    ``markdown=None`` so the caller renders an image instead of dropping the
-    table silently.
+    The caption is normally printed above the grid, so the downward scan is
+    tried first. Some venues print it below the grid instead; the upward scan is
+    the fallback, and the downward result wins whenever both look like a table
+    (it is the historical behaviour).
+
+    Returns ``None`` when no table body can be found on either side. When a body
+    exists but cannot be trusted as a grid, the result carries ``markdown=None``
+    so the caller renders an image instead of dropping the table silently.
     """
 
     label_info = caption_label(caption.text)
@@ -380,39 +384,131 @@ def detect_text_table(
             return line.box.x0 < gutter
         return line.box.x0 >= gutter
 
-    below = sorted(
+    below = _trim_rows(
+        build_rows(_collect_body(caption, lines, in_column, above=False)),
+        caption, single_column=single_column,
+    )
+    if below and _confident(below, _anchor_clusters(below)):
+        return _table(caption, label, below)
+
+    above_rows = build_rows(_collect_body(caption, lines, in_column, above=True))
+    # Trim away from the caption, exactly like the downward path, then restore
+    # reading order. Trimming top-down would meet the page text above the grid
+    # first: it is a run of single-cell rows, so the table would either be
+    # rejected or (worse) keep only the rows nearest the caption.
+    above = tuple(reversed(_trim_rows(
+        tuple(reversed(above_rows)), caption, single_column=single_column,
+    )))
+    if above and _confident(above, _anchor_clusters(above)):
+        return _table(caption, label, above)
+
+    if not below:
+        return None
+    # Today's fallback: the downward body still becomes an image region, so an
+    # unrecoverable grid is shown rather than silently dropped.
+    return _table(caption, label, below)
+
+
+def _collect_body(
+    caption: TableLine,
+    lines: Sequence[TableLine],
+    in_column: Callable[[TableLine], bool],
+    *,
+    above: bool,
+) -> list[TableLine]:
+    """Raw body lines, walking away from the caption in reading order.
+
+    ``above=False`` walks down (caption above the grid); ``above=True`` walks up
+    (caption below the grid). Both stop at a gap wider than ``ROW_GAP_FACTOR``
+    line heights, at ``MAX_SCAN_DEPTH`` points from the caption, or at another
+    caption. The upward walk collects bottom-to-top and is reversed before
+    returning, so callers always receive reading order.
+
+    ``MAX_ROWS`` counts *rows* in the upward walk. Counting raw lines would cut
+    a wide grid's header off, because the walk starts at the caption and the
+    header is the last thing it reaches.
+    """
+
+    if not above:
+        candidates = sorted(
+            (
+                line
+                for line in lines
+                if line is not caption
+                and line.box.y0 >= caption.box.y1 - 1
+                and in_column(line)
+            ),
+            key=lambda line: (line.box.center_y, line.box.x0),
+        )
+        body: list[TableLine] = []
+        previous_bottom = caption.box.y1
+        tolerance = max(
+            ROW_TOLERANCE_MIN,
+            _median([line.box.height for line in candidates]) * ROW_GAP_FACTOR,
+        )
+        for line in candidates:
+            if line.box.y0 - previous_bottom > tolerance:
+                break
+            if line.box.y0 - caption.box.y0 > MAX_SCAN_DEPTH:
+                break
+            if caption_label(line.text) is not None:
+                break
+            body.append(line)
+            previous_bottom = max(previous_bottom, line.box.y1)
+            if len(body) >= MAX_ROWS:
+                break
+        return body
+
+    candidates = sorted(
         (
             line
             for line in lines
             if line is not caption
-            and line.box.y0 >= caption.box.y1 - 1
+            and line.box.y1 <= caption.box.y0 + 1
             and in_column(line)
         ),
-        key=lambda line: (line.box.center_y, line.box.x0),
+        key=lambda line: (-line.box.center_y, line.box.x0),
     )
-    body: list[TableLine] = []
-    previous_bottom = caption.box.y1
-    tolerance = max(ROW_TOLERANCE_MIN, _median([line.box.height for line in below]) * ROW_GAP_FACTOR)
-    for line in below:
-        if line.box.y0 - previous_bottom > tolerance:
+    body = []
+    previous_top = caption.box.y0
+    tolerance = max(
+        ROW_TOLERANCE_MIN,
+        _median([line.box.height for line in candidates]) * ROW_GAP_FACTOR,
+    )
+    last_center: float | None = None
+    rows_seen = 0
+    for line in candidates:
+        if previous_top - line.box.y1 > tolerance:
             break
-        if line.box.y0 - caption.box.y0 > MAX_SCAN_DEPTH:
+        if caption.box.y0 - line.box.y0 > MAX_SCAN_DEPTH:
             break
         if caption_label(line.text) is not None:
             break
+        center = line.box.center_y
+        if last_center is None or abs(center - last_center) > ROW_TOLERANCE_MAX:
+            if rows_seen >= MAX_ROWS:
+                break
+            rows_seen += 1
+            last_center = center
         body.append(line)
-        previous_bottom = max(previous_bottom, line.box.y1)
-        if len(body) >= MAX_ROWS:
-            break
+        previous_top = min(previous_top, line.box.y0)
+    body.reverse()
+    return body
 
-    rows = build_rows(body)
-    if not rows:
-        return None
 
-    # Walk the rows in order, growing the table extent as it goes. Rows that
-    # live entirely outside the extent belong to the neighbouring text column
-    # and are skipped; a row inside the extent with only one cell is the start
-    # of the footnote block and ends the table.
+def _trim_rows(
+    rows: Sequence[TableRow],
+    caption: TableLine,
+    *,
+    single_column: bool,
+) -> tuple[TableRow, ...]:
+    """Rows that belong to this table, not to the neighbouring column or notes.
+
+    Rows that live entirely outside the growing extent belong to the
+    neighbouring text column and are skipped; a row inside the extent with only
+    one cell is the start of the footnote block and ends the table.
+    """
+
     trimmed: list[TableRow] = []
     extent_x0 = caption.box.x0
     extent_x1 = caption.box.x1
@@ -449,34 +545,40 @@ def detect_text_table(
     while trimmed and len(_assign_row(trimmed[0], anchors)) < 2 and skipped < 2:
         trimmed.pop(0)
         skipped += 1
-    if not trimmed:
-        return None
+    return tuple(trimmed)
 
-    anchors = _anchor_clusters(trimmed)
-    box = _region_box(caption.box, trimmed) if trimmed else caption.box
-    if _confident(trimmed, anchors):
-        grid = _grid(trimmed, anchors)
+
+def _table(caption: TableLine, label: str, rows: Sequence[TableRow]) -> TextTable:
+    """Serialise a confirmed grid, or mark it for image rendering."""
+
+    anchors = _anchor_clusters(rows)
+    box = _region_box(caption.box, rows)
+    if _confident(rows, anchors):
+        grid = _grid(rows, anchors)
         markdown = markdown_table(grid) if len(grid) >= 2 else None
         if markdown:
             return TextTable(
                 label=label,
                 caption=caption.text,
                 box=box,
-                rows=tuple(trimmed),
+                rows=tuple(rows),
                 markdown=markdown,
             )
     return TextTable(
         label=label,
         caption=caption.text,
         box=box,
-        rows=tuple(trimmed),
+        rows=tuple(rows),
         markdown=None,
     )
 
 
 def _region_box(caption: Box, rows: Sequence[TableRow]) -> Box:
+    # ``y0`` must reach the topmost row: the converter suppresses body lines by
+    # point-in-box, and a box pinned to the caption would print a caption-below
+    # table's rows a second time as run-on body text.
     x0 = min([caption.x0] + [row.x0 for row in rows])
-    y0 = caption.y0
+    y0 = min([caption.y0] + [row.y0 for row in rows])
     x1 = max([caption.x1] + [row.x1 for row in rows])
     y1 = max([caption.y1] + [row.y1 for row in rows])
     return Box(x0=x0, y0=y0, x1=x1, y1=y1)

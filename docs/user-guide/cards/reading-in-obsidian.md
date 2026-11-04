@@ -61,6 +61,12 @@ uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检
 
 ![卡片索引](../../assets/screenshots/cards-index.png){width=760}
 
+**裸尖括号会被转义**：正文里的 `<CLASS>`、`<METHOD>` 这类模型写的占位符，在阅读层
+写成 `&lt;CLASS&gt;`。原因是 Obsidian 的 **Live Preview** 会把未知的未闭合 HTML 标签
+当成 HTML 块的开头，从此整段不再按 Markdown 渲染；阅读视图（Reading view）更宽容，
+所以同一个文件看起来「忽有忽无」。转义只发生在生成的阅读层，机器原稿保持原文。代码块、
+公式、行内代码和链接目标里的尖括号不受影响。
+
 ## 阅读层是生成物
 
 - 可以随时删掉 `HOME.md`、`cards/`、`reading/` 重新生成；不要手工编辑，下一次生成会覆盖。

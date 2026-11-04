@@ -169,23 +169,31 @@ def _collect_sources(config, literature_root=None):
     pack_count = len(result)
     pack_ids = set(result)
     scan = scan_drafts(config, literature_root)
-    draft_ids, duplicates = set(), []
+    duplicates: list[dict] = []
+    by_id: dict[str, Any] = {}
+    pack_seen: set[str] = set()
     for item in scan.items:
-        if item.evidence_id in draft_ids:
-            # Two drafts for one paper are ambiguous unless a pack already owns
-            # the identity; a pack-preferred duplicate is recorded, not fatal.
-            if item.evidence_id in pack_ids:
-                continue
-            raise ThemeError("THEME_DUPLICATE_SOURCE",
-                             "同一篇文献存在多个已验证草稿；不任意选择", evidence_id=item.evidence_id)
-        draft_ids.add(item.evidence_id)
         if item.evidence_id in pack_ids:
-            duplicates.append({"evidence_id": item.evidence_id,
-                               "code": "DUPLICATE_SOURCE_PREFERRED_PACK"})
+            # A pack owns the identity; the drafts are recorded, never fatal.
+            if item.evidence_id not in pack_seen:
+                pack_seen.add(item.evidence_id)
+                duplicates.append({"evidence_id": item.evidence_id,
+                                   "code": "DUPLICATE_SOURCE_PREFERRED_PACK"})
             continue
-        result[item.evidence_id] = {
+        previous = by_id.get(item.evidence_id)
+        if previous is None:
+            by_id[item.evidence_id] = item
+            continue
+        winner, loser = _prefer_draft(previous, item)
+        by_id[item.evidence_id] = winner
+        duplicates.append({"evidence_id": item.evidence_id,
+                           "code": "DUPLICATE_SOURCE_SUPERSEDED",
+                           "kept": winner.directory.name,
+                           "dropped": loser.directory.name})
+    for evidence_id, item in by_id.items():
+        result[evidence_id] = {
             "kind": "draft",
-            "pack": _safe_path(root, "draft-readings", item.evidence_id),
+            "pack": _safe_path(root, "draft-readings", evidence_id),
             "card": item.card,
             "record": item.record,
             "directory": item.directory,
@@ -200,6 +208,36 @@ def _collect_sources(config, literature_root=None):
         "rejected_drafts": dict(scan.rejected),
     }
     return result, report_fields
+
+
+def _validation_moment(value: Any) -> datetime | None:
+    """A timezone-aware instant, or ``None`` when the stamp is unusable."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def _prefer_draft(first: Any, second: Any) -> tuple[Any, Any]:
+    """Order two drafts of the same paper, newest validation first.
+
+    Regenerating a card leaves the previous draft in place, and both stay
+    valid against their own validation records. Picking the newer one is
+    deterministic, so the run continues and the choice is reported. Two drafts
+    validated at the same instant, or without a usable timestamp, remain
+    genuinely ambiguous and still stop the run.
+    """
+
+    left, right = _validation_moment(first.validated_at), _validation_moment(second.validated_at)
+    if left is None or right is None or left == right:
+        raise ThemeError("THEME_DUPLICATE_SOURCE",
+                         "同一篇文献存在多个已验证草稿且无法确定先后；请人工选择",
+                         evidence_id=first.evidence_id)
+    return (first, second) if left > right else (second, first)
 
 
 def _sources(config, literature_root=None):

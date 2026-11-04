@@ -279,6 +279,24 @@ class SourceMergeTests(unittest.TestCase):
             self.collected()
         self.assertEqual(error.exception.code, "THEME_DUPLICATE_SOURCE")
 
+    def test_newer_draft_supersedes_an_older_one(self):
+        # Regenerating a card leaves the previous draft behind. When both are
+        # valid, the newer validation decides instead of stopping the run.
+        first, draft = self.tree.draft(draft_id="a" * 16)
+        self.tree.validation(first, draft, name="v1", validated_at="2026-10-27T00:00:01Z")
+        second, other = self.tree.draft(library=("group", GROUP_ID), draft_id="b" * 16)
+        self.tree.validation(second, other, name="v2", validated_at="2026-10-28T00:00:01Z")
+        (self.fixture.package / "manifest.json").unlink()
+
+        sources, report = self.collected()
+
+        self.assertEqual(list(sources), ["EV-" + PARENT_KEY])
+        self.assertEqual(sources["EV-" + PARENT_KEY]["directory"], second.resolve())
+        self.assertEqual(report["duplicate_sources"],
+                         [{"evidence_id": "EV-" + PARENT_KEY,
+                           "code": "DUPLICATE_SOURCE_SUPERSEDED",
+                           "kept": "b" * 16, "dropped": "a" * 16}])
+
 
 if __name__ == "__main__":
     unittest.main()

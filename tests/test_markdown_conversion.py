@@ -9,6 +9,7 @@ two fail-closed cases (scanned page, encrypted file), plus determinism.
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 import pymupdf
@@ -540,6 +541,45 @@ def test_borderless_table_is_recovered_as_markdown(tmp_path: Path) -> None:
     assert "| Site | Rain | Flow |" in markdown
     assert "| A | 12 | 3 |" in markdown
     assert WARNING_TABLE_IMAGE not in prepared.warnings
+
+
+def _borderless_table_caption_below_pdf(tmp_path: Path) -> Path:
+    """CVPR-style: the caption is printed under the grid, not above it."""
+
+    doc = pymupdf.open()
+    page = _page(doc)
+    _text(page, 72, 80, "Catchment Summary", 16)
+    _paragraph(page, 95, BODY)
+    rows = (
+        ("Model", "mAP", "R@1", "R@5"),
+        ("+ Maps", "62.4", "92.9", "50.7"),
+        ("+ Encode Maps", "56.8", "92.3", "49.0"),
+        ("+ Contrastive Loss", "56.8", "92.3", "49.0"),
+    )
+    for row, values in enumerate(rows):
+        top = 340 + row * 20
+        for column, value in enumerate(values):
+            _text(page, 72 + column * 110, top, value, 9)
+    _text(page, 72, 425, "Table 1. Ablation of the encoder.", 9)
+    _paragraph(page, 445, BODY, 9)
+    path = tmp_path / "borderless-table-caption-below.pdf"
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def test_borderless_table_with_caption_below_is_recovered(tmp_path: Path) -> None:
+    pdf = _borderless_table_caption_below_pdf(tmp_path)
+    prepared, error = _convert(pdf, tmp_path / "out")
+
+    assert error is None and prepared is not None
+    markdown = prepared.markdown_path.read_text(encoding="utf-8")
+    assert "| Model | mAP | R@1 | R@5 |" in markdown
+    assert "| + Maps | 62.4 | 92.9 | 50.7 |" in markdown
+    assert WARNING_TABLE_IMAGE not in prepared.warnings
+    # The grid must not also survive as one run-on body line (the failure that
+    # made a model read the wrong values).
+    assert not re.search(r"(?:\d+\.\d+\s+){5,}\d+\.\d+", markdown)
 
 
 def test_vector_figure_is_rendered_from_caption(tmp_path: Path) -> None:

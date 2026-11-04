@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
+from hydrolitagent.cards.application.markdown_safety import escape_html_like
 from hydrolitagent.cards.application.reading_citations import (
     EvidenceLabel as _EvidenceLabel,
     humanize_evidence,
@@ -789,6 +790,9 @@ def _theme_page(theme: _Theme, root: Path, card_paths: dict[str, Path],
     if not body.startswith("#"):
         body = f"# {theme.title}\n\n{body}"
     body, order = humanize_evidence(body, labels, page_dir)
+    # After the rewrite: humanize_evidence inserts ``[label](<path>)`` links,
+    # and escaping before it would treat those destinations as prose.
+    body = escape_html_like(body)
     source_note = theme.source_file.relative_to(root).as_posix()
     links = _theme_readings_text(theme, root, card_paths, page_dir, labels, order)
     lines = [
@@ -1156,7 +1160,8 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
             for path in copied
         ]
         body, unreferenced = inline_figures(
-            _strip_banner(data.get("card_body_markdown") or ""), figure_assets
+            escape_html_like(_strip_banner(data.get("card_body_markdown") or "")),
+            figure_assets,
         )
 
         entry = {
