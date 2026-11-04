@@ -375,6 +375,54 @@ def _check_body(draft, add, warnings):
     return body
 
 
+# A card that cannot read part of a table may say so, but the claim has to be
+# checkable. Two shapes are notorious for being invented: a quoted fragment of
+# a value ("截断为「6.」") and a blanket "末位被截断". On 2026-11-04 the card for
+# OlmoEarth claimed both for values that the prepared Markdown printed in full
+# (6.2M, 6.67 kL), because the model had been handed a flattened table and
+# guessed. The warning forces the author to quote the broken text itself.
+_TRUNCATED_QUOTE = re.compile(r"截断(?:为|成|至)?\s*[「“\"]([^」”\"]{1,12})[」”\"]")
+_TRUNCATED_TAIL = re.compile(r"末位被截断|末位截断|末位被截掉|末位丢失")
+_TRUNCATION_WARNINGS_MAX = 3
+
+
+def _check_truncation_claims(body, warnings):
+    """Flag unverifiable "the table was truncated" claims.
+
+    Warnings cannot consult the prepared Markdown: a validation record binds the
+    warning list, and ``load_validated_subject_card`` re-runs this function with
+    only the draft and the input record. A body-only rule stays reproducible; it
+    asks the author to quote the broken source text instead of asserting a
+    limitation outright.
+    """
+
+    if not isinstance(body, str):
+        return
+    visible = re.sub(r"<!--.*?-->", "", body)
+    seen = 0
+    for match in _TRUNCATED_QUOTE.finditer(visible):
+        if seen >= _TRUNCATION_WARNINGS_MAX:
+            return
+        warnings.append({
+            "code": "CARD_TRUNCATION_CLAIM_UNVERIFIED",
+            "path": "/card_body_markdown",
+            "message": ("正文声称数值被截断（片段「%s」）；请直接引用被截断处的原文，"
+                        "或给出完整数值。校验器无法据此判断源文本是否真的不完整" % match.group(1)),
+            "fragment": match.group(1),
+        })
+        seen += 1
+    for match in _TRUNCATED_TAIL.finditer(visible):
+        if seen >= _TRUNCATION_WARNINGS_MAX:
+            return
+        warnings.append({
+            "code": "CARD_TRUNCATION_CLAIM_UNVERIFIED",
+            "path": "/card_body_markdown",
+            "message": "正文声称表格末位被截断；请引用被截断处的原文，或给出完整数值",
+            "fragment": match.group(0),
+        })
+        seen += 1
+
+
 def _validate_legacy_draft(assets, draft, paper_input, identity, report, add, warnings):
     """Rules for schema_version 1 drafts (PDF read by the provider itself)."""
     if type(draft.get("schema_version")) is not int or draft["schema_version"] != 1:
@@ -550,6 +598,7 @@ def _validate_markdown_draft(assets, draft, paper_input, identity, report, add, 
         add("CARD_READING_RECORD_INVALID", "/reading_record",
             "reading_record 与 source_access 必须是同一份回执")
     body = _check_body(draft, add, warnings)
+    _check_truncation_claims(body, warnings)
     try:
         _validate_machine_fields(assets.markdown_output_schema, draft, body, pages, add, warnings)
         _provenance_markdown(assets, draft, add)

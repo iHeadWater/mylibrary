@@ -68,6 +68,10 @@ class DraftSource:
     pdf_size_bytes: int
     converter_id: str | None
     converter_version: str | None
+    # When the newest passing validation ran. Two drafts for one paper are
+    # otherwise indistinguishable to the theme collector; this is what lets it
+    # pick the newer one instead of refusing to run.
+    validated_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -242,6 +246,7 @@ def inspect_draft(
         pdf_size_bytes=identity["pdf_size_bytes"],
         converter_id=converter_id,
         converter_version=converter_version,
+        validated_at=record.get("validated_at") if isinstance(record.get("validated_at"), str) else None,
     ), ""
 
 

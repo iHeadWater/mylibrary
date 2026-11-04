@@ -626,3 +626,53 @@ def test_markdown_v2_file_validation_and_theme_boundary(markdown_case):
     accepted = themes.load_subject_card_sources(markdown_case[0], [select(markdown_case, report)])
     assert accepted[0]["card"] == markdown_case[1]["card_body_markdown"]
     assert accepted[0]["validation"]["status"] == "PASS"
+
+
+# --------------------------------------------------------------------------------------
+# "The table was truncated" is a claim the validator cannot check: a validation
+# record binds its warning list, and the downstream re-run only sees the draft.
+# On 2026-11-04 the OlmoEarth card used it twice for values the prepared Markdown
+# printed in full, so the claim itself now has to be quoted and checkable.
+# --------------------------------------------------------------------------------------
+
+
+def _warning_codes(report):
+    return [w["code"] for w in report["warnings"]]
+
+
+def test_quoted_truncation_fragment_is_flagged(markdown_case):
+    markdown_case[1]["card_body_markdown"] = (
+        "# Fixed paper\n\n表 1 给出四个规模：Nano 4 层、128 维、8 头、1.4M 参数，"
+        "Tiny 12 层、192 维、3 头，参数量在转换文本中被截断为「6.」开头（第 2 页）。\n"
+    )
+    report = check(markdown_case)
+    assert report["status"] == "PASS"
+    flagged = [w for w in report["warnings"] if w["code"] == "CARD_TRUNCATION_CLAIM_UNVERIFIED"]
+    assert len(flagged) == 1
+    assert flagged[0]["fragment"] == "6."
+
+
+def test_tail_truncation_phrase_is_flagged(markdown_case):
+    markdown_case[1]["card_body_markdown"] = (
+        "# Fixed paper\n\n表 5 报告总水耗约 6 kL（表格末位被截断），其余数值完整（第 2 页）。\n"
+    )
+    report = check(markdown_case)
+    assert "CARD_TRUNCATION_CLAIM_UNVERIFIED" in _warning_codes(report)
+
+
+def test_plain_body_is_not_flagged(markdown_case):
+    markdown_case[1]["card_body_markdown"] = (
+        "# Fixed paper\n\n表 5 报告总水耗 6.67 kL，数值可逐列核对（第 2 页）。\n"
+    )
+    report = check(markdown_case)
+    assert "CARD_TRUNCATION_CLAIM_UNVERIFIED" not in _warning_codes(report)
+
+
+def test_truncation_warnings_are_capped(markdown_case):
+    markdown_case[1]["card_body_markdown"] = (
+        "# Fixed paper\n\n"
+        + "".join(f"表 {n} 的数值被截断为「{n}.」开头（第 2 页）。\n" for n in (1, 2, 3, 4, 5))
+    )
+    report = check(markdown_case)
+    flagged = [w for w in report["warnings"] if w["code"] == "CARD_TRUNCATION_CLAIM_UNVERIFIED"]
+    assert len(flagged) == 3
