@@ -73,7 +73,7 @@ class ValidationAssets:
     def from_root(cls, platform_root=None):
         root = Path(platform_root) if platform_root is not None else ASSETS_DIR
         return cls(root / "templates/evidence-cards", root / "templates/evidence-cards/_catalog.json",
-                   root / "prompts/evidence-card-generation-v8.md",
+                   root / "prompts/evidence-card-generation-v9.md",
                    root / "prompts/subject-card-draft-v1.md",
                    root / "prompts/pdf-local-reading-v1.md",
                    root / "schemas/subject-card-draft-output.schema.json",

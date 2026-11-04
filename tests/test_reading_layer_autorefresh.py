@@ -53,7 +53,7 @@ def _config(tmp_path: Path) -> Path:
             target.write_bytes(source.read_bytes())
     (tmp_path / "automation" / "prompts").mkdir(parents=True, exist_ok=True)
     (tmp_path / "automation" / "prompts" / "evidence-card-generation-v4.md").write_bytes(
-        (ASSETS_DIR / "prompts" / "evidence-card-generation-v8.md").read_bytes()
+        (ASSETS_DIR / "prompts" / "evidence-card-generation-v9.md").read_bytes()
     )
     # ``write_config`` puts the file in ``<root>/config`` and resolves
     # ``project_root: ".."`` to ``<root>``; the assets must live there too.
