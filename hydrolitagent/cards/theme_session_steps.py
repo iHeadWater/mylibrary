@@ -683,7 +683,7 @@ def _save_reading(config, run_dir, session, context, step, request, output) -> d
                                   declared=declared, actual=expected_pages)
         try:
             reading = verify_reading(ReadingReceipt.from_output(output), markdown,
-                                     _anchors_for(request))
+                                     _anchors_for(request), max_failed_quotes=None)
         except GroundingError as exc:
             raise core.ThemeError(exc.code, str(exc), diagnostic=dict(exc.detail)) from exc
         if not reading.verified:

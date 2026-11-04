@@ -34,8 +34,8 @@ from hydrolitagent.cards.application.workspace import (
     stage_paper_workspace,
     stage_text_workspace,
 )
-from hydrolitagent.cards.domain.grounding import expected_canaries, verify_reading
-from hydrolitagent.cards.domain.reading import GroundingError, ReadingReceipt
+from hydrolitagent.cards.domain.grounding import audit_reading, expected_canaries
+from hydrolitagent.cards.domain.reading import ReadingReceipt
 from hydrolitagent.cards.domain.source_access import MARKDOWN_PREPARED
 from hydrolitagent.cards.ports.paper import ConversionFailure
 from hydrolitagent.cards.ports.runner import CardRunRequest
@@ -283,16 +283,27 @@ def _reading_access(prepared, output):
         raise core.ThemeError("THEME_READING_PAGE_COUNT_MISMATCH",
                               "模型页数与已转换 Markdown 的页锚点数不一致",
                               declared=declared_pages, actual=prepared.page_count)
-    try:
-        reading = verify_reading(
-            ReadingReceipt.from_output(output), markdown, prepared.page_anchors
-        )
-    except GroundingError as exc:
-        raise core.ThemeError(exc.code, str(exc), diagnostic=dict(exc.detail)) from exc
-    if not reading.verified:
+    audit = audit_reading(
+        ReadingReceipt.from_output(output), markdown, prepared.page_anchors,
+        # Mixed single/two-column pages interleave a floating figure with the
+        # body, so one correctly read sentence may not be verbatim in paper.md.
+        # Exclude at most 10% (minimum one) and keep the rest as evidence.
+        max_failed_quotes=None,
+    )
+    if audit.violations:
+        detail = dict(audit.detail)
+        detail["violations"] = [
+            {"code": v.code, "path": v.path, "message": v.message,
+             "expected": v.expected, "actual": v.actual}
+            for v in audit.violations
+        ]
+        raise core.ThemeError(audit.violations[0].code, audit.violations[0].message,
+                              diagnostic=detail)
+    reading = audit.reading
+    if reading is None or not reading.verified:
         raise core.ThemeError("THEME_READING_NOT_VERIFIED",
                               "定向精读的引文覆盖率不足，未作为主题证据保存",
-                              reading=reading.as_dict())
+                              reading=reading.as_dict() if reading else None)
     return {
         "method": MARKDOWN_PREPARED,
         "source_pdf_sha256": prepared.source.pdf_sha256,
@@ -302,6 +313,7 @@ def _reading_access(prepared, output):
         "converter_id": prepared.converter_id,
         "converter_version": prepared.converter_version,
         "reading": reading.as_dict(),
+        "excluded_quote_count": len(audit.excluded),
     }
 
 
@@ -439,7 +451,12 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
                 "warnings": list(result.warnings),
             }
             if prepared is not None:
-                payload["source_access"] = _reading_access(prepared, payload["output"])
+                access = _reading_access(prepared, payload["output"])
+                payload["source_access"] = access
+                if access.get("excluded_quote_count"):
+                    payload["warnings"].append(
+                        f"QUOTE_UNVERIFIED_TOLERATED:{access['excluded_quote_count']}"
+                    )
                 # A source reused from the paper cache has no delivered PDF to
                 # re-hash; its identity is the cache manifest, checked above.
                 if delivery is not None and core._file_sha(delivery.pdf_path) != source["record"]["pdf_sha256"]:

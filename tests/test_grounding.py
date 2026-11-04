@@ -925,3 +925,59 @@ def test_a_rejected_quote_is_quoted_back_in_the_violation() -> None:
     actual = raised.value.detail["violations"][0]["actual"]
     assert "Peak error fell by 92 percent" in actual
     assert "未找到" in actual
+
+
+# --------------------------------------------------------------------------------------
+# bounded tolerance for layout artifacts
+# --------------------------------------------------------------------------------------
+
+_INVENTED = {
+    "anchor": "P2",
+    "quote": "Peak error fell by 92 percent under every tested scenario.",
+    "pdf_page": 2,
+    "section": None,
+    "figure": None,
+    "table": None,
+}
+
+
+def test_one_unlocated_quote_is_excluded_under_bounded_tolerance() -> None:
+    markdown, anchors = make_document()
+    locations = body_locations(2, 3, 4) + [_INVENTED]
+
+    audit = audit_reading(
+        receipt(markdown, source_locations=locations), markdown, anchors,
+        max_failed_quotes=None,
+    )
+
+    assert audit.violations == ()
+    assert len(audit.excluded) == 1
+    assert audit.excluded[0].code == "QUOTE_NOT_FOUND"
+    assert audit.reading is not None
+    assert audit.reading.status == "VERIFIED"
+
+
+def test_tolerance_is_bounded_and_strict_by_default() -> None:
+    markdown, anchors = make_document()
+    locations = body_locations(2, 3, 4) + [
+        _INVENTED,
+        {**_INVENTED, "quote": "Another invented sentence that is nowhere in the paper at all."},
+    ]
+    data = receipt(markdown, source_locations=locations)
+
+    assert audit_reading(data, markdown, anchors).violations
+    # Five quotes allow at most one exclusion (10%, minimum one).
+    assert audit_reading(data, markdown, anchors, max_failed_quotes=None).violations
+
+
+def test_verify_reading_honours_the_tolerance() -> None:
+    markdown, anchors = make_document()
+    locations = body_locations(2, 3, 4) + [_INVENTED]
+
+    reading = verify_reading(
+        receipt(markdown, source_locations=locations), markdown, anchors,
+        max_failed_quotes=None,
+    )
+
+    assert reading.status == "VERIFIED"
+    assert reading.verified_quotes == 3

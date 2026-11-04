@@ -481,10 +481,16 @@ class ThemeTests(unittest.TestCase):
         def fabricate(request, output):
             if request.role != "focused_reading":
                 return None
-            return {**output, "source_locations": [{
-                "anchor": "P2",
-                "quote": "Peak error fell by 92 percent under every tested scenario.",
-                "pdf_page": 2, "section": None, "figure": None, "table": None}]}
+            # Two invented quotes exceed the one-quote layout tolerance, so the
+            # reading is still rejected as fabricated rather than merely partial.
+            return {**output, "source_locations": [
+                {"anchor": "P2",
+                 "quote": "Peak error fell by 92 percent under every tested scenario.",
+                 "pdf_page": 2, "section": None, "figure": None, "table": None},
+                {"anchor": "P2",
+                 "quote": "Another invented sentence that is nowhere in the paper at all.",
+                 "pdf_page": 2, "section": None, "figure": None, "table": None},
+            ]}
         self.answer_hooks.append(fabricate)
         result = self.run_theme()
         self.assertEqual(result["themes"][0]["error"]["code"], "QUOTE_NOT_FOUND")
