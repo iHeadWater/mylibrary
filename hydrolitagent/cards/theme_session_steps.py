@@ -31,7 +31,11 @@ from hydrolitagent.cards.domain.paper import (
     PageAnchor,
 )
 from hydrolitagent.cards.domain.reading import GroundingError, ReadingReceipt
-from hydrolitagent.cards.domain.source_access import MARKDOWN_PREPARED
+from hydrolitagent.cards.domain.source_access import (
+    MARKDOWN_PREPARED,
+    PARTIAL_READING_MIN_COVERAGE,
+    PARTIAL_READING_MIN_QUOTES,
+)
 from hydrolitagent.cards.pdf_delivery import prepare_pdf_delivery
 from hydrolitagent.cards.publication import text_hash
 
@@ -683,13 +687,19 @@ def _save_reading(config, run_dir, session, context, step, request, output) -> d
                                   declared=declared, actual=expected_pages)
         try:
             reading = verify_reading(ReadingReceipt.from_output(output), markdown,
-                                     _anchors_for(request))
+                                     _anchors_for(request), max_failed_quotes=None)
         except GroundingError as exc:
             raise core.ThemeError(exc.code, str(exc), diagnostic=dict(exc.detail)) from exc
+        reading_body = reading.as_dict()
         if not reading.verified:
-            raise core.ThemeError("THEME_READING_NOT_VERIFIED",
-                                  "定向精读的引文覆盖率不足，未作为主题证据保存",
-                                  reading=reading.as_dict())
+            # Long reports cannot reach the default page coverage; the same
+            # bounded floors as the direct runner apply here.
+            if (reading.quote_coverage < PARTIAL_READING_MIN_COVERAGE
+                    or reading.verified_quotes < PARTIAL_READING_MIN_QUOTES):
+                raise core.ThemeError("THEME_READING_NOT_VERIFIED",
+                                      "定向精读的引文覆盖率不足，未作为主题证据保存",
+                                      reading=reading_body)
+            reading_body["partial_accepted"] = True
         access = {
             "method": MARKDOWN_PREPARED,
             "source_pdf_sha256": request["source_pdf_sha256"],
@@ -698,7 +708,7 @@ def _save_reading(config, run_dir, session, context, step, request, output) -> d
             "page_count": request["page_count"],
             "converter_id": request["converter_id"],
             "converter_version": request["converter_version"],
-            "reading": reading.as_dict(),
+            "reading": reading_body,
         }
         record = _write_record(record_path, request["binding"], output,
                                _execution(context, source_access=access))

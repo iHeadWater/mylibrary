@@ -261,12 +261,25 @@ def _strip_code_fence(text: str) -> str:
 
 
 def _json_object(content: str, what: str) -> dict[str, Any]:
+    text = _strip_code_fence(content)
     try:
-        value = json.loads(_strip_code_fence(content))
+        value = json.loads(text)
     except ValueError as exc:
-        raise RunnerFailure(
-            "RUNNER_OUTPUT_INVALID", f"模型输出不是有效 JSON（{what}）"
-        ) from exc
+        # Some models append a sentence after the object (usually the prompt's
+        # own "only output JSON" line). The object itself is authoritative; a
+        # truncated one still fails because ``raw_decode`` needs its closing
+        # brace.
+        start = text.find("{")
+        value = None
+        if start >= 0:
+            try:
+                value, _end = json.JSONDecoder().raw_decode(text, start)
+            except ValueError:
+                value = None
+        if value is None:
+            raise RunnerFailure(
+                "RUNNER_OUTPUT_INVALID", f"模型输出不是有效 JSON（{what}）"
+            ) from exc
     if not isinstance(value, Mapping):
         raise RunnerFailure("RUNNER_OUTPUT_INVALID", f"模型输出必须是 JSON 对象（{what}）")
     return dict(value)

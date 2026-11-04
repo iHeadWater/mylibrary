@@ -35,7 +35,9 @@ from hydrolitagent.cards.application.reading_citations import (
 )
 from hydrolitagent.cards.application.reading_links import file_link as _file_link
 from hydrolitagent.cards.application.reading_links import relative_path
+from hydrolitagent.cards.card_validation import fingerprint
 from hydrolitagent.cards.domain.paper import MANIFEST_FILENAME
+from hydrolitagent.cards.publication import atomic_bytes, atomic_text
 
 SCHEMA_VERSION = 1
 OPERATION = "cards_index"
@@ -45,6 +47,7 @@ CARDS_DIRNAME = "cards"
 INDEX_FILENAME = "INDEX.md"
 READING_DIRNAME = "reading"
 THEMES_DIRNAME = "themes"
+LAYER_MANIFEST_FILENAME = ".reading-layer.json"
 EVIDENCE_DIRNAME = "evidence-packs"
 DRAFT_READINGS_DIRNAME = "draft-readings"
 FIGURE_DIRNAME = "figures"
@@ -214,8 +217,85 @@ def _write_text(path: Path, text: str, *, root: Path,
         unchanged.append(relative)
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
+    atomic_text(path, data.decode("utf-8"))
     written.append(relative)
+
+
+def _read_layer_manifest(root: Path) -> list[str]:
+    """Files the previous build owns; an unreadable manifest owns nothing."""
+
+    try:
+        payload = json.loads((root / LAYER_MANIFEST_FILENAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    files = payload.get("files") if isinstance(payload, dict) else None
+    if not isinstance(files, list):
+        return []
+    return [item for item in files if isinstance(item, str)]
+
+
+def _owned_layer_path(root: Path, relative: str) -> Path | None:
+    """Resolve a manifest entry, refusing anything outside the layer's trees."""
+
+    parts = Path(relative).parts
+    if relative == HOME_FILENAME:
+        owned = True
+    elif parts and parts[0] == CARDS_DIRNAME:
+        owned = True
+    elif len(parts) >= 3 and parts[0] == READING_DIRNAME and parts[1] == THEMES_DIRNAME:
+        owned = True
+    else:
+        owned = False
+    if not owned:
+        return None
+    candidate = (root / relative).resolve()
+    try:
+        candidate.relative_to(root.resolve())
+    except ValueError:
+        return None
+    return candidate
+
+
+def _write_layer_manifest(root: Path, files: set[str], *,
+                          written: list[str], unchanged: list[str]) -> None:
+    payload = {"schema_version": 1, "files": sorted(files)}
+    _write_text(
+        root / LAYER_MANIFEST_FILENAME,
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        root=root, written=written, unchanged=unchanged,
+    )
+
+
+def _delete_stale(previous: list[str], current: set[str], root: Path,
+                  deleted: list[str]) -> None:
+    """Remove pages this layer wrote before and no longer generates.
+
+    Only paths recorded in the previous manifest are candidates, so files the
+    user placed under ``cards/`` or ``reading/`` are never touched.
+    """
+
+    for relative in sorted(set(previous) - current):
+        path = _owned_layer_path(root, relative)
+        if path is None or not path.is_file():
+            continue
+        try:
+            path.unlink()
+        except OSError:
+            continue
+        deleted.append(relative)
+    cards = root / CARDS_DIRNAME
+    if not cards.is_dir():
+        return
+    for child in sorted(cards.iterdir(), reverse=True):
+        if not child.is_dir():
+            continue
+        figures = child / FIGURE_DIRNAME
+        if figures.is_dir() and not any(figures.iterdir()):
+            figures.rmdir()
+        try:
+            child.rmdir()
+        except OSError:
+            pass
 
 
 # --------------------------------------------------------------------------------------
@@ -396,16 +476,36 @@ class _Draft:
         return max(self.validations, key=lambda item: _timestamp(item.get("validated_at")))
 
     @property
+    def latest_bound_validation(self) -> dict[str, Any] | None:
+        """The newest record only if it still describes these draft bytes.
+
+        Mirrors ``draft_sources.inspect_draft``: a newer record always wins, but
+        it is unusable when its ``draft_id`` or ``draft_sha256`` no longer match
+        the draft on disk. A hand-edited draft must not keep advertising PASS.
+        """
+
+        latest = self.latest_validation
+        if latest is None:
+            return None
+        try:
+            current = fingerprint(self.data)
+        except (ValueError, TypeError, OverflowError, RecursionError):
+            return None
+        if latest.get("draft_id") != self.draft_id or latest.get("draft_sha256") != current:
+            return None
+        return latest
+
+    @property
     def created_at(self) -> datetime:
         return _timestamp(self.data.get("created_at"))
 
 
-def _scan_drafts(root: Path, warnings: list[str]) -> list[_Draft]:
+def _scan_drafts(root: Path, warnings: list[str], errors: list[str]) -> list[_Draft]:
     drafts: list[_Draft] = []
     for path in sorted((root / "zotero").glob("*/drafts/*/draft.json")):
         data = _load_json(path)
         if not isinstance(data, dict):
-            warnings.append(f"DRAFT_INVALID:{path.relative_to(root).as_posix()}")
+            errors.append(f"DRAFT_INVALID:{path.relative_to(root).as_posix()}")
             continue
         validations: list[dict[str, Any]] = []
         for validation_path in sorted((path.parent / "validations").glob("*/validation.json")):
@@ -414,7 +514,7 @@ def _scan_drafts(root: Path, warnings: list[str]) -> list[_Draft]:
                 validations.append(record)
         draft = _Draft(directory=path.parent, data=data, validations=tuple(validations))
         if not draft.parent_key:
-            warnings.append(f"DRAFT_SOURCE_MISSING:{path.relative_to(root).as_posix()}")
+            errors.append(f"DRAFT_SOURCE_MISSING:{path.relative_to(root).as_posix()}")
             continue
         drafts.append(draft)
     return drafts
@@ -432,7 +532,7 @@ def _select_current(group: list[_Draft]) -> tuple[_Draft, str]:
 
     eligible = [
         draft for draft in group
-        if (latest := draft.latest_validation) is not None
+        if (latest := draft.latest_bound_validation) is not None
         and latest.get("status") == VALIDATION_PASS
         and latest.get("reading_verified") is True
     ]
@@ -523,7 +623,7 @@ def _copy_figures(source_dir: Path, target_dir: Path, *, root: Path,
             unchanged.append(relative)
         else:
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(data)
+            atomic_bytes(target, data)
             written.append(relative)
         copied.append(target)
     # Drop images a previous run copied but the cache no longer has, so the
@@ -583,13 +683,19 @@ class _Theme:
     readings: tuple[dict[str, Any], ...]
 
 
-def _scan_themes(root: Path, warnings: list[str]) -> list[_Theme]:
+def _scan_themes(root: Path, warnings: list[str], errors: list[str]) -> list[_Theme]:
     themes_dir = root / THEMES_DIRNAME
-    payload = _load_json(themes_dir / "_registry.json")
+    registry = themes_dir / "_registry.json"
+    if not registry.is_file():
+        # A vault that has never run the theme pool is normal; a registry that
+        # exists but cannot be read is not, and must not silently drop themes.
+        warnings.append("THEMES_REGISTRY_ABSENT")
+        return []
+    payload = _load_json(registry)
     record = payload.get("record") if isinstance(payload, dict) else None
     entries = record.get("themes") if isinstance(record, dict) else None
     if not isinstance(entries, dict):
-        warnings.append("THEMES_REGISTRY_MISSING")
+        errors.append("THEMES_REGISTRY_INVALID")
         return []
     themes: list[_Theme] = []
     for theme_id in sorted(entries):
@@ -601,14 +707,14 @@ def _scan_themes(root: Path, warnings: list[str]) -> list[_Theme]:
         current = entry.get("current") or {}
         relative = current.get("directory")
         if not isinstance(relative, str):
-            warnings.append(f"THEME_VERSION_MISSING:{theme_id}")
+            errors.append(f"THEME_VERSION_MISSING:{theme_id}")
             continue
         directory = themes_dir / relative
         source_file = directory / "revised.md"
         if not source_file.is_file():
             source_file = directory / "initial.md"
         if not source_file.is_file():
-            warnings.append(f"THEME_VERSION_MISSING:{theme_id}")
+            errors.append(f"THEME_VERSION_MISSING:{theme_id}")
             continue
         readings = current.get("readings")
         title = entry.get("title")
@@ -898,6 +1004,7 @@ def _home_page(entries: list[dict[str, Any]], themes: list[_Theme], root: Path) 
         "## 说明",
         "",
         "- 阅读层是**生成物**：重跑 `cards index` 会更新 `HOME.md`、`cards/` 与 `reading/`。",
+        "- 生成清单 `.reading-layer.json` 记录本层写过的文件；已删除草稿或退休主题的旧页会随重建清理。",
         "- 旧目录 `survey-ai-scientist/`、`_archive/` 与其他 vault 杂项**不在**本阅读层。",
         "- 卡片状态取自最新 `validation.json`；`PASS` 只表示确定性规则通过，不证明科学正确。",
         "",
@@ -951,7 +1058,9 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
         "runtime_dir": str(runtime_dir) if runtime_dir is not None else None,
         "written": [],
         "unchanged": [],
+        "deleted": [],
         "warnings": [],
+        "errors": [],
         "links_checked": 0,
         "broken_links": [],
         "card_count": 0,
@@ -966,9 +1075,19 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
     written: list[str] = report["written"]
     unchanged: list[str] = report["unchanged"]
     warnings: list[str] = report["warnings"]
+    errors: list[str] = report["errors"]
 
-    drafts = _scan_drafts(root, warnings)
-    themes = _scan_themes(root, warnings)
+    drafts = _scan_drafts(root, warnings, errors)
+    themes = _scan_themes(root, warnings, errors)
+    if errors:
+        # Fail closed: a partial scan would silently remove cards or themes from
+        # an otherwise good vault, so keep the previous pages untouched.
+        report["error"] = {
+            "code": "READING_LAYER_SCAN_DEGRADED",
+            "message": "阅读层未重建：有输入无法读取，已保留上一次完整结果",
+            "details": list(errors),
+        }
+        return report
     reading_index = _scan_readings(root)
     theme_titles = {theme.theme_id: theme.title for theme in themes}
     groups = _group_drafts(drafts)
@@ -984,6 +1103,7 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
             theme_reading_refs.setdefault(evidence_id, []).append(ref)
 
     generated: list[Path] = []
+    figure_paths: list[Path] = []
     card_paths: dict[str, Path] = {}
     entries: list[dict[str, Any]] = []
 
@@ -992,7 +1112,9 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
         data = chosen.data
         source = data.get("source") or {}
         item = source.get("item") if isinstance(source.get("item"), dict) else {}
-        latest = chosen.latest_validation
+        latest = chosen.latest_bound_validation
+        if latest is None and chosen.latest_validation is not None:
+            warnings.append(f"VALIDATION_STALE:{parent_key}")
         status = _status_of(latest)
         evidence_id = f"EV-{parent_key}"
         tags = sorted(set(theme_readings.get(evidence_id, [])))
@@ -1010,6 +1132,7 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
                 source_figures, card_dir / FIGURE_DIRNAME, root=root,
                 written=written, unchanged=unchanged,
             )
+            figure_paths.extend(copied)
 
         required_readings = [
             root / EVIDENCE_DIRNAME / ref["directory"] / "reading.md"
@@ -1101,6 +1224,14 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
     report["broken_links"] = broken
     report["card_count"] = len(entries)
     report["theme_count"] = len(themes)
+
+    # The manifest is the ownership record for stale-page cleanup: only files a
+    # previous build wrote may be deleted, never user notes dropped into the
+    # same trees.
+    current = {path.relative_to(root).as_posix() for path in [*generated, *figure_paths]}
+    _delete_stale(_read_layer_manifest(root), current, root, report["deleted"])
+    _write_layer_manifest(root, current, written=written, unchanged=unchanged)
+
     report["ok"] = not broken
     return report
 
@@ -1119,6 +1250,8 @@ def failed_refresh(exc: BaseException) -> dict[str, Any]:
         "ok": False,
         "written": 0,
         "unchanged": 0,
+        "deleted": [],
+        "errors": [],
         "links_checked": 0,
         "broken_links": [],
         "error": {
@@ -1147,6 +1280,8 @@ def refresh(root: Path, *, runtime_dir: Path | None = None) -> dict[str, Any]:
         "root": report.get("root"),
         "written": len(report.get("written") or []),
         "unchanged": len(report.get("unchanged") or []),
+        "deleted": list(report.get("deleted") or []),
+        "errors": list(report.get("errors") or []),
         "links_checked": report.get("links_checked", 0),
         "broken_links": list(report.get("broken_links") or []),
         "warnings": list(report.get("warnings") or []),

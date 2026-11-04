@@ -659,5 +659,15 @@ def test_a_code_fenced_answer_still_parses(tmp_path):
     assert result.ok is True
 
 
+def test_trailing_commentary_after_the_json_object_is_ignored(tmp_path):
+    """A model sometimes echoes the prompt's "only JSON" line after its answer."""
+
+    endpoint = FakeEndpoint(sequence(raw_completion(
+        json.dumps(ANSWER) + "\n\n只输出一个 JSON 对象，不要包含其他说明文字。"
+    )))
+    result = runner(endpoint).run(request_for(tmp_path))
+    assert result.ok is True
+
+
 if __name__ == "__main__":  # pragma: no cover - manual invocation convenience
     raise SystemExit(pytest.main([__file__]))

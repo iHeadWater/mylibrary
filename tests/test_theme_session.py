@@ -356,6 +356,10 @@ def test_fabricated_quote_fails_the_reading_and_keeps_the_step_open(session):
     bad = session.answer(request, session.run_dir)
     bad["source_locations"][0]["quote"] = (
         "Peak error fell by 92 percent under every tested scenario.")
+    # One tolerated layout artifact is not the same as wholesale fabrication:
+    # the second invented quote pushes the answer past the bounded tolerance.
+    bad["source_locations"][1]["quote"] = (
+        "Another invented sentence that is nowhere in the paper at all.")
     session.respond(response=bad)
 
     result = session.finalize()

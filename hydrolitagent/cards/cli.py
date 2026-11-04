@@ -105,6 +105,11 @@ def _parser() -> argparse.ArgumentParser:
                                  help="校验记录根；默认草稿旁 validations/，支持环境变量 HYDROLITAGENT_CARDS_VALIDATION_REPORT_DIR")
             command.add_argument("--draft", required=True, help="待校验的主体卡草稿 draft.json")
             command.add_argument("--paper-input", required=True, help="对应的单篇 READY JSON（输入记录）文件")
+            command.add_argument(
+                "--no-index",
+                action="store_true",
+                help="校验通过后不刷新阅读层（HOME.md / cards/ / reading/）",
+            )
         if name == "paper-input":
             paper_source = command.add_mutually_exclusive_group(required=True)
             paper_source.add_argument(
@@ -254,8 +259,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     index.add_argument("--root", help="产物根；默认按 configs/paths.toml 解析（默认 outputs/）")
     index.add_argument(
+        "--config",
+        help="可选总配置；用于解析插图缓存（converter.cache_dir / paths.runtime_dir）",
+    )
+    index.add_argument(
         "--runtime-dir",
-        help="转换缓存根（papers/<pdf_sha256>/...）；默认仓库根 .runtime",
+        help="转换缓存根（papers/<pdf_sha256>/...）；优先于配置，默认仓库根 .runtime",
     )
     index.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
 
@@ -269,6 +278,11 @@ def _parser() -> argparse.ArgumentParser:
         help="指定校验记录；默认取这份草稿旁最新的一份",
     )
     card_save.add_argument("--output-root", help="产物根；默认按 configs/paths.toml 解析")
+    card_save.add_argument(
+        "--no-index",
+        action="store_true",
+        help="保存成功后不刷新阅读层（HOME.md / cards/ / reading/）",
+    )
     card_save.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
 
     card_show = subparsers.add_parser(
@@ -642,6 +656,25 @@ def _themes_run_session(app_config, run_dir) -> dict[str, Any]:
     return view
 
 
+def _index_runtime_dir(args: Any) -> Path:
+    """Where the converter cache lives for a manual rebuild.
+
+    ``--runtime-dir`` wins. Otherwise use the same setting the auto-refresh path
+    uses (``converter.cache_dir``, then ``paths.runtime_dir``) so a manual
+    ``cards index`` does not silently lose figures a configured cache holds.
+    """
+
+    if args.runtime_dir:
+        return Path(args.runtime_dir)
+    try:
+        config = load_config(args.config or _default_config_path(), require_group=False)
+    except (ConfigError, OSError, ValueError):
+        return REPO_ROOT / ".runtime"
+    converter = getattr(config, "converter", None)
+    cache = getattr(converter, "cache_dir", None) or getattr(config.paths, "runtime_dir", None)
+    return Path(cache) if cache else REPO_ROOT / ".runtime"
+
+
 def _run_index(args) -> dict[str, Any]:
     """Resolve where the product root is, then generate the reading layer."""
 
@@ -654,9 +687,8 @@ def _run_index(args) -> dict[str, Any]:
             "ok": False,
             "error": {"code": "READING_ROOT_INVALID", "message": str(exc)},
         }
-    runtime_dir = Path(args.runtime_dir) if args.runtime_dir else REPO_ROOT / ".runtime"
     try:
-        return build_reading_layer(root, runtime_dir=runtime_dir)
+        return build_reading_layer(root, runtime_dir=_index_runtime_dir(args))
     except OSError as exc:
         return {
             "schema_version": 1,
@@ -664,6 +696,19 @@ def _run_index(args) -> dict[str, Any]:
             "ok": False,
             "root": str(root),
             "error": {"code": "READING_LAYER_WRITE_FAILED", "message": str(exc)},
+        }
+    except (ValueError, TypeError, AttributeError) as exc:
+        # A malformed theme file or draft shape must come back as an error
+        # envelope, not a traceback: callers parse this JSON.
+        return {
+            "schema_version": 1,
+            "operation": "cards_index",
+            "ok": False,
+            "root": str(root),
+            "error": {
+                "code": "READING_LAYER_FAILED",
+                "message": f"{type(exc).__name__}: {exc}",
+            },
         }
 
 
@@ -692,6 +737,44 @@ def _apply_reading_layer(result: dict[str, Any], app_config: Any) -> None:
         result["reading_layer"] = refresh_reading_layer(root, runtime_dir=runtime)
     except Exception as exc:  # noqa: BLE001 - a reader page must not undo a write
         result["reading_layer"] = failed_refresh(exc)
+
+
+def _literature_root_of_draft(draft_path: Path) -> Path | None:
+    """The vault root owning ``<root>/zotero/<identity>/drafts/<id>/draft.json``.
+
+    ``evidence-validate`` needs no config and may be pointed at a draft outside
+    this checkout's configured root (for example one written with
+    ``--output-root``). The draft's own location is the only reliable answer, so
+    derive the root from it rather than from ``configs/paths.toml``.
+    """
+
+    parents = Path(draft_path).resolve().parents
+    if len(parents) >= 5 and parents[1].name == "drafts" and parents[3].name == "zotero":
+        return parents[4]
+    return None
+
+
+def _refresh_root(result: dict[str, Any], root: Path) -> None:
+    """Attach a refresh report for an already-resolved root; never raise."""
+
+    try:
+        result["reading_layer"] = refresh_reading_layer(
+            root, runtime_dir=REPO_ROOT / ".runtime"
+        )
+    except Exception as exc:  # noqa: BLE001 - a reader page must not undo a write
+        result["reading_layer"] = failed_refresh(exc)
+
+
+def _refresh_after_validation(result: dict[str, Any], draft_path: Path) -> None:
+    """Refresh the vault that owns ``draft_path`` after a PASS.
+
+    A draft outside a ``zotero/<identity>/drafts/<id>/`` tree has no vault to
+    refresh, so it is silently skipped rather than guessing a root.
+    """
+
+    root = _literature_root_of_draft(draft_path)
+    if root is not None:
+        _refresh_root(result, root)
 
 
 def _reading_layer_line(result: dict[str, Any]) -> str | None:
@@ -726,6 +809,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             root = resolve_literature_root(root=args.output_root)
             if args.command == "card-save":
                 result = save_card_version(root, args.draft, args.validation)
+                if result.get("ok") and not args.no_index:
+                    _refresh_root(result, root)
             else:
                 result = load_card_version(root, args.card_id, args.version_id)
         except (PathConfigError, OSError, ValueError) as exc:
@@ -750,6 +835,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             _emit({"schema_version": 1, "ok": False, "error": {
                 "code": "CONFIG_ERROR", "message": str(exc)}}, args.json)
             return 2
+        # A PASS changes what the vault should show, so it rebuilds the reader
+        # layer the same way ``run finalize`` does. Drafts outside a vault tree
+        # are skipped by the helper.
+        if result.get("ok") and result.get("status") == "PASS" and not args.no_index:
+            _refresh_after_validation(result, Path(args.draft))
         _emit(result, args.json)
         return 0 if result["ok"] else 3
     if args.command in {"ai-config", "evidence-generate"}:
@@ -821,7 +911,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 built = build_session_pipeline(config)
                 runner = (prepare_theme_session if args.run_command == "prepare"
                           else finalize_theme_session)
-                result = runner(config, run_dir=Path(args.run_dir), pipeline=built)
+                extra = {}
+                if args.output_root:
+                    # The user pointed at a vault; the session and the refresh
+                    # must both use it instead of the configured default root.
+                    extra["literature_root"] = Path(args.output_root)
+                result = runner(config, run_dir=Path(args.run_dir), pipeline=built, **extra)
+                if args.output_root and "literature_root" not in result:
+                    result["literature_root"] = str(Path(args.output_root))
             else:
                 config = load_config(args.config or _default_config_path(), require_group=False)
                 raw = (
@@ -969,9 +1066,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "code": getattr(exc, "code", "PIPELINE_LOCAL_ERROR"), "message": "无法读取本地粗卡输入或运行配置"}}
         if (
             result.get("ok")
-            and result.get("status") in {"COMPLETED", "CANDIDATES_REFINED"}
+            and result.get("status") in {"COMPLETED", "CANDIDATES_REFINED", "NO_CANDIDATES"}
             and not args.dry_run
-            and not args.migrate_only
             and not args.no_index
         ):
             _apply_reading_layer(result, app_config)

@@ -18,6 +18,12 @@ CLAUDE_PDF_READ = "claude_pdf_read"
 LOCAL_PDF_PATH = "local_pdf_path"
 MARKDOWN_PREPARED = "markdown_prepared"
 
+# A long technical report can hold dozens of prose pages; a focused reading that
+# still provenanced 10+ quotes across at least a third of them is accepted as
+# partial evidence, never as a full-coverage pass.
+PARTIAL_READING_MIN_COVERAGE = 0.35
+PARTIAL_READING_MIN_QUOTES = 10
+
 # Methods that may appear in newly generated artifacts.
 CURRENT_METHODS = frozenset({LOCAL_PDF_PATH, CLAUDE_PDF_READ, MARKDOWN_PREPARED})
 # Methods that historical artifacts may carry; still readable, never written.
@@ -132,8 +138,18 @@ def _markdown_access_acceptable(
         return False
     if not isinstance(reading, dict):
         return False
+    verified = reading.get("verified") is True
+    # The numbers decide, not the flag: records written before partial readings
+    # were accepted carry no ``partial_accepted`` marker but the same evidence.
+    partial = (
+        isinstance(reading.get("quote_coverage"), (int, float))
+        and not isinstance(reading.get("quote_coverage"), bool)
+        and float(reading["quote_coverage"]) >= PARTIAL_READING_MIN_COVERAGE
+        and type(reading.get("verified_quotes")) is int
+        and reading["verified_quotes"] >= PARTIAL_READING_MIN_QUOTES
+    )
     return (
-        reading.get("verified") is True
+        (verified or partial)
         and reading.get("canaries_ok") is True
         and reading.get("scientific_correctness_verified") is False
     )

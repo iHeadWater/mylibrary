@@ -8,14 +8,15 @@ uv run hydrolitagent cards index          # 首次打开或手动重建时生成
 uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检）
 ```
 
-**日常不用手动跑**：`cards run finalize` 成功（主题流程要走到 `COMPLETED`）与 `themes-run`
-成功之后，平台会自动刷新同一层阅读物；`--no-index` 可关掉。手动跑 `cards index` 的场合是：
+**日常不用手动跑**：`evidence-validate` 校验通过（`PASS`）、`card-save` 保存成功、
+`cards run finalize` 成功（主题流程要走到 `COMPLETED`）与 `themes-run` 成功之后，平台会
+自动刷新同一层阅读物；`--no-index` 可关掉。手动跑 `cards index` 的场合是：
 第一次把产物根当 vault 打开、清理过产物、或想强制重建。阅读层永远可以从机器原稿重建。
 
 ## 打开步骤（照做即可）
 
-1. 首次打开时先在仓库根跑一次 `uv run hydrolitagent cards index`（之后由 finalize /
-   themes-run 自动维护；也可以随时手动重建）。
+1. 首次打开时先在仓库根跑一次 `uv run hydrolitagent cards index`（之后由
+   evidence-validate / card-save / finalize / themes-run 自动维护；也可以随时手动重建）。
 2. 打开 Obsidian → **Open folder as vault**（打开文件夹作为仓库）。
 3. 选择**产物根**本身 —— 默认是仓库下的 `outputs/`，**不是**仓库根，也不要点进 `outputs/zotero/`。
 4. 在文件列表最外层打开 `HOME.md`；需要的话在设置里把它设为起始页。
@@ -30,11 +31,15 @@ uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检
   cards/<条目Key>/card.md              阅读版卡片（YAML 头 + 状态 + 正文 + 来源/主题/精读/图）
   cards/<条目Key>/figures/*.png        从转换缓存复制的论文插图
   reading/themes/<主题编号>.md          当前主题版本的阅读页（来源链接已按新布局重算）
+  .reading-layer.json                  生成清单：本层写过哪些文件（用于清理旧页）
   zotero/ themes/ evidence-packs/      机器原稿：**不改**
 ```
 
 `cards index` **只写**上面标为阅读层的路径。`zotero/`、`themes/`、`evidence-packs/` 和
 `themes/_registry.json` 属于哈希链，生成器只读不写；主题页里历史版本的「粗卡」链接保持原样。
+
+重建时只删除清单里记录过、这次不再生成的文件（已删除的草稿、已退休的主题）。你在 `cards/`
+或 `reading/` 下自己放的笔记不在清单里，不会被删。
 
 ## 现在的卡片长什么样
 

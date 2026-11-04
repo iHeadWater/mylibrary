@@ -14,8 +14,13 @@ focus 直接相关的段落：方法、数据、比较基准、结果、局限�
 1. `reading_receipt.markdown_sha256`：逐字回显输入材料 `reading_parameters.markdown_sha256`。
 2. `reading_receipt.canaries_seen`：列出 `reading_parameters.reading_canaries` 的全部值，一个都不能少。
 3. `reading_receipt.model_claimed_status` 写 `FULL_MARKDOWN_REVIEWED`；`read_mode` 写 `file`。
-4. `source_locations`：逐字引文，必须能在 `paper.md` 中找到。每个正文页（role 为 `body` 的页）
-   至少给出一条引文；引文不要选标题、页眉或短句，至少 24 个西文字符或 12 个汉字。
+4. `source_locations`：逐字引文，必须能在 `paper.md` 中找到。只为**有正文段落**的页面提供引文；
+   引文必须取自正文句子，不要选章节标题、页眉、短句、图题、表题、表头或只有数字的表格行
+   （例如以 `Table`、`Figure`、`Extended Data Table`、`Extended Data Fig.` 开头的行）。
+   **仅含图表、没有正文段落的页面不要提供引文**——表题凑数会被接地校验拒绝。
+   引文必须在 `paper.md` 中**连续出现**：双栏排版可能把同一句话拆成两段，中间隔着
+   另一栏的行；遇到这种情况请换一条连续片段，不要自行拼接被隔开的句子。
+   每条引文至少 24 个西文字符或 12 个汉字。
    `pdf_page` 写引文真实所在页；`section`/`figure`/`table` 没有就填 null。
 
 程序会核对摘要、canary 与每条引文。任何一项对不上，本次精读会被拒绝——不要为了通过而编造引文。

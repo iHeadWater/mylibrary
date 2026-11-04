@@ -92,7 +92,8 @@ uv run hydrolitagent cards run finalize \
 - 人类可读输出多一行：`阅读层已刷新：2 个文件（1 未变，5 条链接，0 断链）`。
 - **刷新失败不会让命令失败**：权限、路径、磁盘等异常只降级为 `reading_layer.ok=false`
   （带 `error.code`），草稿照常保存，命令仍按原结果返回退出码。
-- 不想刷新就加 `--no-index`（默认开启）。阅读层是生成物，随时可用
+- 默认会刷新；不想刷新就加 `--no-index`。校验通过（`evidence-validate` 返回 `PASS`）与
+  保存版本（`card-save`）成功后同样会刷新。阅读层是生成物，随时可用
   `uv run hydrolitagent cards index` 重建。
 
 `--output-root` 指向别的产物根时，阅读层也跟着刷新到那里；插图缓存取自配置的

@@ -146,6 +146,52 @@ def test_single_paper_finalize_refreshes_and_no_index_opts_out(tmp_path: Path) -
     assert "denied" in broken["reading_layer"]["error"]["message"]
 
 
+def test_evidence_validate_refreshes_after_pass_and_no_index_opts_out(tmp_path: Path) -> None:
+    """The single-paper flow is generate → validate; the second step must publish.
+
+    ``run finalize`` already refreshes, so the draft is written with
+    ``--no-index`` first; the vault must stay empty until validation passes.
+    """
+
+    config_path, input_path, output_root = _single_paper_workspace(tmp_path)
+    run_dir = tmp_path / "run"
+    _prepare(config_path, input_path, run_dir, output_root)
+    code, finalized = _finalize(config_path, input_path, run_dir, output_root, "--no-index")
+    assert code == 0, finalized
+    assert finalized["ok"] is True
+    assert not (output_root / "HOME.md").exists()
+    draft_path = finalized["draft_path"]
+
+    def validate(*extra: str) -> tuple[int, dict]:
+        return _cli([
+            "evidence-validate",
+            "--config", str(config_path),
+            "--draft", draft_path,
+            "--paper-input", str(input_path),
+            *extra,
+            "--json",
+        ])
+
+    # 1. ``--no-index`` on validation keeps the vault untouched too.
+    code, quiet = validate("--no-index")
+    assert code == 0, quiet
+    assert quiet["status"] == "PASS"
+    assert "reading_layer" not in quiet
+    assert not (output_root / "HOME.md").exists()
+
+    # 2. default: a PASS rebuilds the vault that owns the draft.
+    code, result = validate()
+    assert code == 0, result
+    assert result["status"] == "PASS"
+    layer = result["reading_layer"]
+    assert layer["ok"] is True, layer
+    assert layer["written"] > 0
+    assert layer["broken_links"] == []
+    assert (output_root / "HOME.md").is_file()
+    assert (output_root / "cards" / PARENT_KEY / "card.md").is_file()
+    assert PARENT_KEY in (output_root / "HOME.md").read_text(encoding="utf-8")
+
+
 def test_refresh_wrapper_never_raises(monkeypatch, tmp_path: Path) -> None:
     def boom(root, *, runtime_dir=None):
         raise OSError("disk full")

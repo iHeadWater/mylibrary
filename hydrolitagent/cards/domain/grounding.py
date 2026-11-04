@@ -423,6 +423,9 @@ class ReadingAudit:
     # Legacy fields of the first violation, so the strict entry point keeps the
     # detail its callers already read (``location_index``, ``missing_canaries``).
     detail: dict[str, Any] = field(default_factory=dict)
+    # Quotes excluded under a bounded tolerance. They are not evidence, but they
+    # no longer block a reading whose remaining quotes and coverage hold up.
+    excluded: tuple[Violation, ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -436,6 +439,7 @@ def audit_reading(
     *,
     min_coverage: float = DEFAULT_MIN_COVERAGE,
     quotes_verified: bool = True,
+    max_failed_quotes: int | None = 0,
 ) -> ReadingAudit:
     """Collect every grounding problem instead of raising on the first one.
 
@@ -570,9 +574,17 @@ def audit_reading(
         failed_quotes=len(violations),
         content_pages=index.content_pages(citable=_citable_pages(markdown)),
     )
-    if violations:
+    allowed = max_failed_quotes
+    if allowed is None:
+        # Bounded tolerance for layout artifacts: a two-column PDF can interleave
+        # a figure beside the body, so a correctly read sentence is not verbatim
+        # in the converted text. The excluded quote is never used as evidence.
+        allowed = max(1, len(parsed.source_locations) // 10)
+    if len(violations) > allowed:
         return ReadingAudit(None, tuple(violations), coverage, first_detail)
-    status = "VERIFIED" if coverage.satisfied else "PARTIAL"
+    # Excluded quotes do not count against coverage: they are kept in
+    # ``audit.excluded`` for the report, not silently turned into page evidence.
+    status = "VERIFIED" if coverage.quote_coverage >= min_coverage else "PARTIAL"
     return ReadingAudit(
         VerifiedReading(
             status=status,
@@ -592,6 +604,7 @@ def audit_reading(
         (),
         coverage,
         {},
+        tuple(violations),
     )
 
 
@@ -601,6 +614,7 @@ def verify_reading(
     anchors: Sequence[PageAnchor],
     *,
     min_coverage: float = DEFAULT_MIN_COVERAGE,
+    max_failed_quotes: int | None = 0,
 ) -> VerifiedReading:
     """Accept or reject a runner's reading receipt.
 
@@ -610,7 +624,10 @@ def verify_reading(
     ``min_coverage`` of the body pages are backed by a verified quote.
     """
 
-    audit = audit_reading(receipt, markdown, anchors, min_coverage=min_coverage)
+    audit = audit_reading(
+        receipt, markdown, anchors,
+        min_coverage=min_coverage, max_failed_quotes=max_failed_quotes,
+    )
     if audit.violations:
         raise _grounding_error(audit)
     assert audit.reading is not None  # no violations means the audit built one
