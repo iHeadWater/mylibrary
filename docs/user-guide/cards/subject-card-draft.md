@@ -31,7 +31,7 @@ Poppler**；`--ai-provider` 只决定由哪个执行者执行。旧的 CLI「自
 > `runners` 为准，只有两个：
 >
 > - `direct`：直连 OpenAI 兼容的 `/chat/completions`，默认 DeepSeek
->   （`https://api.deepseek.com`、`deepseek-chat`），key 取 `DEEPSEEK_API_KEY`；
+>   （`https://api.deepseek.com`、`deepseek-flash`），key 取 `DEEPSEEK_API_KEY`；
 >   换 endpoint 用 `base_url` / `--ai-model` 或 `DIRECT_LLM_BASE_URL` / `DIRECT_LLM_MODEL`。
 > - `in_session`：由 `cards run prepare|finalize` 交给当前 agent，不需要 key。
 >
@@ -48,6 +48,11 @@ card.md       给人读的正文
 ```
 
 产物根默认是仓库 `outputs/`。实际落点用 `uv run hydrolitagent cards ai-config --json` 查。
+
+**表格**：提示词 v9 起，论文中承载关键定量结果的表（≥2 行且 ≥2 列数值）必须以 Markdown
+表格复现，保留行列标签，不改写成流水句；单元格缺失时留空说明，不用「约等于」「末位截断」
+之类未经核实的值填充。转换器无法可靠重建的表（例如双栏对齐损坏）由正文如实标注为未复现。
+这条属于生成指引，校验器**不**检查正文是否真的有表。
 
 ## 边界
 
