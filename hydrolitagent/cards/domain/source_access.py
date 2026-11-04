@@ -139,9 +139,10 @@ def _markdown_access_acceptable(
     if not isinstance(reading, dict):
         return False
     verified = reading.get("verified") is True
+    # The numbers decide, not the flag: records written before partial readings
+    # were accepted carry no ``partial_accepted`` marker but the same evidence.
     partial = (
-        reading.get("partial_accepted") is True
-        and isinstance(reading.get("quote_coverage"), (int, float))
+        isinstance(reading.get("quote_coverage"), (int, float))
         and not isinstance(reading.get("quote_coverage"), bool)
         and float(reading["quote_coverage"]) >= PARTIAL_READING_MIN_COVERAGE
         and type(reading.get("verified_quotes")) is int

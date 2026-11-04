@@ -142,6 +142,19 @@ def test_partial_flag_alone_does_not_override_a_failed_verdict() -> None:
     assert source_access_acceptable(access) is False
 
 
+def test_legacy_partial_record_is_accepted_by_its_numbers() -> None:
+    """Records written before the flag existed carry the same measurable evidence."""
+
+    access = _markdown_access(reading={
+        "verified": False,
+        "canaries_ok": True,
+        "scientific_correctness_verified": False,
+        "quote_coverage": 0.39,
+        "verified_quotes": 19,
+    })
+    assert source_access_acceptable(access) is True
+
+
 @pytest.mark.parametrize(
     "dotted,value",
     [
