@@ -35,14 +35,15 @@
 
 平台只提供**流程**，LLM 动作由两种执行者之一完成，没有第三种：
 
-1. `in_session`（默认）：`cards run prepare` 准备 `paper.md`，当前 agent 写 `response.json`，
-   `cards run finalize` 校验后保存草稿。**不需要任何 API key。**
-2. `direct`：直连 OpenAI 兼容 API，默认 DeepSeek（`base_url=https://api.deepseek.com`、
-   `model=deepseek-chat`、key 取 `DEEPSEEK_API_KEY`）。
+1. `direct`（默认，`configs/ai.toml` 与内置默认值都是它）：直连 OpenAI 兼容 API，默认 DeepSeek
+   （`base_url=https://api.deepseek.com`、`model=deepseek-flash`、key 取 `DEEPSEEK_API_KEY`）。
+2. `in_session`：`cards run prepare` 准备 `paper.md`，当前 agent 写 `response.json`，
+   `cards run finalize` 校验后保存草稿。**不需要任何 API key**；需在 `configs/ai.toml`
+   或 `--ai-provider in_session` 显式选择。
 
 | 字段 | 当前含义 | 允许值或规则 |
 |---|---|---|
-| `runner` | 执行者 id（注册表名） | `in_session`（默认）或 `direct`；未知值在构建管线时报错 |
+| `runner` | 执行者 id（注册表名） | `direct`（默认）或 `in_session`；未知值在构建管线时报错 |
 | `model` | 所选执行者的模型名 | `null` 表示使用该执行者的默认值 |
 | `reasoning_effort` | 思考强度 | `null` 或 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max`；实际支持范围取决于模型 |
 | `generation_timeout_seconds` | 一次制卡的最长等待秒数 | 大于 0；当前为 1500，即 25 分钟 |
