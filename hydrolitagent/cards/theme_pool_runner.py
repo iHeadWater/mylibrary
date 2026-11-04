@@ -36,7 +36,11 @@ from hydrolitagent.cards.application.workspace import (
 )
 from hydrolitagent.cards.domain.grounding import audit_reading, expected_canaries
 from hydrolitagent.cards.domain.reading import ReadingReceipt
-from hydrolitagent.cards.domain.source_access import MARKDOWN_PREPARED
+from hydrolitagent.cards.domain.source_access import (
+    MARKDOWN_PREPARED,
+    PARTIAL_READING_MIN_COVERAGE,
+    PARTIAL_READING_MIN_QUOTES,
+)
 from hydrolitagent.cards.ports.paper import ConversionFailure
 from hydrolitagent.cards.ports.runner import CardRunRequest
 from hydrolitagent.cards.progress import report_progress
@@ -266,12 +270,10 @@ def refinement_input(options, action, child, focused, existing):
         "change_kind": action["kind"], "change_reason": action["reason"]}
 
 
-# A long technical report can hold dozens of prose pages; demanding the default
-# 80% page coverage makes a focused reading impossible even when the model read
-# broadly. These floors accept such a reading as partial evidence, never as a
-# full-coverage pass.
-THEME_PARTIAL_MIN_COVERAGE = 0.35
-THEME_PARTIAL_MIN_QUOTES = 10
+# Shared with the source-access gate, so the record and its later re-check use
+# the same floors.
+THEME_PARTIAL_MIN_COVERAGE = PARTIAL_READING_MIN_COVERAGE
+THEME_PARTIAL_MIN_QUOTES = PARTIAL_READING_MIN_QUOTES
 
 
 def _reading_access(prepared, output):
@@ -313,12 +315,14 @@ def _reading_access(prepared, output):
         raise core.ThemeError("THEME_READING_NOT_VERIFIED",
                               "定向精读的引文覆盖率不足，未作为主题证据保存",
                               reading=None)
+    reading_body = reading.as_dict()
     if not reading.verified:
         if (reading.quote_coverage < THEME_PARTIAL_MIN_COVERAGE
                 or reading.verified_quotes < THEME_PARTIAL_MIN_QUOTES):
             raise core.ThemeError("THEME_READING_NOT_VERIFIED",
                                   "定向精读的引文覆盖率不足，未作为主题证据保存",
-                                  reading=reading.as_dict())
+                                  reading=reading_body)
+        reading_body["partial_accepted"] = True
         warnings.append(f"THEME_READING_PARTIAL:{reading.quote_coverage}")
     return ({
         "method": MARKDOWN_PREPARED,
@@ -328,7 +332,7 @@ def _reading_access(prepared, output):
         "page_count": prepared.page_count,
         "converter_id": prepared.converter_id,
         "converter_version": prepared.converter_version,
-        "reading": reading.as_dict(),
+        "reading": reading_body,
         "excluded_quote_count": len(audit.excluded),
     }, warnings)
 

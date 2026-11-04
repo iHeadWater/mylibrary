@@ -107,6 +107,41 @@ def test_markdown_access_is_accepted_when_every_field_matches() -> None:
     ) is True
 
 
+def test_partial_reading_is_accepted_with_the_bounded_flags() -> None:
+    access = _markdown_access(reading={
+        "verified": False,
+        "canaries_ok": True,
+        "scientific_correctness_verified": False,
+        "partial_accepted": True,
+        "quote_coverage": 0.39,
+        "verified_quotes": 19,
+    })
+    assert source_access_acceptable(access) is True
+
+
+@pytest.mark.parametrize("coverage,quotes", [(0.34, 30), (0.39, 9), (0.39, True)])
+def test_partial_reading_below_the_floors_is_rejected(coverage, quotes) -> None:
+    access = _markdown_access(reading={
+        "verified": False,
+        "canaries_ok": True,
+        "scientific_correctness_verified": False,
+        "partial_accepted": True,
+        "quote_coverage": coverage,
+        "verified_quotes": quotes,
+    })
+    assert source_access_acceptable(access) is False
+
+
+def test_partial_flag_alone_does_not_override_a_failed_verdict() -> None:
+    access = _markdown_access(reading={
+        "verified": False,
+        "canaries_ok": True,
+        "scientific_correctness_verified": False,
+        "partial_accepted": True,
+    })
+    assert source_access_acceptable(access) is False
+
+
 @pytest.mark.parametrize(
     "dotted,value",
     [
