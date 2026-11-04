@@ -9,7 +9,7 @@
 | 配置与路径 | 未知字段、越界路径、重叠安装目录和非布尔开关必须拒绝 | `test_config.py` | 已有自动测试 |
 | 单篇论文输入 | 候选选择、个人/群组、父条目/附件、缺失或重复 PDF、未索引全文 | `test_paper_input.py` | 已有自动测试 |
 | PDF 门禁与交付 | 缺失、过小、无可用文本、身份变化和越界文件不得进入制卡 | `test_pdf_gate.py`、`test_pdf_delivery.py` | 已有自动测试 |
-| PDF→Markdown 转换 | 页锚点与页数一致、图资产与表格提取、中文/双栏/扫描件的覆盖率与 `CONVERTER_LOW_TEXT` fail-closed、同一 PDF 的 Markdown 哈希稳定 | `test_markdown_conversion.py`、`test_paper_store.py` | 已有自动测试 |
+| PDF→Markdown 转换 | 页锚点与页数一致、图资产与表格提取（题注在上与**题注在表体下方**）、中文/双栏/扫描件的覆盖率与 `CONVERTER_LOW_TEXT` fail-closed、同一 PDF 的 Markdown 哈希稳定 | `test_markdown_conversion.py`、`test_pdf_tables.py`、`test_paper_store.py` | 已有自动测试 |
 | 证据卡模板 | 九类模板的来源、版本、front matter 和内容指纹必须一致 | `test_evidence_templates.py` | 已有自动测试 |
 | 单篇主体卡 | 来源错误、空输出、非法模板与引文不接地必须停止保存；旧 v1 草稿仍可只读校验 | `test_ai_config.py`、`test_card_draft.py`、`test_card_validation.py`、`test_markdown_workflow.py`、`test_legacy_removed.py` | 已有自动测试 |
 | 执行者适配器 | `direct` 的 HTTP 契约、`in_session` 两阶段、脚本化替身、旧 CLI 流式解码与连接保护 | `test_direct_runner.py`、`test_in_session.py`、`test_scripted_runner.py`、`test_streaming_decoding.py`、`test_connection_guard.py` | 已有自动测试 |
