@@ -41,7 +41,12 @@ from hydrolitagent.cards.ports.runner import CardRunner, RunnerDoctor
 # Converter ids this stage can build. ``none`` means "configuration did not
 # choose a converter", which the Markdown pipeline resolves to the only
 # available implementation instead of silently skipping conversion.
-KNOWN_CONVERTERS = frozenset({"none", "pymupdf"})
+#
+# ``pymupdf-ocr`` is the same converter with recognition enabled for pages that
+# carry no text layer (#72). It is a separate id rather than a boolean switch so
+# a stored conversion says in its own directory name which converter produced
+# it, and so a mixed document never has to choose "recognise everything".
+KNOWN_CONVERTERS = frozenset({"none", "pymupdf", "pymupdf-ocr"})
 
 
 @dataclass(frozen=True)
@@ -81,11 +86,19 @@ def _cache_dir(app_config: Any) -> Path:
     return _runtime_root(app_config)
 
 
-def _default_converter() -> PaperConverter:
+def _default_converter(converter_id: str = "pymupdf") -> PaperConverter:
     # Imported lazily so ``cards doctor`` can diagnose a missing PyMuPDF instead
     # of failing while importing the composition root itself.
-    from hydrolitagent.cards.adapters.pdf.pymupdf_converter import PymupdfConverter
+    from hydrolitagent.cards.adapters.pdf.pymupdf_converter import (
+        PymupdfConverter,
+        PymupdfOcrConverter,
+    )
 
+    # The id is dispatched here rather than ignored: before this, every id in
+    # ``KNOWN_CONVERTERS`` produced the same object, so a typo in the registry
+    # would have looked like a working configuration.
+    if converter_id == "pymupdf-ocr":
+        return PymupdfOcrConverter()
     return PymupdfConverter()
 
 
@@ -131,7 +144,7 @@ def build_markdown_pipeline(app_config: Any) -> MarkdownPipeline:
     except RegistryError as exc:
         raise ConfigError(f"未注册的制卡运行器：{runner_id!r}；{exc}") from exc
     return MarkdownPipeline(
-        converter=_default_converter(),
+        converter=_default_converter(converter_id),
         store=PaperStore(_cache_dir(app_config)),
         runner=runner,
         options=_conversion_options(converter_config),
@@ -167,7 +180,7 @@ def build_session_pipeline(app_config: Any) -> MarkdownPipeline:
     except RegistryError as exc:  # pragma: no cover - built-in registration
         raise ConfigError(f"缺少 in_session 运行器：{exc}") from exc
     return MarkdownPipeline(
-        converter=_default_converter(),
+        converter=_default_converter(converter_id),
         store=PaperStore(_cache_dir(app_config)),
         runner=runner,
         options=_conversion_options(converter_config),

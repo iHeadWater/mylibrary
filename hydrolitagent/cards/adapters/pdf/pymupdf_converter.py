@@ -88,6 +88,8 @@ from .tables import (
 )
 
 CONVERTER_ID = "pymupdf"
+# The id of the variant that may recognise pages without a text layer (#72).
+OCR_CONVERTER_ID = "pymupdf-ocr"
 # Extraction rules, not just the library version. Bumping this invalidates the
 # content-addressed cache for every PDF, which is exactly what a layout fix needs.
 CONVERTER_REVISION = "layout-3"
@@ -918,12 +920,33 @@ class PymupdfConverter:
         )
 
 
+class PymupdfOcrConverter(PymupdfConverter):
+    """The same deterministic converter, able to read pages without text (#72).
+
+    A separate class exists for the *identity*, not for a second implementation:
+    every layout rule, anchor and canary below is shared with ``PymupdfConverter``,
+    so a document converted by either id has the same structure. What differs is
+    that this id is allowed to rasterise a page that carries no text layer and
+    read it with an OCR engine, recording per page where the characters came
+    from.
+
+    Declaring it as a distinct id (rather than a boolean on the same id) keeps
+    three things honest: the cache directory names the converter that produced
+    it, a document never has to be "all recognised or none", and choosing it is
+    a visible decision in configuration rather than a toggle nobody notices.
+    """
+
+    converter_id = OCR_CONVERTER_ID
+
+
 __all__ = [
     "CONVERTER_ID",
+    "OCR_CONVERTER_ID",
     "FIGURES_DIRNAME",
     "MARKDOWN_FILENAME",
     "MANIFEST_FILENAME",
     "PymupdfConverter",
+    "PymupdfOcrConverter",
     "WARNING_DOWNLOAD_STAMP",
     "WARNING_FIGURE",
     "WARNING_READING_ORDER",
