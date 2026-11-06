@@ -116,6 +116,10 @@ uv run hydrolitagent cards run finalize \
 | `IN_SESSION_MARKDOWN_SHA_MISSING` | 回执没有 `markdown_sha256` | 回显 `request.json` 中的值 |
 | `IN_SESSION_CANARY_MISSING` | `canaries_seen` 不完整 | 列出全部 canary |
 | `MARKDOWN_RUNNER_OUTPUT_INVALID` | 收口到的输出不是 JSON 对象 | 检查 schema 版本与顶层结构 |
+| `CONVERTER_LOW_TEXT` | 可读文本页低于阈值；用 `pymupdf-ocr` 时原因里会写明 OCR 后端为何不可用 | 换带文本层的 PDF，或 `uv sync --extra ocr` 后把 `converter_id` 设为 `pymupdf-ocr` |
+| `CONVERTER_OCR_FAILED` | 识别某一页时后端抛错 | 确认 OCR 依赖安装完整；个别页面失败可改用带文本层的版本 |
+
+识别页（扫描件）上的引文仍逐字校验，但整卡状态是 `OCR_ASSISTED` 而不是 `VERIFIED`——卡片状态行会写“第 N 页为 OCR 识别，引文需对照扫描件复核”。它**可以**存版本、可以进主题，只是不会冒充 `VERIFIED`。
 
 引文不合规（不在 Markdown 中、页号不符、过短）不会伪造成功：要么该引文不计入证据，
 要么整卡因覆盖率不足而 `production_eligible=false`。详见[主体卡校验](subject-card-validation.md)。
@@ -131,6 +135,8 @@ uv run hydrolitagent cards doctor --json
 | 检查 | 能力 | 说明 |
 |---|---|---|
 | `converter.pymupdf` | `pdf.convert` | PyMuPDF 可 import、版本与能力（文本 / 版面 / 表格 / 图） |
+| `converter.ocr.<引擎>` | `pdf.ocr` | 仅 `converter_id=pymupdf-ocr` 时出现；识别后端是否可加载。缺失是 `warn`：带文字层的 PDF 照旧能转 |
+| `converter.layout.<后端>` | `pdf.regions` | 仅开了 `region_boxes` 时出现；版面分析后端是否可加载。缺失是 `warn`：文字照常出，只是不贴公式/表格区域图 |
 | `runner.<id>` | `runner.<id>` | 注册表中的执行者，只有两个：`direct`、`in_session` |
 | `storage.output_root` | `storage.write` | 产物根能否写入；可用 `--output-root` 检查另一个根 |
 | `storage.runtime_lock` | `storage.lock` | 运行锁能否取得并释放 |

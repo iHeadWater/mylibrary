@@ -247,7 +247,12 @@ def _prepare_card(
         "enabled_template_ids": sorted(templates),
         "reading_canaries": list(canaries),
         "page_anchors": [
-            {"page": anchor.page, "role": anchor.role, "heading": anchor.heading}
+            {
+                "page": anchor.page,
+                "role": anchor.role,
+                "heading": anchor.heading,
+                "source": anchor.source,
+            }
             for anchor in prepared.page_anchors
         ],
         "figures": [
@@ -561,7 +566,9 @@ def _complete_draft(
     fields = output["machine_fields"]
 
     warnings = [*run.warnings]
-    if reading.status != "VERIFIED":
+    if reading.status == "OCR_ASSISTED":
+        warnings.append("GROUNDING_OCR_ASSISTED")
+    elif reading.status != "VERIFIED":
         warnings.append("GROUNDING_COVERAGE_PARTIAL")
     if prep.prepared.warnings:
         warnings.append("CONVERTER_WARNINGS_PRESENT")

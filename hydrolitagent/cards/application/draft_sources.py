@@ -202,7 +202,13 @@ def inspect_draft(
         return None, reason
     if record.get("status") != "PASS" or record.get("ok") is not True:
         return None, "failed_validation"
-    if (record.get("reading_verified") is not True
+    status = record.get("reading_status")
+    reading_ok = (
+        status in {"VERIFIED", "OCR_ASSISTED"}
+        if isinstance(status, str)
+        else record.get("reading_verified") is True
+    )
+    if (not reading_ok
             or record.get("eligible_for_theme_generation") is not True):
         return None, "partial"
     try:

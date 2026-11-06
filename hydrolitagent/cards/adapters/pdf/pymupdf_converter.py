@@ -40,15 +40,27 @@ from hydrolitagent.cards.domain.paper import (
     MARKDOWN_FILENAME,
     FigureAsset,
     PageAnchor,
+    PageSource,
     PreparedPaper,
+    RecognitionInfo,
     SourceIdentity,
 )
 from hydrolitagent.cards.ports.paper import (
     ConversionError,
+    ConversionFailure,
     ConversionOptions,
     ConversionRequest,
     ConverterDoctor,
+    OcrOptions,
+    RecognizedWord,
+    RegionBox,
+    RegionDetector,
+    RegionOptions,
+    TextRecognizer,
 )
+
+from ..ocr import recognizer_for
+from ..layout import region_detector_for
 
 from .anchors import (
     Box,
@@ -117,7 +129,18 @@ WARNING_FIGURE = "FIGURE_EXTRACTION_UNCERTAIN"
 WARNING_VECTOR_FIGURE = "VECTOR_FIGURE_RENDERED"
 WARNING_RUNNING_HEADER = "RUNNING_HEADER_REMOVED"
 WARNING_DOWNLOAD_STAMP = "DOWNLOADS_STAMP_REMOVED"
-WARNING_OCR = "OCR_OPTIONAL_UNAVAILABLE"
+# The page has no usable text layer, so its characters were recognised from a
+# picture of the page. Downstream must treat its quotes as "the recogniser thinks
+# the paper says this", not as the paper's own text (#72).
+WARNING_OCR_PAGE = "OCR_PAGE_RECOGNIZED"
+# Layout analysis is optional: without it a recognised page keeps its formulas as
+# noisy text instead of as a picture of the formula.
+WARNING_LAYOUT_UNAVAILABLE = "LAYOUT_REGIONS_UNAVAILABLE"
+# Recognised text inside a formula/table region was dropped because it cannot be
+# read reliably; the region is kept as an image instead (#72, 8b).
+WARNING_REGION_REMOVED = "OCR_REGION_REMOVED"
+# A page the recogniser read gets no outline: its box heights are not font sizes.
+WARNING_OCR_NO_HEADINGS = "OCR_PAGE_OUTLINE_UNAVAILABLE"
 
 
 @dataclass(frozen=True)
@@ -129,6 +152,9 @@ class _Line:
     level: int | None
     block: int = 0
     cells: tuple[Cell, ...] = ()
+    # Share of this line that fell inside a formula/table region, when that made
+    # the line unusable. ``None`` means "not measured", which is the native path.
+    region_share: float | None = None
 
 
 @dataclass(frozen=True)
@@ -151,6 +177,11 @@ class _PageData:
     layout: ColumnLayout = SINGLE_COLUMN
     drawings: tuple[Box, ...] = ()
     table_failed: bool = False
+    source: PageSource = "native"
+    # Formula/table/figure regions found on a recognised page (#72).
+    regions: tuple[RegionBox, ...] = ()
+    removed_lines: int = 0
+    removed_chars: int = 0
 
 
 @dataclass(frozen=True)
@@ -211,6 +242,193 @@ def join_spans(fragments: Sequence[tuple[str, Box, float]]) -> str:
     return _WHITESPACE.sub(" ", _CONTROL.sub(" ", "".join(parts))).strip()
 
 
+# Recognised words arrive as loose runs with a box each: no line, no paragraph,
+# no column. These thresholds rebuild that structure from geometry alone, so a
+# recognised page goes through the same renderer as a native one.
+_ROW_OVERLAP_SHARE = 0.5
+_RUN_GAP_FACTOR = 1.2
+_PARAGRAPH_GAP_FACTOR = 0.8
+_COLUMN_GAP_FACTOR = 3.0
+_COLUMN_GAP_MIN = 8.0
+
+
+def _split_row(
+    row: Sequence[RecognizedWord], factor: float = _RUN_GAP_FACTOR
+) -> list[list[RecognizedWord]]:
+    """Cut one visual row where the horizontal gap is too wide to be a space.
+
+    Two columns of a scanned page very often share a baseline, and keeping them
+    in one "line" joins unrelated sentences -- ``... costly natu-`` followed by
+    the other column's ``code``. Note the items here are whole *lines* (the
+    recogniser returns one box per text line), so the gap between them is either
+    a small layout artifact or a column gutter: 1.2 character heights separates
+    the two, where the previous 2.0 kept a 17 pt gutter (against an 11 pt line)
+    glued together.
+    """
+
+    runs: list[list[RecognizedWord]] = [[row[0]]]
+    for word in row[1:]:
+        previous = runs[-1][-1]
+        height = max(word.box[3] - word.box[1], previous.box[3] - previous.box[1], 1.0)
+        if word.box[0] - previous.box[2] > factor * height:
+            runs.append([word])
+        else:
+            runs[-1].append(word)
+    return runs
+
+
+def _column_index(lefts: Sequence[float], tolerance: float) -> list[int]:
+    """Group run start positions into columns, left to right."""
+
+    ordered = sorted(lefts)
+    breaks = [
+        current
+        for previous, current in zip(ordered, ordered[1:])
+        if current - previous > tolerance
+    ]
+    return [sum(1 for edge in breaks if left >= edge) for left in lefts]
+
+
+def lines_from_words(words: Sequence[RecognizedWord]) -> tuple[_Line, ...]:
+    """Rebuild lines, paragraphs and columns from recognised word boxes.
+
+    This is the whole of the OCR adapter's contribution to layout: the converter
+    owns every structural decision, as it does for native text. Sizes are the
+    recognised box heights, which is enough to weigh a line against its
+    neighbours but never claims font metadata the picture does not carry --
+    ``bold`` is always false and headings are not inferred from it.
+    """
+
+    if not words:
+        return ()
+
+    ordered = sorted(
+        words, key=lambda word: ((word.box[1] + word.box[3]) / 2.0, word.box[0])
+    )
+    rows: list[list[RecognizedWord]] = []
+    for word in ordered:
+        for row in reversed(rows):
+            top = min(item.box[1] for item in row)
+            bottom = max(item.box[3] for item in row)
+            overlap = min(bottom, word.box[3]) - max(top, word.box[1])
+            height = min(bottom - top, word.box[3] - word.box[1])
+            if height > 0 and overlap >= _ROW_OVERLAP_SHARE * height:
+                row.append(word)
+                break
+        else:
+            rows.append([word])
+
+    runs: list[list[RecognizedWord]] = []
+    for row in rows:
+        row.sort(key=lambda word: word.box[0])
+        runs.extend(_split_row(row))
+    if not runs:
+        return ()
+
+    heights = [max(word.box[3] - word.box[1] for word in run) for run in runs]
+    median_height = sorted(heights)[len(heights) // 2]
+    tolerance = max(_COLUMN_GAP_MIN, _COLUMN_GAP_FACTOR * median_height)
+    columns = _column_index([run[0].box[0] for run in runs], tolerance)
+
+    lines: list[_Line] = []
+    block = -1
+    previous_bottom: float | None = None
+    previous_column: int | None = None
+    # Column-major block ids: a new id whenever the column changes or the vertical
+    # gap is wider than a paragraph break. The renderer only compares ids for
+    # equality, so two paragraphs never merge across a column boundary.
+    for run, column, height in zip(runs, columns, heights):
+        typed = [(word.text, _box(*word.box), word.box[3] - word.box[1]) for word in run]
+        cells = split_cells(typed)
+        text = join_spans(typed)
+        if not text or not cells:
+            continue
+        top = min(word.box[1] for word in run)
+        if (
+            previous_bottom is None
+            or column != previous_column
+            or top - previous_bottom > _PARAGRAPH_GAP_FACTOR * height
+        ):
+            block += 1
+        lines.append(
+            _Line(
+                text=text,
+                box=_box(
+                    min(word.box[0] for word in run),
+                    top,
+                    max(word.box[2] for word in run),
+                    max(word.box[3] for word in run),
+                ),
+                size=dominant_size(
+                    (word.text, word.box[3] - word.box[1], False) for word in run
+                ),
+                bold=False,
+                level=None,
+                block=block,
+                cells=cells,
+            )
+        )
+        previous_bottom = max(word.box[3] for word in run)
+        previous_column = column
+    return tuple(lines)
+
+
+def _leading_section_lines(page: _PageData, limit: int = 3) -> tuple[str, ...]:
+    """Short leading lines, used only to classify a page's role.
+
+    A recognised page has no heading levels, so ``assign_page_roles`` would never
+    see "References" and every back-matter page would count as body, inflating
+    the coverage denominator. Role classification only needs the *words*, not a
+    level, so the first few short lines are offered as candidates. They are not
+    turned into Markdown headings.
+    """
+
+    if page.source == "native":
+        return ()
+    candidates: list[str] = []
+    for line in page.lines[:limit]:
+        text = line.text.strip()
+        if not text or len(text) > 60 or text.endswith("."):
+            continue
+        candidates.append(text)
+    return tuple(candidates)
+
+
+def _overlap_share(box: Box, region: Box) -> float:
+    """Share of ``box`` that falls inside ``region``, by area."""
+
+    width = min(box.x1, region.x1) - max(box.x0, region.x0)
+    height = min(box.y1, region.y1) - max(box.y0, region.y0)
+    if width <= 0 or height <= 0:
+        return 0.0
+    area = max(box.area, 1.0)
+    return (width * height) / area
+
+
+def _drop_region_lines(
+    lines: Sequence[_Line], regions: Sequence[RegionBox], min_share: float
+) -> tuple[tuple[_Line, ...], int, int]:
+    """Remove recognised lines that belong to a formula/table region (#72, 8b).
+
+    A line only goes when it is *mostly* inside the region. Recognised text in a
+    formula is unusable, and keeping it is actively harmful: every verbatim check
+    would pass on characters the paper does not carry, so the noise would be
+    promoted to "evidence". The region itself is kept as a picture instead.
+    """
+
+    kept: list[_Line] = []
+    dropped_lines = 0
+    dropped_chars = 0
+    boxes = [_box(*region.box) for region in regions]
+    for line in lines:
+        if any(_overlap_share(line.box, box) >= min_share for box in boxes):
+            dropped_lines += 1
+            dropped_chars += len(line.text)
+            continue
+        kept.append(line)
+    return tuple(kept), dropped_lines, dropped_chars
+
+
 def _box(*values: float) -> Box:
     x0, y0, x1, y1 = (float(value) for value in values)
     return Box(x0=x0, y0=y0, x1=x1, y1=y1)
@@ -246,16 +464,39 @@ def _table_number(label: str | None, fallback: int) -> str:
     return str(fallback)
 
 
+def _unknown_backend(name: str, label: str, key: str) -> ConverterDoctor:
+    return ConverterDoctor(
+        converter_id=str(name),
+        available=False,
+        version=None,
+        capabilities=(),
+        error=f"未知的{label}后端：{name!r}",
+        fix=f"在配置中改用 converter.{key} 支持的后端",
+    )
+
+
 class PymupdfConverter:
     """Layout-aware converter: page anchors, tables, figures and canaries."""
 
     converter_id = CONVERTER_ID
 
-    def __init__(self, *, render_dpi: int = DEFAULT_RENDER_DPI) -> None:
-        self.converter_version = (
-            f"{getattr(pymupdf, '__version__', 'unknown')}+{CONVERTER_REVISION}"
-        )
+    def __init__(
+        self,
+        *,
+        render_dpi: int = DEFAULT_RENDER_DPI,
+        ocr: OcrOptions | None = None,
+        regions: RegionOptions | None = None,
+        recognizer: TextRecognizer | None = None,
+        region_detector: RegionDetector | None = None,
+    ) -> None:
         self.render_dpi = render_dpi
+        # Defaults for ``doctor`` and for callers that do not build options per
+        # request; a conversion always reads ``request.options``.
+        self.ocr = ocr
+        self.regions = regions
+        self._recognizer = recognizer
+        self._region_detector = region_detector
+        self.converter_version = self._version()
         # Newer PyMuPDF releases print an advertisement to stdout the first
         # time tables are detected. This library feeds JSON-producing CLIs, so
         # that message must never leak into a command's output.
@@ -263,12 +504,46 @@ class PymupdfConverter:
         if callable(silence):
             silence()
 
+    def _version(self) -> str:
+        return f"{getattr(pymupdf, '__version__', 'unknown')}+{CONVERTER_REVISION}"
+
+    def _resolved_recognizer(self, options: OcrOptions) -> TextRecognizer | None:
+        if self._recognizer is not None:
+            return self._recognizer
+        return recognizer_for(options.engine)
+
+    def _resolved_regions(self, options: RegionOptions) -> RegionDetector | None:
+        if self._region_detector is not None:
+            return self._region_detector
+        return region_detector_for(options.backend)
+
     def doctor(self) -> ConverterDoctor:
+        capabilities = ["text", "layout", "tables", "figures"]
+        recognizer_report = None
+        if self.ocr is not None:
+            capabilities.append("ocr")
+            recognizer = self._resolved_recognizer(self.ocr)
+            recognizer_report = (
+                recognizer.available()
+                if recognizer is not None
+                else _unknown_backend(self.ocr.engine, "OCR", "ocr_engine")
+            )
+        regions_report = None
+        if self.regions is not None and self.regions.enabled:
+            capabilities.append("regions")
+            detector = self._resolved_regions(self.regions)
+            regions_report = (
+                detector.available()
+                if detector is not None
+                else _unknown_backend(self.regions.backend, "版面分析", "region_backend")
+            )
         return ConverterDoctor(
             converter_id=self.converter_id,
             available=True,
             version=self.converter_version,
-            capabilities=("text", "layout", "tables", "figures"),
+            capabilities=tuple(capabilities),
+            recognizer=recognizer_report,
+            regions=regions_report,
         )
 
     # -- conversion -------------------------------------------------------------------
@@ -304,41 +579,201 @@ class PymupdfConverter:
                 document.load_page(index).get_text("text")
                 for index in range(document.page_count)
             ]
-            coverage = text_coverage(raw_texts)
+            native_coverage = text_coverage(raw_texts)
+
+            # Recognition is a fallback, not a second pipeline. ``auto`` engages
+            # it only for a document that is mostly unreadable from its own text
+            # layer, so a PDF that converts today keeps converting byte for byte
+            # (#72, acceptance 2); ``all`` is the explicit opt-out for the rare
+            # file whose text layer is present but wrong.
+            ocr = options.ocr
+            scope = ocr.scope if ocr is not None else "auto"
+            needs_ocr = (
+                (
+                    list(range(len(raw_texts)))
+                    if ocr.scope == "all"
+                    else [
+                        index
+                        for index, text in enumerate(raw_texts)
+                        if len(text.strip()) < ocr.min_page_chars
+                    ]
+                )
+                if ocr is not None
+                else []
+            )
+            active: TextRecognizer | None = None
+            if ocr is not None and (scope == "all" or native_coverage < options.min_text_coverage):
+                recognizer = self._resolved_recognizer(ocr)
+                if recognizer is None:
+                    return None, ConversionError(
+                        "CONVERTER_LOW_TEXT",
+                        f"可读文本页只占 {native_coverage:.0%}，低于阈值 "
+                        f"{options.min_text_coverage:.0%}，且配置的 OCR 后端未知："
+                        f"{ocr.engine!r}",
+                        "在配置中改用 converter.ocr_engine 支持的后端（当前仅 rapidocr）。",
+                    )
+                report = recognizer.available()
+                if not report.available:
+                    # Offline or misconfigured: degrade to exactly the old
+                    # behaviour, with the reason attached (#72, acceptance 4).
+                    return None, ConversionError(
+                        "CONVERTER_LOW_TEXT",
+                        f"可读文本页只占 {native_coverage:.0%}，低于阈值 "
+                        f"{options.min_text_coverage:.0%}，且 OCR 后端不可用："
+                        f"{report.error or '未知原因'}",
+                        report.fix or "安装 OCR 可选依赖，或提供带文本层的 PDF 版本。",
+                    )
+                active = recognizer
+            elif native_coverage < options.min_text_coverage:
+                return None, ConversionError(
+                    "CONVERTER_LOW_TEXT",
+                    f"可读文本页只占 {native_coverage:.0%}，低于阈值 "
+                    f"{options.min_text_coverage:.0%}。",
+                    "该 PDF 很可能是扫描件；请提供带文本层的版本，"
+                    "或改用 converter_id=pymupdf-ocr 并安装 OCR 可选依赖。",
+                )
+
+            # Layout regions are detected once per document, and only when some
+            # page will actually be recognised: a page read from its text layer
+            # has real tables and figures of its own, and a second opinion on
+            # them would only disagree with the rules that already work.
+            regions_by_page: dict[int, tuple[RegionBox, ...]] = {}
+            regions_warning: str | None = None
+            if active is not None and needs_ocr and options.regions is not None:
+                regions_by_page, regions_warning = self._detect_regions(
+                    request, options.regions
+                )
+
+            try:
+                pages, read_warnings = self._read_pages(
+                    document, options, active, raw_texts, regions_by_page
+                )
+            except ConversionFailure as failure:
+                return None, failure.error
+            if regions_warning is not None:
+                read_warnings.add(regions_warning)
+
+            recognised = any(page.source != "native" for page in pages)
+            coverage = (
+                text_coverage([" ".join(line.text for line in page.lines) for page in pages])
+                if recognised
+                else native_coverage
+            )
             if coverage < options.min_text_coverage:
                 return None, ConversionError(
                     "CONVERTER_LOW_TEXT",
                     f"可读文本页只占 {coverage:.0%}，低于阈值 {options.min_text_coverage:.0%}。",
-                    "该 PDF 很可能是扫描件；请提供带文本层的版本，或另行启用可选的 OCR 流程。",
+                    "已尝试 OCR，仍有页面读不出文字；请确认该页是空白页，"
+                    "或提高 converter.ocr_dpi 后重试。",
                 )
 
-            pages, read_warnings = self._read_pages(document, options)
             markdown_text, anchors, figures, warnings = self._render(
                 document, request, pages, read_warnings
             )
+            recognition = None
+            if recognised and ocr is not None and active is not None:
+                recognition = RecognitionInfo(
+                    engine=ocr.engine,
+                    version=active.engine_version,
+                    lang=ocr.lang,
+                    dpi=ocr.dpi,
+                    pages=tuple(
+                        anchor.page for anchor in anchors if anchor.source != "native"
+                    ),
+                )
             return self._write(
-                request, document, markdown_text, anchors, figures, coverage, warnings
+                request,
+                document,
+                markdown_text,
+                anchors,
+                figures,
+                coverage,
+                warnings,
+                recognition,
+                pages,
             )
         finally:
             document.close()
 
+    def _detect_regions(
+        self, request: ConversionRequest, options: RegionOptions
+    ) -> tuple[dict[int, tuple[RegionBox, ...]], str | None]:
+        """Return regions per page, or a warning when the backend is unusable."""
+
+        detector = self._resolved_regions(options)
+        if detector is None:
+            return {}, WARNING_LAYOUT_UNAVAILABLE
+        report = detector.available()
+        if not report.available:
+            return {}, WARNING_LAYOUT_UNAVAILABLE
+        try:
+            found = detector.detect(request.pdf_path)
+        except Exception:  # noqa: BLE001 - a soft capability must not fail the page
+            return {}, WARNING_LAYOUT_UNAVAILABLE
+        grouped: dict[int, list[RegionBox]] = {}
+        for region in found:
+            grouped.setdefault(region.page, []).append(region)
+        return {page: tuple(items) for page, items in grouped.items()}, None
+
     # -- reading ----------------------------------------------------------------------
 
     def _read_pages(
-        self, document: pymupdf.Document, options: ConversionOptions
+        self,
+        document: pymupdf.Document,
+        options: ConversionOptions,
+        recognizer: TextRecognizer | None = None,
+        raw_texts: Sequence[str] = (),
+        regions_by_page: dict[int, tuple[RegionBox, ...]] | None = None,
     ) -> tuple[list[_PageData], set[str]]:
         raw_spans: list[tuple[str, float, bool]] = []
         raw_lines: list[tuple[_Line, ...]] = []
+        sources: list[PageSource] = []
+        page_regions: list[tuple[RegionBox, ...]] = []
+        cropped: list[tuple[int, int]] = []
         page_heights: list[float] = []
+        warnings: set[str] = set()
+        ocr = options.ocr
+        regions_by_page = regions_by_page or {}
+
         for index in range(document.page_count):
             page = document.load_page(index)
+            page_heights.append(page.rect.height)
+            native_text = raw_texts[index] if index < len(raw_texts) else ""
+            wants = recognizer is not None and (
+                (ocr is not None and ocr.scope == "all")
+                or len(native_text.strip()) < (ocr.min_page_chars if ocr else 40)
+            )
+            if wants:
+                assert ocr is not None and recognizer is not None
+                recognised = self._recognised_lines(page, ocr, recognizer, warnings)
+                found = regions_by_page.get(index + 1, ())
+                dropped_lines = dropped_chars = 0
+                if found and options.regions is not None:
+                    if options.regions.text == "remove":
+                        recognised, dropped_lines, dropped_chars = _drop_region_lines(
+                            recognised, found, options.regions.min_line_share
+                        )
+                        if dropped_lines:
+                            warnings.add(WARNING_REGION_REMOVED)
+                raw_lines.append(recognised)
+                page_regions.append(found)
+                cropped.append((dropped_lines, dropped_chars))
+                sources.append("ocr")
+                continue
             data = page.get_text("dict")
             raw_spans.extend(self._spans(data))
             raw_lines.append(self._lines(data))
-            page_heights.append(page.rect.height)
+            page_regions.append(())
+            cropped.append((0, 0))
+            sources.append("native")
 
-        body_size = body_font_size(raw_spans)
-        warnings: set[str] = set()
+        body_size = (
+            body_font_size(raw_spans)
+            if raw_spans
+            else dominant_size(
+                (line.text, line.size, False) for lines in raw_lines for line in lines
+            )
+        )
 
         margin_lines = [
             [(line.text, line.box) for line in lines] for lines in raw_lines
@@ -381,13 +816,24 @@ class PymupdfConverter:
                 if layout.uncertain:
                     warnings.add(WARNING_READING_ORDER)
 
+            native_page = sources[index] == "native"
+            if not native_page and lines:
+                # A recognised line carries no font size, only the height of the
+                # box drawn around it. That height tracks ascenders more than
+                # point size, so inferring levels from it promotes prose to
+                # ``##``. The page keeps its text and loses its outline.
+                warnings.add(WARNING_OCR_NO_HEADINGS)
             enriched = tuple(
                 _Line(
                     text=line.text,
                     box=line.box,
                     size=line.size,
                     bold=line.bold,
-                    level=heading_level(line.text, line.size, line.bold, body_size),
+                    level=(
+                        heading_level(line.text, line.size, line.bold, body_size)
+                        if native_page
+                        else None
+                    ),
                     block=line.block,
                     cells=line.cells,
                 )
@@ -405,18 +851,52 @@ class PymupdfConverter:
             )
             if table_failed:
                 warnings.add(WARNING_TABLE)
-            images = self._image_boxes(page) if figures_enabled else ()
+            # A recognised page is one big picture of a page: extracting its
+            # "images" would turn every scan into a full-page figure, and its
+            # "tables" would be a picture of the page rendered as a table.
+            images = self._image_boxes(page) if figures_enabled and native_page else ()
+            removed_lines, removed_chars = cropped[index]
             pages.append(
                 _PageData(
                     lines=enriched,
-                    tables=tables,
+                    tables=tables if native_page else (),
                     images=images,
                     layout=layout,
                     drawings=drawings,
                     table_failed=table_failed,
+                    source=sources[index],
+                    regions=page_regions[index],
+                    removed_lines=removed_lines,
+                    removed_chars=removed_chars,
                 )
             )
         return pages, warnings
+
+    def _recognised_lines(
+        self,
+        page: pymupdf.Page,
+        ocr: OcrOptions,
+        recognizer: TextRecognizer,
+        warnings: set[str],
+    ) -> tuple[_Line, ...]:
+        """Rasterise one page and turn the recogniser's words into lines."""
+
+        try:
+            image = page.get_pixmap(dpi=ocr.dpi).tobytes("png")
+            words = recognizer.recognize(image, ocr)
+        except ConversionFailure:
+            raise
+        except Exception as exc:  # noqa: BLE001 - a broken backend must be reported
+            raise ConversionFailure(
+                ConversionError(
+                    "CONVERTER_OCR_FAILED",
+                    f"第 {page.number + 1} 页 OCR 失败：{type(exc).__name__}: {exc}",
+                    "确认 OCR 可选依赖已正确安装（uv sync --extra ocr）；"
+                    "若只是个别页面失败，可改用带文本层的 PDF。",
+                )
+            ) from exc
+        warnings.add(WARNING_OCR_PAGE)
+        return lines_from_words(words)
 
     @staticmethod
     def _spans(data: dict[str, Any]) -> list[tuple[str, float, bool]]:
@@ -585,7 +1065,9 @@ class PymupdfConverter:
     ) -> tuple[str, tuple[PageAnchor, ...], tuple[FigureAsset, ...], tuple[str, ...]]:
         page_count = len(pages)
         headings_per_page = [
-            tuple(line.text for line in page.lines if line.level) for page in pages
+            tuple(line.text for line in page.lines if line.level)
+            or _leading_section_lines(page)
+            for page in pages
         ]
         roles, primaries = assign_page_roles(headings_per_page)
         options = request.options
@@ -594,9 +1076,6 @@ class PymupdfConverter:
         )
         figures_dir = request.output_dir / FIGURES_DIRNAME
         warnings: set[str] = set(read_warnings)
-        if options.ocr:
-            # OCR is an optional external step and is not part of stage 2.
-            warnings.add(WARNING_OCR)
 
         parts: list[str] = []
         offset = 0
@@ -619,7 +1098,11 @@ class PymupdfConverter:
                 page, page_no, page_data, drawings, figures_dir, warnings
             )
 
-            if options.mode == "layout" and options.extract_figures:
+            if (
+                options.mode == "layout"
+                and options.extract_figures
+                and page_data.source == "native"
+            ):
                 figure_blocks, placements = self._extract_figures(
                     page, page_no, page_data, drawings, figures_dir, warnings
                 )
@@ -645,6 +1128,7 @@ class PymupdfConverter:
                     heading=primaries[index] if index < len(primaries) else None,
                     role=roles[index] if index < len(roles) else "unknown",
                     canary=canary_tokens[0] if canary_tokens else None,
+                    source=page_data.source,
                 )
             )
             parts.append("\n")
@@ -663,9 +1147,15 @@ class PymupdfConverter:
     ) -> str:
         items: list[tuple[str, Any]] = [("line", line) for line in page_data.lines]
         items.extend(("table", table) for table in page_data.tables)
-        boxes = [line.box for line in page_data.lines] + [
-            table.box for table in page_data.tables
-        ]
+        items.extend(
+            ("region", (number, region))
+            for number, region in enumerate(page_data.regions, start=1)
+        )
+        boxes = (
+            [line.box for line in page_data.lines]
+            + [table.box for table in page_data.tables]
+            + [_box(*region.box) for region in page_data.regions]
+        )
         if not boxes:
             return ""
         order = order_boxes(boxes, page_data.layout)
@@ -682,6 +1172,16 @@ class PymupdfConverter:
 
         for position in order:
             kind, payload = items[position]
+            if kind == "region":
+                flush()
+                last_block = None
+                number, region = payload
+                blocks.append(
+                    self._region_block(
+                        page, page_no, number, region, figures_dir, warnings
+                    )
+                )
+                continue
             if kind == "table":
                 flush()
                 last_block = None
@@ -741,6 +1241,32 @@ class PymupdfConverter:
             warnings.add(WARNING_TABLE)
             return caption
         return f"{caption}\n\n![Table {number}]({FIGURES_DIRNAME}/{filename})".strip()
+
+    def _region_block(
+        self,
+        page: pymupdf.Page,
+        page_no: int,
+        number: int,
+        region: RegionBox,
+        figures_dir: Path,
+        warnings: set[str],
+    ) -> str:
+        """Render a formula/table/figure region as a picture, not as text.
+
+        The characters inside it were either dropped (``remove``) or are noise
+        (``keep``); either way the reader should see the formula itself.
+        """
+
+        figures_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"page-{page_no:03d}-region-{number}.png"
+        label = {"formula": "Formula", "table": "Table", "figure": "Figure"}.get(
+            region.kind, "Region"
+        )
+        box = _box(*region.box)
+        if not self._render_region(page, box, figures_dir / filename):
+            warnings.add(WARNING_FIGURE)
+            return ""
+        return f"![{label} {number}]({FIGURES_DIRNAME}/{filename})"
 
     @staticmethod
     def _table_clip(box: Box, drawings: Sequence[Box]) -> Box:
@@ -843,6 +1369,8 @@ class PymupdfConverter:
         figures: tuple[FigureAsset, ...],
         coverage: float,
         warnings: tuple[str, ...],
+        recognition: RecognitionInfo | None = None,
+        pages: Sequence[_PageData] = (),
     ) -> tuple[PreparedPaper | None, ConversionError | None]:
         output_dir = request.output_dir
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -882,6 +1410,7 @@ class PymupdfConverter:
                     "heading": anchor.heading,
                     "role": anchor.role,
                     "canary": anchor.canary,
+                    "source": anchor.source,
                 }
                 for anchor in anchors
             ],
@@ -897,6 +1426,24 @@ class PymupdfConverter:
             "text_coverage": round(coverage, 4),
             "warnings": list(warnings),
         }
+        if recognition is not None:
+            payload["recognition"] = {
+                "engine": recognition.engine,
+                "version": recognition.version,
+                "lang": recognition.lang,
+                "dpi": recognition.dpi,
+                "pages": list(recognition.pages),
+            }
+        removed_lines = sum(page.removed_lines for page in pages)
+        region_pages = [
+            index + 1 for index, page in enumerate(pages) if page.regions
+        ]
+        if region_pages:
+            payload["regions"] = {
+                "pages": region_pages,
+                "removed_lines": removed_lines,
+                "removed_chars": sum(page.removed_chars for page in pages),
+            }
         manifest_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
@@ -915,6 +1462,7 @@ class PymupdfConverter:
                 converter_version=self.converter_version,
                 text_coverage=round(coverage, 4),
                 warnings=warnings,
+                recognition=recognition,
             ),
             None,
         )
@@ -937,6 +1485,20 @@ class PymupdfOcrConverter(PymupdfConverter):
     """
 
     converter_id = OCR_CONVERTER_ID
+
+    def _version(self) -> str:
+        """Base version plus the recognition settings.
+
+        The settings belong in the version, not only in the manifest: the cache
+        is looked up by ``<id>-<version>``, so a change of engine, language or
+        density must land in a different directory. Otherwise a theme run --
+        which reads a cache without knowing any conversion options -- would
+        happily reuse characters produced by settings nobody asked for.
+        """
+
+        base = f"{getattr(pymupdf, '__version__', 'unknown')}+{CONVERTER_REVISION}"
+        ocr = self.ocr or OcrOptions()
+        return f"{base}+ocr.{ocr.signature}"
 
 
 __all__ = [

@@ -33,7 +33,14 @@ GROUNDING_ERROR_CODES: frozenset[str] = frozenset(
     }
 )
 
-ReadingStatus = Literal["VERIFIED", "PARTIAL"]
+# ``VERIFIED`` means every quote was found verbatim in a page the PDF itself
+# carries text for. ``OCR_ASSISTED`` means the same check passed, but part of the
+# evidence came from pages a machine recognised from a picture: the card may be
+# published, and its reader is told which pages to double-check against the scan
+# (#72). ``PARTIAL`` is below the coverage threshold and stays a draft.
+ReadingStatus = Literal["VERIFIED", "OCR_ASSISTED", "PARTIAL"]
+# Statuses that may be stored as a version and used downstream.
+ACCEPTED_READING_STATUSES = ("VERIFIED", "OCR_ASSISTED")
 
 
 class GroundingError(RuntimeError):
@@ -197,10 +204,27 @@ class VerifiedReading:
     # mentioned by the card body without evidence, because there is none to
     # quote there (#65).
     content_pages: tuple[int, ...] = ()
+    # Quotes found on a page whose characters were recognised from a picture.
+    # They count as evidence of what the card read, and are counted separately so
+    # the card can say which pages a human must check against the scan (#72).
+    weak_quotes: int = 0
+    weak_pages: tuple[int, ...] = ()
 
     @property
     def verified(self) -> bool:
         return self.status == "VERIFIED"
+
+    @property
+    def ocr_assisted(self) -> bool:
+        """At least one quote rests on recognised, not printed, characters."""
+
+        return bool(self.weak_pages)
+
+    @property
+    def accepted(self) -> bool:
+        """Strong enough to be stored as a version (see ``ACCEPTED_READING_STATUSES``)."""
+
+        return self.status in ACCEPTED_READING_STATUSES
 
     @property
     def full_read_verified(self) -> bool:
@@ -235,7 +259,13 @@ class VerifiedReading:
                 for conflict in self.anchor_conflicts
             ],
             "content_pages": list(self.content_pages),
+            "weak_quotes": self.weak_quotes,
+            "weak_pages": list(self.weak_pages),
+            # True when part of the evidence came from OCR: a reader who depends
+            # on a digit must check it against the scan.
+            "ocr_assisted": self.ocr_assisted,
             "verified": self.verified,
+            "accepted": self.accepted,
             "full_read_verified": self.full_read_verified,
             "scientific_correctness_verified": self.scientific_correctness_verified,
         }
@@ -280,6 +310,7 @@ class ReadingCoverage:
 
 
 __all__ = [
+    "ACCEPTED_READING_STATUSES",
     "GROUNDING_ERROR_CODES",
     "AnchorConflict",
     "GroundingError",

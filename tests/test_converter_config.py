@@ -48,21 +48,28 @@ def test_converter_section_accepts_explicit_values(tmp_path: Path) -> None:
     config = load_config(
         _config_with(
             tmp_path,
-            converter_id="pymupdf",
             mode="text",
             table_mode="text",
             extract_figures=False,
-            ocr=True,
+            converter_id="pymupdf-ocr",
             min_text_coverage=0.9,
         )
     )
     converter = config.converter
-    assert converter.converter_id == "pymupdf"
+    assert converter.converter_id == "pymupdf-ocr"
     assert converter.mode == "text"
     assert converter.table_mode == "text"
     assert converter.extract_figures is False
-    assert converter.ocr is True
+    assert converter.ocr is False
     assert converter.min_text_coverage == 0.9
+    # The capability is selected by the id, so the options exist only for it (#72).
+    assert converter.ocr_options is not None
+    assert converter.region_options is not None
+
+
+def test_legacy_ocr_flag_without_the_ocr_converter_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="converter.ocr 已弃用"):
+        load_config(_config_with(tmp_path, converter_id="pymupdf", ocr=True))
 
 
 def test_unknown_converter_field_is_rejected(tmp_path: Path) -> None:

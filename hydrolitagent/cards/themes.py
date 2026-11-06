@@ -128,8 +128,90 @@ def _file_sha(path):
     return digest.hexdigest()
 
 
-def _collect_sources(config, literature_root=None):
+CARD_SELECTION = re.compile(r"(EV-[A-Z0-9]{8})(?:@(v[1-9][0-9]*))?\Z")
+
+
+def _parse_selection(selected):
+    """``["EV-ABCD1234", "EV-EFGH5678@v2"]`` → ``[(card_id, version_id | None)]``.
+
+    A reference without a version means "the current version of that card"; the
+    version is never guessed from the drafts, because that is how two runs of one
+    paper silently pick different inputs.
+    """
+
+    if not isinstance(selected, (list, tuple)):
+        raise ThemeError("THEME_SELECTION_INVALID", "卡片选择必须是列表", selection=type(selected).__name__)
+    parsed, seen = [], set()
+    for raw in selected:
+        text = str(raw).strip()
+        match = CARD_SELECTION.fullmatch(text)
+        if match is None:
+            raise ThemeError("THEME_SELECTION_INVALID",
+                             "卡片选择形如 EV-ABCD1234 或 EV-ABCD1234@v1", selection=text)
+        card_id, version_id = match.group(1), match.group(2)
+        if card_id in seen:
+            raise ThemeError("THEME_SELECTION_INVALID", "同一张卡被选了两次", card_id=card_id)
+        seen.add(card_id)
+        parsed.append((card_id, version_id))
+    if not parsed:
+        raise ThemeError("THEME_SELECTION_INVALID", "至少要选一张卡")
+    return parsed
+
+
+def _selected_sources(config, selected, literature_root=None):
+    """Only the drafts behind the chosen card versions; nothing is scanned in.
+
+    The selection replaces the ambiguity rule: when one paper has several valid
+    drafts, the saved card version names which one, so the run does not have to
+    refuse (``THEME_DUPLICATE_SOURCE``) or guess.
+    """
+
+    from hydrolitagent.cards.application.card_version import load_card_version
+    from hydrolitagent.cards.application.draft_sources import newest_validation, scan_drafts
+    from hydrolitagent.cards.domain.errors import CardGenerationError
+
+    root = (Path(literature_root).expanduser().resolve()
+            if literature_root is not None else Path(config.paths.literature_root))
+    scan = scan_drafts(config, literature_root)
+    by_draft = {}
+    for item in scan.items:
+        # The scanned ``record`` is the pool's source record; the draft fingerprint
+        # lives in the validation record the saved card version was built from.
+        validation, _ = newest_validation(item.directory)
+        digest = (validation or {}).get("draft_sha256")
+        if isinstance(digest, str):
+            by_draft[(item.evidence_id, digest)] = item
+    result = {}
+    for card_id, version_id in _parse_selection(selected):
+        try:
+            version = load_card_version(root, card_id, version_id)
+        except CardGenerationError as exc:
+            raise ThemeError(exc.code, str(exc), card_id=card_id, version_id=version_id) from exc
+        manifest = version.get("manifest") or {}
+        item = by_draft.get((card_id, manifest.get("draft_sha256")))
+        if item is None:
+            raise ThemeError("THEME_SELECTION_NOT_VALIDATED",
+                             "选中的卡片版本找不到当前合格的草稿；草稿可能已改动或校验已失效",
+                             card_id=card_id, version_id=version["version_id"])
+        result[card_id] = {
+            "kind": "draft",
+            "pack": _safe_path(config.paths.evidence_packs_dir, "draft-readings", item.evidence_id),
+            "card": item.card,
+            "record": item.record,
+            "directory": item.directory,
+            "literature_root": scan.root,
+            "pdf_size_bytes": item.pdf_size_bytes,
+            "converter": (item.converter_id, item.converter_version),
+            "card_version": f"{card_id}@{version['version_id']}",
+        }
+    return result, dict(scan.rejected)
+
+
+def _collect_sources(config, literature_root=None, selected=None):
     """Return ``(sources, report_fields)`` for one theme run.
+
+    ``selected`` (card references) switches the run from "scan every valid draft"
+    to "exactly these cards"; everything downstream is the same.
 
     Two kinds of sources share one evidence identity: validated single-paper
     drafts and legacy rough evidence packs. A pack wins when both describe the
@@ -142,6 +224,17 @@ def _collect_sources(config, literature_root=None):
     """
 
     from hydrolitagent.cards.application.draft_sources import scan_drafts
+
+    if selected is not None:
+        chosen, rejected = _selected_sources(config, selected, literature_root)
+        report_fields = {
+            "sources_by_kind": {"evidence_pack": 0, "draft": len(chosen)},
+            "source_ids": list(chosen),
+            "duplicate_sources": [],
+            "rejected_drafts": rejected,
+            "selected_cards": [source["card_version"] for source in chosen.values()],
+        }
+        return chosen, report_fields
 
     result = {}
     root = config.paths.evidence_packs_dir
@@ -294,7 +387,7 @@ def _run(config, report, **kwargs):
 
 def run_themes(config, *, progress=None, dry_run=False,
                delivery_preparer=None, remaining_seconds=None, migration_only=False,
-               pipeline=None, literature_root=None):
+               pipeline=None, literature_root=None, selected=None):
     """Run the theme pipeline.
 
     ``pipeline`` is the ``composition.MarkdownPipeline`` (converter, paper store,
@@ -302,6 +395,7 @@ def run_themes(config, *, progress=None, dry_run=False,
     ``composition`` on first use, so ``run_themes(config)`` stays callable.
     ``literature_root`` overrides where validated drafts are scanned; the CLI
     leaves it unset so the same resolver as the single-paper path applies.
+    ``selected`` narrows the sources to the given card references.
     """
     started = time.monotonic()
     cap = config.pipeline.max_run_seconds
@@ -315,12 +409,12 @@ def run_themes(config, *, progress=None, dry_run=False,
         if dry_run:
             _run(config, report, progress=progress,
                 delivery_preparer=delivery_preparer, remaining_seconds=remaining_seconds,
-                pipeline=pipeline, literature_root=literature_root)
+                pipeline=pipeline, literature_root=literature_root, selected=selected)
         else:
             with PipelineRunLock(config.paths.lock_file.with_name(config.paths.lock_file.name + ".themes")):
                 _run(config, report, progress=progress,
                     delivery_preparer=delivery_preparer or prepare_pdf_delivery, remaining_seconds=remaining_seconds,
-                    pipeline=pipeline, literature_root=literature_root)
+                    pipeline=pipeline, literature_root=literature_root, selected=selected)
     except KeyboardInterrupt:
         report.update(ok=False, status="CANCELLED", error={"code": "CANCELLED", "message": "已中止；保存的候选/精读步骤保留，下次继续"})
     except (ThemeError, EvidencePackageError, PdfDeliveryError, PdfGateError, TaskStoreError, ZoteroApiError) as exc:

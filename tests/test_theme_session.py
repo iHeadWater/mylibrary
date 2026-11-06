@@ -48,7 +48,22 @@ EID = "EV-" + PARENT_KEY
 class ThemeSession:
     """One configured workspace: a rough pack, a real PDF and a run directory."""
 
-    revised_markdown = "精读后建议收窄主题，仍是候选。"
+    revised_markdown = (
+        "2018 年飓风 Michael 过后，报告说 165 万人断电，模型算出 122 万。两个数差得不算离谱，但方向说明从设施坏了到人没了电中间还有好几层。这两篇文献正好在这一点上给出相反的证据。\n\n"
+        "一篇把尾部增益算作生成机制本身的功劳，另一篇把它算到输入质量与预训练的差别上；"
+        "在现有材料里，这个分歧还没有被拆开，所以现在只能给出条件性结论。\n\n"
+        "## 尾部增益从哪里来\n\n"
+        "Ou 等（2025）报告 CRPS 改善随流量量级上升，但也承认输入降水替换后增益明显缩水，"
+        "所以生成机制不是唯一来源。\n\n"
+        "## 现在能下的结论\n\n"
+        "可以确认尾部增益存在，不能确认它由生成机制独占。"
+    )
+    audit_markdown = (
+        "与初版相比：保留“尾部增益”这一判断，收窄了归因部分。\n\n"
+        "- 原文陈述：DRUM 在 72.3% 流域优于 LSTM-p。\n"
+        "- AI 推理：两篇的差异可能来自评价分层方式。\n"
+        "- 不能确定：增益在超训练范围事件上是否稳定。"
+    )
     reading_markdown = "精读发现：原主题需要收窄。没有固定章节。"
 
     def __init__(self, root: Path):
@@ -57,8 +72,11 @@ class ThemeSession:
         # The theme assets must live under the configured project root; the real
         # ones are copied so both the library and the CLI resolve the same files.
         shutil.copytree(ASSETS_DIR / "templates/themes", root / "templates/themes")
+        # One source on purpose: production refuses a single-source theme, so the
+        # fixture opts out of that rule explicitly.
         self.config_path = write_config(root, {"theme_pipeline": {
-            "enabled": True, "assets_dir": "templates/themes"}})
+            "enabled": True, "assets_dir": "templates/themes",
+            "min_sources_per_theme": 1}})
         self.config = load_config(self.config_path)
         self.f.complete()
         self.pdf = _write_pdf(root / "source.pdf")
@@ -87,7 +105,7 @@ class ThemeSession:
                 "kind": "CREATE", "theme_ids": [], "reason": "测试新主题",
                 "themes": [{
                     "title": "主题一",
-                    "candidate_markdown": "自由格式初版。没有固定标题，也没有固定标签。",
+                    "candidate_markdown": "这两篇能不能回答同一个问题？自由格式初版，没有固定标题。",
                     "paper_tasks": [
                         {"evidence_id": evidence_id, "focus": f"问题 {evidence_id}",
                          "reuse_reading_id": None, "reuse_reason": None}
@@ -117,7 +135,8 @@ class ThemeSession:
                 },
                 "source_locations": prose_locations(markdown, request["page_count"]),
             }
-        return {"revised_markdown": self.revised_markdown}
+        return {"revised_markdown": self.revised_markdown,
+                "audit_markdown": self.audit_markdown}
 
     def respond(self, run_dir=None, response=None):
         run_dir = Path(run_dir or self.run_dir)

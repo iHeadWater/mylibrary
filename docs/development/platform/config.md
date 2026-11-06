@@ -66,9 +66,33 @@
 
 父条目 Key、附件 Key、PDF 哈希、任务状态和运行时间不是配置，它们由系统运行时写入 `.runtime/` 或草稿记录。API 路由、事件类型和数据结构版本属于程序协议，也不是用户路径配置。详细边界见 [variables.md](variables.md)。
 
+### 扫描件：`converter_id="pymupdf-ocr"`（#72）
+
+**能力由转换器 id 选择，不是一个独立开关。** `converter_id` 取 `pymupdf-ocr` 时，同一个转换器允许把没有文字层的页面渲染成图片、交给 OCR 读出字符；取 `pymupdf` 时该能力不可用。两种身份共用同一份版面代码，所以结构、页锚点、canary 完全一致。
+
+| 键 | 默认 | 含义 |
+|---|---|---|
+| `ocr_scope` | `auto` | `auto`：整份可读文本页低于 `min_text_coverage` 才启用；`all`：每页都识别（文字层存在但内容错的怪件） |
+| `ocr_engine` | `rapidocr` | 当前只支持 RapidOCR（PP-OCRv4，`uv sync --extra ocr`） |
+| `ocr_lang` | `ch` | 当前只支持随包分发的中英模型 |
+| `ocr_dpi` | `300` | 栅格化密度。**参与缓存身份**：改它会换缓存目录，因为字会变 |
+| `ocr_min_page_chars` | `40` | 单页原生字符少于这个数就当作图片处理 |
+| `region_boxes` | `true` | 是否用 Docling 找公式/表格/图的区域框（`uv sync --extra layout`） |
+| `region_backend` | `docling` | 当前只支持 Docling，且只用它的 layout 模型（不开 OCR、不开表格结构） |
+| `region_text` | `remove` | `remove`：整行 ≥70% 落在区域框内就把该行文字摘掉、只贴图；`keep`：文字留着 |
+| `ocr` | `false` | **已弃用**。设为 `true` 而 `converter_id` 不是 `pymupdf-ocr` 会直接报配置错误 |
+
+`region_boxes` 第一次真正使用时会下载版面模型（约 300 MB）。这一步要能访问 HuggingFace；国内网络下先 `export HF_ENDPOINT=https://hf-mirror.com`，否则会退化成 `LAYOUT_REGIONS_UNAVAILABLE`。
+
+**硬能力与软能力**：OCR 引擎缺失时，扫描件无法转换（`CONVERTER_LOW_TEXT`，`fix` 指向安装）；版面分析缺失只是**警告**（`LAYOUT_REGIONS_UNAVAILABLE`），文字照常出来，代价是公式区域保留为噪声文字而没有被替换成图。离线时只要模型已缓存就正常；模型缓存缺失则退化成缺后端。
+
+**落盘契约**：manifest 升到版本 3。`page_anchors[].source` 逐页标注 `native` / `ocr` / `vlm`（一期不会产生 `vlm`）；顶层 `recognition` 记引擎、版本、语言、DPI 与页号；用过区域框时另有 `regions` 记涉及页、摘除行数与字数。版本 2 的清单仍可读，按“全部 native”解释。缓存目录名带上 OCR 签名（`pymupdf-ocr-1.28.2+layout-3+ocr.rapidocr-ch-dpi300`），因此换引擎或换 DPI 不会命中旧缓存。
+
+**识别页的引文**：`grounding` 仍逐字校验，但把落在识别页上的引文单独计入 `weak_quotes` / `weak_pages`。全卡只要有这类引文，阅读状态就是 `OCR_ASSISTED` 而不是 `VERIFIED`：它可以存版本、可以进主题，但卡片上写明“第 N 页为 OCR 识别，引文需对照扫描件复核”。识别页也不做标题推断（OCR 只给字符框，框高不是字号），角色判定改用页首短行匹配 References / Appendix。
+
 ## 主题池 theme_pipeline
 
-`theme_pipeline.enabled=true` 已开启主题入口。`research_goal=null` 表示无预设目标；`model`、`reasoning_effort`、`timeout_seconds` 为 null 时继承 `card_generator` 对应设置。`assets_dir` 指定主题模板与 schema 的目录，默认 `hydrolitagent/cards/assets/templates/themes`。结果目录沿用 `paths.themes_dir`，定向精读保存在各论文记录下。模型/目标/模板内容变化产生新的 CHANGE 记录。[现行规则](../../user-guide/cards/unified-theme-pool.md)。
+`theme_pipeline.enabled=true` 已开启主题入口。`research_goal=null` 表示无预设目标；`model`、`reasoning_effort`、`timeout_seconds` 为 null 时继承 `card_generator` 对应设置。`assets_dir` 指定主题模板与 schema 的目录，默认 `hydrolitagent/cards/assets/templates/themes`。`min_sources_per_theme`（默认 3）是一个候选主题至少要有几篇文献支撑，不足的候选记进 `unclustered.md`，不判整轮失败。`max_repairs`（默认 3，上限 5）是一篇定向精读或一次主题回填最多被退回修正的次数：程序把缺的页与现状回给同一模型，覆盖率门槛本身不变；调用没有返回可用结果时另有 2 次重试，不占这个额度。结果目录沿用 `paths.themes_dir`，定向精读保存在各论文记录下。模型/目标/模板内容变化产生新的 CHANGE 记录。[现行规则](../../user-guide/cards/unified-theme-pool.md)。
 
 ## 不要加「假配置」
 

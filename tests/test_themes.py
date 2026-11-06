@@ -68,8 +68,10 @@ class ThemeTests(unittest.TestCase):
         self.f = GenerationFixture(self.root)
         self.path = write_config(self.root)
         config = load_config(self.path)
+        # This fixture has one source: a single-source theme is refused in
+        # production (>=2 cards), so the test opts out explicitly.
         self.config = replace(config, theme_pipeline=replace(config.theme_pipeline, enabled=True,
-            assets_dir=ROOT / "templates/themes"))
+            assets_dir=ROOT / "templates/themes", min_sources_per_theme=1))
         # Build a real, validated legacy rough pack without a live provider.
         self.f.complete()
         # A real PDF: the live pipeline converts it with PyMuPDF and caches the
@@ -81,10 +83,25 @@ class ThemeTests(unittest.TestCase):
         (self.f.package / "manifest.json").write_text(json.dumps(self.manifest), encoding="utf-8")
         self.delivery = Mock(return_value=replace(self.f.delivery(), pdf_path=self.pdf, pdf_sha256=digest))
         self.discovered = {"problem_clusters_markdown": "问题簇：测试材料。", "themes": [{"title": "主题一",
-            "candidate_markdown": "自由格式初版。没有固定标题，也没有固定标签。", "paper_tasks": [
+            "candidate_markdown": "这两篇能不能回答同一个问题？自由格式初版，没有固定标题。", "paper_tasks": [
                 {"evidence_id": EID, "focus": "尺度差异能否解释结论差别？"}]}]}
         self.discovery_actions = None      # None -> CREATE one theme per self.discovered item
-        self.revised_markdown = "精读后建议收窄主题，仍是候选。"
+        self.revised_markdown = (
+            "2018 年飓风 Michael 过后，报告说 165 万人断电，模型算出 122 万。两个数差得不算离谱，但方向说明从设施坏了到人没了电中间还有好几层。这两篇文献正好在这一点上给出相反的证据。\n\n"
+            "一篇把尾部增益算作生成机制本身的功劳，另一篇把它算到输入质量与预训练的差别上；"
+            "在现有材料里，这个分歧还没有被拆开，所以现在只能给出条件性结论。\n\n"
+            "## 尾部增益从哪里来\n\n"
+            "Ou 等（2025）报告 CRPS 改善随流量量级上升，但也承认输入降水替换后增益明显缩水，"
+            "所以生成机制不是唯一来源。\n\n"
+            "## 现在能下的结论\n\n"
+            "可以确认尾部增益存在，不能确认它由生成机制独占。"
+        )
+        self.audit_markdown = (
+            "与初版相比：保留“尾部增益”这一判断，收窄了归因部分。\n\n"
+            "- 原文陈述：DRUM 在 72.3% 流域优于 LSTM-p。\n"
+            "- AI 推理：两篇的差异可能来自评价分层方式。\n"
+            "- 不能确定：增益在超训练范围事件上是否稳定。"
+        )
         self.reading_markdown = "精读发现：原主题需要收窄。没有固定章节。"
         self.failures = {}                 # role -> remaining failures
         self.fail_hooks = []               # callables(request) -> True to fail this call
@@ -145,7 +162,8 @@ class ThemeTests(unittest.TestCase):
         elif request.role == "theme_discovery":
             output = self.discovery_output()
         else:
-            output = {"revised_markdown": self.revised_markdown}
+            output = {"revised_markdown": self.revised_markdown,
+                      "audit_markdown": self.audit_markdown}
         for hook in self.answer_hooks:
             changed = hook(request, output)
             if changed is not None:
@@ -476,6 +494,49 @@ class ThemeTests(unittest.TestCase):
         )
         result = self.run_theme()
         self.assertEqual(result["themes"][0]["error"]["code"], "MARKDOWN_SHA_MISMATCH")
+
+    def test_reading_stages_the_numbered_paper(self):
+        """The model can only cite identifiers if the numbered copy is staged."""
+        first_reading = None
+        def capture(request, output):
+            nonlocal first_reading
+            if request.role == "focused_reading" and first_reading is None:
+                first_reading = sorted(p.name for p in Path(request.workspace).iterdir())
+            return None
+        self.answer_hooks.append(capture)
+        self.run_theme()
+        self.assertIn("paper.numbered.md", first_reading)
+
+    def test_reading_with_sentence_ids_is_accepted(self):
+        """A reading that cites identifiers is grounded by the program (#65)."""
+        from hydrolitagent.cards.domain.sentence_index import annotate
+        def cite_ids(request, output):
+            if request.role != "focused_reading":
+                return None
+            markdown = request.paper.markdown_path.read_text(encoding="utf-8")
+            _, index = annotate(markdown)
+            per_page = {}
+            for identifier, meta in index.items():
+                per_page.setdefault(meta["page"], identifier)
+            return {**output, "source_locations": [
+                {"sentence_ids": [identifier], "section": None, "figure": None,
+                 "table": None, "pdf_page": page}
+                for page, identifier in sorted(per_page.items())
+            ]}
+        self.answer_hooks.append(cite_ids)
+        result = self.run_theme()
+        self.assertTrue(result["ok"], result)
+
+    def test_reading_with_an_invented_id_is_rejected(self):
+        def invent(request, output):
+            if request.role != "focused_reading":
+                return None
+            return {**output, "source_locations": [
+                {"sentence_ids": ["P9-S099"], "section": None, "figure": None,
+                 "table": None, "pdf_page": 9}]}
+        self.answer_hooks.append(invent)
+        result = self.run_theme()
+        self.assertEqual(result["themes"][0]["error"]["code"], "CARD_SENTENCE_ID_UNKNOWN")
 
     def test_fabricated_quote_is_rejected(self):
         def fabricate(request, output):

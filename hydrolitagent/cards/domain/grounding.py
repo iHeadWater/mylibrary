@@ -42,7 +42,8 @@ from hydrolitagent.cards.domain.reading import (
     SourceLocation,
     VerifiedReading,
 )
-from hydrolitagent.cards.domain.sentence_index import citable_pages as _citable_pages
+from hydrolitagent.cards.domain.sentence_index import annotate, citable_pages as _citable_pages
+from hydrolitagent.cards.domain.sentence_index import expand
 from hydrolitagent.cards.domain.violations import Violation, violation_dicts
 
 # A quote must be long enough that it cannot be a lucky heading match. A CJK
@@ -235,6 +236,10 @@ class PageIndex:
         )
         # Parallel to ``pages``: what the converter decided this page is.
         self.roles: tuple[str, ...] = tuple(anchor.role for anchor in anchors)
+        # Parallel to ``pages``: where the characters came from. A quote found on
+        # a recognised page proves the recogniser read those characters, not that
+        # the printed page carries them (#72).
+        self.sources: tuple[str, ...] = tuple(anchor.source for anchor in anchors)
         # A sentence that crosses a page break is split by the page marker and
         # by the running header of the next page, so it matches no single page.
         # Joining each adjacent pair of prose texts restores exactly one such
@@ -266,6 +271,13 @@ class PageIndex:
                 if not _HEADING.match(line)
             )
         )
+
+    def page_source(self, page: int | None) -> str:
+        """Provenance of one page, ``native`` when the page is unknown."""
+
+        if page is None or not 1 <= page <= len(self.sources):
+            return "native"
+        return self.sources[page - 1]
 
     def content_pages(
         self, min_chars: int = CONTENT_PAGE_MIN_CHARS, citable: frozenset[int] | None = None
@@ -502,7 +514,24 @@ def audit_reading(
     violations: list[Violation] = []
     first_detail: dict[str, Any] = {}
     verified_quotes = 0
+    weak_pages: set[int] = set()
+    weak_quotes = 0
     body_pages = {anchor.page for anchor in anchors}
+
+    def record(page: int) -> None:
+        """Count one quote as evidence, noting when its page was recognised.
+
+        A recognised page is still evidence of what the card read -- otherwise a
+        scanned paper could never be carded at all -- but its quotes are counted
+        separately so the card can say which pages a human must double-check
+        against the scan (#72).
+        """
+
+        nonlocal weak_quotes
+        verified_pages.add(page)
+        if index.page_source(page) != "native":
+            weak_pages.add(page)
+            weak_quotes += 1
     for position, location in enumerate(parsed.source_locations):
         if not quotes_verified:
             # The text came from a sentence identifier the program resolved, so
@@ -520,7 +549,7 @@ def audit_reading(
                     "第 " + str(position + 1) + " 条证据的页码不在本文范围内",
                     "1–" + str(max(body_pages) if body_pages else 0), str(page)))
                 continue
-            verified_pages.add(page)
+            record(page)
             verified_quotes += 1
             continue
         # A location without a quote is rejected by ``_verify_quote`` as too
@@ -558,7 +587,7 @@ def audit_reading(
                 )
             )
             continue
-        verified_pages.add(claimed if claimed is not None else verdict.page)
+        record(claimed if claimed is not None else verdict.page)
         verified_quotes += 1
 
     coverage = _coverage(
@@ -572,7 +601,11 @@ def audit_reading(
     )
     if violations:
         return ReadingAudit(None, tuple(violations), coverage, first_detail)
-    status = "VERIFIED" if coverage.satisfied else "PARTIAL"
+    status = (
+        ("OCR_ASSISTED" if weak_quotes else "VERIFIED")
+        if coverage.satisfied
+        else "PARTIAL"
+    )
     return ReadingAudit(
         VerifiedReading(
             status=status,
@@ -588,6 +621,8 @@ def audit_reading(
             content_pages=tuple(
                 sorted(set(coverage.covered_pages) | set(coverage.missing_pages))
             ),
+            weak_quotes=weak_quotes,
+            weak_pages=tuple(sorted(weak_pages)),
         ),
         (),
         coverage,
@@ -615,6 +650,57 @@ def verify_reading(
         raise _grounding_error(audit)
     assert audit.reading is not None  # no violations means the audit built one
     return audit.reading
+
+
+def audit_reading_output(
+    output: Any,
+    markdown: str,
+    anchors: Sequence[PageAnchor],
+    *,
+    min_coverage: float = DEFAULT_MIN_COVERAGE,
+) -> ReadingAudit:
+    """Audit one reading answer, resolving sentence identifiers first.
+
+    Both executors call this -- the one-shot runner and the file-based session --
+    so an answer means the same thing whichever wrote ``response.json``. When
+    every location cites an identifier, the quoted text is the document's own by
+    construction and the program skips re-searching for it; an identifier that
+    does not exist becomes a violation instead of a guessed quote.
+
+    Nothing about a repairable answer is raised here: the caller decides whether
+    to ask again. Only text that does not look like an answer at all fails inside
+    ``audit_reading`` as a preflight violation.
+    """
+
+    locations = output.get("source_locations") if isinstance(output, Mapping) else None
+    expanded = output
+    used_identifiers = False
+    problems: list[dict[str, Any]] = []
+    if isinstance(locations, list) and locations and all(
+        isinstance(location, Mapping) and location.get("sentence_ids")
+        for location in locations
+    ):
+        _, index = annotate(markdown)
+        expanded, problems = expand(locations, index)
+        used_identifiers = True
+    if problems:
+        return ReadingAudit(None, tuple(_as_violation(item) for item in problems), None)
+    if used_identifiers:
+        expanded = {**output, "source_locations": expanded}
+    return audit_reading(
+        ReadingReceipt.from_output(expanded), markdown, anchors,
+        min_coverage=min_coverage, quotes_verified=not used_identifiers,
+    )
+
+
+def _as_violation(problem: Mapping[str, Any]) -> Violation:
+    return Violation(
+        code=str(problem.get("code")),
+        path=str(problem.get("path") or ""),
+        message=str(problem.get("message") or ""),
+        expected=problem.get("expected"),
+        actual=problem.get("actual"),
+    )
 
 
 def _preflight(

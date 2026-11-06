@@ -136,6 +136,13 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--dry-run", action="store_true", help="只预览本地粗卡输入和配置；不扫描 Zotero、不写文件、不调用模型")
             command.add_argument("--migrate-only", action="store_true", help="仅将已完成旧主题接入统一池；不调用模型、不重新精读")
             command.add_argument(
+                "--select",
+                help=(
+                    "只使用这几张已保存的主体卡：EV-ABCD1234（用当前版本）或 "
+                    "EV-ABCD1234@v1（指定版本），逗号分隔。不指定则扫描全部合格草稿"
+                ),
+            )
+            command.add_argument(
                 "--run-dir",
                 help=(
                     "in_session 分步协议的运行目录；默认 <runtime_dir>/theme-session。"
@@ -584,6 +591,12 @@ def _render_human(result: dict[str, Any]) -> str:
                          f"（运行目录 {result.get('run_dir')}）")
         if result.get("next_action"):
             lines.append(f"- 下一步：{result['next_action']}")
+        if result.get("unclustered"):
+            dropped = result["unclustered"]
+            lines.append(
+                f"- 未构成主题：{len(dropped)} 个（单篇，不强行成组："
+                + "、".join(str(item.get("title")) for item in dropped) + "）"
+            )
         if result.get("error"):
             lines.append(f"- 错误：{result['error'].get('message')}")
         reading_layer = _reading_layer_line(result)
@@ -934,7 +947,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             }
     elif args.command == "themes-run":
         try:
-            extra = {"migration_only": args.migrate_only}
+            extra = {"migration_only": args.migrate_only,
+                     "selected": None if args.select is None else [part.strip() for part in args.select.split(",")]}
             if args.dry_run or args.migrate_only:
                 # A dry run or a migration-only run must not require a working
                 # runner (nor parse the AI selection): it only reports what the
@@ -949,7 +963,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     timeout_seconds=args.ai_timeout,
                 )
                 app_config = apply_ai_selection(app_config, selection)
-                if selection["provider"] == "in_session":
+                if selection["provider"] == "in_session" and args.select is not None:
+                    # The step protocol persists its inputs in the run directory;
+                    # a selection that is not part of that record would silently
+                    # change meaning when the run resumes.
+                    result = {"schema_version": 1, "operation": "themes_run", "ok": False,
+                              "status": "BLOCKED",
+                              "error": {"code": "THEME_SELECTION_UNSUPPORTED",
+                                        "message": "--select 目前只支持 direct；in_session 分步协议尚未记录选区"}}
+                elif selection["provider"] == "in_session":
                     # Nothing here may call a model: stage one step at a time and
                     # let the current agent write response.json.
                     result = _themes_run_session(app_config, args.run_dir)

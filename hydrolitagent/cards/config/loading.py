@@ -12,6 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from ..domain.reading_repair import MAX_REPAIR_ROUNDS
 from .executables import _resolve_executable
 from .models import (
     LITERATURE_PATH_FIELDS,
@@ -69,6 +70,14 @@ def _read_config_file(config_path: str | Path | None) -> tuple[Path | None, dict
 
 _CONVERTER_MODES = frozenset({"layout", "text"})
 _CONVERTER_TABLE_MODES = frozenset({"markdown", "text"})
+# Engines the OCR fallback can drive (#72). One entry today: the adapter ships one
+# bundled model, and admitting a name here means the adapter really honours it --
+# a typo must fail loudly rather than silently convert nothing.
+_OCR_ENGINES = frozenset({"rapidocr"})
+_OCR_LANGS = frozenset({"ch"})
+_OCR_SCOPES = frozenset({"auto", "all"})
+_REGION_BACKENDS = frozenset({"docling"})
+_REGION_TEXT = frozenset({"remove", "keep"})
 
 
 def _load_converter(raw: Any, path_config: PathConfig) -> ConverterConfig:
@@ -91,6 +100,41 @@ def _load_converter(raw: Any, path_config: PathConfig) -> ConverterConfig:
     ocr = raw.get("ocr", False)
     if type(ocr) is not bool:
         raise ConfigError("converter.ocr 必须是布尔值")
+    if ocr and converter_id.strip() != "pymupdf-ocr":
+        raise ConfigError(
+            "converter.ocr 已弃用：请把 converter.converter_id 设为 pymupdf-ocr，"
+            "不要单独打开 converter.ocr"
+        )
+    ocr_scope = raw.get("ocr_scope", "auto")
+    if ocr_scope not in _OCR_SCOPES:
+        raise ConfigError(f"converter.ocr_scope 仅支持 {sorted(_OCR_SCOPES)}")
+    ocr_engine = raw.get("ocr_engine", "rapidocr")
+    if ocr_engine not in _OCR_ENGINES:
+        raise ConfigError(
+            f"converter.ocr_engine 仅支持 {sorted(_OCR_ENGINES)}；收到 {ocr_engine!r}"
+        )
+    ocr_lang = raw.get("ocr_lang", "ch")
+    if ocr_lang not in _OCR_LANGS:
+        raise ConfigError(
+            f"converter.ocr_lang 仅支持 {sorted(_OCR_LANGS)}；收到 {ocr_lang!r}"
+        )
+    ocr_dpi = raw.get("ocr_dpi", 300)
+    if type(ocr_dpi) is not int or not 72 <= ocr_dpi <= 600:
+        raise ConfigError("converter.ocr_dpi 必须是 72 到 600 之间的整数")
+    ocr_min_page_chars = raw.get("ocr_min_page_chars", 40)
+    if type(ocr_min_page_chars) is not int or ocr_min_page_chars < 0:
+        raise ConfigError("converter.ocr_min_page_chars 必须是非负整数")
+    region_boxes = raw.get("region_boxes", True)
+    if type(region_boxes) is not bool:
+        raise ConfigError("converter.region_boxes 必须是布尔值")
+    region_backend = raw.get("region_backend", "docling")
+    if region_backend not in _REGION_BACKENDS:
+        raise ConfigError(
+            f"converter.region_backend 仅支持 {sorted(_REGION_BACKENDS)}"
+        )
+    region_text = raw.get("region_text", "remove")
+    if region_text not in _REGION_TEXT:
+        raise ConfigError(f"converter.region_text 仅支持 {sorted(_REGION_TEXT)}")
 
     coverage = raw.get("min_text_coverage", 0.60)
     if isinstance(coverage, bool) or not isinstance(coverage, (int, float)):
@@ -116,6 +160,14 @@ def _load_converter(raw: Any, path_config: PathConfig) -> ConverterConfig:
         extract_figures=extract_figures,
         table_mode=table_mode,
         ocr=ocr,
+        ocr_scope=ocr_scope,
+        ocr_engine=ocr_engine,
+        ocr_lang=ocr_lang,
+        ocr_dpi=ocr_dpi,
+        ocr_min_page_chars=ocr_min_page_chars,
+        region_boxes=region_boxes,
+        region_backend=region_backend,
+        region_text=region_text,
         min_text_coverage=float(coverage),
         cache_dir=cache_dir,
     )
@@ -342,6 +394,16 @@ def load_config(
         theme_values["timeout_seconds"] = _validate_seconds("theme_pipeline.timeout_seconds", theme_values["timeout_seconds"])
         if not math.isfinite(theme_values["timeout_seconds"]):
             raise ConfigError("theme_pipeline.timeout_seconds 必须是有限正数")
+    minimum = theme_values.get("min_sources_per_theme")
+    if minimum is not None and (type(minimum) is not int or minimum < 1):
+        raise ConfigError("theme_pipeline.min_sources_per_theme 必须是正整数")
+    repairs = theme_values.get("max_repairs")
+    if repairs is not None and (
+        type(repairs) is not int or not 0 <= repairs <= MAX_REPAIR_ROUNDS
+    ):
+        raise ConfigError(
+            f"theme_pipeline.max_repairs 必须是 0 到 {MAX_REPAIR_ROUNDS} 的整数"
+        )
     asset_value = theme_values.get("assets_dir")
     if asset_value is not None and (not isinstance(asset_value, str) or not asset_value.strip()):
         raise ConfigError("theme_pipeline.assets_dir 必须是路径字符串或 null")

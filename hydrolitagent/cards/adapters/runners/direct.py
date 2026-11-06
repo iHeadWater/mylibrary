@@ -548,7 +548,12 @@ class DirectRunner:
             # Deterministic outline: page number, role and heading. It comes from
             # the converter, not from the model, so the two cannot disagree.
             "outline": [
-                {"page": anchor.page, "role": anchor.role, "heading": anchor.heading}
+                {
+                    "page": anchor.page,
+                    "role": anchor.role,
+                    "heading": anchor.heading,
+                    "source": anchor.source,
+                }
                 for anchor in paper.page_anchors
             ],
             "figures": [

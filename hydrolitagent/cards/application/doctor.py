@@ -51,6 +51,42 @@ def converter_checks(converter: ConverterDoctor) -> tuple[DoctorCheck, ...]:
     )
 
 
+def helper_checks(
+    report: ConverterDoctor | None, *, capability: str, label: str
+) -> tuple[DoctorCheck, ...]:
+    """Report one optional helper behind the PDF fallback (#72).
+
+    ``None`` means the helper is not configured, which is not a finding. A
+    configured helper that is missing is a *warning*, never a failure: without
+    the OCR engine a scanned paper cannot be read, but every text-layer PDF still
+    converts; without layout analysis a scan still yields its text and only loses
+    the formula/table pictures.
+    """
+
+    if report is None:
+        return ()
+    name = f"converter.{label}.{report.converter_id}"
+    if report.available:
+        capabilities = "、".join(report.capabilities) or "无声明能力"
+        return (
+            DoctorCheck(
+                name=name,
+                capability=capability,
+                status="pass",
+                detail=f"可用；版本={report.version or '未知'}；能力={capabilities}",
+            ),
+        )
+    return (
+        DoctorCheck(
+            name=name,
+            capability=capability,
+            status="warn",
+            detail=report.error or f"{label} 不可用",
+            fix=report.fix,
+        ),
+    )
+
+
 def runner_checks(runners: Sequence[RunnerDoctor]) -> tuple[DoctorCheck, ...]:
     """Missing optional runners warn; a report with no usable runner fails."""
 
@@ -149,6 +185,7 @@ def summarize_capabilities(
 __all__ = [
     "build_report",
     "converter_checks",
+    "helper_checks",
     "runner_checks",
     "summarize_capabilities",
 ]

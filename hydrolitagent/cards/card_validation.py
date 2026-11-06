@@ -537,13 +537,31 @@ def _validate_markdown_draft(assets, draft, paper_input, identity, report, add, 
     # ``verified`` is computed by ``domain.grounding`` at generation time; this
     # report only records it so eligibility can require it explicitly.
     reading = access.get("reading") if isinstance(access, dict) else None
+    canaries_ok = isinstance(reading, dict) and reading.get("canaries_ok") is True
+    # ``reading_verified`` keeps its strong meaning: every quote came from a page
+    # the PDF itself carries text for. A card whose evidence partly rests on
+    # recognised characters is ``OCR_ASSISTED``: publishable, but it says so
+    # (#72). Both pass ``reading_accepted``; neither is ``VERIFIED`` by accident.
+    ocr_assisted = isinstance(reading, dict) and reading.get("ocr_assisted") is True
     verified_reading = (
         isinstance(reading, dict)
         and reading.get("verified") is True
-        and reading.get("canaries_ok") is True
+        and canaries_ok
+        and not ocr_assisted
     )
     report["reading_verified"] = verified_reading
-    report["reading_status"] = "VERIFIED" if verified_reading else "PARTIAL"
+    report["reading_status"] = (
+        "VERIFIED" if verified_reading else ("OCR_ASSISTED" if (
+            isinstance(reading, dict) and reading.get("accepted") is True and canaries_ok
+        ) else "PARTIAL")
+    )
+    report["reading_accepted"] = report["reading_status"] in {"VERIFIED", "OCR_ASSISTED"}
+    report["ocr_assisted"] = ocr_assisted
+    report["ocr_pages"] = (
+        [page for page in reading.get("weak_pages") or [] if type(page) is int]
+        if isinstance(reading, dict)
+        else []
+    )
     # During the migration the draft carries the same receipt under both names;
     # a mismatch means one of them was edited independently.
     if fingerprint(draft.get("reading_record")) != fingerprint(access):
@@ -591,7 +609,7 @@ def validate_subject_card(config, draft, paper_input):
     if markdown:
         # A new draft may only enter theme generation with a verified reading;
         # a PARTIAL grounding is saved as a draft but never eligible.
-        eligible = eligible and report.get("reading_verified") is True
+        eligible = eligible and report.get("reading_accepted") is True
     report.update(ok=not errors, status="FAIL" if errors else "PASS",
                   eligible_for_theme_generation=eligible)
     return report

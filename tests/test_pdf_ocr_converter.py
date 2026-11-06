@@ -66,9 +66,12 @@ def test_both_ids_are_registered():
 
 
 def test_the_factory_dispatches_on_the_id():
-    assert _default_converter("pymupdf").converter_id == "pymupdf"
-    assert _default_converter("pymupdf-ocr").converter_id == OCR_CONVERTER_ID
-    assert isinstance(_default_converter("pymupdf-ocr"), PymupdfOcrConverter)
+    from hydrolitagent.cards.config.models import ConverterConfig
+
+    assert _default_converter(ConverterConfig(converter_id="pymupdf")).converter_id == "pymupdf"
+    ocr = _default_converter(ConverterConfig(converter_id="pymupdf-ocr"))
+    assert ocr.converter_id == OCR_CONVERTER_ID
+    assert isinstance(ocr, PymupdfOcrConverter)
 
 
 def test_choosing_the_new_id_changes_nothing_for_a_readable_pdf(tmp_path: Path):

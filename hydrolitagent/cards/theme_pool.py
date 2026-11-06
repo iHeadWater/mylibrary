@@ -23,6 +23,9 @@ from hydrolitagent.cards.publication import atomic_text, text_hash
 PROTOCOL = "unified-theme-pool-v1"
 ACTIVE = "CANDIDATE_REFINED"
 RETIRED = "SUPERSEDED"
+# A theme is a synthesis: one paper is the card again with a new title, not a
+# theme. Sources that cannot be paired belong in the "not a theme" explanation.
+MIN_THEME_SOURCES = 2
 
 
 def _fail(code, message, **details):
@@ -66,8 +69,9 @@ def file_hashes(directory, names):
 
 def check_files(directory, hashes):
     for name, expected in hashes.items():
-        if name not in {"initial.md", "revised.md", "plan.json", "manifest.json",
-                        "revision-result.json", "reading.md", "result.json"}:
+        if name not in {"initial.md", "revised.md", "revised.audit.md", "plan.json",
+                        "manifest.json", "revision-result.json", "reading.md",
+                        "result.json"}:
             _fail("THEME_POOL_PATH_INVALID", "共享记录包含未知文件名")
         path = core._safe_path(directory, name)
         if not path.is_file() or text_hash(path.read_text(encoding="utf-8")) != expected:
@@ -350,8 +354,24 @@ def reading_catalog(config, state):
     return catalog
 
 
-def plan_actions(output, state, sources, change_id, catalog):
-    """Validate routing, lineage and publication rights, never scientific prose."""
+def plan_actions(output, state, sources, change_id, catalog, min_sources=MIN_THEME_SOURCES,
+                 dropped=None):
+    """Validate routing, lineage and publication rights, never scientific prose.
+
+    A proposed theme backed by fewer than ``min_sources`` papers is dropped from
+    the plan and appended to ``dropped`` instead of failing the run: a paper that
+    has no partner simply does not form a theme, and forcing it into one -- or
+    losing the other themes over it -- would both be wrong (#33). The caller
+    records what was dropped under「未构成主题」.
+    """
+    if not isinstance(output, dict):
+        _fail("THEME_OUTPUT_EMPTY", "分拣答案不是对象；原始输出保留")
+    missing = [name for name in ("problem_clusters_markdown", "actions") if name not in output]
+    if missing:
+        # Name the field: "为空" alone does not tell the operator which required
+        # answer the model dropped.
+        _fail("THEME_OUTPUT_EMPTY",
+              "分拣答案缺少必填字段：" + "、".join(missing) + "；原始输出保留")
     core._nonempty(output.get("problem_clusters_markdown"), "问题簇与变更说明")
     actions = output.get("actions")
     if not isinstance(actions, list):
@@ -377,10 +397,22 @@ def plan_actions(output, state, sources, change_id, catalog):
             if (entry is None or entry["status"] != ACTIVE or entry.get("formal_confirmation") is not None
                     or parent in used):
                 _fail("THEME_PARENT_PROTECTED", "只能修改当前候选；正式、历史或重复操作的主题受保护", theme_id=parent)
-            used.add(parent)
         built = []
         for index, child in enumerate(children):
             normalized = core._discovery({"problem_clusters_markdown": "routing", "themes": [child]}, sources)[0]
+            if len(normalized["paper_tasks"]) < min_sources:
+                # Not a routing error: the answer is well formed, the corpus just
+                # has no partner for this paper. Record it and keep the rest.
+                if dropped is not None:
+                    dropped.append({
+                        "kind": kind,
+                        "title": normalized.get("title"),
+                        "evidence_ids": sorted({task["evidence_id"]
+                                                for task in normalized["paper_tasks"]}),
+                        "source_count": len(normalized["paper_tasks"]),
+                        "required": min_sources,
+                    })
+                continue
             tasks = {}
             for task in child["paper_tasks"]:
                 eid = task["evidence_id"]
@@ -402,8 +434,29 @@ def plan_actions(output, state, sources, change_id, catalog):
             if kind != "UPDATE" and tid in state["themes"]:
                 _fail("THEME_ID_CONFLICT", "新主题编号与已存在主题冲突")
             built.append({**normalized, "theme_id": tid})
+        if not built:
+            # Every child of this action was a single-paper cluster.
+            continue
+        for parent in parents:
+            used.add(parent)
         planned.append({"kind": kind, "theme_ids": parents, "reason": raw["reason"], "themes": built})
     return planned
+
+
+def unclustered_markdown(dropped, min_sources=MIN_THEME_SOURCES):
+    """The record of candidates that had no partner: kept, never forced (#33)."""
+
+    lines = [
+        "# 未构成主题",
+        "",
+        f"以下候选没有达到“每个主题至少 {min_sources} 篇”的要求，与其他文献没有形成共同问题。"
+        "按规则不强行凑成主题，原样记录；后续有新文献时可以重新考虑。",
+        "",
+    ]
+    for item in dropped:
+        papers = "、".join(item.get("evidence_ids") or [])
+        lines.append(f"- **{item.get('title')}**（{item.get('source_count')} 篇：{papers}）")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def apply_actions(base, actions, saved, change_id, binding):

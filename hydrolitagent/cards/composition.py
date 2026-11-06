@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from hydrolitagent._config import PathConfigError, resolve_literature_root
+from hydrolitagent.cards.adapters.layout.doctor import probe_regions
+from hydrolitagent.cards.adapters.ocr.doctor import probe_recognizer
 from hydrolitagent.cards.adapters.pdf.doctor import probe_pymupdf
 from hydrolitagent.cards.adapters.runners.registry import RegistryError, create, ids as runner_ids
 from hydrolitagent.cards.adapters.storage.doctor import storage_checks
@@ -26,6 +28,7 @@ from hydrolitagent.cards.adapters.storage.paper_store import PaperStore
 from hydrolitagent.cards.application.doctor import (
     build_report,
     converter_checks,
+    helper_checks,
     runner_checks,
     summarize_capabilities,
 )
@@ -66,7 +69,10 @@ def _conversion_options(converter_config: Any) -> ConversionOptions:
         mode=getattr(converter_config, "mode", "layout"),
         extract_figures=getattr(converter_config, "extract_figures", True),
         table_mode=getattr(converter_config, "table_mode", "markdown"),
-        ocr=getattr(converter_config, "ocr", False),
+        # ``None`` unless ``converter_id`` is ``pymupdf-ocr``: the capability is
+        # selected by the converter id, not by a separate switch (#72).
+        ocr=getattr(converter_config, "ocr_options", None),
+        regions=getattr(converter_config, "region_options", None),
         min_text_coverage=getattr(converter_config, "min_text_coverage", 0.60),
     )
 
@@ -86,7 +92,7 @@ def _cache_dir(app_config: Any) -> Path:
     return _runtime_root(app_config)
 
 
-def _default_converter(converter_id: str = "pymupdf") -> PaperConverter:
+def _default_converter(converter_config: Any = None) -> PaperConverter:
     # Imported lazily so ``cards doctor`` can diagnose a missing PyMuPDF instead
     # of failing while importing the composition root itself.
     from hydrolitagent.cards.adapters.pdf.pymupdf_converter import (
@@ -97,8 +103,14 @@ def _default_converter(converter_id: str = "pymupdf") -> PaperConverter:
     # The id is dispatched here rather than ignored: before this, every id in
     # ``KNOWN_CONVERTERS`` produced the same object, so a typo in the registry
     # would have looked like a working configuration.
+    converter_id = getattr(converter_config, "converter_id", "none")
     if converter_id == "pymupdf-ocr":
-        return PymupdfOcrConverter()
+        # The options also reach the converter so ``doctor`` can report the
+        # backends; a conversion reads them from the request.
+        return PymupdfOcrConverter(
+            ocr=getattr(converter_config, "ocr_options", None),
+            regions=getattr(converter_config, "region_options", None),
+        )
     return PymupdfConverter()
 
 
@@ -144,7 +156,7 @@ def build_markdown_pipeline(app_config: Any) -> MarkdownPipeline:
     except RegistryError as exc:
         raise ConfigError(f"未注册的制卡运行器：{runner_id!r}；{exc}") from exc
     return MarkdownPipeline(
-        converter=_default_converter(converter_id),
+        converter=_default_converter(converter_config),
         store=PaperStore(_cache_dir(app_config)),
         runner=runner,
         options=_conversion_options(converter_config),
@@ -180,7 +192,7 @@ def build_session_pipeline(app_config: Any) -> MarkdownPipeline:
     except RegistryError as exc:  # pragma: no cover - built-in registration
         raise ConfigError(f"缺少 in_session 运行器：{exc}") from exc
     return MarkdownPipeline(
-        converter=_default_converter(converter_id),
+        converter=_default_converter(converter_config),
         store=PaperStore(_cache_dir(app_config)),
         runner=runner,
         options=_conversion_options(converter_config),
@@ -284,6 +296,25 @@ def build_doctor_report(app_config: Any, *, output_root: Any = None, network: bo
     """Collect converter, runner, storage (and optional Zotero) checks."""
 
     checks: list[DoctorCheck] = list(converter_checks(probe_pymupdf()))
+    converter_config = getattr(app_config, "converter", None)
+    ocr_options = getattr(converter_config, "ocr_options", None)
+    if ocr_options is not None:
+        checks.extend(
+            helper_checks(
+                probe_recognizer(ocr_options.engine),
+                capability="pdf.ocr",
+                label="ocr",
+            )
+        )
+    region_options = getattr(converter_config, "region_options", None)
+    if region_options is not None:
+        checks.extend(
+            helper_checks(
+                probe_regions(region_options.backend),
+                capability="pdf.regions",
+                label="layout",
+            )
+        )
     checks.extend(runner_checks(_runner_doctors(app_config)))
 
     try:

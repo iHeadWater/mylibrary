@@ -34,13 +34,28 @@ from hydrolitagent.cards.application.workspace import (
     stage_paper_workspace,
     stage_text_workspace,
 )
-from hydrolitagent.cards.domain.grounding import expected_canaries, verify_reading
-from hydrolitagent.cards.domain.reading import GroundingError, ReadingReceipt
+from hydrolitagent.cards.domain.grounding import (
+    audit_reading_output,
+    expected_canaries,
+)
+from hydrolitagent.cards.domain.reading_repair import (
+    RETRYABLE_RUNNER_CODES,
+    repair_prompt,
+    repair_request,
+    retry_prompt,
+)
+from hydrolitagent.cards.domain import theme_prose
+from hydrolitagent.cards.domain.sentence_index import annotate, inventory
 from hydrolitagent.cards.domain.source_access import MARKDOWN_PREPARED
 from hydrolitagent.cards.ports.paper import ConversionFailure
 from hydrolitagent.cards.ports.runner import CardRunRequest
 from hydrolitagent.cards.progress import report_progress
 from hydrolitagent.cards.publication import text_hash
+
+# A stage that answered nothing is retried this many times before the run stops.
+# It matches the subject-card path: two chances for a truncated answer or a
+# dropped connection, then the failure is reported as it came (#65).
+MAX_STAGE_RETRIES = 2
 
 
 def _summary(config, state, report):
@@ -184,7 +199,12 @@ def _reading_prompt(prepared):
         "page_count": prepared.page_count,
         "reading_canaries": list(expected_canaries(markdown)),
         "page_anchors": [
-            {"page": anchor.page, "role": anchor.role, "heading": anchor.heading}
+            {
+                "page": anchor.page,
+                "role": anchor.role,
+                "heading": anchor.heading,
+                "source": anchor.source,
+            }
             for anchor in prepared.page_anchors
         ],
         "figures": [
@@ -236,15 +256,35 @@ def discovery_input(config, options, state, sources, catalog):
         "available_readings": available_readings(sources, catalog)}
 
 
+def _contract_prompt(prompt, schema_text):
+    """Put the answer contract into the prompt instead of trusting the server.
+
+    The direct runner asks for ``response_format: json_schema`` and falls back to
+    plain text when the server refuses it (DeepSeek answers
+    ``JSON_SCHEMA_UNSUPPORTED``). Nothing else then tells the model which field
+    names to use, and a real run answered ``action``/``markdown`` where the
+    contract says ``kind``/``title``/``candidate_markdown``.
+    """
+
+    return (prompt + "\n\n## 输出字段（必须严格遵守）\n"
+            "服务端可能不支持结构化输出。下面的 JSON schema 是本次回答的唯一字段依据："
+            "字段名、类型与必填项照抄，不要自造字段名，也不要改名。\n```json\n"
+            + schema_text.rstrip() + "\n```")
+
+
 def discovery_prompt(assets, input_material):
-    return (assets["discovery.md"] + "\n\n" + assets["pool-discovery.md"]
-            + "\n\n输入材料：\n" + core._json(input_material))
+    return _contract_prompt(
+        assets["discovery.md"] + "\n\n" + assets["pool-discovery.md"]
+        + "\n\n输入材料：\n" + core._json(input_material),
+        assets["pool-discovery.schema.json"])
 
 
 def reading_prompt(assets, *, candidate, focus, evidence_id, rough_card, reading_parameters):
-    return (assets["focused-reading-markdown.md"] + "\n\n输入材料：\n" + core._json({
-        "candidate": candidate, "focus": focus, "evidence_id": evidence_id,
-        "rough_card": rough_card, "reading_parameters": reading_parameters}))
+    return _contract_prompt(
+        assets["focused-reading-markdown.md"] + "\n\n输入材料：\n" + core._json({
+            "candidate": candidate, "focus": focus, "evidence_id": evidence_id,
+            "rough_card": rough_card, "reading_parameters": reading_parameters}),
+        assets["focused-reading-markdown.schema.json"])
 
 
 def reading_binding(*, asset_hashes, source, focus, candidate, model, reasoning_effort,
@@ -266,13 +306,13 @@ def refinement_input(options, action, child, focused, existing):
         "change_kind": action["kind"], "change_reason": action["reason"]}
 
 
-def _reading_access(prepared, output):
-    """Ground a focused reading and project it into ``source_access``.
+def _audit_reading(prepared, output):
+    """Ground one reading and report every problem instead of the first one.
 
-    A hard grounding failure is re-raised as a ``ThemeError`` so the theme pool
-    records one structured blocker instead of an uncaught exception. A reading
-    whose quote coverage is below the threshold is rejected here: a partial read
-    must not become theme evidence.
+    Nothing about a *fixable* answer is raised here: the caller decides whether
+    to send it back for another round. Only a changed input (a Markdown digest
+    that no longer matches, a page count the paper does not have) raises, because
+    another answer would be rejected for the same reason.
     """
 
     markdown = prepared.markdown_path.read_text(encoding="utf-8")
@@ -283,16 +323,12 @@ def _reading_access(prepared, output):
         raise core.ThemeError("THEME_READING_PAGE_COUNT_MISMATCH",
                               "模型页数与已转换 Markdown 的页锚点数不一致",
                               declared=declared_pages, actual=prepared.page_count)
-    try:
-        reading = verify_reading(
-            ReadingReceipt.from_output(output), markdown, prepared.page_anchors
-        )
-    except GroundingError as exc:
-        raise core.ThemeError(exc.code, str(exc), diagnostic=dict(exc.detail)) from exc
-    if not reading.verified:
-        raise core.ThemeError("THEME_READING_NOT_VERIFIED",
-                              "定向精读的引文覆盖率不足，未作为主题证据保存",
-                              reading=reading.as_dict())
+    return audit_reading_output(output, markdown, prepared.page_anchors)
+
+
+def _reading_access(prepared, reading):
+    """Project a verified reading into the ``source_access`` record."""
+
     return {
         "method": MARKDOWN_PREPARED,
         "source_pdf_sha256": prepared.source.pdf_sha256,
@@ -305,16 +341,89 @@ def _reading_access(prepared, output):
     }
 
 
+def _raise_reading_violation(audit):
+    """Report the first violation of an answer that cannot be repaired."""
+
+    first = audit.violations[0]
+    raise core.ThemeError(
+        first.code,
+        first.message,
+        diagnostic={"violations": [item.as_dict() for item in audit.violations],
+                    "location_index": audit.detail.get("location_index", 0),
+                    "declared_page": audit.detail.get("declared_page"),
+                    "found_page": audit.detail.get("found_page")},
+    )
+
+
+def run_stage_calls(*, stage, base_prompt, invoke, examine=None, max_repairs=0,
+                    progress=None, subject="精读"):
+    """Call the model until the answer is usable, or until the rounds run out.
+
+    ``invoke(prompt)`` makes one call and returns the payload; ``examine(payload)``
+    audits a reading and never raises for a fixable problem. Two separate budgets
+    are spent:
+
+    * a *retry* covers a call that answered nothing (truncated JSON, a dropped
+      connection). Nothing was said, so nothing has to be corrected.
+    * a *repair* covers an answer that is wrong in a way the model can fix. It
+      costs a round out of ``max_repairs`` and the prompt says what was missing.
+
+    A synthesis has nothing to ground: ``examine`` is omitted and only retries
+    apply. Returns ``(payload, audit)``; ``audit`` is ``None`` for a synthesis.
+    """
+
+    prompt = base_prompt
+    repairs = retries = 0
+    while True:
+        try:
+            payload = invoke(prompt)
+        except core.ThemeError as exc:
+            if exc.code not in RETRYABLE_RUNNER_CODES or retries >= MAX_STAGE_RETRIES:
+                raise
+            retries += 1
+            prompt = retry_prompt(base_prompt, exc.code, str(exc))
+            report_progress(progress, "phase", stage=stage,
+                            message=f"第 {retries} 次调用没有拿到可用的回答（{exc.code}），重试一次")
+            continue
+        if examine is None:
+            return payload, None
+        audit = examine(payload)
+        request = repair_request(audit)
+        if request is None:
+            if audit.violations:
+                _raise_reading_violation(audit)
+            return payload, audit
+        if repairs >= max_repairs:
+            if request.violations:
+                _raise_reading_violation(audit)
+            raise core.ThemeError(
+                "THEME_READING_NOT_VERIFIED",
+                "定向精读的引文覆盖率不足，未作为主题证据保存",
+                reading=audit.reading.as_dict() if audit.reading is not None else None,
+                coverage=request.coverage,
+            )
+        repairs += 1
+        prompt = repair_prompt(base_prompt, payload.get("output") or {}, request,
+                               round_number=repairs, max_rounds=max_repairs,
+                               subject=subject)
+        report_progress(
+            progress, "phase", stage=stage,
+            message=(f"第 {repairs} 次{subject}不达标（{len(request.violations)} 处问题"
+                     + (f"，缺 {len(request.missing_pages)} 页" if request.missing_pages else "")
+                     + "），交回同一模型补充"),
+        )
+
+
 # --------------------------------------------------------------------------------------
 # One pool change
 # --------------------------------------------------------------------------------------
 
 
 def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seconds,
-        literature_root=None):
+        literature_root=None, selected=None):
     """Run one pool change through the configured runner."""
 
-    sources, source_report = core._collect_sources(config, literature_root)
+    sources, source_report = core._collect_sources(config, literature_root, selected)
     report.update(protocol_version=pool.PROTOCOL, source_count=len(sources),
                   pool_path=str(config.paths.themes_dir),
                   index_path=str(config.paths.themes_dir / "index.md"),
@@ -376,82 +485,123 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
             raise core.ThemeError("THEME_POOL_CHANGED", "处理中主题池发生变化，保留结果、不覆盖")
         pool.check_index(config, state)
 
-    def run_stage(stage, *, schema_name, role, prompt, source=None):
-        """One runner call; a reading is converted and grounded, a synthesis is not."""
+    def run_stage(stage, *, schema_name, role, prompt, source=None, check=None, subject="精读"):
+        """One runner call; a reading is converted and grounded, a synthesis is not.
+
+        A reading that comes back short is asked for again with the pages it
+        missed, up to ``theme_pipeline.max_repairs`` times; a call that answered
+        nothing is retried without spending one of those rounds. The coverage
+        threshold is untouched by either path.
+        """
 
         unchanged()
-        remaining = remaining_seconds()
-        if remaining < 1:
-            raise core.ThemeError("RUN_TIME_LIMIT", "本轮时间预算已用完，保存结果下次继续")
         report["current_stage"] = stage
         report_progress(progress, "phase", stage=stage, message=stage)
         schema_text = assets[schema_name]
         schema = json.loads(schema_text)
-        timeout_seconds = min(cg.generation_timeout_seconds, remaining)
         prepared = delivery = None
+        base_prompt = prompt
         if source is not None:
             delivery, prepared = _prepared_source(
                 config, source, delivery_preparer=delivery_preparer, pipeline=pipeline
             )
-            prompt = prompt(prepared)
-        run_id = uuid.uuid4().hex[:16]
+            base_prompt = prompt(prepared)
+        numbered = None
         if prepared is not None:
-            workspace = stage_paper_workspace(
-                prepared,
-                run_id=run_id,
-                root=runtime_dir(config),
-                context={"role": role, "stage": stage,
-                         "paper": _reading_prompt(prepared)},
-                schema_text=schema_text,
+            markdown_text = prepared.markdown_path.read_text(encoding="utf-8")
+            numbered, sentences = annotate(markdown_text)
+            # The model can only cite what exists. Without the real ranges it
+            # extrapolates an identifier onto a page that has none, and the whole
+            # reading is rejected for a mistake the program could have prevented.
+            base_prompt = base_prompt + (
+                "\n\n## 可引用的句子编号（只有这些）\n"
+                "下面按页列出真实存在的编号范围。只能引用这份清单里出现过的编号，"
+                "不要按页码推算。标着“没有可引用的句子”的页只有图，不要为它们编造证据。\n"
+                + inventory(sentences, prepared.page_count)
             )
-        else:
-            workspace = stage_text_workspace(
-                run_id=run_id,
-                root=runtime_dir(config),
-                context={"role": role, "stage": stage},
-                schema_text=schema_text,
-            )
-        report["model_call_count"] += 1
-        try:
-            result = pipeline.runner.run(CardRunRequest(
-                run_id=run_id, paper=prepared, prompt=prompt, output_schema=schema,
-                workspace=workspace, timeout_seconds=timeout_seconds, role=role,
-                model=cg.model, reasoning_effort=cg.reasoning_effort,
-                reading_mode="file", progress=progress,
-            ))
-            if not result.ok:
-                error = result.error
-                raise core.ThemeError(
-                    error.code if error else "THEME_MODEL_FAILED",
-                    error.message if error else "主题步骤调用失败",
-                    provider={"runner_id": result.runner_id,
-                              **(dict(error.detail) if error and error.detail else {})},
-                )
-            if not isinstance(result.output, Mapping):
-                raise core.ThemeError("THEME_TRANSPORT_INVALID", "运行器没有返回可保存的结果对象")
-            payload = {
-                "ok": True,
-                "output": dict(result.output),
-                "runner_id": result.runner_id,
-                "usage": dict(result.usage) if result.usage else None,
-                "configured_model": result.model or cg.model,
-                "configured_reasoning_effort": result.reasoning_effort or cg.reasoning_effort,
-                "warnings": list(result.warnings),
-            }
+
+        def invoke(attempt_prompt):
+            remaining = remaining_seconds()
+            if remaining < 1:
+                raise core.ThemeError("RUN_TIME_LIMIT", "本轮时间预算已用完，保存结果下次继续")
+            run_id = uuid.uuid4().hex[:16]
+            timeout_seconds = min(cg.generation_timeout_seconds, remaining)
             if prepared is not None:
-                payload["source_access"] = _reading_access(prepared, payload["output"])
+                workspace = stage_paper_workspace(
+                    prepared,
+                    run_id=run_id,
+                    root=runtime_dir(config),
+                    context={"role": role, "stage": stage,
+                             "paper": _reading_prompt(prepared)},
+                    schema_text=schema_text,
+                    numbered_markdown=numbered,
+                )
+            else:
+                workspace = stage_text_workspace(
+                    run_id=run_id,
+                    root=runtime_dir(config),
+                    context={"role": role, "stage": stage},
+                    schema_text=schema_text,
+                )
+            report["model_call_count"] += 1
+            try:
+                result = pipeline.runner.run(CardRunRequest(
+                    run_id=run_id, paper=prepared, prompt=attempt_prompt, output_schema=schema,
+                    workspace=workspace, timeout_seconds=timeout_seconds, role=role,
+                    model=cg.model, reasoning_effort=cg.reasoning_effort,
+                    reading_mode="file", progress=progress,
+                ))
+                if not result.ok:
+                    error = result.error
+                    raise core.ThemeError(
+                        error.code if error else "THEME_MODEL_FAILED",
+                        error.message if error else "主题步骤调用失败",
+                        provider={"runner_id": result.runner_id,
+                                  **(dict(error.detail) if error and error.detail else {})},
+                    )
+                if not isinstance(result.output, Mapping):
+                    raise core.ThemeError("THEME_TRANSPORT_INVALID",
+                                          "运行器没有返回可保存的结果对象")
+                payload = {
+                    "ok": True,
+                    "output": dict(result.output),
+                    "runner_id": result.runner_id,
+                    "usage": dict(result.usage) if result.usage else None,
+                    "configured_model": result.model or cg.model,
+                    "configured_reasoning_effort": result.reasoning_effort or cg.reasoning_effort,
+                    "warnings": list(result.warnings),
+                }
                 # A source reused from the paper cache has no delivered PDF to
                 # re-hash; its identity is the cache manifest, checked above.
                 if delivery is not None and core._file_sha(delivery.pdf_path) != source["record"]["pdf_sha256"]:
                     raise core.ThemeError("THEME_INPUT_CHANGED", "原始 PDF 在处理期间改变，未接受结果")
-            unchanged()
-            shutil.rmtree(workspace, ignore_errors=True)
-            return payload
-        except Exception:
-            # A failed stage keeps its staged material for diagnosis; the caller
-            # records the blocker and the saved steps stay reusable.
-            report["last_workspace"] = str(workspace)
-            raise
+                unchanged()
+                shutil.rmtree(workspace, ignore_errors=True)
+                return payload
+            except Exception:
+                # A failed attempt keeps its staged material for diagnosis; the
+                # caller records the blocker and the saved steps stay reusable.
+                report["last_workspace"] = str(workspace)
+                raise
+
+        if prepared is not None:
+            examine = lambda item: _audit_reading(prepared, item["output"])  # noqa: E731
+        elif check is not None:
+            examine = lambda item: check(item["output"])  # noqa: E731
+        else:
+            examine = None
+        payload, audit = run_stage_calls(
+            stage=stage,
+            base_prompt=base_prompt,
+            invoke=invoke,
+            examine=examine,
+            max_repairs=options.max_repairs if examine is not None else 0,
+            progress=progress,
+            subject=subject,
+        )
+        if prepared is not None:
+            payload["source_access"] = _reading_access(prepared, audit.reading)
+        return payload
 
     existing = existing_themes(config, state)
     discovery_prompt_text = discovery_prompt(
@@ -460,11 +610,20 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
         {"protocol_version": pool.PROTOCOL, "base": core._digest(base), "input": binding},
         lambda: run_stage("统一主题池：跨文献关联与候选演化",
                           schema_name="pool-discovery.schema.json",
-                          role="theme_discovery", prompt=discovery_prompt_text), report)
-    actions = pool.plan_actions(discovery["output"], state, sources, change_id, catalog)
+                          role="theme_discovery", prompt=discovery_prompt_text,
+                          check=theme_prose.review_candidate, subject="主题分拣"), report)
+    dropped = []
+    actions = pool.plan_actions(discovery["output"], state, sources, change_id, catalog,
+                                min_sources=options.min_sources_per_theme, dropped=dropped)
     unchanged()
     core._publish(change_dir / "plan.json", core._json(actions))
     core._publish(change_dir / "problem-clusters.md", discovery["output"]["problem_clusters_markdown"])
+    if dropped:
+        # A paper without a partner did not form a theme. That is a result, not a
+        # failure: it is written down where a reader can find it.
+        core._publish(change_dir / "unclustered.md",
+                      pool.unclustered_markdown(dropped, options.min_sources_per_theme))
+    report["unclustered"] = dropped
     saved = {}
     report["action_count"] = len(actions)
     for action in actions:
@@ -520,17 +679,26 @@ def run(config, report, *, progress, pipeline, delivery_preparer, remaining_seco
                     {"protocol_version": pool.PROTOCOL, "input": revision_input},
                     lambda: run_stage(f"主题回填 {tid}", schema_name="refinement.schema.json",
                         role="theme_synthesis",
-                        prompt=assets["refinement.md"] + "\n\n输入材料：\n" + core._json(revision_input)),
+                        prompt=_contract_prompt(
+                            assets["refinement.md"] + "\n\n输入材料：\n" + core._json(revision_input),
+                            assets["refinement.schema.json"]),
+                        check=theme_prose.review, subject="主题正文"),
                     report)
                 body = core._nonempty(revision["output"].get("revised_markdown"), "回填主题正文")
+                audit_body = core._nonempty(revision["output"].get("audit_markdown"), "主题审计记录")
                 unchanged()
                 core._publish(directory / "revised.md", "<!-- CANDIDATE_REFINED; NOT CONFIRMED -->\n" + body
                               + _links(config, refs, directory, literature_root))
+                # The revision bookkeeping is evidence about the answer, not part
+                # of it: it lives beside the prose so the page stays readable.
+                core._publish(directory / "revised.audit.md",
+                              "<!-- THEME_AUDIT; 修订对照与证据归属，不作为正文 -->\n" + audit_body)
                 core._publish(directory / "manifest.json", core._json({"theme_id": tid, "status": pool.ACTIVE,
                     "formal_confirmation": None, "change_id": change_id, "reason": action["reason"],
                     "kind": action["kind"], "predecessors": action["theme_ids"], "readings": refs}))
                 saved[tid] = {"directory": directory.relative_to(config.paths.themes_dir).as_posix(),
-                    "hashes": pool.file_hashes(directory, ("initial.md", "revised.md", "plan.json", "manifest.json",
+                    "hashes": pool.file_hashes(directory, ("initial.md", "revised.md", "revised.audit.md",
+                                                         "plan.json", "manifest.json",
                                                          "revision-result.json")), "readings": refs}
                 item.update(status=pool.ACTIVE, revised_path=str(directory / "revised.md"))
                 report["updated_theme_count"] += 1

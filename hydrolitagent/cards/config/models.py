@@ -117,6 +117,14 @@ class PipelineConfig:
 class ThemePipelineConfig:
     enabled: bool = False
     research_goal: str | None = None
+    # A theme is a synthesis of at least this many papers; two papers are a
+    # comparison, not a synthesis, and one is the card again with a new title.
+    # Lowered only by tests that ship fewer sources on purpose (see #33).
+    min_sources_per_theme: int = 3
+    # A focused reading that does not cover the paper is sent back to the same
+    # model with the pages it missed, at most this many times. The coverage
+    # threshold itself never moves: a repair round only adds evidence (see #33).
+    max_repairs: int = 3
     model: str | None = None
     reasoning_effort: str | None = None
     timeout_seconds: float | None = None
@@ -137,9 +145,48 @@ class ConverterConfig:
     mode: str = "layout"
     extract_figures: bool = True
     table_mode: str = "markdown"
+    # Legacy flag, kept so old configuration files still load. The capability is
+    # selected by ``converter_id="pymupdf-ocr"`` now (#72); turning this on while
+    # that id is not selected is a configuration mistake, not a silent no-op.
     ocr: bool = False
+    ocr_scope: str = "auto"
+    ocr_engine: str = "rapidocr"
+    ocr_lang: str = "ch"
+    ocr_dpi: int = 300
+    ocr_min_page_chars: int = 40
+    region_boxes: bool = True
+    region_backend: str = "docling"
+    region_text: str = "remove"
     min_text_coverage: float = 0.60
     cache_dir: Path | None = None
+
+    @property
+    def ocr_options(self):
+        """``OcrOptions`` when this converter recognises, otherwise ``None``."""
+
+        if self.converter_id != "pymupdf-ocr":
+            return None
+        from ..ports.paper import OcrOptions
+
+        return OcrOptions(
+            engine=self.ocr_engine,
+            lang=self.ocr_lang,
+            dpi=self.ocr_dpi,
+            min_page_chars=self.ocr_min_page_chars,
+            scope=self.ocr_scope,
+        )
+
+    @property
+    def region_options(self):
+        """``RegionOptions`` when region analysis is asked for, otherwise ``None``."""
+
+        if self.converter_id != "pymupdf-ocr" or not self.region_boxes:
+            return None
+        from ..ports.paper import RegionOptions
+
+        return RegionOptions(
+            enabled=True, backend=self.region_backend, text=self.region_text
+        )
 
 
 @dataclass(frozen=True)

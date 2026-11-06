@@ -427,6 +427,13 @@ def _group_drafts(drafts: list[_Draft]) -> dict[str, list[_Draft]]:
     return groups
 
 
+def _reading_accepted(record: dict[str, Any]) -> bool:
+    status = record.get("reading_status")
+    if isinstance(status, str):
+        return status in {"VERIFIED", "OCR_ASSISTED"}
+    return record.get("reading_verified") is True
+
+
 def _select_current(group: list[_Draft]) -> tuple[_Draft, str]:
     """R3: pass+verified beats newer-but-unverified; ties go to the newest."""
 
@@ -434,7 +441,7 @@ def _select_current(group: list[_Draft]) -> tuple[_Draft, str]:
         draft for draft in group
         if (latest := draft.latest_validation) is not None
         and latest.get("status") == VALIDATION_PASS
-        and latest.get("reading_verified") is True
+        and _reading_accepted(latest)
     ]
     if eligible:
         chosen = max(
@@ -690,6 +697,17 @@ def _theme_page(theme: _Theme, root: Path, card_paths: dict[str, Path],
         "",
         body,
         "",
+    ]
+    # The revision bookkeeping is kept beside the prose, not inside it: a reader
+    # who wants it follows one link, and the page stays readable (#33).
+    audit_file = theme.source_file.parent / "revised.audit.md"
+    if audit_file.is_file():
+        lines += [
+            f"> 审计记录（与初版相比的修订、原文/推理归属）："
+            f"{_file_link('revised.audit.md', audit_file, page_dir)}",
+            "",
+        ]
+    lines += [
         "---",
         "",
         "## 参考",
@@ -726,13 +744,17 @@ def _front_matter(entry: dict[str, Any]) -> str:
 
 
 def _status_line(entry: dict[str, Any]) -> str:
-    return (
+    line = (
         f"> 状态：{entry['status']} · "
         f"production_eligible：{_bool_text(entry['production_eligible'])} · "
         f"scientific_correctness_verified：{_bool_text(entry['scientific_correctness_verified'])} · "
         f"reading_verified：{entry['reading_verified_display']} · "
         f"当前草稿：`{entry['draft_id']}`"
     )
+    if entry.get("ocr_assisted"):
+        pages = "、".join(str(page) for page in entry.get("ocr_pages") or ()) or "部分"
+        line += f" · 第 {pages} 页为 OCR 识别，引文需对照扫描件复核"
+    return line
 
 
 def _related_themes_text(entry: dict[str, Any], path: Path,
@@ -1050,6 +1072,9 @@ def build_reading_layer(root: Path, *, runtime_dir: Path | None = None) -> dict[
             "validated_at": latest.get("validated_at") if latest else None,
             "reading_verified": latest.get("reading_verified") if latest else None,
             "reading_verified_display": _bool_text(latest.get("reading_verified") if latest else None),
+            # Pages read from a picture rather than from a text layer (#72).
+            "ocr_assisted": latest.get("ocr_assisted") if latest else None,
+            "ocr_pages": (latest.get("ocr_pages") if latest else None) or [],
             "production_eligible": latest.get("production_eligible") if latest else data.get("production_eligible"),
             "scientific_correctness_verified": (
                 latest.get("scientific_correctness_verified") if latest

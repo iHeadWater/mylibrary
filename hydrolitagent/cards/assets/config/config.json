@@ -6,6 +6,8 @@
     "model": null,
     "reasoning_effort": null,
     "timeout_seconds": null,
+    "min_sources_per_theme": 3,
+    "max_repairs": 3,
     "assets_dir": "hydrolitagent/cards/assets/templates/themes"
   },
   "pipeline": {
@@ -20,6 +22,14 @@
     "extract_figures": true,
     "table_mode": "markdown",
     "ocr": false,
+    "ocr_scope": "auto",
+    "ocr_engine": "rapidocr",
+    "ocr_lang": "ch",
+    "ocr_dpi": 300,
+    "ocr_min_page_chars": 40,
+    "region_boxes": true,
+    "region_backend": "docling",
+    "region_text": "remove",
     "min_text_coverage": 0.6,
     "cache_dir": null
   },

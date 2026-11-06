@@ -24,13 +24,13 @@ from typing import Any
 from hydrolitagent.cards import theme_pool as pool
 from hydrolitagent.cards import theme_pool_runner as runner_core
 from hydrolitagent.cards import themes as core
-from hydrolitagent.cards.domain.grounding import expected_canaries, verify_reading
+from hydrolitagent.cards.application.workspace import NUMBERED_MARKDOWN_FILENAME
+from hydrolitagent.cards.domain.grounding import audit_reading_output, expected_canaries
 from hydrolitagent.cards.domain.paper import (
     FIGURES_DIRNAME,
     MARKDOWN_FILENAME,
     PageAnchor,
 )
-from hydrolitagent.cards.domain.reading import GroundingError, ReadingReceipt
 from hydrolitagent.cards.domain.source_access import MARKDOWN_PREPARED
 from hydrolitagent.cards.pdf_delivery import prepare_pdf_delivery
 from hydrolitagent.cards.publication import text_hash
@@ -67,8 +67,9 @@ _NEXT_ACTION = {
         f"{SCHEMA_FILENAME} 写 {RESPONSE_FILENAME}：problem_clusters_markdown 与 actions。"
     ),
     KIND_READING: (
-        "完整阅读本目录的 paper.md 与 figures/，按 "
-        f"{SCHEMA_FILENAME} 写 {RESPONSE_FILENAME}：逐字引文放 source_locations，"
+        "完整阅读本目录的 paper.numbered.md（每句前的 ⟨P3-S004⟩ 是句子编号）与 figures/，按 "
+        f"{SCHEMA_FILENAME} 写 {RESPONSE_FILENAME}：source_locations 只给 sentence_ids，"
+        "不要抄写原文；正文标注出处用（第 N 页）。"
         "reading_receipt 回显 markdown_sha256 与全部 canary。"
     ),
     KIND_REFINEMENT: (
@@ -308,6 +309,9 @@ def _anchor_payload(anchor: PageAnchor) -> dict[str, Any]:
         "heading": anchor.heading,
         "role": anchor.role,
         "canary": anchor.canary,
+        # Provenance must survive the round trip through request.json, otherwise
+        # a scan would be re-audited as if its text were printed (#72).
+        "source": anchor.source,
     }
 
 
@@ -321,6 +325,7 @@ def _anchors_from(payload) -> tuple[PageAnchor, ...]:
             heading=item.get("heading"),
             role=item.get("role", "unknown"),
             canary=item.get("canary"),
+            source=item.get("source", "native"),
         ))
     return tuple(anchors)
 
@@ -351,6 +356,15 @@ def _stage_paper(run_dir, prepared) -> None:
             shutil.rmtree(figures_dir)
     if text_hash(markdown_path.read_text(encoding="utf-8")) != prepared.markdown_sha256:
         raise core.ThemeError("MARKDOWN_SOURCE_INVALID", "写入运行目录后的 paper.md 与转换结果不一致")
+    # The same text with ⟨P3-S004⟩ markers: the model cites identifiers, the
+    # program owns the quoted sentence. Rebuilt from paper.md, so it can never
+    # drift from the file the hash was checked against (#65).
+    from hydrolitagent.cards.domain.sentence_index import annotate as _annotate
+    numbered_text, _ = _annotate(source_text)
+    numbered_path = run_dir / NUMBERED_MARKDOWN_FILENAME
+    if (not numbered_path.is_file()
+            or numbered_path.read_text(encoding="utf-8") != numbered_text):
+        _write_text(numbered_path, numbered_text)
     figures_dir = run_dir / FIGURES_DIRNAME
     for figure in prepared.figures:
         target = figures_dir / figure.path.name
@@ -638,18 +652,26 @@ def _save_discovery(config, session, context, request, output) -> list[dict[str,
     path = context.change_dir / "discovery-result.json"
     binding = request["binding"]
     record = _existing_record(path, binding)
+    dropped: list[dict[str, Any]] = []
     if record is None:
         # Route validation precedes publication: an invalid answer never leaves a
         # checkpoint that would shadow the corrected one.
         actions = pool.plan_actions(output, context.state, context.sources,
-                                    session["change_id"], context.catalog)
+                                    session["change_id"], context.catalog,
+                                    min_sources=context.options.min_sources_per_theme,
+                                    dropped=dropped)
         record = _write_record(path, binding, output, _execution(context))
     else:
         actions = pool.plan_actions(record["output"], context.state, context.sources,
-                                    session["change_id"], context.catalog)
+                                    session["change_id"], context.catalog,
+                                    min_sources=context.options.min_sources_per_theme,
+                                    dropped=dropped)
     core._publish(context.change_dir / "plan.json", core._json(actions))
     core._publish(context.change_dir / "problem-clusters.md",
                   record["output"]["problem_clusters_markdown"])
+    if dropped:
+        core._publish(context.change_dir / "unclustered.md",
+                      pool.unclustered_markdown(dropped, context.options.min_sources_per_theme))
     for action in actions:
         for child in action["themes"]:
             directory = pool.root_path(
@@ -681,15 +703,29 @@ def _save_reading(config, run_dir, session, context, step, request, output) -> d
             raise core.ThemeError("THEME_READING_PAGE_COUNT_MISMATCH",
                                   "模型页数与已转换 Markdown 的页锚点数不一致",
                                   declared=declared, actual=expected_pages)
-        try:
-            reading = verify_reading(ReadingReceipt.from_output(output), markdown,
-                                     _anchors_for(request))
-        except GroundingError as exc:
-            raise core.ThemeError(exc.code, str(exc), diagnostic=dict(exc.detail)) from exc
-        if not reading.verified:
+        audit = audit_reading_output(output, markdown, _anchors_for(request))
+        if audit.violations:
+            # This executor answers one step at a time, so it cannot ask the
+            # model again by itself: the rejection travels back as a structured
+            # error that names every problem, and the next response.json is the
+            # repair. The one-shot runner spends a repair round the same way.
+            first = audit.violations[0]
+            raise core.ThemeError(
+                first.code, first.message,
+                diagnostic={"violations": [item.as_dict() for item in audit.violations],
+                            "location_index": audit.detail.get("location_index", 0),
+                            "declared_page": audit.detail.get("declared_page"),
+                            "found_page": audit.detail.get("found_page")},
+            )
+        reading = audit.reading
+        # ``accepted`` accepts OCR_ASSISTED as well as VERIFIED (#72): a scanned
+        # paper is weaker evidence, not unusable evidence, and the reading block
+        # already says which pages a human must check.
+        if not reading.accepted:
             raise core.ThemeError("THEME_READING_NOT_VERIFIED",
                                   "定向精读的引文覆盖率不足，未作为主题证据保存",
-                                  reading=reading.as_dict())
+                                  reading=reading.as_dict(),
+                                  coverage=audit.coverage.as_dict() if audit.coverage else None)
         access = {
             "method": MARKDOWN_PREPARED,
             "source_pdf_sha256": request["source_pdf_sha256"],
@@ -719,10 +755,15 @@ def _save_refinement(config, session, context, step, request, output) -> list[di
         record = _write_record(directory / "revision-result.json", binding, output,
                                _execution(context))
     body = core._nonempty(record["output"].get("revised_markdown"), "回填主题正文")
+    audit_body = core._nonempty(record["output"].get("audit_markdown"), "主题审计记录")
     core._publish(directory / "revised.md",
                   "<!-- CANDIDATE_REFINED; NOT CONFIRMED -->\n" + body
                   + runner_core._links(config, refs, directory,
                                        session.get("literature_root")))
+    # Same split as the one-shot runner: prose in ``revised.md``, the revision
+    # bookkeeping beside it.
+    core._publish(directory / "revised.audit.md",
+                  "<!-- THEME_AUDIT; 修订对照与证据归属，不作为正文 -->\n" + audit_body)
     core._publish(directory / "manifest.json", core._json({
         "theme_id": step["theme_id"], "status": pool.ACTIVE, "formal_confirmation": None,
         "change_id": session["change_id"], "reason": action["reason"],
@@ -746,8 +787,8 @@ def _commit(config, session, context) -> dict[str, Any]:
             saved[tid] = {
                 "directory": directory.relative_to(config.paths.themes_dir).as_posix(),
                 "hashes": pool.file_hashes(directory, (
-                    "initial.md", "revised.md", "plan.json", "manifest.json",
-                    "revision-result.json")),
+                    "initial.md", "revised.md", "revised.audit.md", "plan.json",
+                    "manifest.json", "revision-result.json")),
                 "readings": refs,
             }
     next_state = pool.apply_actions(context.state, plan, saved,

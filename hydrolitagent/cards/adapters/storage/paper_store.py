@@ -18,7 +18,7 @@ import json
 import re
 import shutil
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -26,9 +26,11 @@ from hydrolitagent.cards.domain.paper import (
     MANIFEST_FILENAME,
     MANIFEST_VERSION,
     MARKDOWN_FILENAME,
+    READABLE_MANIFEST_VERSIONS,
     FigureAsset,
     PageAnchor,
     PreparedPaper,
+    RecognitionInfo,
     SourceIdentity,
 )
 from hydrolitagent.cards.ports.paper import (
@@ -190,7 +192,10 @@ class PaperStore:
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
-        if not isinstance(payload, dict) or payload.get("manifest_version") != MANIFEST_VERSION:
+        if (
+            not isinstance(payload, dict)
+            or payload.get("manifest_version") not in READABLE_MANIFEST_VERSIONS
+        ):
             return None
 
         cached_source = payload.get("source")
@@ -228,6 +233,11 @@ class PaperStore:
         anchors = self._read_anchors(payload.get("page_anchors"), page_count)
         if anchors is None:
             return None
+        recognition = self._read_recognition(payload.get("recognition"), anchors)
+        if recognition is None and any(anchor.source != "native" for anchor in anchors):
+            # A recognised page without the settings that produced it cannot be
+            # reproduced, so the entry is not usable.
+            return None
         figures = self._read_figures(payload.get("figures"), paper_dir)
         if figures is None:
             return None
@@ -256,6 +266,7 @@ class PaperStore:
             converter_version=converter_version,
             text_coverage=float(coverage),
             warnings=tuple(warnings),
+            recognition=recognition,
         )
 
     @staticmethod
@@ -276,11 +287,14 @@ class PaperStore:
             heading = item.get("heading")
             role = item.get("role")
             canary = item.get("canary")
+            source = item.get("source", "native")
             if heading is not None and not isinstance(heading, str):
                 return None
             if canary is not None and not isinstance(canary, str):
                 return None
             if role not in {"front_matter", "body", "references", "appendix", "unknown"}:
+                return None
+            if source not in {"native", "ocr", "vlm"}:
                 return None
             anchors.append(
                 PageAnchor(
@@ -290,9 +304,45 @@ class PaperStore:
                     heading=heading,
                     role=role,
                     canary=canary,
+                    source=source,
                 )
             )
         return tuple(anchors)
+
+    @staticmethod
+    def _read_recognition(
+        raw: Any, anchors: Sequence[PageAnchor]
+    ) -> RecognitionInfo | None:
+        if raw is None:
+            # A version-2 manifest, or a document read entirely from its text
+            # layer: nothing was recognised, so there is nothing to record.
+            return None
+        if not isinstance(raw, Mapping):
+            return None
+        engine = raw.get("engine")
+        version = raw.get("version")
+        lang = raw.get("lang")
+        dpi = raw.get("dpi")
+        pages = raw.get("pages")
+        if not isinstance(engine, str) or not engine:
+            return None
+        if not isinstance(version, str) or not version:
+            return None
+        if not isinstance(lang, str) or not lang:
+            return None
+        if type(dpi) is not int or dpi < 1:
+            return None
+        if not isinstance(pages, list) or not all(type(page) is int for page in pages):
+            return None
+        recorded = tuple(pages)
+        if recorded != tuple(
+            anchor.page for anchor in anchors if anchor.source != "native"
+        ):
+            # The manifest must agree with its own anchors.
+            return None
+        return RecognitionInfo(
+            engine=engine, version=version, lang=lang, dpi=dpi, pages=recorded
+        )
 
     @staticmethod
     def _read_figures(raw: Any, paper_dir: Path) -> tuple[FigureAsset, ...] | None:

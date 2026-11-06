@@ -130,12 +130,26 @@ def _validation_for(draft_path: Path, validation_path: Path | None) -> dict[str,
     return record
 
 
+def _reading_accepted(record: Mapping[str, Any]) -> bool:
+    """Whether the recorded reading may be stored as a version.
+
+    Records written before #72 carry only ``reading_verified``; those are
+    accepted as before. Newer ones also carry ``reading_status``, where
+    ``OCR_ASSISTED`` is accepted and ``PARTIAL`` is not.
+    """
+
+    status = record.get("reading_status")
+    if isinstance(status, str):
+        return status in {"VERIFIED", "OCR_ASSISTED"}
+    return record.get("reading_verified") is True
+
+
 def _require_passing(record: Mapping[str, Any], draft: Mapping[str, Any]) -> str:
     """Return the draft fingerprint the record describes, or refuse to promote."""
 
     if record.get("status") != "PASS" or record.get("ok") is not True:
         _fail("CARD_VERSION_REQUIRES_PASS", "只有校验通过（PASS）的主体卡才能保存为版本")
-    if record.get("reading_verified") is not True:
+    if not _reading_accepted(record):
         _fail(
             "CARD_VERSION_REQUIRES_VERIFIED_READING",
             "阅读未经验证（PARTIAL）的卡片不能保存为版本；先让整篇阅读通过校验",

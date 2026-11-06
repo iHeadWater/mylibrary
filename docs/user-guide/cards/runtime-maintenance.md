@@ -40,6 +40,17 @@
 重新 `uv sync --all-packages --locked`、重新登录所选模型 CLI 即可；PDF 由 Python 转换，不需要另外配置 Poppler 路径。
 **不要复制别人的 `.venv`、登录文件或账号凭据。**
 
+要处理扫描件（没有文字层的 PDF）时，装两个可选依赖并在配置里把 `converter_id` 设为 `pymupdf-ocr`：
+
+```bash
+uv sync --extra ocr      # RapidOCR，约 80 MB，必需：没有它扫描件读不出字
+uv sync --extra layout   # Docling，约 2 GB（含 torch），可选：只用来给公式/表格区域画框
+```
+
+不装 `layout` 也能识别文字，只是公式区域会保留成噪声文字、不贴图（`LAYOUT_REGIONS_UNAVAILABLE` 警告）。
+第一次真正用到版面分析会下载模型（约 300 MB）；访问不了 HuggingFace 时先 `export HF_ENDPOINT=https://hf-mirror.com`。
+`cards doctor` 在相应配置打开时会多出 `converter.ocr.*` 与 `converter.layout.*` 两行。
+
 ## 边界
 
 - 只有 `evidence-generate` 与 `themes-run --ai-provider direct` 会**调用模型**；

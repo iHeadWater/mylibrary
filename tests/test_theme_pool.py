@@ -83,7 +83,8 @@ class ThemePoolTests(unittest.TestCase):
         self.assertIn(tid, discovery_prompt)
         self.assertIn(fixtures.EID, discovery_prompt)
         self.assertIn(new_eid, discovery_prompt)
-        self.assertIn("精读后建议收窄", discovery_prompt)  # includes previous refined content, not just titles
+        # Includes the previous refined prose, not just titles.
+        self.assertIn("尾部增益从哪里来", discovery_prompt)
         self.assertEqual(self.run_theme()["model_call_count"], 0)
 
     def test_merge_creates_new_identity_preserves_both_parents_and_readings(self):

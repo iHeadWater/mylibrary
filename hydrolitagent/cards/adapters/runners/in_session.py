@@ -180,7 +180,15 @@ class InSessionRunner:
             "reading_mode": request.reading_mode,
             "reading_canaries": list(canaries),
             "page_anchors": [
-                {"page": anchor.page, "role": anchor.role, "heading": anchor.heading}
+                {
+                    "page": anchor.page,
+                    "role": anchor.role,
+                    "heading": anchor.heading,
+                    # ``ocr`` marks a page whose text was recognised from a
+                    # picture: its quotes are evidence of what the recogniser
+                    # read, not of what the printed page says (#72).
+                    "source": anchor.source,
+                }
                 for anchor in request.paper.page_anchors
             ],
             # Same data under the name the hand-off contract uses: a short
