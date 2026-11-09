@@ -91,15 +91,21 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 ### 文献卡与主题卡 (hydrolitagent cards)
 
-**用你自己的 Zotero 文献生成文献卡与主题卡**的最小核心:从一篇指定论文出发生成主体卡草稿、用代码校验,再由若干文献卡形成候选主题。不是交互式问答,也不做批量扫描或无人值守。运行时 **Windows-only**。命令一律从**仓库根**执行,共 5 条:
+**用你自己的 Zotero 文献生成文献卡与主题卡**的最小核心:从一篇指定论文出发生成主体卡草稿、用代码校验,再由若干文献卡形成候选主题。不是交互式问答,也不做批量扫描或无人值守。运行时 **Windows-only**。命令一律从**仓库根**执行,核心 5 条:
 
 - 单篇输入(选一篇自己的论文):`uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json`
-- 生成主体卡草稿:`uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json`
+- 生成主体卡草稿:`uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider direct --json`
 - 离线校验主体卡:`uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json`
 - 生成候选主题:`uv run hydrolitagent cards themes-run --json`(`--dry-run` 只读预览)
 - 只读自查模型与产物根:`uv run hydrolitagent cards ai-config --json`
 
-全部 5 个子命令:`uv run hydrolitagent cards --help`。
+主题池维护 3 条(注册表是唯一事实源,`candidates/` 里可能有未提交的孤儿):
+
+- 只读审计:`uv run hydrolitagent cards themes-audit --json`
+- 归档孤儿:`uv run hydrolitagent cards themes-prune --json`(默认 dry-run;`--apply` 只移动不删除)
+- 退役同证据重复主题:`uv run hydrolitagent cards themes-merge --canonical TH-... --retire TH-... --reason "..." --json`
+
+全部 13 个子命令:`uv run hydrolitagent cards --help`。
 
 不要直接读写平台的状态文件与主题池注册表(`themes/_registry.json`),也不要手工编辑生成的文献卡/主题文件——平台原子写入并校验哈希,手改会被判为漂移。完整说明在 `docs/user-guide/cards/`,实现细节在 `docs/development/platform/`。
 

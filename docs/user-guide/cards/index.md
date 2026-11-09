@@ -25,6 +25,10 @@ uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json
 uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider direct --json
 uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
 uv run hydrolitagent cards themes-run --json
+uv run hydrolitagent cards themes-audit --json        # 只读：注册主题 vs 注册表外孤儿候选
+uv run hydrolitagent cards themes-prune --json        # dry-run：只列出会被归档的孤儿
+uv run hydrolitagent cards themes-prune --apply --json  # 归档孤儿到 themes/orphans/，只移动不删除
+uv run hydrolitagent cards themes-merge --canonical TH-... --retire TH-... --reason "..." --json
 uv run hydrolitagent cards ai-config --json          # 看模型选择与产物落点，不调模型
 uv run hydrolitagent cards index --json              # 手动生成可读的阅读层（HOME / 卡片索引 / 主题阅读页）
 
@@ -40,7 +44,7 @@ uv run hydrolitagent cards run finalize --theme --run-dir <运行目录> --json
 uv run hydrolitagent cards doctor --json
 ```
 
-完整清单：`uv run hydrolitagent cards --help`（当前 8 个子命令；`run` 含 `prepare` / `finalize` 两个阶段）。
+完整清单：`uv run hydrolitagent cards --help`（当前 13 个子命令；`run` 含 `prepare` / `finalize` 两个阶段）。
 
 **阅读层自动刷新**：`evidence-validate` 校验通过（`PASS`）、`card-save` 保存成功、
 `run finalize` 成功、主题流程走到 `COMPLETED`、以及 `themes-run` 成功
