@@ -226,7 +226,7 @@ def _print_paths(*, as_json: bool) -> None:
         ("weekly_review", "周报产物"),
         ("papers", "PDF"),
         ("bilibili", "B站上传"),
-        ("zotero", "NotebookLM"),
+        ("zotero", "历史 Zotero 产物"),
     ):
         mark = "✓" if payload[f"{key}_exists"] else "—"
         print(f"  {mark} {label:<10} {payload[key]}")

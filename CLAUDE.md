@@ -4,7 +4,7 @@ Literature knowledge base for AI-driven hydrology and water resources research.
 
 ## 定位 (Role)
 
-mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入库 → 精读分析卡 → 主题分类 → 公众号文章/播客 → 知识库积累。**Zotero 库是文献库的起点**,深度处理典型地以 Zotero 库为文献来源(通过 Zotero MCP 读库);**Zotero 论文入库也是本仓库能力**(`run_paper_pipeline.sh`/`paper_to_zotero.py`)。上游 dailyinfo 负责进入 Zotero 之前的情报采集(资讯流、原始下载)。
+mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入库 → 精读分析卡 → 主题分类 → 公众号文章/论文动画课 → 知识库积累。**Zotero 库是文献库的起点**,深度处理典型地以 Zotero 库为文献来源(通过 Zotero MCP 读库);**Zotero 论文入库也是本仓库能力**(`run_paper_pipeline.sh`/`paper_to_zotero.py`)。上游 dailyinfo 负责进入 Zotero 之前的情报采集(资讯流、原始下载)。
 
 **Zotero 是文献库的事实层。** 深度处理的输入来自 Zotero MCP(读库);本仓库不维护自己的 Zotero 镜像,不读 dailyinfo 的输出文件。
 
@@ -26,9 +26,9 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 
 | Skill | 功能 | Zotero 工具 |
 |-------|------|-------------|
-| `weekly-review` | 每周文献综述:精读全文→8段分析卡→主题聚类→公众号文章→NotebookLM 播客 | 读库全套 |
-| `zotero-notebooklm` | Zotero 论文 → NotebookLM 中文简报/音频/视频 | 读库 |
-| `weekly-report-generator` | NotebookLM 输出 → 公众号周报 MD | 无 |
+| `weekly-review` | 每周文献综述:精读全文→8段分析卡→主题聚类→公众号文章 | 读库全套 |
+| [`paper-video`](skills/paper-video/SKILL.md) | 单篇 Zotero 论文或 PDF → 中文动画课 | `cards paper-input` |
+| `weekly-report-skill` | 周报初稿 → 公众号周报 MD | 无 |
 | `figure-skill-v2` | 从 Zotero PDF 提图/配图/封面 | 读附件 |
 | `bilibili-upload` | podcast 音频 → MP4 → B 站上传 | 无 |
 | `download-pdf` | 论文 PDF 下载(机构访问) | 无 |
@@ -84,7 +84,7 @@ mylibrary 承担**情报汇集之后的深度处理**:读 Zotero → 论文入�
 ### Literature CLI (hydrolitagent/literature — 从 dailyinfo 迁入)
 用 `uv run python -m` 调用(与全仓库一致,不依赖 console_scripts):
 - B 站上传:`uv run python -m hydrolitagent.literature.bilibili_upload <audio> --title "..." --tags "..." [--dry-run]`
-- NotebookLM 简报/音频:`uv run python -m hydrolitagent.literature.zotero_notebooklm --collection <name> --artifact audio`
+- 论文动画课首次配置和更新：`uv run --locked --extra paper-video python scripts/paper_video.py setup`。生成时按 [paper-video](skills/paper-video/SKILL.md) 执行。
 - 公众号发布:`uv run python -m hydrolitagent.literature.wechat.push <md_file> [--thumb <media_id>]`
 - 公众号润色:`uv run python -m hydrolitagent.literature.wechat.polish <md_file>`
 - 配图/封面:`uv run python -m hydrolitagent.literature.wechat.figure <md_file>` (需 ZHIPUAI_API_KEY)
@@ -145,7 +145,7 @@ hydrolitagent/       # Knowledge graph toolkit (graphify integration)
 configs/             # 配置:graph_prompts.toml · paths.toml(精读产物根的默认值)
 scripts/             # run_paper_pipeline.sh, chunk_fulltext.py (weekly-review 辅助)
 skills/              # Agent skills (zotero-query, paper-to-zotero, 及迁入的 weekly-review 等 6 个)
-outputs/             # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
+outputs/             # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article}
 papers/              # 按主题组织的文献库(10 主题, 约 4000 篇);知识库核心资产
 docs/                # Documentation site (mkdocs-material)
 hydrolitagent/cards/ # 文献卡与主题卡(消费侧:自己的 Zotero → 文献卡 → 主题卡)

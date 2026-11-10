@@ -122,8 +122,7 @@ def read_dotenv_values(env_file: str | Path | None = None) -> dict[str, str]:
     语义与 python-dotenv 的 ``override=False`` 一致:调用方自行让 os.environ 优先。
     文件不存在返回 ``{}`` —— ``.env`` 是可选的、不进 Git 的本机文件。
 
-    存在这个函数是因为 literature/ 下的模块(download_pdf / bilibili_upload /
-    zotero_notebooklm)都不调用 ``load_dotenv``,只读 ``os.environ`` 会让写在
+    存在这个函数是因为 literature/ 下的模块(download_pdf / bilibili_upload)都不调用 ``load_dotenv``,只读 ``os.environ`` 会让写在
     ``.env`` 里的配置静默失效。
     """
     path = Path(env_file) if env_file is not None else PROJECT_ROOT / ".env"

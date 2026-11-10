@@ -269,7 +269,6 @@ def _describe_exception(exc: Exception) -> str:
 def _file_url_to_path(file_url: str) -> str:
     """``file:///G:/x%20y.pdf`` -> ``G:\\x y.pdf`` (or ``/x y.pdf`` on POSIX).
 
-    Mirrors ``hydrolitagent.literature.zotero_notebooklm._file_url_to_path``.
     Duplicated rather than imported because this module is deployed standalone
     into an image that installs only mcp/httpx/pyzotero.
     """

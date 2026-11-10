@@ -50,9 +50,7 @@ The ``result`` key is deliberate: ``scripts/chunk_fulltext.py`` reads
 this output with no changes.
 
 Metadata comes from the Zotero Web API (pyzotero, credentials from ``.env``);
-fulltext comes from the Zotero Desktop Local API on ``127.0.0.1:23119`` — the
-same conventions as ``hydrolitagent/literature/zotero_notebooklm.py``, which
-needs Zotero Desktop running with "Allow other applications to communicate
+fulltext comes from the Zotero Desktop Local API on ``127.0.0.1:23119``. This requires Zotero Desktop running with "Allow other applications to communicate
 with Zotero" enabled.  See CLAUDE.md.
 
 Exit codes: 0 ok, 1 bad input / missing credentials, 2 collection not found,
@@ -74,7 +72,7 @@ import requests
 
 _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
-# Zotero Desktop Local API — mirrors hydrolitagent/literature/zotero_notebooklm.py.
+# Zotero Desktop Local API.
 # ZOTERO_LOCAL_API_URL is the same setting under its older name; container
 # compose files set that one, so keep honouring it.
 ZOTERO_BASE_URL = (

@@ -1,28 +1,27 @@
 ---
 name: weekly-review
-description: Use when the user wants to generate a weekly literature review — fetch recent Zotero papers by date range, deep-analyze full text (not summaries), write a Chinese WeChat public account article, and generate a NotebookLM podcast. Triggers: "本周文献综述", "weekly review", "生成周报", "公众号文章", "文献周报".
+description: Use when the user wants to generate a weekly literature review — fetch recent Zotero papers by date range, deep-analyze full text (not summaries), and write a Chinese WeChat public account article. Triggers: "本周文献综述", "weekly review", "生成周报", "公众号文章", "文献周报".
 ---
 
 # Weekly Literature Review
 
-Generate a weekly literature review from Zotero papers. The workflow fetches papers added in the last 7 days, performs deep full-text analysis one paper at a time, synthesizes findings into a ~2500-word Chinese WeChat article, and optionally generates a NotebookLM podcast.
+Generate a weekly literature review from Zotero papers. The workflow fetches papers added in the last 7 days, performs deep full-text analysis one paper at a time, synthesizes findings into a ~2500-word Chinese WeChat article.
 
-This Skill lives in **mylibrary** and is **decoupled from the dailyinfo Python codebase**. It operates purely through Claude Code + Zotero MCP + notebooklm CLI. Do not import or call any dailyinfo Python functions.
+This Skill lives in **mylibrary** and is **decoupled from the dailyinfo Python codebase**. It operates purely through Claude Code + Zotero MCP. Do not import or call any dailyinfo Python functions.
 
 **Zotero access**: This skill calls the mylibrary Zotero MCP server (streamable HTTP, port 8002, endpoint `/mcp`). Metadata tools (`zotero_search`, `zotero_get_item`, `zotero_get_recent`, etc.) go through pyzotero Web API; full-text/attachment tools (`zotero_get_fulltext`, `zotero_get_file_info`) go through the Zotero Desktop **Local API** (`http://host.docker.internal:23119`), which requires Zotero Desktop running with "Allow other applications to communicate with Zotero" enabled. Zotero PDFs are stored on Google Drive and only accessible locally — the Local API is how they are reached.
 
 ## Contract
 
-- Do not import or call any dailyinfo Python module (`scripts/zotero_notebooklm.py`, `scripts/run_pipelines.py`, etc.).
+- Do not import or call any dailyinfo Python module (`scripts/run_pipelines.py`, etc.).
 - Use **mylibrary Zotero MCP** tools exclusively for paper access: `zotero_search` / `zotero_fulltext_search` (search), `zotero_get_item` (metadata), `zotero_get_fulltext` (full text, Local API), `zotero_get_recent`, `zotero_get_collection_items`, `zotero_get_file_info` (attachment path, Local API).
 - Claude Code is the deep analysis engine. Do not call external AI APIs for analysis.
 - **Per-paper sub-agent rule**: EVERY paper gets its own dedicated sub-agent for reading and analysis. The main agent does NOT read full papers directly — it only orchestrates. For each paper, launch a sub-agent that (a) reads the full text in sequential chunks until 100% coverage, (b) writes the analysis card following the 8-section template, and (c) returns a brief summary. The main agent then verifies the card's structure and spot-checks 2-3 claims. This isolates each paper's context, prevents pollution across papers, and lets the sub-agent's reading technique be optimized independently.
 - **Sub-agent reading technique**: The sub-agent MUST read the full paper completely — no skimming, no abstract-only analysis. Read the file in small sequential chunks (limit=50-80 lines each) until the entire content is consumed. Before writing any card, the sub-agent MUST state what percentage of the paper it has read. If the paper is too large to fit in a single chunk, the sub-agent reads across multiple turns, accumulating understanding before writing the card.
 - **No card, no article.** Do not proceed to Phase 3 (article writing) for any paper that lacks a completed analysis card in `cards/`. The card is the fact layer; the article is the narrative layer. Writing an article without cards means all claims are unverifiable — the audit found this is the strongest predictor of factual errors. Papers without cards may be listed in a brief "also added this week" note, but not analyzed in depth.
 - **Card-article sync.** If an article is substantially rewritten after initial creation (Phase 3.5 evaluation feedback, user revision requests), the corresponding analysis cards must be re-audited before the next evaluation pass. After any rewrite that changes factual claims, numbers, terminology, or limitation coverage, the main agent must read each card alongside the revised article and verify: (a) all numbers cited in the article still match the card, (b) no new factual claims were added that the card doesn't support, (c) no card-documented limitations or frameworks were dropped from the article. Run this sync check before re-invoking the Phase 3.5 evaluator.
-- Output directory convention: `outputs/weekly-review/{YYYY-MM-DD}/` with subdirectories `cards/`, `article/`, `podcast/`. Create all directories before starting analysis.
+- Output directory convention: `outputs/weekly-review/{YYYY-MM-DD}/` with subdirectories `cards/` and `article/`. Create all directories before starting analysis.
 - **Resolve the product root before writing anything.** The root is configurable (`outputs/` is only its default). Run `uv run hydrolitagent paths --json` and read `literature_root`; call it `$OUT`. **If `$OUT` is not `<repo>/outputs`, substitute `$OUT` for the literal `outputs/` in every path in this document.** Echo the resolved root in your Phase 0 message so a misresolution is visible in the transcript rather than silently landing files in the wrong directory. Note: `python -m hydrolitagent` does not work (no `__main__.py`); use the `uv run hydrolitagent` form.
-- For NotebookLM: call the `notebooklm` CLI directly via Bash. Do not use dailyinfo's `NotebookLMAutomation` wrapper class. If the CLI is unavailable, provide manual fallback steps.
 - **Evaluation is NOT optional**: Phase 3.5 (independent evaluation agent) is a hard gate. Every article must pass evaluation before delivery. The main agent MUST NOT skip or shortcut this phase. If an evaluation finds issues, fix them and re-evaluate until the verdict is "通过".
 
 ### Writing Quality Contract
@@ -81,17 +80,10 @@ Every article should follow a natural arc, not a paper list. The default tone is
    outputs/weekly-review/{YYYY-MM-DD}/
      cards/
      article/
-     podcast/
    ```
 
 3. Verify Zotero MCP connectivity with a lightweight call such as listing collections. If the MCP server returns a connection error, stop and tell the user:
    > Zotero MCP 无法连接。请确认 Zotero Desktop 7 已启动，且在 Settings → Advanced → Allow other applications to communicate with Zotero（允许其他程序通过 API 访问 Zotero）已勾选。
-
-4. Verify NotebookLM CLI auth with `NOTEBOOKLM_HOME="D:/code/mylibrary/.tmp/notebooklm" uv run notebooklm doctor`. If auth fails:
-   - Run `NOTEBOOKLM_HOME="D:/code/mylibrary/.tmp/notebooklm" uv run notebooklm login --browser chrome`
-   - The CLI reads Chrome's existing Google login session — if already logged into Google in Chrome, auth completes in seconds without any OAuth prompt
-   - Verify with `notebooklm doctor` again
-   - Do NOT attempt to inject cookies from Playwright — Playwright's Chromium and the notebooklm CLI's browser profile are incompatible
 
 ### Phase 1: Fetch Papers
 
@@ -336,187 +328,6 @@ The evaluation agent scores each article on **4 dimensions**, each 0–10:
     d. If an article fails 3 consecutive evaluation rounds, stop and present the user with the remaining issues. Ask whether to manually fix, abandon this article, or lower the threshold.
     e. **LOW issues** are optional — fix at discretion, do not block passing.
 
-### Phase 4: Per-Direction Podcasts
-
-Each article/direction gets its own independent podcast. One podcast covers 2-4 papers on a single theme. This keeps each episode focused, prevents forced connections between unrelated topics, and produces digestible ~15-20 minute episodes.
-
-#### Language Requirement (MANDATORY)
-
-**All podcasts MUST be in Chinese (Mandarin).** The audience is Chinese researchers. Always pass `--language zh_Hans` to `notebooklm generate audio`. Without this flag, NotebookLM defaults to English. Verify this flag is present before every `generate audio` call. Run `notebooklm language list` to confirm `zh_Hans` is available.
-
-#### Factual Grounding Principle
-
-**Upload all analysis cards and original PDFs for each direction.** The cards contain structured, fact-checked extractions; the PDFs give raw completeness. The article is uploaded for narrative structure only. The AI host is instructed to ground every factual claim in a card or PDF, not in an article.
-
-#### Per-Direction Pipeline
-
-16. For EACH direction/article, create a dedicated NotebookLM notebook and upload only the sources relevant to that direction:
-
-    **Notebook naming**: `"{Theme} {YYYY-MM-DD}"` — e.g., `"Hydrology 2026-06-28"`, `"Remote Sensing 2026-06-28"`, `"AI Foundations 2026-06-28"`.
-
-    **For each notebook, upload in this order:**
-
-    **Step 16a — Analysis cards for this direction only (mandatory):**
-    ```bash
-    NOTEBOOKLM_HOME="..." \
-      notebooklm source add outputs/weekly-review/{date}/cards/{paper_slug}.md \
-        --type text --title "{Paper Title} — Analysis Card" --json
-    ```
-
-    **Step 16b — Original PDFs for this direction only (mandatory):**
-    ```bash
-    NOTEBOOKLM_HOME="..." \
-      notebooklm source add "podcast/pdfs/{paper_slug}.pdf" \
-        --type file --title "{Paper Title} (Original PDF)" --json
-    ```
-
-    **Step 16c — Article for this direction (narrative structure):**
-    ```bash
-    NOTEBOOKLM_HOME="..." \
-      notebooklm source add outputs/weekly-review/{date}/article/article_{date}_{theme}.md \
-        --type text --title "Article: {theme}" --json
-    ```
-
-    **Step 16d — Podcast prompt for this direction:**
-    ```bash
-    NOTEBOOKLM_HOME="..." \
-      notebooklm source add outputs/weekly-review/{date}/podcast/podcast_{theme}.md \
-        --type text --title "Podcast Instructions" --json
-    ```
-
-17. Write a podcast prompt for each direction to `podcast/podcast_{theme}.md`. Each prompt MUST include these rules:
-
-    > **事实锚定**：讨论的每一条具体事实（数字、百分比、方法名称）必须来自 Analysis Card 或原始 PDF。Article 的内容已经过改写和筛选，仅用于了解论文之间的关系。
-    >
-    > **开场白**：直接从论文内容出发，用一两句平实的陈述开场。例如——"这周有三篇和水文监测相关的论文。第一篇讨论了野外数据采集中的常见问题..."。不要假设场景（"想象你是一个..."），不要设问（"你有没有想过..."），不要震惊体，不要编故事。
-    >
-    > **结构**：逐篇讨论。每篇四段——它做了什么、怎么做的、发现了什么、对水文研究意味着什么。论文之间有自然关联就提，没有就各自独立。不强求串联。
-    >
-    > **水文学者视角**：从水资源/水文/地球科学研究者的关切出发。AI 方法论文的重点是"对我有什么用"而非技术炫技。深度严谨，表达平实。
-
-    Each prompt should additionally:
-    - Be in Chinese, single-host narration style (not two-host dialogue)
-    - Cover only the papers in this direction (2-4 papers)
-    - Be under 5,000 characters (~500 words in Chinese, much shorter since only 2-4 papers)
-
-17.5 **Pre-Generation Source Checklist (HARD GATE — CANNOT BE SKIPPED OR SHORTCUT):**
-
-    **Why this gate exists**: In a past run, Phase 4 generated audio with only the article and podcast prompt uploaded. Analysis cards and original PDFs were omitted. On re-run, PDFs were again omitted because "local paths unresolved." On a third attempt, PDFs were collected from Zotero storage and arXiv — proving that PDFs are almost always obtainable if you actually try. The lesson: **"PDF unavailable" must be the result of documented effort, not passive acceptance.**
-
-    **Rule — no exceptions without evidence**:
-
-    > For EVERY paper, a PDF MUST be uploaded as a source. The only acceptable reason for a missing PDF is a documented, named failure (404 from publisher, Zotero attachment not found after searching G:/ drive, etc.). A generic "unresolved local path" from `zotero_get_file_info` is NOT sufficient — many Zotero PDFs have unresolved paths but ARE present as files in `G:/我的云端硬盘/Documents/Papers/Zotero_Papers/`. Always search the Zotero storage directory before concluding a PDF is unavailable. For arXiv preprints, always download from `https://arxiv.org/pdf/{id}`. The bar for "unavailable" is: you tried curl, you searched G:/ drive, you checked the DOI redirect — and ALL three failed.
-
-    **Verification procedure (execute for EACH direction BEFORE calling `generate audio`)**:
-
-    1. Run `notebooklm source list --json` for the active notebook
-    2. Count sources: cards (title ends with "— Analysis Card"), PDFs (file type), article (title starts with "Article:"), prompt (title is "Podcast Instructions")
-    3. **Hard requirement**: ALL four categories MUST have ≥1 source. Cards MUST equal the number of papers in this direction. PDFs MUST equal the number of papers (minus any with documented unobtainable status).
-    4. If any category is short: **STOP everything. Do not pass go. Do not call `generate audio`.** Upload the missing sources first, then re-verify.
-    5. If a PDF cannot be obtained after documented effort (curl + Zotero storage search + DOI redirect ALL failed): report the specific paper to the user before proceeding. Do not silently skip.
-
-    **No-chained-execution rule**: The `create → source add → generate → download` chain is forbidden. The correct sequence is:
-
-    ```
-    create → source add (all 4 categories) → source list (verify) → generate → download
-    ```
-
-    The `source list` step MUST be a separate, visible step — not absorbed into a Bash `&&` chain. This forces the executor to see the source counts before generating.
-
-    **For each direction, confirm before generate**:
-
-    | # | Source Type | Required | Status |
-    |---|-----------|----------|--------|
-    | 16a | Analysis Cards | N papers | ☐ Verified (count = N) |
-    | 16b | Original PDFs | N papers (minus documented misses) | ☐ Verified (count ≥ N - documented) |
-    | 16c | Article | 1 | ☐ Verified |
-    | 16d | Podcast Prompt | 1 | ☐ Verified |
-
-    If any ☐ is unchecked: do NOT proceed to `generate audio`.
-
-18. Generate audio for each direction independently:
-
-    ```bash
-    # Per direction:
-    NOTEBOOKLM_HOME="${NOTEBOOKLM_HOME:-D:/code/mylibrary/.tmp/notebooklm}" \
-      notebooklm create "{Theme} {YYYY-MM-DD}" --use --json
-
-    # Step 16a: Upload analysis cards (one per paper in this direction)
-    NOTEBOOKLM_HOME="..." \
-      notebooklm source add outputs/weekly-review/{date}/cards/{paper1_slug}.md \
-        --type text --title "{Paper1 Title} — Analysis Card" --json
-    NOTEBOOKLM_HOME="..." \
-      notebooklm source add outputs/weekly-review/{date}/cards/{paper2_slug}.md \
-        --type text --title "{Paper2 Title} — Analysis Card" --json
-
-    # Step 16b: Upload original PDFs (one per paper; skip if genuinely unavailable)
-    NOTEBOOKLM_HOME="..." \
-      notebooklm source add "podcast/pdfs/{paper1_slug}.pdf" \
-        --type file --title "{Paper1 Title} (Original PDF)" --json
-
-    # Step 16c: Upload article (narrative structure)
-    NOTEBOOKLM_HOME="..." \
-      notebooklm source add outputs/weekly-review/{date}/article/article_{date}_{theme}.md \
-        --type text --title "Article: {theme}" --json
-
-    # Step 16d: Upload podcast prompt
-    NOTEBOOKLM_HOME="..." \
-      notebooklm source add outputs/weekly-review/{date}/podcast/podcast_{theme}.md \
-        --type text --title "Podcast Instructions" --json
-
-    # Step 17.5: Verify all 4 source categories present (HARD GATE)
-    # Run: notebooklm source list --json | check: cards(16a)✓ PDFs(16b)✓ article(16c)✓ prompt(16d)✓
-    # If any category missing: STOP, upload it, re-verify. Do NOT proceed to generate.
-
-    NOTEBOOKLM_HOME="..." \
-      notebooklm generate audio \
-        "一位水文学者，单人讲解，平实客观地介绍这组论文。开场白直接从论文内容出发，不要假设场景或设问。逐篇讨论，每篇四段：做了什么、怎么做的、发现了什么、意味着什么。所有事实来自Analysis Card和PDF。" \
-        --wait --timeout 900 --interval 5 --retry 3 --language zh_Hans --json
-
-    NOTEBOOKLM_HOME="..." \
-      notebooklm download audio outputs/weekly-review/{date}/podcast/audio_{theme}.mp3 \
-        --force --json
-    ```
-
-    Audio files: `podcast/audio_{theme}.mp3` — one per direction. If any step fails, write `podcast/MANUAL_NOTEBOOKLM_STEPS_{theme}.md`.
-
-18.5 **Post-Download Audio Verification (HARD GATE — CANNOT BE SKIPPED):**
-
-    **Why this gate exists**: In a past run, four audio files were downloaded but three had identical MD5 hashes — the download step had cross-wired: multiple `download audio` commands all pointed at (or fell back to) the same notebook, and no one verified afterward. The sources, prompts, and generations were all correct — the error was purely in the download step.
-
-    **Verification procedure (execute AFTER all downloads complete):**
-
-    ```bash
-    # Step 1: Compute MD5 hashes of all downloaded audio files
-    cd outputs/weekly-review/{date}/podcast
-    md5sum audio_*.mp3  # macOS: md5 audio_*.mp3
-
-    # Step 2: Verify ALL hashes are UNIQUE
-    # If any two files share the same MD5 → CROSS-WIRED DOWNLOAD DETECTED
-    # → Delete the duplicates, re-download from the correct notebooks, re-verify.
-    ```
-
-    **Step 3: Verify each audio file's artifact title matches its intended direction.**
-
-    For each downloaded audio, the `notebooklm download audio` command prints a line like:
-    `Artifact: {auto-generated title} (latest of N artifacts)`
-
-    Record these titles and cross-reference against the intended direction:
-
-    | Audio File | Intended Direction | Downloaded Artifact Title | Match? |
-    |-----------|-------------------|--------------------------|--------|
-    | audio_1.mp3 | {direction_1_theme} | {title from download} | ☐ |
-    | audio_2.mp3 | {direction_2_theme} | {title from download} | ☐ |
-    | ... | ... | ... | ☐ |
-
-    **Match criteria** (not exact title match — NotebookLM auto-generates creative titles):
-    - The artifact title should be TOPICALLY RELATED to the notebook's intended theme
-    - If the same artifact title appears for two different notebooks → CROSS-WIRED → re-download
-    - If an artifact title clearly belongs to a different direction (e.g., an audio for the "flood error structures" direction has a title about "AI compressing weather data") → CROSS-WIRED → re-download
-    - **When in doubt**: play the first 30 seconds of the audio to verify the topic
-
-    **Hard rule**: ALL audio files must have UNIQUE MD5 hashes AND topically-matching artifact titles. If either check fails, fix the downloads and re-verify. Do NOT deliver audio files to the user without passing this gate.
-
 ## Failure Handling
 
 | Scenario | Resolution |
@@ -532,10 +343,6 @@ Each article/direction gets its own independent podcast. One podcast covers 2-4 
 | Evaluation agent finds accuracy issues | Fix issues → re-evaluate changed sections. **Do not skip this loop.** Repeat until passing verdict. |
 | Evaluation phase skipped or bypassed | This is a Contract violation. Stop, launch evaluation agents for all articles, and do not deliver articles until all evaluations pass. |
 | Stories cannot form single narrative | Propose split to user. Wait for confirmation, then write separate articles. |
-| `notebooklm` CLI not installed | `pip install notebooklm-py[browser]` into the project environment |
-| `notebooklm doctor` reports no auth | Run `NOTEBOOKLM_HOME="D:/code/mylibrary/.tmp/notebooklm" uv run notebooklm login --browser chrome`. The CLI opens Chrome and reads the existing Google login session — if you're already logged into Google in Chrome (most users), it detects this automatically and saves auth in under 5 seconds without any OAuth prompt. No need for Playwright or manual browser interaction. Verify with `notebooklm doctor`. |
-| NotebookLM generation times out | The `--timeout 900` flag gives 15 minutes. If it still times out, the podcast may be very long. Write `MANUAL_NOTEBOOKLM_STEPS.md` and tell user to generate in the web UI. |
-| Article too long for single NotebookLM source | Split into multiple text sources: `article_part1.md`, `article_part2.md`. NotebookLM limit is ~500K words per source. |
 | Zotero attachment 404 (GDrive-only PDF) | Observed in a 48-paper run: many entries return `zotero_get_fulltext` 404 or "unresolved path" because the PDF lives only on `G:/我的云端硬盘/Documents/Papers/Zotero_Papers/`. Fix: use `zotero_get_file_info` to get the filename, then Read the PDF directly from the G-drive directory (or `zotero_read_pdf_pages`), OR for arXiv preprints download `https://arxiv.org/pdf/{id}`. Do NOT downgrade to abstract-only when a G-drive PDF exists — the G-drive fallback recovered full text for ~6 papers in that run. |
 | Zotero fulltext extraction polluted (mixed papers) | Observed twice in a 48-paper run: `zotero_get_fulltext` returned content contaminated with a different paper (e.g., 42% of one file was another neural-operator paper; ~29% of another was the NRRPI paper). Mitigation: after retrieval, sanity-check the text matches the expected title/abstract. If polluted, cross-verify with `zotero_get_file_info` + direct G-drive PDF read, or `zotero_read_pdf_pages`. Record the pollution in the card's 局限性 section. |
 
@@ -548,7 +355,6 @@ After each phase, report progress:
 - **Phase 2**: "已完成 M 篇深度解析（N 篇通过子代理），分析卡保存至 `cards/`" — list the slugs
 - **Phase 3**: "故事架构: {single narrative / N separate articles}" → "文章已生成: `article/article_{date}.md` ({word_count} 字)"
 - **Phase 3.5**: "评估结果: {通过 / N issues found and resolved}"
-- **Phase 4**: "播客已生成: `podcast/audio_overview.mp3`" OR "播客素材已准备，需手动完成: 见 `podcast/MANUAL_NOTEBOOKLM_STEPS.md`"
 
 Final summary:
 
@@ -558,5 +364,4 @@ Final summary:
 > - **文章**: `outputs/weekly-review/{date}/article/article_{date}.md`
 > - **评估**: {通过 / N issues resolved}
 > - **分析卡**: `outputs/weekly-review/{date}/cards/`
-> - **播客**: {audio_path 或 "需手动生成"}
 > - **下一步**: {建议}

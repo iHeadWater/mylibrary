@@ -20,7 +20,6 @@ hydrolitagent/
 ├── literature/              # 文献深度处理（从 dailyinfo 迁入）
 │   ├── _paths.py            # 路径助手
 │   ├── bilibili_upload.py   # B 站发布
-│   ├── zotero_notebooklm.py # Zotero → NotebookLM
 │   └── wechat/              # 公众号（figure/polish/push）
 ├── graph/                   # graphify 知识图谱
 ├── query/                   # 图查询
@@ -45,7 +44,7 @@ skills/
 ├── paper-to-zotero/         # 论文入库 Skill（详细版）
 ├── run-paper-to-zotero/     # 论文入库 Skill（简化版）
 ├── weekly-review/           # 每周文献综述（从 dailyinfo 迁入）
-├── zotero-notebooklm/       # Zotero → NotebookLM（迁入）
+├── paper-video/             # 单篇论文动画课
 ├── weekly-report-skill/     # 公众号周报（迁入）
 ├── figure-skill-v2/         # 配图/封面（迁入）
 ├── bilibili-upload/         # B 站发布（迁入）
@@ -53,7 +52,7 @@ skills/
 └── literature-cards/        # 文献卡与主题卡的 skill 入口
 
 outputs/
-└── weekly-review/{date}/    # 精读产物（cards/article/podcast）
+└── weekly-review/{date}/    # 精读产物（cards/article）
 
 papers/                      # 按主题组织的文献库（知识库核心资产）
 tests/                       # pytest（含迁入的 test_literature_*）
@@ -181,7 +180,7 @@ Skills 是面向 Agent 的封装层，每个 Skill 包含：
 
 | 线 | 做什么 | 代码 / 数据 | 用户入口 |
 |---|---|---|---|
-| **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/播客/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（12 个技能） | [MCP Server 工具](../user-guide/mcp-tools.md) |
+| **工具链** | 入库与消费：DOI/arXiv/标题 → PDF → Zotero 条目；读库、精读、知识图谱、公众号/论文动画课/B 站 | `hydrolitagent/`、`scripts/`、`skills/`（12 个技能） | [MCP Server 工具](../user-guide/mcp-tools.md) |
 | **文献卡与主题卡** | 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题（默认 PDF→Markdown，跨平台，不需要 Poppler） | `hydrolitagent/cards/`、`skills/literature-cards/` | [文献卡与主题卡](../user-guide/cards/index.md) |
 | **证据卡与主题综合** | 来源 → 证据卡 → 初步主题 → **人工筛选门** → 既定主题 → Claim 准入 → 万字综合 | `skills/hydrology-evidence-cards/`、`skills/hydrology-theme-synthesis/`、[模板资产](../user-guide/cards/templates.md) | [模板资产](../user-guide/cards/templates.md) |
 

@@ -4,7 +4,7 @@
 
 | ① 收进来 | ② 读进去 | ③ 组织起来 | ④ 产出内容 | ⑤ 沉淀成资产 |
 |---|---|---|---|---|
-| 下载 PDF · 建 Zotero 条目 | 检索 · 精读 · 分析卡 | 主题分类 | 公众号 · 播客 · B 站 | 证据卡 · 主题池 |
+| 下载 PDF · 建 Zotero 条目 | 检索 · 精读 · 分析卡 | 主题分类 | 公众号 · 论文动画课 · B 站 | 证据卡 · 主题池 |
 
 入口是 **Zotero 文献库**。进入 Zotero **之前**的情报采集由上游兄弟仓库 **dailyinfo** 负责 —— 本仓库从那里接手。
 
@@ -44,7 +44,7 @@ cd /path/to/mylibrary
 |---|---|---|
 | 「把这篇论文**下载并入库**」 | DOI / arXiv / 标题 → 下载 PDF → 建 Zotero 条目 + `linked_file` 附件 | [论文入库流水线](user-guide/paper-pipeline.md) |
 | 「去我的库里找找 X 相关的文献」 | 搜 / 读 Zotero 库（含全文、附件与批注） | [MCP Server 工具](user-guide/mcp-tools.md) |
-| 「把这批论文精读成分析卡 / 出一期公众号+播客」 | 每周综述：精读全文 → 分析卡 → 主题聚类 → 文章 → 播客 | [文献深度处理](user-guide/literature.md) |
+| 「把这批论文精读成分析卡 / 出一期公众号综述」 | 每周综述：精读全文 → 分析卡 → 主题聚类 → 文章 | [文献深度处理](user-guide/literature.md) |
 | 「把《某某》这篇做成卡」 | 从你的 Zotero 找到它 → 读 PDF → 出主体卡草稿 → 代码校验 | [文献卡与主题卡](user-guide/cards/index.md) |
 | 「这几篇都做一下」 | 同一条链路逐篇跑，一篇失败不拖累其余 | [单篇论文输入](user-guide/cards/paper-input.md) |
 | 「看看能聚出哪些主题」 | 由已有的文献卡生成候选主题、必要时定向精读并回填 | [统一主题池](user-guide/cards/unified-theme-pool.md) |
@@ -65,7 +65,7 @@ cd /path/to/mylibrary
 | 论文入库流水线 | DOI / arXiv ID / 标题 → 下载 PDF → Zotero 条目 + linked_file 附件 | [论文入库流水线](user-guide/paper-pipeline.md) |
 | 论文 PDF 下载 | 独立 CLI，用 Playwright 驱动本机 Chrome（不依赖 Claude Code） | [论文 PDF 下载](user-guide/download-pdf.md) |
 | Zotero 入库（linked_file） | 已下载 PDF 同步进 Zotero，零云端配额 | [Zotero 入库](user-guide/zotero-sync.md) |
-| Zotero → NotebookLM | 新增论文整理成中文简报 / 音频 / 视频概览 | [Zotero → NotebookLM](user-guide/zotero-notebooklm.md) |
+| 论文动画课 | 单篇 Zotero 论文或 PDF → 中文动画课 | [配置与用法](user-guide/paper-video.md) |
 | 文献深度处理 | Literature CLI：每周综述、公众号发布/润色/配图、B 站上传 | [文献深度处理](user-guide/literature.md) |
 | **文献卡与主题卡** | 自己的 Zotero 论文 → 文献卡 → 候选主题（跨平台，PDF→Markdown，不需要 Poppler） | [文献卡与主题卡](user-guide/cards/index.md) |
 | **产物阅读层** | `cards index`：产物根 → Obsidian vault（HOME、卡片索引、主题阅读页，链接自检） | [在 Obsidian 里读产物](user-guide/cards/reading-in-obsidian.md) |
@@ -84,8 +84,8 @@ cd /path/to/mylibrary
 - [在 Obsidian 里读产物](user-guide/cards/reading-in-obsidian.md) — 把产物根当 vault 打开，从 `HOME.md` 开始
 - [MCP Server 工具](user-guide/mcp-tools.md) — 12 个 MCP 工具完整参考
 - [论文入库流水线](user-guide/paper-pipeline.md) — DOI 到 Zotero 的完整流程
-- [论文 PDF 下载（机构访问）](user-guide/download-pdf.md) · [Zotero 入库（linked_file）](user-guide/zotero-sync.md) · [Zotero → NotebookLM](user-guide/zotero-notebooklm.md)
-- [文献深度处理](user-guide/literature.md) — 精读/主题/公众号/播客 CLI
+- [论文 PDF 下载（机构访问）](user-guide/download-pdf.md) · [Zotero 入库（linked_file）](user-guide/zotero-sync.md) · [论文动画课](user-guide/paper-video.md)
+- [文献深度处理](user-guide/literature.md) — 精读、主题与公众号
 - [Zotero 配置参考](user-guide/config.md) — 配置文件与环境变量逐字段
 - [模块架构](development/architecture.md) — 代码结构与数据流
 - [贡献指南](development/contributing.md) — 如何运行测试与添加新工具

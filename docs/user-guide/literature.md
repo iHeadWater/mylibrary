@@ -1,7 +1,7 @@
 # 文献深度处理（Literature CLI）
 
-从 dailyinfo 迁入的文献处理能力：**精读、主题、公众号、播客、B 站发布**。
-它与「文献卡与主题卡」是两条不同的路子 —— 这边产出**当期内容**（文章、播客、分析卡），
+从 dailyinfo 迁入的文献处理能力：**精读、主题、公众号、B 站发布**。
+它与「文献卡与主题卡」是两条不同的路子 —— 这边产出**当期内容**（文章、分析卡），
 那边把文献沉淀成**长期可追溯**的资产。
 
 ## CLI 用法（统一用 `uv run python -m`）
@@ -20,10 +20,6 @@ uv run python -m hydrolitagent.literature.zotero_sync <pdf> <doi> --json
 # B 站上传(封面自动生成)
 uv run python -m hydrolitagent.literature.bilibili_upload <audio.mp3> \
   --title "标题" --tags "AI,水文,科研" [--dry-run]
-
-# NotebookLM 简报/音频
-uv run python -m hydrolitagent.literature.zotero_notebooklm \
-  --collection water --artifact audio --open-missing-pdfs
 
 # 公众号发布
 uv run python -m hydrolitagent.literature.wechat.push <polished.md> [--thumb <media_id>]
@@ -44,8 +40,6 @@ uv run python -m hydrolitagent.literature.wechat.figure <article.md>
 | `GDRIVE_PAPERS_PATH` | GDrive 论文文件夹(Linked Attachment Base Directory) | zotero_sync.py |
 | `ZHIPUAI_API_KEY` | 智谱 AI(CogView)配图/封面 | wechat/figure.py |
 | `WECHAT_APPID` / `WECHAT_APPSECRET` / `WECHAT_THUMB_MEDIA_ID` | 公众号发布 | wechat/push.py |
-| `NOTEBOOKLM_HOME` | NotebookLM CLI 配置目录(未设置时用 notebooklm-py 默认 `~/.notebooklm`;本仓库 skill 推荐设为 `.tmp/notebooklm`) | zotero_notebooklm.py |
-| `ZOTERO_LOCAL_BASE_URL` | Zotero 本地 API(默认 `http://127.0.0.1:23119`)；旧名 `ZOTERO_LOCAL_API_URL` 仍兼容 | zotero_notebooklm.py |
 
 > ⚠️ 凭据一律从环境变量读取,**不要把 API 密钥硬编码进源码**。`push.py` 曾硬编码微信凭据,迁移时已修复为 env 读取。
 
@@ -53,11 +47,11 @@ uv run python -m hydrolitagent.literature.wechat.figure <article.md>
 
 - [论文 PDF 下载（机构访问）](download-pdf.md) — Playwright 浏览器下载
 - [Zotero 入库（linked_file）](zotero-sync.md) — PDF → Zotero 条目
-- [Zotero → NotebookLM 简报](zotero-notebooklm.md) — 新机器配置与完整工作流
+- [论文动画课](paper-video.md) — 新机器配置与完整工作流
 
 ## 精读产物(知识库)
 
-每周文献综述的产出(分析卡、文章、播客)统一放在 `outputs/weekly-review/{YYYY-MM-DD}/`。
+每周文献综述的产出(分析卡、文章)统一放在 `outputs/weekly-review/{YYYY-MM-DD}/`。
 
 > `outputs/` 只是**默认落点**。产物根可配置——要同步到 OneDrive / Google Drive / 坚果云,
 > 设 `HYDROLITAGENT_ROOT`（graph 与文献产物共用）或 `HYDROLITAGENT_LITERATURE_ROOT`
@@ -68,19 +62,18 @@ uv run python -m hydrolitagent.literature.wechat.figure <article.md>
 outputs/weekly-review/2026-08-04/
 ├── cards/         # 8 段分析卡(每篇一篇)
 ├── article/       # 公众号文章
-├── podcast/       # 播客音频
 └── 文献总览.md     # 本期论文分类总览
 ```
 
-精读流程由 `skills/weekly-review/` 驱动:每篇论文一个子代理精读全文 → 写 8 段分析卡 → 主题聚类 → 文章 → 播客。
+精读流程由 `skills/weekly-review/` 驱动:每篇论文一个子代理精读全文 → 写 8 段分析卡 → 主题聚类 → 文章。
 
 ## 相关 Skill
 
 | Skill | 功能 |
 |-------|------|
-| `weekly-review` | 每周文献综述:精读→卡片→主题→文章→播客 |
-| `zotero-notebooklm` | Zotero 论文 → NotebookLM 简报/音频/视频 |
-| `weekly-report-generator` | NotebookLM 输出 → 公众号周报 |
+| `weekly-review` | 每周文献综述:精读→卡片→主题→文章 |
+| `paper-video` | 单篇论文动画课 |
+| `weekly-report-skill` | 周报初稿 → 公众号周报 |
 | `figure-skill-v2` | 配图/封面 |
 | `bilibili-upload` | B 站发布 |
 | `download-pdf` | 论文 PDF 下载(机构访问)+ Zotero 同步 |
