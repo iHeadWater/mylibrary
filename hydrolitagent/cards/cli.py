@@ -48,7 +48,12 @@ from hydrolitagent.cards.paper_input import (
     prepare_paper_input,
 )
 from hydrolitagent.cards.progress import ConsoleProgress
-from hydrolitagent.cards.themes import run_themes
+from hydrolitagent.cards.themes import ThemeError, run_themes
+from hydrolitagent.cards.theme_admin import (
+    audit as themes_audit,
+    merge as themes_merge,
+    prune as themes_prune,
+)
 from hydrolitagent.cards.theme_session import (
     finalize_theme_session,
     prepare_theme_session,
@@ -190,6 +195,36 @@ def _parser() -> argparse.ArgumentParser:
                 "--no-progress", action="store_true",
                 help="关闭 stderr 实时进度，仅保留最终结果",
             )
+
+    audit_parser = subparsers.add_parser(
+        "themes-audit",
+        help="只读：区分注册主题与注册表外孤儿候选，并报告证据集重复",
+    )
+    audit_parser.add_argument("--config", default=_default_config_path(),
+                              help="总配置文件路径；默认读取项目 config/config.json")
+    audit_parser.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
+
+    merge_parser = subparsers.add_parser(
+        "themes-merge",
+        help="把同证据的重复注册主题退役到 canonical；原子提交注册表",
+    )
+    merge_parser.add_argument("--config", default=_default_config_path(),
+                              help="总配置文件路径；默认读取项目 config/config.json")
+    merge_parser.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
+    merge_parser.add_argument("--canonical", required=True, help="保留的主题编号 TH-...")
+    merge_parser.add_argument("--retire", action="append", required=True,
+                              help="待退役主题编号，可重复；证据集必须与 canonical 相同")
+    merge_parser.add_argument("--reason", required=True, help="合并理由；写入 changes/<id>/inputs.json")
+
+    prune_parser = subparsers.add_parser(
+        "themes-prune",
+        help="把注册表外孤儿候选移动到 themes/orphans/；默认 dry-run，只移动不删除",
+    )
+    prune_parser.add_argument("--config", default=_default_config_path(),
+                              help="总配置文件路径；默认读取项目 config/config.json")
+    prune_parser.add_argument("--json", action="store_true", help="输出机器可读取 JSON")
+    prune_parser.add_argument("--apply", action="store_true",
+                              help="实际移动孤儿目录；不传则只报告")
 
     run = subparsers.add_parser(
         "run",
@@ -1074,6 +1109,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         if result.get("status") == "CANCELLED":
             _emit(result, args.json)
             return 130
+    elif args.command in {"themes-audit", "themes-merge", "themes-prune"}:
+        try:
+            if args.command == "themes-audit":
+                result = themes_audit(app_config)
+            elif args.command == "themes-merge":
+                result = themes_merge(
+                    app_config,
+                    canonical=args.canonical,
+                    retire=args.retire,
+                    reason=args.reason,
+                )
+            else:
+                result = themes_prune(app_config, apply=args.apply)
+        except ThemeError as exc:
+            result = {
+                "schema_version": 1,
+                "ok": False,
+                "operation": args.command.replace("-", "_"),
+                "status": "BLOCKED",
+                "error": {"code": exc.code, "message": str(exc), **getattr(exc, "details", {})},
+            }
+        if (args.command == "themes-merge" and result.get("ok")
+                and result.get("status") == "CANDIDATES_MERGED"):
+            _apply_reading_layer(result, app_config)
     else:
         raise AssertionError(f"未处理的命令：{args.command}")
     _emit(result, args.json)

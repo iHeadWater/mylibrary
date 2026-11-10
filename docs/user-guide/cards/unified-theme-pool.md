@@ -91,6 +91,23 @@ outputs/
 > 另一件**尚未实现**的事：让平台受控地搜索 / 写入你的 Obsidian（Vault 接入选型见
 > [项目级设计](../../development/platform/project-design.md)）。两件事别混。
 
+## 审计与清理
+
+`candidates/` 目录里可能出现**没走完提交**的孤儿版本（运行中断、并发写入或旧批次遗留）。
+**注册表才是事实源**：`themes/index.md` 与 `_registry.json` 里没有的主题，不是当前主题。
+
+```bash
+uv run hydrolitagent cards themes-audit --json              # 只读：注册主题 vs 孤儿目录，附证据集重复组
+uv run hydrolitagent cards themes-prune --json              # dry-run：只列出会被归档的孤儿
+uv run hydrolitagent cards themes-prune --apply --json      # 移到 themes/orphans/<CHANGE>/，只移动不删除
+uv run hydrolitagent cards themes-merge --canonical TH-... --retire TH-... --reason "..." --json
+```
+
+- `themes-audit` 按注册表 `current` / `history` 引用的**版本目录**判断孤儿，不按主题编号前缀猜。
+- `themes-prune` 默认不移动；`--apply` 只归档孤儿，写 `manifest.json` 可追溯，不删任何文件。
+- `themes-merge` 只处理注册表内的主题，且要求待退役主题与 canonical 的**证据集完全相同**；
+  通过 `theme_pool.commit()` 原子提交，幂等重跑返回 `NO_CHANGE_NEEDED`。
+
 ## 边界
 
 - **正式主题不能被自动改写**：候选必须**由人确认**才能转正式；`themes-run` 只产出候选，**不自动晋级**。
