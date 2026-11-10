@@ -4,14 +4,6 @@
 
 mylibrary 帮你把论文收进 Zotero，完成精读与整理，再产出可复用的证据卡、综述、文章和动画课。上游项目 [dailyinfo](https://github.com/iHeadWater/dailyinfo) 负责论文入库前的科研情报采集。
 
-## 效果展示
-
-同一个工作流生成的两期中文动画课，横屏 1080p，含旁白与字幕，合在一个稿件的两个 P 里：
-
-| [![DrLIM 动画课](docs/assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | [![CPC 动画课](docs/assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
-|---|---|
-| **DrLIM** · Hadsell、Chopra、LeCun，CVPR 2006 —— 用对比损失学习不变量映射 · [在 B 站看 P1 →](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | **CPC** · van den Oord、Li、Vinyals，DeepMind 2018 —— 在潜空间预测未来，用 InfoNCE 学表示 · [在 B 站看 P2 →](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
-
 ## 快速开始
 
 克隆仓库后，在 Claude Code 或 Codex 等编码助手里打开 `mylibrary` 文件夹。所有命令都从仓库根目录运行。
@@ -48,6 +40,18 @@ cp .env.example .env
 | 统计这位学者或这个机构的发文 | 用 OpenAlex 确认身份并汇总发表记录 | [论文统计](docs/user-guide/scholars/index.md) |
 
 也可以[在 Obsidian 里浏览阅读产物](docs/user-guide/cards/reading-in-obsidian.md)，或[检查当前模型和产物路径](docs/user-guide/cards/runtime-maintenance.md)。
+
+## 效果展示
+
+上面这些工作流能产出什么，先看几个例子。
+
+### 论文动画课
+
+同一个工作流生成的两期中文动画课，横屏 1080p，含旁白与字幕，合在一个稿件的两个 P 里：
+
+| [![DrLIM 动画课](docs/assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | [![CPC 动画课](docs/assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
+|---|---|
+| **DrLIM** · Hadsell、Chopra、LeCun，CVPR 2006 —— 用对比损失学习不变量映射 · [在 B 站看 P1 →](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | **CPC** · van den Oord、Li、Vinyals，DeepMind 2018 —— 在潜空间预测未来，用 InfoNCE 学表示 · [在 B 站看 P2 →](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
 
 ## 命令行示例
 

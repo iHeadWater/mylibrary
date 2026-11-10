@@ -4,14 +4,6 @@
 
 mylibrary helps you collect papers in Zotero, read and organize them, and turn them into reusable evidence cards, reviews, articles, and animated explainers. The upstream [dailyinfo](https://github.com/iHeadWater/dailyinfo) project collects research updates before papers enter Zotero.
 
-## See it in action
-
-Two papers, turned into narrated Chinese explainers by the same workflow — collected as one two-part video:
-
-| [![DrLIM explainer](docs/assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | [![CPC explainer](docs/assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
-|---|---|
-| **DrLIM** · Hadsell, Chopra & LeCun, CVPR 2006 — learn an invariant mapping with a contrastive loss · [Watch P1 on Bilibili →](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | **CPC** · van den Oord, Li & Vinyals, DeepMind 2018 — predict the future in latent space with InfoNCE · [Watch P2 on Bilibili →](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
-
 ## Quick start
 
 Open the cloned `mylibrary` folder in your coding agent, such as Claude Code or Codex. Run commands from the repository root.
@@ -48,6 +40,18 @@ See the [installation guide](docs/getting-started/installation.md) for configura
 | Find publication statistics for this researcher or institution | Resolve identities and summarize publication records with OpenAlex | [Publication statistics](docs/user-guide/scholars/index.md) |
 
 You can also [browse the reading outputs in Obsidian](docs/user-guide/cards/reading-in-obsidian.md) or [check the model and output paths](docs/user-guide/cards/runtime-maintenance.md).
+
+## Showcase
+
+A few things the workflows above produce.
+
+### Animated paper explainers
+
+Two papers, turned into narrated Chinese explainers by the same workflow — collected as one two-part video:
+
+| [![DrLIM explainer](docs/assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | [![CPC explainer](docs/assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
+|---|---|
+| **DrLIM** · Hadsell, Chopra & LeCun, CVPR 2006 — learn an invariant mapping with a contrastive loss · [Watch P1 on Bilibili →](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | **CPC** · van den Oord, Li & Vinyals, DeepMind 2018 — predict the future in latent space with InfoNCE · [Watch P2 on Bilibili →](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
 
 ## Command-line examples
 
