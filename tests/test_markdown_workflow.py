@@ -104,7 +104,7 @@ def app_config(tmp_path):
     assets = {
         "evidence_card_templates_dir": ASSETS_DIR / "templates/evidence-cards",
         "evidence_card_template_catalog_file": ASSETS_DIR / "templates/evidence-cards/_catalog.json",
-        "evidence_card_generation_prompt_file": ASSETS_DIR / "prompts/evidence-card-generation-v9.md",
+        "evidence_card_generation_prompt_file": ASSETS_DIR / "prompts/evidence-card-generation-v10.md",
     }
     return replace(
         base,

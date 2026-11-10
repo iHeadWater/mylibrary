@@ -34,7 +34,7 @@
     "templates_dir": "hydrolitagent/cards/assets/templates",
     "evidence_card_templates_dir": "hydrolitagent/cards/assets/templates/evidence-cards",
     "evidence_card_template_catalog_file": "hydrolitagent/cards/assets/templates/evidence-cards/_catalog.json",
-    "evidence_card_generation_prompt_file": "hydrolitagent/cards/assets/prompts/evidence-card-generation-v9.md",
+    "evidence_card_generation_prompt_file": "hydrolitagent/cards/assets/prompts/evidence-card-generation-v10.md",
     "themes_dir": "themes"
   },
   "zotero": {
