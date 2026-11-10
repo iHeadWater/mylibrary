@@ -6,11 +6,11 @@ mylibrary helps you collect papers in Zotero, read and organize them, and turn t
 
 ## See it in action
 
-Two papers, turned into narrated Chinese explainers by the same workflow — no manual editing:
+Two papers, turned into narrated Chinese explainers by the same workflow — collected as one two-part video:
 
-| [![DrLIM explainer](docs/assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1xGWu68E3x) | [![CPC explainer](docs/assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1NGWu68E8L) |
+| [![DrLIM explainer](docs/assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | [![CPC explainer](docs/assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
 |---|---|
-| **DrLIM** · Hadsell, Chopra & LeCun, CVPR 2006 — learn an invariant mapping with a contrastive loss · [Watch on Bilibili →](https://www.bilibili.com/video/BV1xGWu68E3x) | **CPC** · van den Oord, Li & Vinyals, DeepMind 2018 — predict the future in latent space with InfoNCE · [Watch on Bilibili →](https://www.bilibili.com/video/BV1NGWu68E8L) |
+| **DrLIM** · Hadsell, Chopra & LeCun, CVPR 2006 — learn an invariant mapping with a contrastive loss · [Watch P1 on Bilibili →](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | **CPC** · van den Oord, Li & Vinyals, DeepMind 2018 — predict the future in latent space with InfoNCE · [Watch P2 on Bilibili →](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
 
 ## Quick start
 

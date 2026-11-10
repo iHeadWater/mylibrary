@@ -4,11 +4,11 @@
 
 ## 效果示例
 
-下面两期动画课由本工作流生成，均使用免费 Edge 中文旁白、自动字幕和可编辑的 Remotion 工程：
+下面两期动画课由本工作流生成，均使用免费 Edge 中文旁白、自动字幕和可编辑的 Remotion 工程，合在一个 B 站稿件的两个 P 里：
 
-| [![DrLIM 动画课](../assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1xGWu68E3x) | [![CPC 动画课](../assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1NGWu68E8L) |
+| [![DrLIM 动画课](../assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | [![CPC 动画课](../assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
 |---|---|
-| **DrLIM**（CVPR 2006）—— 用对比损失学习不变量映射 · [在 B 站观看](https://www.bilibili.com/video/BV1xGWu68E3x) | **CPC**（DeepMind 2018）—— 在潜空间预测未来 · [在 B 站观看](https://www.bilibili.com/video/BV1NGWu68E8L) |
+| **DrLIM**（CVPR 2006）—— 用对比损失学习不变量映射 · [在 B 站看 P1](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | **CPC**（DeepMind 2018）—— 在潜空间预测未来 · [在 B 站看 P2](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
 
 ## 首次配置与更新
 

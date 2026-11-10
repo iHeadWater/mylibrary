@@ -6,11 +6,11 @@ mylibrary 帮你把论文收进 Zotero，完成精读与整理，再产出可复
 
 ## 效果展示
 
-同一个工作流生成的两期中文动画课，横屏 1080p，含旁白与字幕：
+同一个工作流生成的两期中文动画课，横屏 1080p，含旁白与字幕，合在一个稿件的两个 P 里：
 
-| [![DrLIM 动画课](docs/assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1xGWu68E3x) | [![CPC 动画课](docs/assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1NGWu68E8L) |
+| [![DrLIM 动画课](docs/assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | [![CPC 动画课](docs/assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
 |---|---|
-| **DrLIM** · Hadsell、Chopra、LeCun，CVPR 2006 —— 用对比损失学习不变量映射 · [在 B 站观看 →](https://www.bilibili.com/video/BV1xGWu68E3x) | **CPC** · van den Oord、Li、Vinyals，DeepMind 2018 —— 在潜空间预测未来，用 InfoNCE 学表示 · [在 B 站观看 →](https://www.bilibili.com/video/BV1NGWu68E8L) |
+| **DrLIM** · Hadsell、Chopra、LeCun，CVPR 2006 —— 用对比损失学习不变量映射 · [在 B 站看 P1 →](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | **CPC** · van den Oord、Li、Vinyals，DeepMind 2018 —— 在潜空间预测未来，用 InfoNCE 学表示 · [在 B 站看 P2 →](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
 
 ## 快速开始
 
