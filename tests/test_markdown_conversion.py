@@ -515,16 +515,31 @@ def _vector_figure_pdf(tmp_path: Path) -> Path:
     return path
 
 
+_CANARY_MARKER = re.compile(r"<!-- reading-canary: [^>]*-->")
+
+
+def _without_canaries(markdown: str) -> str:
+    """Drop the integrity markers so text assertions see visible prose only.
+
+    A canary is eight hex characters of a digest derived from the PDF bytes, and
+    a digest may contain ``901`` by chance; matching against the raw file made
+    this test fail once per few thousand runs on an unlucky hash.
+    """
+
+    return _CANARY_MARKER.sub("", markdown)
+
+
 def test_running_headers_and_footers_are_removed(tmp_path: Path) -> None:
     pdf = _running_matter_pdf(tmp_path)
     prepared, error = _convert(pdf, tmp_path / "out")
 
     assert error is None and prepared is not None
-    markdown = prepared.markdown_path.read_text(encoding="utf-8")
+    markdown = _without_canaries(prepared.markdown_path.read_text(encoding="utf-8"))
     assert "Journal of Test Hydrology" not in markdown
     assert "SMITH ET AL. RUNNING MATTER FIXTURE" not in markdown
     # Page numbers differ per page but normalise to the same running text.
-    assert "901" not in markdown and "902" not in markdown
+    lines = [line.strip() for line in markdown.splitlines()]
+    assert "901" not in lines and "902" not in lines
     assert WARNING_RUNNING_HEADER in prepared.warnings
     # The body survives the filter, including a line that is only a number:
     # page-number removal must be position-bound.
