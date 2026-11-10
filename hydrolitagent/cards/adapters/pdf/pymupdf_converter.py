@@ -1,4 +1,4 @@
-"""Deterministic PDF→Markdown conversion built on PyMuPDF.
+﻿"""Deterministic PDF→Markdown conversion built on PyMuPDF.
 
 The converter is deliberately conservative: it extracts text, simple table
 markup, page anchors and figure images, and it never guesses silently. When a
@@ -91,7 +91,7 @@ from .tables import (
 CONVERTER_ID = "pymupdf"
 # Extraction rules, not just the library version. Bumping this invalidates the
 # content-addressed cache for every PDF, which is exactly what a layout fix needs.
-CONVERTER_REVISION = "layout-6"
+CONVERTER_REVISION = "layout-8"
 DEFAULT_RENDER_DPI = 150
 
 _WHITESPACE = re.compile(r"\s+")
@@ -108,6 +108,14 @@ _SPACE_GAP_FACTOR = 0.25
 _SPACE_GAP_MIN = 2.0
 # Uncatalogued images in the publisher header band are logos, not figures.
 _LOGO_BAND_SHARE = 0.10
+# Some PDFs emit every visual line as its own text block (CNKI two-column
+# Chinese journals, a few LaTeX templates). One block is then not one
+# paragraph, so a block change is joined again when the geometry says the line
+# continues: same left edge, one normal line spacing, no closing punctuation.
+_CONTINUATION_GAP_RATIO = 1.1
+_CONTINUATION_MIN_GAP_RATIO = 0.15
+_CONTINUATION_X_TOLERANCE = 2.5
+_SENTENCE_END = "。！？.!?:：；;"
 
 WARNING_READING_ORDER = "READING_ORDER_UNCERTAIN"
 WARNING_TABLE = "TABLE_EXTRACTION_UNCERTAIN"
@@ -163,6 +171,10 @@ def _is_cjk(character: str) -> bool:
     return _CJK_START <= ord(character) <= _CJK_END
 
 
+def _has_cjk(text: str) -> bool:
+    return any(_is_cjk(character) for character in text)
+
+
 def join_line_text(left: str, right: str) -> str:
     """Join two extracted lines without inserting a space between CJK glyphs."""
 
@@ -173,6 +185,41 @@ def join_line_text(left: str, right: str) -> str:
     if _is_cjk(left[-1]) or _is_cjk(right[0]) or left[-1] in "，。；：、！？）":
         return left + right
     return f"{left} {right}"
+
+
+def continues_line(previous: "_Line | None", current: "_Line") -> bool:
+    """True when ``current`` is the next visual line of the same paragraph.
+
+    PyMuPDF returns one block per visual line for some PDFs (CNKI two-column
+    Chinese journals, a few LaTeX templates). Treating a block change as a
+    paragraph break then shatters the body into 24-character lines, which no
+    sentence splitter can index and no reader can follow. Geometry decides
+    instead: same left edge, one normal line spacing, and a previous line that
+    did not close a sentence.
+    """
+
+    if previous is None or current.level:
+        return False
+    if not previous.text.strip() or not current.text.strip():
+        return False
+    # Latin typesetting already gives PyMuPDF one block per paragraph, so
+    # joining there would merge unrelated paragraphs whenever a line happens to
+    # end without a full stop. Per-line blocks are a CJK-publisher artefact, so
+    # the rule stays inside CJK text and leaves Latin papers' Markdown byte
+    # identical.
+    if not (_has_cjk(previous.text) or _has_cjk(current.text)):
+        return False
+    if previous.text.rstrip()[-1] in _SENTENCE_END:
+        return False
+    height = max(
+        previous.box.y1 - previous.box.y0, current.box.y1 - current.box.y0, 1.0
+    )
+    gap = current.box.y0 - previous.box.y1
+    if not (
+        height * _CONTINUATION_MIN_GAP_RATIO <= gap <= height * _CONTINUATION_GAP_RATIO
+    ):
+        return False
+    return abs(current.box.x0 - previous.box.x0) <= height * _CONTINUATION_X_TOLERANCE
 
 
 def join_spans(fragments: Sequence[tuple[str, Box, float]]) -> str:
@@ -672,12 +719,15 @@ class PymupdfConverter:
         blocks: list[str] = []
         paragraph: list[str] = []
         last_block: int | None = None
+        previous_line: _Line | None = None
         table_index = 0
 
         def flush() -> None:
+            nonlocal previous_line
             if paragraph:
                 blocks.append(paragraph[0])
                 paragraph.clear()
+            previous_line = None
 
         for position in order:
             kind, payload = items[position]
@@ -709,12 +759,14 @@ class PymupdfConverter:
                 blocks.append("#" * line.level + " " + normalize_heading(line.text))
                 continue
             if last_block is not None and line.block != last_block:
-                flush()
+                if not continues_line(previous_line, line):
+                    flush()
             if paragraph:
                 paragraph[0] = join_line_text(paragraph[0], line.text)
             else:
                 paragraph.append(line.text)
             last_block = line.block
+            previous_line = line
         flush()
         return "\n\n".join(blocks) + "\n" if blocks else ""
 
