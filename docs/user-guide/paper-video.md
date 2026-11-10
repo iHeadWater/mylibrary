@@ -2,6 +2,14 @@
 
 在 mylibrary 的项目对话里说「把 Zotero 里的《论文题名》做成中文动画课」，也可以提供条目键、DOI 或本地 PDF。默认制作横屏 1080p 视频，围绕一个核心机制组织动画，再回到论文原图或实验结果。
 
+## 效果示例
+
+下面两期动画课由本工作流生成，均使用免费 Edge 中文旁白、自动字幕和可编辑的 Remotion 工程：
+
+| [![DrLIM 动画课](../assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1xGWu68E3x) | [![CPC 动画课](../assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1NGWu68E8L) |
+|---|---|
+| **DrLIM**（CVPR 2006）—— 用对比损失学习不变量映射 · [在 B 站观看](https://www.bilibili.com/video/BV1xGWu68E3x) | **CPC**（DeepMind 2018）—— 在潜空间预测未来 · [在 B 站观看](https://www.bilibili.com/video/BV1NGWu68E8L) |
+
 ## 首次配置与更新
 
 先安装 Git、Python 3.12–3.14、uv、Node.js 20+（含 npm）和 FFmpeg（含 FFprobe），并确保它们能在终端调用。使用 Zotero 输入时，还需打开 Zotero Desktop 并开启本地 API。然后在仓库根目录运行：
