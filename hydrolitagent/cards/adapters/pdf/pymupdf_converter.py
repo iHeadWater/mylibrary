@@ -73,6 +73,7 @@ from .anchors import (
 from .figures import (
     CaptionBlock,
     FigurePlacement,
+    merge_caption_duplicates,
     select_figures,
     select_vector_figures,
 )
@@ -90,7 +91,7 @@ from .tables import (
 CONVERTER_ID = "pymupdf"
 # Extraction rules, not just the library version. Bumping this invalidates the
 # content-addressed cache for every PDF, which is exactly what a layout fix needs.
-CONVERTER_REVISION = "layout-5"
+CONVERTER_REVISION = "layout-6"
 DEFAULT_RENDER_DPI = 150
 
 _WHITESPACE = re.compile(r"\s+")
@@ -807,22 +808,49 @@ class PymupdfConverter:
         )
         combined.sort(key=lambda item: (round(item.box.y0, 2), round(item.box.x0, 2)))
 
+        # One figure can arrive as many embedded images. Merge them by caption
+        # before rendering, so a two-column layout yields one readable picture
+        # instead of a dozen tiles (and one appendix entry per tile).
+        merged = merge_caption_duplicates(
+            [
+                FigurePlacement(
+                    page=page_no, ordinal=index, box=item.box, caption=item.caption
+                )
+                for index, item in enumerate(combined, start=1)
+            ]
+        )
+
+        # A tile without a caption is kept only when it is big enough to be a
+        # whole figure on its own; otherwise it is one fragment of a picture
+        # whose caption belongs to a sibling, and it would only add a dead
+        # thumbnail to the card's appendix.
+        page_area = page.rect.width * page.rect.height
+        merged = tuple(
+            placement
+            for placement in merged
+            if placement.caption
+            or (
+                placement.box.width >= page.rect.width * 0.35
+                and placement.box.height >= page.rect.height * 0.12
+                and placement.box.area >= page_area * 0.06
+            )
+        )
+
         figures_dir.mkdir(parents=True, exist_ok=True)
         blocks: list[str] = []
         written: list[FigurePlacement] = []
-        for ordinal, item in enumerate(combined, start=1):
-            placement = FigurePlacement(
-                page=page_no,
-                ordinal=ordinal,
-                box=item.box,
-                caption=item.caption,
-            )
+        vector_boxes = [figure.box for figure in vector]
+        for placement in merged:
             if not self._render_region(
-                page, item.box, figures_dir / placement.filename
+                page, placement.box, figures_dir / placement.filename
             ):
                 warnings.add(WARNING_FIGURE)
                 continue
-            if item.vector:
+            if any(
+                min(placement.box.x1, box.x1) > max(placement.box.x0, box.x0)
+                and min(placement.box.y1, box.y1) > max(placement.box.y0, box.y0)
+                for box in vector_boxes
+            ):
                 warnings.add(WARNING_VECTOR_FIGURE)
             written.append(placement)
             blocks.append(
