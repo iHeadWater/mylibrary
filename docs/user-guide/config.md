@@ -21,7 +21,7 @@ ZOTERO_LOCAL_BASE_URL=http://host.docker.internal:23119
 | `ZOTERO_API_KEY` | MCP Server | Zotero Web API 密钥 |
 | `ZOTERO_LIBRARY_ID` | MCP Server | Zotero User ID（数字） |
 | `ZOTERO_LIBRARY_TYPE` | MCP Server | `user`（默认）或 `group`（群组库） |
-| `ZOTERO_LOCAL_BASE_URL` | MCP Server + zotero_notebooklm.py | 本地全文检索 API 地址（host 根）。旧名 `ZOTERO_LOCAL_API_URL` 仍兼容；默认值按使用方不同：MCP Server 为 `http://host.docker.internal:23119`，zotero_notebooklm.py 为 `http://127.0.0.1:23119` |
+| `ZOTERO_LOCAL_BASE_URL` | MCP Server | 本地全文检索 API 地址（host 根）。旧名 `ZOTERO_LOCAL_API_URL` 仍兼容；MCP Server 默认值为 `http://host.docker.internal:23119` |
 
 ### 文献深度处理（literature CLI）环境变量
 
@@ -34,8 +34,6 @@ ZOTERO_LOCAL_BASE_URL=http://host.docker.internal:23119
 | `WECHAT_APPID` | wechat/push.py | 公众号 AppID |
 | `WECHAT_APPSECRET` | wechat/push.py | 公众号 AppSecret |
 | `WECHAT_THUMB_MEDIA_ID` | wechat/push.py | 公众号默认封面 media_id |
-| `NOTEBOOKLM_HOME` | zotero_notebooklm.py | NotebookLM CLI 配置目录(未设置时用 notebooklm-py 默认 `~/.notebooklm`;本仓库 skill 推荐设为 `.tmp/notebooklm`) |
-| `ZOTERO_LOCAL_BASE_URL` | zotero_notebooklm.py | Zotero 本地 API(默认 `http://127.0.0.1:23119`)；旧名 `ZOTERO_LOCAL_API_URL` 仍兼容 |
 
 > ⚠️ 凭据一律从环境变量读取,不要硬编码进源码。参见 [文献深度处理](literature.md)。
 
@@ -45,7 +43,7 @@ ZOTERO_LOCAL_BASE_URL=http://host.docker.internal:23119
 
 ## 精读产物根 {#reading-output-root}
 
-文献综述/精读的产物(分析卡、文章、播客、PDF、B站上传件)都落在一个**可配置的产物根**下。
+文献综述/精读的产物(分析卡、文章、PDF、B站上传件)都落在一个**可配置的产物根**下。
 默认是仓库内的 `outputs/`(已被 `.gitignore` 排除)。可以把它指向
 OneDrive / Google Drive / 坚果云等同步目录,让其他人直接打开产物——不需要手工拷贝。
 
@@ -107,10 +105,10 @@ uv run hydrolitagent paths --json   # 机读(skill 用)
 | `MYLIBRARY_PDF_ROOT` | **旧名**,只影响 `download_pdf output-path` 的计算,优先级高于产物根。`scripts/download_paper.py` 的下载落点用 `--out`(默认 `.playwright-mcp/`),不受它影响 |
 
 > ⚠️ **`.env` 里有已知的静默失效**:`literature/` 下的模块(`download_pdf` /
-> `bilibili_upload` / `zotero_notebooklm`)不调用 `load_dotenv`。产物根解析器会
+> `bilibili_upload`)不调用 `load_dotenv`。产物根解析器会
 > 自己补读 `.env`,所以 `HYDROLITAGENT_ROOT` / `HYDROLITAGENT_LITERATURE_ROOT`
 > 写在 `.env` 里都是生效的;
-> 但 `MYLIBRARY_PDF_ROOT` 和 `NOTEBOOKLM_HOME` 的同款问题还没修 —— 它们写在
+> 但 `MYLIBRARY_PDF_ROOT` 写在
 > `.env` 里会被静默忽略,只有 export 到 shell 才生效。
 
 ## Zotero 配置文件

@@ -30,16 +30,13 @@ def resolve_literature_root() -> Path:
     """按 环境变量 → ``configs/paths.toml`` → ``PROJECT_ROOT/outputs`` 解析产物根。
 
     额外补读一次 ``.env`` 但不写回 ``os.environ``:``literature/`` 下的模块
-    (``download_pdf`` / ``bilibili_upload`` / ``zotero_notebooklm``)都不调用
+    (``download_pdf`` / ``bilibili_upload``)都不调用
     ``load_dotenv``,只认 ``os.environ`` 会让写在 ``.env`` 里的配置静默失效。
     """
     return _resolve(dotenv=None)
 
 
-# 模块级常量,导入时求值。**必须保持是 Path 且是这个模块的属性**:
-# ``zotero_notebooklm`` 用 ``from ... import OUTPUT_ROOT`` 绑定自己的模块全局,
-# 三个测试靠 ``monkeypatch.setattr(zn, "OUTPUT_ROOT", ...)`` 改落点。
-# 换成函数会让那条路子作废。
+# 模块级路径，导入时解析。
 OUTPUT_ROOT = resolve_literature_root()
 
 # 产物根下各子目录。刻意不是配置项 —— 这几个名字是与 skill、文档的契约,

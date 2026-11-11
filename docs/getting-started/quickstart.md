@@ -79,19 +79,16 @@ docker compose exec hermes-coder /opt/hermes/scripts/run-paper-pipeline.sh --dry
 uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>
 ```
 
-## 场景 5：精读成分析卡 / 公众号 / 播客
+## 场景 5：精读成分析卡与公众号文章
 
 **你可以这么说**：
 
-> 「把这批论文精读成分析卡」 · 「出一期公众号 + 播客」
+> 「把这批论文精读成分析卡」 · 「出一期公众号综述」
 
 精读由 `skills/weekly-review/` 驱动：每篇论文一个子代理读全文 → 8 段分析卡 → 主题聚类 →
-公众号文章 → 播客，产物落在 `outputs/weekly-review/{日期}/`。
+公众号文章，产物落在 `outputs/weekly-review/{日期}/`。
 
-```bash
-uv run python -m hydrolitagent.literature.zotero_notebooklm --collection water --artifact audio
-uv run python -m hydrolitagent.literature.bilibili_upload audio.mp3 --title "标题" --dry-run
-```
+想单独讲清一篇论文时，可以说「把这篇论文做成中文动画课」。见[论文动画课](../user-guide/paper-video.md)。
 
 ## 场景 6：把论文做成文献卡与主题卡
 
@@ -122,7 +119,7 @@ uv run hydrolitagent cards index
 - [前提与配置](installation.md) — 通用前提 + 按能力看额外要什么 + 凭据放哪
 - [论文入库流水线](../user-guide/paper-pipeline.md) — 下载与入库的完整流程和故障排查
 - [MCP Server 工具](../user-guide/mcp-tools.md) — 12 个工具的用途、参数与返回格式
-- [文献深度处理](../user-guide/literature.md) — 精读、公众号、播客的 CLI
+- [文献深度处理](../user-guide/literature.md) — 精读和公众号
 - [文献卡与主题卡](../user-guide/cards/index.md) — 自己 Zotero 的论文 → 文献卡 → 主题卡（跨平台，PDF→Markdown）
 - [在 Obsidian 里读产物](../user-guide/cards/reading-in-obsidian.md) — 从 `HOME.md` 开始的阅读层
 - [Zotero 配置参考](../user-guide/config.md) — 环境变量与配置文件

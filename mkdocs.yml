@@ -67,7 +67,7 @@ nav:
       - 论文入库流水线: user-guide/paper-pipeline.md
       - 论文 PDF 下载: user-guide/download-pdf.md
       - Zotero 入库（linked_file）: user-guide/zotero-sync.md
-      - Zotero → NotebookLM 简报: user-guide/zotero-notebooklm.md
+      - 论文动画课: user-guide/paper-video.md
       - 文献深度处理: user-guide/literature.md
       - Zotero 配置参考: user-guide/config.md
       - 文献卡与主题卡:

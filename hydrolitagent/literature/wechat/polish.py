@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Polish a NotebookLM-generated MD using DeepSeek and the weekly-report skill."""
+"""Polish a weekly report draft using DeepSeek and the weekly-report skill."""
 
 import argparse
 import os

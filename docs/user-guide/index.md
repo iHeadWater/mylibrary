@@ -7,10 +7,10 @@
 | **① 收进来** | 下载 PDF · 建 Zotero 条目（含 `linked_file` 附件） | [论文入库流水线](paper-pipeline.md) · [论文 PDF 下载（机构访问）](download-pdf.md) · [Zotero 入库](zotero-sync.md) |
 | **② 读进去** | 按题名 / 全文 / 标签检索库；读全文、附件与批注 | [MCP Server 工具](mcp-tools.md) |
 | **③ 组织起来** | 精读成分析卡；主题聚类 | [文献深度处理](literature.md) |
-| **④ 产出内容** | 公众号文章 / 播客 / B 站 | [文献深度处理](literature.md) |
+| **④ 产出内容** | 公众号文章 / B 站 | [文献深度处理](literature.md) |
 | **⑤ 沉淀成资产** | 文献卡 → 主题卡（长期可追溯） | [文献卡与主题卡](cards/index.md)（细分页见下） |
 | **⑥ 按人/机构统计** | 统计某人/某机构的论文产出、作者位次与研究方向 | [学者与机构论文统计](scholars/index.md) |
-| 另外 | 新增论文 → NotebookLM 中文简报 / 音频 / 视频 | [Zotero → NotebookLM](zotero-notebooklm.md) |
+| 另外 | 单篇 Zotero 论文或 PDF → 中文动画课 | [论文动画课](paper-video.md) |
 | 配置 | 环境变量、TOML、Linked Attachment Base Directory | [Zotero 配置参考](config.md) |
 
 ## 文献卡与主题卡：细分页

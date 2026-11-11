@@ -33,6 +33,17 @@ from pyzotero import zotero as zt
 
 from hydrolitagent.literature.chinese_doi import fetch_chinese_crossref
 
+# Load the repo .env so bare-host runs (no Zotero TOML) can read credentials
+# from ZOTERO_API_KEY / ZOTERO_LIBRARY_ID, same source as the Zotero MCP
+# server and hydrolitagent.literature.zotero_sync.
+# <repo>/hydrolitagent/zotero/paper_to_zotero.py → <repo>/
+# Must run BEFORE the CROSSREF_* constants below: they read the environment at
+# import time, so a .env-only CROSSREF_MAILTO would otherwise be missed.
+_ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
+if _ENV_FILE.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_ENV_FILE)
+
 CROSSREF_MAILTO = os.environ.get("CROSSREF_MAILTO", "").strip()
 CROSSREF_UA = "zotero-bridge/1.0" + (
     f" (mailto:{CROSSREF_MAILTO})" if CROSSREF_MAILTO else ""
@@ -42,15 +53,6 @@ ARXIV_API = "http://export.arxiv.org/api/query"
 # CJK Unified Ideographs (U+4E00–U+9FFF): a title written in Chinese means the
 # record is a Chinese-language paper, not an English one titled in Chinese.
 _CJK_RE = re.compile("[一-鿿]")
-
-# Load the repo .env so bare-host runs (no Zotero TOML) can read credentials
-# from ZOTERO_API_KEY / ZOTERO_LIBRARY_ID, same source as the Zotero MCP
-# server and hydrolitagent.literature.zotero_sync.
-# <repo>/hydrolitagent/zotero/paper_to_zotero.py → <repo>/
-_ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
-if _ENV_FILE.exists():
-    from dotenv import load_dotenv
-    load_dotenv(_ENV_FILE)
 
 
 def fetch_crossref(doi: str, attempts: int = 2) -> dict | None:

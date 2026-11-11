@@ -2,7 +2,7 @@
 
 分三组:
 - 解析优先级(环境变量 → configs/paths.toml → 内置默认);
-- 模块常量必须可 monkeypatch —— zotero_notebooklm 的三个测试依赖这一点;
+- 模块常量必须可 monkeypatch;
 - CLI 的 ``paths`` 子命令。
 
 解析类测试一律显式注入 ``env=`` / ``dotenv=``,不依赖进程真实环境:仓库根有活的
@@ -112,8 +112,7 @@ def test_external_root_via_env_var_needs_no_second_switch(tmp_path):
 def test_env_var_in_env_file_is_honoured(tmp_path):
     """`.env` 里的产物根必须生效。
 
-    回归守卫:literature/ 下的模块(download_pdf / bilibili_upload /
-    zotero_notebooklm)都不调用 load_dotenv,只读 os.environ 会让写在
+    回归守卫:literature/ 下的模块(download_pdf / bilibili_upload)都不调用 load_dotenv,只读 os.environ 会让写在
     .env 里的配置静默失效。
     """
     from_dotenv = tmp_path / "from-dotenv"
@@ -235,10 +234,7 @@ def test_read_dotenv_values_handles_missing_file(tmp_path):
 
 
 def test_output_root_is_a_module_level_path():
-    """zotero_notebooklm 的三个测试依赖这个形状。
-
-    它若变成函数,`monkeypatch.setattr(zn, "OUTPUT_ROOT", tmp_path)` 就废了。
-    """
+    """The configured output root remains an absolute Path."""
     assert isinstance(paths_mod.OUTPUT_ROOT, type(paths_mod.PROJECT_ROOT))
     assert paths_mod.OUTPUT_ROOT.is_absolute()
 
@@ -248,18 +244,6 @@ def test_subdirectory_constants_derive_from_output_root():
     for name in ("WEEKLY_REVIEW_DIR", "PAPERS_DIR", "BILIBILI_DIR", "ZOTERO_DIR"):
         path = getattr(paths_mod, name)
         assert path.parent == paths_mod.OUTPUT_ROOT, f"{name} 不在产物根下"
-
-
-def test_zotero_notebooklm_output_dir_is_still_patchable(monkeypatch, tmp_path):
-    """三个现有测试的写法,这里再钉一遍:patch OUTPUT_ROOT 必须改得动落点。"""
-    import datetime as dt
-
-    from hydrolitagent.literature import zotero_notebooklm as zn
-
-    monkeypatch.setattr(zn, "OUTPUT_ROOT", tmp_path)
-    paths = zn.make_paths(dt.date(2026, 9, 10))
-
-    assert paths.output_dir == tmp_path / "zotero" / "2026-09-10"
 
 
 def test_bilibili_output_dir_is_still_patchable(monkeypatch, tmp_path):

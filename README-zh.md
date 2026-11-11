@@ -1,224 +1,88 @@
-# Hydro AI Papers (mylibrary)
+# mylibrary — 水文水资源科研工作台
 
-[仓库顶层说明](README.md) · [在线文档](https://iheadwater.github.io/mylibrary/)
+[English](README.md) · **简体中文** · [在线文档](https://iheadwater.github.io/mylibrary/)
 
-AI 驱动的水文水资源研究 —— 文献流水线的**深度处理层**:精读、主题分类、公众号文章、播客,以 **Zotero 文献库**为根基。
-
-## 定位
-
-mylibrary 承担**情报汇集之后的深度处理**:
-
-- **Zotero 库是文献库的起点** —— 深度处理典型地以 Zotero 库为文献来源(通过 MCP server 读库)。
-- **Zotero 论文入库也是本仓库能力** —— DOI / arXiv / 标题 → PDF → Zotero 条目的流水线(`run_paper_pipeline.sh`)就在本仓库。
-- 上游的兄弟仓库(dailyinfo)负责**进入 Zotero 之前的情报采集**(资讯流、原始下载);本仓库不读它的输出文件。
-
-产物沉淀为**文献知识库**:`papers/` 按主题组织(10 个主题,约 4000 篇),以及 `outputs/` 下的精读分析卡、公众号文章、播客。
-
-## 能力
-
-| 能力 | 命令 | 文档 |
-|---|---|---|
-| **Zotero 文献查询** — 12 个工具的 MCP Server(streamable HTTP,端口 8002,端点 `/mcp`):搜索、浏览、读取全文/附件/批注 | `uv run python -m hydrolitagent.zotero.server` | [MCP 工具](docs/user-guide/mcp-tools.md) |
-| **论文入库** — DOI / arXiv ID / 标题 → PDF → Zotero 条目 + `linked_file` 附件 | `bash scripts/run_paper_pipeline.sh "<DOI|arXiv|title>"` | [入库流水线](docs/user-guide/paper-pipeline.md) |
-| **论文 PDF 下载** — 机构访问:独立 CLI,用 Playwright 驱动本机 Chrome(不依赖 Claude Code) | `uv run python scripts/download_paper.py --doi <doi> [--sync]` | [PDF 下载](docs/user-guide/download-pdf.md) |
-| **Zotero 入库 linked_file** — 已下载 PDF 同步进 Zotero 作为 `linked_file`(零云端配额) | `uv run python -m hydrolitagent.literature.zotero_sync <pdf> <doi>` | [Zotero 入库](docs/user-guide/zotero-sync.md) |
-| **Zotero → NotebookLM** — 新增论文整理成中文简报 / 音频 / 视频概览 | `uv run python -m hydrolitagent.literature.zotero_notebooklm --collection <name> --artifact audio` | [NotebookLM](docs/user-guide/zotero-notebooklm.md) |
-| **文献深度处理** — Literature CLI:每周综述、公众号发布/润色/配图、B 站上传 | `uv run python -m hydrolitagent.literature.wechat.push <md>` | [文献深度处理](docs/user-guide/literature.md) |
-| **论文复现** — 复现 AI 驱动水文学关键论文 | — | `equation_from_data/`、`google_floodhub/` |
-| **文献卡与主题卡平台** — 从自己 Zotero 的一篇论文 → 主体卡草稿 → 代码校验 → 若干文献卡 → 候选主题。确定性校验。**运行时为 Windows-only。** | `uv run hydrolitagent cards ai-config --json` | [平台文档](docs/user-guide/cards/index.md) |
-| **产物阅读层** — `cards index` 把产物根生成成可读的 Obsidian vault:`HOME.md`、卡片索引、阅读版卡片、主题阅读页;链接自检,机器原稿不动 | `uv run hydrolitagent cards index --json` | [在 Obsidian 里读产物](docs/user-guide/cards/reading-in-obsidian.md) |
+mylibrary 帮你把论文收进 Zotero，完成精读与整理，再产出可复用的证据卡、综述、文章和动画课。上游项目 [dailyinfo](https://github.com/iHeadWater/dailyinfo) 负责论文入库前的科研情报采集。
 
 ## 快速开始
 
-**单篇制卡用户：** 请先看[仓库首页](README.md)的「开工前先配好这些」和[前提与配置](docs/getting-started/installation.md)；能力清单见[文献卡与主题卡](docs/user-guide/cards/index.md)。支持自己的个人/群组 Zotero 文库、Codex/Claude CLI 和可配置输出目录；不需要作者的本机路径、账号或 `.venv`。以下配置主要服务其他工具链，不是单篇制卡必须照抄的前置条件。
+克隆仓库后，在 Claude Code 或 Codex 等编码助手里打开 `mylibrary` 文件夹。所有命令都从仓库根目录运行。
 
 ```bash
-# 克隆并安装
-git clone git@github.com:iHeadWater/mylibrary.git
+git clone https://github.com/iHeadWater/mylibrary.git
 cd mylibrary
-uv sync --all-packages   # 装依赖(原 workspace 成员已并入 hydrolitagent/cards)
-
-# 配置
-cp .env.example .env   # 按需填 DEEPSEEK_API_KEY、ZOTERO_API_KEY、ZOTERO_LIBRARY_ID 等
+uv sync --locked
+cp .env.example .env
 ```
 
-> 本仓库只有一个包 **`hydrolitagent`** —— 文献卡与主题卡能力在它的 `hydrolitagent/cards/` 子包(workspace 成员随之取消)。`.venv` 与 `uv.lock` 仍只有一份;`uv sync --all-packages` 照旧可用。
+项目使用 Git、Python 3.12–3.14 和 [uv](https://docs.astral.sh/uv/)。`uv sync --locked` 根据 `uv.lock` 将单个 `hydrolitagent` 包的 Python 依赖安装到 `.venv`。按所用功能填写所需凭据。
 
-完整参考(Zotero Desktop / Linked Attachment Base Directory 配置、环境变量、TOML 配置)见[前提与配置](docs/getting-started/installation.md)。
+| 功能 | 额外配置 |
+|---|---|
+| 通过 Web API 查询或写入 Zotero | Zotero API key 和文库 ID |
+| 读取 Zotero 本地 PDF | 保持 Zotero Desktop 运行，并开启本地 API |
+| 将 PDF 作为链接附件入库 | 配置 PDF 文件夹及 Zotero 的链接附件根目录 |
+| 通过模型 API 生成文献卡 | 默认直连方式使用 `DEEPSEEK_API_KEY`，也可交给当前助手生成，无需单独的密钥 |
+| 制作论文动画课 | 安装 Node.js 20+（含 npm）和 FFmpeg（含 FFprobe）。用 `uv sync --locked --extra paper-video` 安装 Python 依赖，再按[视频配置指南](docs/user-guide/paper-video.md)配置 Remotion。 |
 
-## 常用命令
+详细配置见[安装指南](docs/getting-started/installation.md)。
 
-### Zotero 工具
+## 可以让助手做什么
+
+| 你可以这样说 | 交付结果 | 指南 |
+|---|---|---|
+| 把这篇论文下载并入库 | 解析 DOI、arXiv ID 或标题，建立带链接 PDF 附件的 Zotero 条目 | [论文入库](docs/user-guide/paper-pipeline.md) |
+| 在我的 Zotero 库里找论文 | 搜索和读取文献条目、附件与批注 | [Zotero MCP 工具](docs/user-guide/mcp-tools.md) |
+| 把这篇论文做成证据卡 | 读取 PDF，生成带出处的文献卡 | [文献卡与主题卡](docs/user-guide/cards/index.md) |
+| 看看这些论文有哪些共同主题 | 从文献卡生成候选主题，整理结果供复核 | [主题池](docs/user-guide/cards/unified-theme-pool.md) |
+| 做一期公众号文献周报 | 精读全文、按主题归类并起草文章 | [文献深度处理](docs/user-guide/literature.md) |
+| 把这篇论文做成中文动画课 | 生成有声视频、字幕和可编辑工程 | [论文动画课](docs/user-guide/paper-video.md) |
+| 统计这位学者或这个机构的发文 | 用 OpenAlex 确认身份并汇总发表记录 | [论文统计](docs/user-guide/scholars/index.md) |
+
+也可以[在 Obsidian 里浏览阅读产物](docs/user-guide/cards/reading-in-obsidian.md)，或[检查当前模型和产物路径](docs/user-guide/cards/runtime-maintenance.md)。
+
+## 效果展示
+
+上面这些工作流能产出什么，先看几个例子。
+
+### 论文动画课
+
+同一个工作流生成的两期中文动画课，横屏 1080p，含旁白与字幕，合在一个稿件的两个 P 里：
+
+| [![DrLIM 动画课](docs/assets/showcase/drlim.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | [![CPC 动画课](docs/assets/showcase/cpc.jpg)](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
+|---|---|
+| **DrLIM** · Hadsell、Chopra、LeCun，CVPR 2006 —— 用对比损失学习不变量映射 · [在 B 站看 P1 →](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | **CPC** · van den Oord、Li、Vinyals，DeepMind 2018 —— 在潜空间预测未来，用 InfoNCE 学表示 · [在 B 站看 P2 →](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
+
+## 命令行示例
 
 ```bash
-# 启动 12 个工具的 MCP Server(端口 8002)
+# 启动 Zotero MCP 服务，端口 8002
 uv run python -m hydrolitagent.zotero.server
 
-# 通过 DOI 添加论文到 Zotero(仅元数据)
-uv run python -m hydrolitagent.zotero.paper_to_zotero --metadata-only "10.1038/s41586-024-07145-1"
+# 下载 PDF 并同步到 Zotero
+uv run python scripts/download_paper.py --doi "10.1016/j.jhydrol.2023.130249" --sync
 
-# 一键流水线:下载 PDF + 建 Zotero 条目 + linked_file 附件
-bash scripts/run_paper_pipeline.sh "10.1038/s41586-024-07145-1"
-
-# 把已有的 GDrive PDF 链接为 Zotero linked_file
-uv run python -m hydrolitagent.zotero.zot_link_gdrive <ZOTERO_KEY> <filename>
-```
-
-### Literature CLI(入库后深度处理)
-
-```bash
-# 一条命令完成下载 + Zotero 同步(隐身 Chrome;自动按出版商路由)
-uv run python scripts/download_paper.py --doi <doi> --sync
-uv run python scripts/download_paper.py --arxiv <id> --sync
-uv run python scripts/download_paper.py --title "<标题>" --sync     # 只有标题：自动检索解析 DOI
-
-# 机构访问下载 PDF
-uv run python -m hydrolitagent.literature.download_pdf doi <doi>
-
-# 把已下载 PDF 同步进 Zotero 作为 linked_file
-uv run python -m hydrolitagent.literature.zotero_sync <pdf_path> <doi> --json
-
-# Zotero → NotebookLM 简报 / 音频 / 视频(需 [notebooklm] extra)
-uv run --extra notebooklm python -m hydrolitagent.literature.zotero_notebooklm --collection <name> --artifact audio
-
-# 公众号工作流
-uv run python -m hydrolitagent.literature.wechat.polish <draft.md>
-uv run python -m hydrolitagent.literature.wechat.figure <article.md>
-uv run python -m hydrolitagent.literature.wechat.push <polished.md> [--thumb <media_id>]
-
-# 上传播客音频到 B 站
-uv run python -m hydrolitagent.literature.bilibili_upload <audio.mp3> --title "标题" --tags "AI,水文,科研" [--dry-run]
-```
-
-### 文献卡与主题卡平台
-
-**入库只有两件事 —— 下载 PDF,和建 Zotero 条目。** 本仓库其余的都属于**消费**:读库、精读、主题、公众号、播客。这个平台是消费侧里的一支独立支线 —— 别人产出当期内容,它把**你自己的 Zotero 文献**沉淀成**长期可追溯的文献卡与主题卡**。命令一律从仓库根执行。
-
-> 注意“两侧”不等于“两个包”：本仓库**只有一个包** `hydrolitagent`；文献卡与主题卡是它内部的 `hydrolitagent/cards/`，纯属消费侧。
-
-```bash
-# 单篇输入:从自己的一篇论文得到 READY 记录
-uv run python scripts/paper_input.py --user-library --item-key ABCD1234 --output paper-input.json
-
-# 生成主体卡草稿(调用所选模型)
-uv run hydrolitagent cards evidence-generate --paper-input paper-input.json --ai-provider codex --json
-
-# 离线校验主体卡(不调模型)
-uv run hydrolitagent cards evidence-validate --draft <草稿目录>/draft.json --paper-input paper-input.json --json
-
-# 由若干文献卡生成候选主题;--dry-run 只读预览
-uv run hydrolitagent cards themes-run --json
-uv run hydrolitagent cards themes-run --dry-run --json
-
-# 只读自查模型与产物根
+# 定位 Zotero 论文并查看制卡配置
+uv run hydrolitagent cards paper-input --user-library --item-key ABCD1234 --json
 uv run hydrolitagent cards ai-config --json
 
-# 生成可读的阅读层(HOME / 卡片索引 / 阅读版卡片 / 主题阅读页),并自检相对链接
+# 构建阅读索引或查询学者发文
 uv run hydrolitagent cards index --json
+uv run hydrolitagent scholars resolve --name "Zhang San" --json
 ```
 
-- **平台不下载 PDF** —— 只读取自己 Zotero 中已经附好的文件。下载与入库属于 `paper-to-zotero` / `download-pdf`。
-- **运行时为 Windows-only**:本地 CLI 的安装、登录与 PDF 工具准备只在 Windows 上验证过。
-- 生成的产物(文献卡、主题池、运行记录)**不入库** —— 运行时写入,另行共享。仓库里只有代码、模板、提示词与 schema。
-- 完整命令清单:`uv run hydrolitagent cards --help`(8 个子命令)。
-- 用 Obsidian 读产物:跑一次 `cards index`,把**产物根**(默认 `outputs/`)当 vault 打开,从 `HOME.md` 开始。详见[在 Obsidian 里读产物](docs/user-guide/cards/reading-in-obsidian.md)。
+更多命令见[快速入门](docs/getting-started/quickstart.md)、[文献深度处理](docs/user-guide/literature.md)和[项目架构](docs/development/architecture.md)。项目助手技能位于 [skills/](skills/)。
 
-### 学者与机构论文统计
-
-按人/机构统计论文产出：给定姓名、ORCID 或 OpenAlex ID，检索论文，统计数量、作者位次、
-第一/通讯、年份与期刊分布，并可与 `papers/` 主题目录或 graphify 图谱按 DOI/题名对照，
-用来回答“谁在什么方向”。需要时再导出成学院/机构表格。
+## 文档与测试
 
 ```bash
-# 确认身份（同名时只列候选）
-uv run hydrolitagent scholars resolve --name "张三" --name-en "Zhang San" --json
-
-# 单人 / 批量
-uv run hydrolitagent scholars stats --name "张三" --name-en "Zhang San" --institute "水利所" --output-dir outputs/scholars/2026-10-26 --json
-uv run hydrolitagent scholars batch --roster configs/scholars_roster.example.csv --output-dir outputs/scholars/2026-10-26 --json
-```
-
-- 口径：2021 年起；期刊 + 会议；第一作者**或**通讯作者任一计入。
-- 同名/中文名无别名时**不猜**，汇总数字留空并进复核清单。
-- 中文文献可 `--web-search deepseek`（复用 `DEEPSEEK_API_KEY`）出候选，人工确认后用 `--supplement` 计入。
-
-详见[学者与机构论文统计](docs/user-guide/scholars/index.md)。
-
-## Agent Skills
-
-| Skill | 功能 |
-|---|---|
-| `zotero-query` | 通过 MCP 工具查询 Zotero 文献库 |
-| `paper-to-zotero` | 下载论文并入库 Zotero(DOI / arXiv / 标题) |
-| `run-paper-to-zotero` | 一键 paper-fetch → GDrive → Zotero linked_file 流水线 |
-| `download-pdf` | Playwright 机构访问下载 PDF(另含 `scripts/download_paper.py` 隐身一键模式) |
-| `zotero-notebooklm` | Zotero 论文 → NotebookLM 中文简报 / 音频 / 视频 |
-| `weekly-review` | 每周文献综述:精读 → 分析卡 → 公众号文章 → NotebookLM 播客 |
-| `weekly-report-skill` | NotebookLM 输出 → 公众号周报 MD |
-| `figure-skill-v2` | 每篇论文配图 + 整期封面(优先 PDF 提取,否则智谱 CogView 生成) |
-| `bilibili-upload` | 播客音频 → MP4 → B 站上传 |
-| `literature-cards` | 文献卡与主题卡平台 CLI 的入口(自己的 Zotero 文献 → 文献卡 → 主题卡)。运行时为 Windows-only。 |
-| `hydrology-evidence-cards` | Zotero 源论文 → 人读证据卡(科研工作流,含机器审计字段) |
-| `hydrology-theme-synthesis` | 文献 → 初步主题 → 人工筛选门 → 正式主题(科研工作流) |
-
-## 项目结构（用户入口节选）
-
-完整目录与模块职责见[模块架构](docs/development/architecture.md)。以下只列用户需要的入口。
-
-```
-hydrolitagent/
-├── cli.py               # CLI 分发:文献卡、主题卡与产物路径查询
-├── zotero/              # Zotero 集成
-│   ├── server.py         # 12 工具 MCP Server(FastMCP,端口 8002)
-│   ├── paper_to_zotero.py # DOI/arXiv/标题 → Zotero 条目(Crossref/arXiv 元数据)
-│   └── zot_link_gdrive.py # Google Drive → linked_file 附件
-├── literature/          # Literature CLI(入库后深度处理)
-│   ├── download_pdf.py      # 机构访问下载 PDF
-│   ├── zotero_sync.py       # PDF → Zotero linked_file
-│   ├── zotero_notebooklm.py # Zotero → NotebookLM 简报/音频/视频
-│   ├── bilibili_upload.py   # 播客 → MP4 → B 站
-│   └── wechat/              # figure.py, polish.py, push.py
-└── cards/               # 文献卡与主题卡
-    ├── cli.py           # 单篇输入、生成、校验、主题池与配置查询
-    └── assets/          # 模板、提示词、schema、示例与默认配置
-
-configs/                 # Prompt / 提取配置
-scripts/                 # run_paper_pipeline.sh, download_paper.py(隐身一键 PDF 下载), chunk_fulltext.py
-skills/                  # 12 个 Agent skill
-docs/                    # 文档站点(mkdocs-material)
-outputs/                 # 精读产物(默认落点,可配置):weekly-review/{date}/{cards,article,podcast}
-papers/                  # 按主题组织的文献库(10 个主题)
-
-equation_from_data/      # 论文复现:从数据发现方程
-google_floodhub/         # 论文复现:Google 洪水预测
-definitions.py           # 共享常量
-```
-
-## 文档
-
-文档站点基于 [mkdocs-material](https://squidfunk.github.io/mkdocs-material/),源码在 [`docs/`](docs/):
-
-```bash
-uv run mkdocs serve    # http://127.0.0.1:8000
+uv run mkdocs serve
 uv run mkdocs build --strict
+uv run pytest
 ```
 
-平台文档在 [`docs/user-guide/cards/`](docs/user-guide/cards/index.md) —— 从那里入门,完整交接也从这份[平台文档导航](docs/user-guide/cards/index.md)开始。保留两套独立 Zotero 客户端的决定记录在 [ADR-0002](docs/adr/0002-zotero-two-clients-boundary.md)。
+Zotero 集成测试需要本机 Zotero 正在运行，且库中有符合条件的测试文献。见[测试源码](tests/test_zotero_local_api_integration.py)。
 
-## 贡献
+## 贡献与许可证
 
-欢迎贡献:
-
-1. Fork 并创建新分支
-2. 将论文、代码或文档添加到相应位置
-3. 确保有分享权限、且知道贡献会以 [AGPL-3.0](LICENSE) 授权
-4. 提交 PR 并附上清晰说明
-
-## 许可证
-
-**GNU Affero General Public License v3.0**（AGPL-3.0）。© 2025 mylibrary contributors。完整正文见 [LICENSE](LICENSE)。
-
-> **这个协议管什么**：你可以自由使用、修改、分发 —— **包括商用**；但只要你**分发**本软件、
-> 或把**修改过的版本作为网络服务提供**给别人用，就必须**同样以 AGPL-3.0 提供完整源码**
-> （含你的修改）。换言之：**不能拿它做闭源产品或闭源 SaaS。**
-> 这是 [Zotero](https://www.zotero.org/) 本身采用的协议。
+欢迎通过 PR 提交贡献，请说明改动并确认有权分享所提交的材料。mylibrary 使用 **GNU Affero General Public License v3.0**。见 [LICENSE](LICENSE)。

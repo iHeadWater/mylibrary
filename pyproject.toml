@@ -28,8 +28,7 @@ dependencies = [
   # PDF 直读路径用它解析页数/文本。代价是 Dependabot 对 `==` 只报不修，每次安全公告都得手工 bump。
   "pypdf==6.21.2",
   # 付费墙出版商（ScienceDirect / Wiley / AGU / Nature / Springer）的下载路径靠它。
-  # 必须是核心依赖而非 extra：它是幽灵依赖过一次——只经 notebooklm[browser] 间接进入 lock，
-  # 默认不装，任何一次 `uv sync` 都会把手装的那份剪掉，download_paper.py 的浏览器分支随之静默失效。
+  # 作为核心依赖安装，保证浏览器下载分支始终可用。
   # 浏览器二进制不在 uv 管理范围内，换机器后仍需跑一次 `uv run playwright install chromium`。
   "playwright>=1.62",
   # PDF→Markdown 转换（版面、页锚点、提图）。AGPL-3.0 与本项目许可兼容。
@@ -39,8 +38,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-notebooklm = [
-  "notebooklm-py[browser]>=0.5.0",
+paper-video = [
+  "edge-tts>=7.3.1,<8",
+  "jieba>=0.42.1,<1",
+  "numpy",
 ]
 
 [dependency-groups]
