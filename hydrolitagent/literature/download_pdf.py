@@ -442,7 +442,18 @@ UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
 )
-CROSSREF_UA = "mylibrary-download-paper/1.0 (mailto:test@example.com)"
+def _crossref_ua() -> str:
+    """Crossref User-Agent with the polite-pool address, read per request.
+
+    ``CROSSREF_MAILTO`` must not be captured at import time: ``.env`` is loaded
+    from ``main()`` / ``setup_check()``, which run after this module is
+    imported. Crossref rate-limits requests carrying a placeholder contact
+    address, so the mailto part is omitted entirely when the variable is unset.
+    """
+    mailto = os.environ.get("CROSSREF_MAILTO", "").strip()
+    return "mylibrary-download-paper/1.0" + (
+        f" (mailto:{mailto})" if mailto else ""
+    )
 DEFAULT_OUT = Path(".playwright-mcp")
 
 
@@ -458,7 +469,7 @@ def search_crossref_by_title(title: str, rows: int = 8) -> list[dict]:
         "rows": rows,
         "select": "DOI,title,container-title,issued,type",
     })
-    req = urllib.request.Request(url, headers={"User-Agent": CROSSREF_UA})
+    req = urllib.request.Request(url, headers={"User-Agent": _crossref_ua()})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.load(r)["message"]["items"]
@@ -524,7 +535,7 @@ def pick_doi_by_title(title: str, items: list[dict],
 
 def crossref_meta(doi: str) -> dict:
     url = "https://api.crossref.org/works/" + doi
-    req = urllib.request.Request(url, headers={"User-Agent": CROSSREF_UA})
+    req = urllib.request.Request(url, headers={"User-Agent": _crossref_ua()})
     with urllib.request.urlopen(req, timeout=40) as r:
         msg = json.load(r)["message"]
     alt = msg.get("alternative-id") or []
@@ -589,7 +600,7 @@ def unpaywall_is_oa(doi: str) -> str | None:
     """Return the best OA PDF URL if the paper has one."""
     url = f"https://api.unpaywall.org/v2/{doi}?email=mylibrary@example.com"
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": CROSSREF_UA})
+        req = urllib.request.Request(url, headers={"User-Agent": _crossref_ua()})
         with urllib.request.urlopen(req, timeout=30) as r:
             data = json.load(r)
     except Exception:
@@ -719,6 +730,12 @@ def _load_dotenv() -> None:
             load_dotenv(env_file)
         except Exception:
             pass
+
+
+# Load at import so CROSSREF_MAILTO (read per request by _crossref_ua) and the
+# Zotero credentials are available to scripts/download_paper.py, which is a thin
+# CLI shell that never called _load_dotenv itself.
+_load_dotenv()
 
 
 # Budget covers the one-time DOI-index rebuild; steady state is seconds.
