@@ -13,7 +13,14 @@ CaptionKind = Literal["figure", "table"]
 
 _CAPTION = re.compile(
     r"^\s*(?:(?P<figure>fig(?:ure)?\.?)|(?P<table>table))\s+"
-    r"(?P<number>\d{1,3})\s*(?:[.:—–-]|$)",
+    # Three ways a caption label ends, all seen in the wild:
+    #   "Fig. 1 | Wadi Derna ..."   pipe (Nature, Communications, Elsevier)
+    #   "Figure 3. Disruptions ..." punctuation
+    #   "Fig. 1 Pipeline for ..."   no separator, title follows
+    # The bare-space form additionally requires the next word to start a title,
+    # so body prose such as "Figure 5 shows population-averaged ..." is not
+    # mistaken for a caption.
+    r"(?P<number>\d{1,3})(?:\s*[.:—–|｜-]|(?=\s+(?-i:[A-Z])|\s*[\u4e00-\u9fff(])|$)",
     re.IGNORECASE,
 )
 

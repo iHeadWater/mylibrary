@@ -286,6 +286,62 @@ def select_vector_figures(
     return tuple(selected)
 
 
+def merge_caption_duplicates(
+    placements: Sequence[FigurePlacement],
+) -> tuple[FigurePlacement, ...]:
+    """Collapse the placements that share one figure caption into a single crop.
+
+    A two-column PDF can split one figure into a dozen embedded images: the
+    caption is then the only reliable evidence that they belong together. Boxes
+    that resolve to the same caption label on the same page are unioned, and the
+    ordinals are renumbered per page so the identifiers stay stable.
+    """
+
+    groups: list[list[FigurePlacement]] = []
+    labels: dict[tuple[int, int], int] = {}
+    for placement in placements:
+        info = caption_label(placement.caption or "")
+        key = (placement.page, info[1]) if info and info[0] == "figure" else None
+        if key is not None and key in labels:
+            groups[labels[key]].append(placement)
+            continue
+        if key is not None:
+            labels[key] = len(groups)
+        groups.append([placement])
+
+    merged: list[FigurePlacement] = []
+    for group in groups:
+        first = group[0]
+        x0 = min(item.box.x0 for item in group)
+        y0 = min(item.box.y0 for item in group)
+        x1 = max(item.box.x1 for item in group)
+        y1 = max(item.box.y1 for item in group)
+        caption = next((item.caption for item in group if item.caption), None)
+        merged.append(
+            FigurePlacement(
+                page=first.page,
+                ordinal=first.ordinal,
+                box=Box(x0=x0, y0=y0, x1=x1, y1=y1),
+                caption=caption,
+            )
+        )
+
+    merged.sort(key=lambda item: (item.page, round(item.box.y0, 2), round(item.box.x0, 2)))
+    renumbered: list[FigurePlacement] = []
+    counters: dict[int, int] = {}
+    for placement in merged:
+        counters[placement.page] = counters.get(placement.page, 0) + 1
+        renumbered.append(
+            FigurePlacement(
+                page=placement.page,
+                ordinal=counters[placement.page],
+                box=placement.box,
+                caption=placement.caption,
+            )
+        )
+    return tuple(renumbered)
+
+
 __all__ = [
     "CAPTION_MAX_GAP",
     "CaptionBlock",
@@ -300,6 +356,7 @@ __all__ = [
     "figure_id",
     "find_caption",
     "is_significant_image",
+    "merge_caption_duplicates",
     "select_figures",
     "select_vector_figures",
     "vector_figure_region",

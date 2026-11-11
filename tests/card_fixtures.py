@@ -453,7 +453,7 @@ def legacy_draft_case(tmp_path):
             app.paths,
             evidence_card_templates_dir=ASSETS_DIR / "templates/evidence-cards",
             evidence_card_template_catalog_file=ASSETS_DIR / "templates/evidence-cards/_catalog.json",
-            evidence_card_generation_prompt_file=ASSETS_DIR / "prompts/evidence-card-generation-v9.md",
+            evidence_card_generation_prompt_file=ASSETS_DIR / "prompts/evidence-card-generation-v10.md",
         ),
     )
     record = paper_input_record(pdf)

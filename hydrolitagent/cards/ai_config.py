@@ -163,7 +163,7 @@ def subject_card_config(selection, *, base_config=None):
           model=selection["model"] or None, reasoning_effort=None,
           generation_timeout_seconds=selection["timeout_seconds"])
     paths = base_config.paths if base_config is not None else SimpleNamespace(
-          evidence_card_generation_prompt_file=PROMPTS_DIR / "evidence-card-generation-v9.md",
+          evidence_card_generation_prompt_file=PROMPTS_DIR / "evidence-card-generation-v10.md",
           evidence_card_templates_dir=TEMPLATES_DIR / "evidence-cards",
           evidence_card_template_catalog_file=TEMPLATES_DIR / "evidence-cards/_catalog.json")
     # ``runner_options`` is the provider-neutral bag ``composition`` hands to the

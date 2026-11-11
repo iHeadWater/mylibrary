@@ -43,7 +43,7 @@ Python 核对输入记录、原 PDF 和模板索引 → 一个模型独立会话
 
 总入口仍为 `hydrolitagent/cards/assets/config/config.json`（单篇也可用 `configs/ai.toml`）。`workflow_mode=single_agent`；单 Agent 模式不能同时提供 `multi_agent_workflow`，避免无效角色覆盖值误导。PDF 由 Python 转成 Markdown，旧的 PDF 直读与 Poppler 配置已移除。
 
-主提示词为 `evidence-card-generation-v9.md`，共用读取指引为 `pdf-local-reading-v1.md`。v8 起将详细写作要求与保存条件分开，不降低全文阅读范围，不增加模型复核或格式修复调用；v9 在其上要求论文中承载关键定量结果的表格（≥2 行且 ≥2 列数值）用 Markdown 表格复现，不得改写成流水句。历史上生成的草稿仍记录各自的 `prompt_version`，旧提示词文件保留以便追溯。运行器读取 `paper.md` 与图资产；平台不再启动 shell 或 PDF 渲染工具。
+主提示词为 `evidence-card-generation-v10.md`，共用读取指引为 `pdf-local-reading-v1.md`。v8 起将详细写作要求与保存条件分开，不降低全文阅读范围，不增加模型复核或格式修复调用；v9 在其上要求论文中承载关键定量结果的表格（≥2 行且 ≥2 列数值）用 Markdown 表格复现，不得改写成流水句；v10 规定标注粒度——正文用自然学术叙述，只有转述他人研究、【AI 推理】、【信息边界】三种情形加方括号标签，不再逐句贴【原文陈述】，并要求正文按原文图号引图。历史上生成的草稿仍记录各自的 `prompt_version`，旧提示词文件保留以便追溯。运行器读取 `paper.md` 与图资产；平台不再启动 shell 或 PDF 渲染工具。
 
 ## 验证
 
