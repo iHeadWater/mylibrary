@@ -43,9 +43,9 @@ uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检
 
 ## 现在的卡片长什么样
 
-下面是用真实产物（`cards/86N8CEZ5`）截的图；在 Obsidian 里打开效果一致，公式由 Obsidian 原生渲染。
+下面几张图取自真实产物（`cards/82K3JP4F`、`cards/E7ZTFJZJ`、主题 `TH-877103b1db3d0e741b1577ae`），按阅读层排版渲染；在 Obsidian 里打开同一份文件，排版与公式渲染基本一致。
 
-**卡片顶部**：YAML 属性、按 `validation.json` 写的真实状态、标题与正文开头。
+**卡片顶部**：属性、按 `validation.json` 写的真实状态（`PASS` / `REJECTED`）、标题与正文开头。
 
 ![卡片顶部](../../assets/screenshots/card-top.png){width=760}
 
