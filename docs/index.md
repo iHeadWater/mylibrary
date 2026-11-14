@@ -71,6 +71,18 @@ cd /path/to/mylibrary
 | **产物阅读层** | `cards index`：产物根 → Obsidian vault（HOME、卡片索引、主题阅读页，链接自检） | [在 Obsidian 里读产物](user-guide/cards/reading-in-obsidian.md) |
 | 论文复现 | 复现 AI 驱动水文学关键论文 | `equation_from_data/`、`google_floodhub/` |
 
+## 产出的样子
+
+读一篇论文产出一张卡，多张卡再聚成候选主题 —— 下面的图是把产物根当 vault 打开后的 Obsidian 截图（`outputs/cards/`、`outputs/reading/themes/`）。
+
+| [![证据卡：属性、状态与正文](assets/screenshots/card-top.png)](user-guide/cards/reading-in-obsidian.md) | [![候选主题页](assets/screenshots/theme-page.png)](user-guide/cards/unified-theme-pool.md) |
+|---|---|
+| **证据卡** —— 顶部状态按 `validation.json` 写，正文连续成段，图内联在首次提及处 | **候选主题** —— 多篇卡聚成一个主题，每条判断挂 `EV-` 证据编号 |
+
+阅读层首页按篇列出全部卡片，一篇一行，点进去就是卡片：
+
+![阅读层首页：一篇卡一行](assets/screenshots/reading-layer-home.png)
+
 ## 项目结构
 
 包与目录的完整地图、代码分三支、Zotero 的几种读法见[模块架构](development/architecture.md)。

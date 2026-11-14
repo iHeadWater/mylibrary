@@ -43,9 +43,9 @@ uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检
 
 ## 现在的卡片长什么样
 
-下面是用真实产物（`cards/86N8CEZ5`）截的图；在 Obsidian 里打开效果一致，公式由 Obsidian 原生渲染。
+下面几张图是把产物根当 vault 打开后的 Obsidian 截图（阅读视图；左侧边栏已收起），产物是 `cards/82K3JP4F`、`cards/E7ZTFJZJ` 与主题 `TH-877103b1db3d0e741b1577ae`。
 
-**卡片顶部**：YAML 属性、按 `validation.json` 写的真实状态、标题与正文开头。
+**卡片顶部**：属性、按 `validation.json` 写的真实状态（`PASS` / `REJECTED`）、标题与正文开头。
 
 ![卡片顶部](../../assets/screenshots/card-top.png){width=760}
 
@@ -57,9 +57,13 @@ uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检
 
 ![主题阅读页](../../assets/screenshots/theme-page.png){width=760}
 
-**卡片索引**：每篇论文只列当前选中的一份草稿，并写明选择依据。
+**阅读层首页**：`HOME.md` 一篇卡一行，点进去就是卡片；全部卡片另见 `cards/INDEX.md`（每篇只列当前选中的一份草稿，并写明选择依据）。
 
-![卡片索引](../../assets/screenshots/cards-index.png){width=760}
+![阅读层首页](../../assets/screenshots/reading-layer-home.png){width=760}
+
+**关系图谱**：Obsidian 自带的关系图谱，画的就是这一层生成的链接 —— 蓝点是文献卡，绿点是定向精读页，橙点是主题页（`reading/themes/`），深灰点是主题候选版本与综述这类附属页；`HOME`、`INDEX` 是度数最高的两个枢纽。
+
+![阅读层的关系图谱：卡片、主题与精读页的链接网络](../../assets/screenshots/obsidian-graph.png){width=760}
 
 **裸尖括号会被转义**：正文里的 `<CLASS>`、`<METHOD>` 这类模型写的占位符，在阅读层
 写成 `&lt;CLASS&gt;`。原因是 Obsidian 的 **Live Preview** 会把未知的未闭合 HTML 标签

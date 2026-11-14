@@ -53,6 +53,18 @@ cp .env.example .env
 |---|---|
 | **DrLIM** · Hadsell、Chopra、LeCun，CVPR 2006 —— 用对比损失学习不变量映射 · [在 B 站看 P1 →](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | **CPC** · van den Oord、Li、Vinyals，DeepMind 2018 —— 在潜空间预测未来，用 InfoNCE 学表示 · [在 B 站看 P2 →](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
 
+### 文献卡与主题卡
+
+读一篇论文产出一张卡，多张卡再聚成候选主题。下面的图是把产物根当 vault 打开后的 Obsidian 截图（`outputs/cards/`、`outputs/reading/themes/`）：
+
+| [![证据卡：属性、状态与正文](docs/assets/screenshots/card-top.png)](docs/user-guide/cards/reading-in-obsidian.md) | [![候选主题页](docs/assets/screenshots/theme-page.png)](docs/user-guide/cards/unified-theme-pool.md) |
+|---|---|
+| **证据卡** · 顶部状态按 `validation.json` 写（`PASS` / `REJECTED`），不是模型自评；正文按行文顺序展开，不逐句贴标签。`uv run hydrolitagent cards run prepare` | **候选主题** · 多篇卡聚成一个主题，每条判断挂 `EV-` 证据编号，正文可逐条追回卡片与精读页。`uv run hydrolitagent themes-run` |
+
+图内联在首次提及处 —— 正文写完「（图 1）」，图就落在那个列表项之后，图注紧随其下：
+
+![图内联在首次提及处](docs/assets/screenshots/card-inline-figure.png)
+
 ## 命令行示例
 
 ```bash

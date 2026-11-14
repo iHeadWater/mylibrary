@@ -53,6 +53,18 @@ Two papers, turned into narrated Chinese explainers by the same workflow — col
 |---|---|
 | **DrLIM** · Hadsell, Chopra & LeCun, CVPR 2006 — learn an invariant mapping with a contrastive loss · [Watch P1 on Bilibili →](https://www.bilibili.com/video/BV1njWu6dEv7?p=1) | **CPC** · van den Oord, Li & Vinyals, DeepMind 2018 — predict the future in latent space with InfoNCE · [Watch P2 on Bilibili →](https://www.bilibili.com/video/BV1njWu6dEv7?p=2) |
 
+### Evidence cards and theme pages
+
+One paper in, one card out; several cards then cluster into candidate themes. Every image below is an Obsidian screenshot of the artifacts vault (`outputs/cards/`, `outputs/reading/themes/`):
+
+| [![Evidence card: properties, status, prose](docs/assets/screenshots/card-top.png)](docs/user-guide/cards/reading-in-obsidian.md) | [![Candidate theme page](docs/assets/screenshots/theme-page.png)](docs/user-guide/cards/unified-theme-pool.md) |
+|---|---|
+| **Evidence card** · the status line is written from `validation.json` (`PASS` / `REJECTED`), not self-graded by the model; the body reads as continuous prose instead of per-sentence labels. `uv run hydrolitagent cards run prepare` | **Candidate theme** · several cards cluster into one theme, each claim carries an `EV-` evidence id that traces back to a card and a focused-reading page. `uv run hydrolitagent themes-run` |
+
+Figures land where the text first mentions them — write `（图 1）` and the image follows that list item, caption directly underneath:
+
+![Figure inlined at first mention](docs/assets/screenshots/card-inline-figure.png)
+
 ## Command-line examples
 
 ```bash

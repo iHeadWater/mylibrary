@@ -4,6 +4,10 @@ Zotero MCP Server 通过 streamable HTTP 传输在端口 8002 上暴露 12 个�
 
 > ⚠️ **工具名与 dailyinfo 的 Zotero 插件 MCP 不同，勿混用**：本仓库取全文是 **`zotero_get_fulltext`**，dailyinfo 插件叫 **`zotero_get_item_fulltext`**——后者在本 server 不存在，反之亦然。批量脚本/提示词跨仓复用时先核对工具名。
 
+检索类工具读的就是本地 Zotero 库里的这份数据（条目、创建者、出版物、期刊标签）：
+
+![Zotero 收藏里的条目列表](../assets/screenshots/zotero-query.webp){width=820}
+
 ## 工具概览
 
 ### Web API 工具（10 个）
