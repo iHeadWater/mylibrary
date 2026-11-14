@@ -73,15 +73,15 @@ cd /path/to/mylibrary
 
 ## 产出的样子
 
-读一篇论文产出一张卡，多张卡再聚成候选主题 —— 图都来自真实产物（`outputs/cards/`、`outputs/reading/themes/`）。
+读一篇论文产出一张卡，多张卡再聚成候选主题 —— 下面的图是把产物根当 vault 打开后的 Obsidian 截图（`outputs/cards/`、`outputs/reading/themes/`）。
 
 | [![证据卡：属性、状态与正文](assets/screenshots/card-top.png)](user-guide/cards/reading-in-obsidian.md) | [![候选主题页](assets/screenshots/theme-page.png)](user-guide/cards/unified-theme-pool.md) |
 |---|---|
 | **证据卡** —— 顶部状态按 `validation.json` 写，正文连续成段，图内联在首次提及处 | **候选主题** —— 多篇卡聚成一个主题，每条判断挂 `EV-` 证据编号 |
 
-卡片按篇列在 `outputs/cards/INDEX.md` 里，每篇只列当前选中的一份草稿并写明选择依据：
+阅读层首页按篇列出全部卡片，一篇一行，点进去就是卡片：
 
-![卡片索引：每篇一条当前草稿](assets/screenshots/cards-index.png)
+![阅读层首页：一篇卡一行](assets/screenshots/reading-layer-home.png)
 
 ## 项目结构
 

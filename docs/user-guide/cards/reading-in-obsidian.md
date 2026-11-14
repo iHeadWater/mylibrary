@@ -43,7 +43,7 @@ uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检
 
 ## 现在的卡片长什么样
 
-下面几张图取自真实产物（`cards/82K3JP4F`、`cards/E7ZTFJZJ`、主题 `TH-877103b1db3d0e741b1577ae`），按阅读层排版渲染；在 Obsidian 里打开同一份文件，排版与公式渲染基本一致。
+下面几张图是把产物根当 vault 打开后的 Obsidian 截图（阅读视图；左侧边栏已收起），产物是 `cards/82K3JP4F`、`cards/E7ZTFJZJ` 与主题 `TH-877103b1db3d0e741b1577ae`。
 
 **卡片顶部**：属性、按 `validation.json` 写的真实状态（`PASS` / `REJECTED`）、标题与正文开头。
 
@@ -57,9 +57,9 @@ uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检
 
 ![主题阅读页](../../assets/screenshots/theme-page.png){width=760}
 
-**卡片索引**：每篇论文只列当前选中的一份草稿，并写明选择依据。
+**阅读层首页**：`HOME.md` 一篇卡一行，点进去就是卡片；全部卡片另见 `cards/INDEX.md`（每篇只列当前选中的一份草稿，并写明选择依据）。
 
-![卡片索引](../../assets/screenshots/cards-index.png){width=760}
+![阅读层首页](../../assets/screenshots/reading-layer-home.png){width=760}
 
 **裸尖括号会被转义**：正文里的 `<CLASS>`、`<METHOD>` 这类模型写的占位符，在阅读层
 写成 `&lt;CLASS&gt;`。原因是 Obsidian 的 **Live Preview** 会把未知的未闭合 HTML 标签

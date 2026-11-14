@@ -55,7 +55,7 @@ Two papers, turned into narrated Chinese explainers by the same workflow — col
 
 ### Evidence cards and theme pages
 
-One paper in, one card out; several cards then cluster into candidate themes. Every image below comes from real artifacts (`outputs/cards/`, `outputs/reading/themes/`):
+One paper in, one card out; several cards then cluster into candidate themes. Every image below is an Obsidian screenshot of the artifacts vault (`outputs/cards/`, `outputs/reading/themes/`):
 
 | [![Evidence card: properties, status, prose](docs/assets/screenshots/card-top.png)](docs/user-guide/cards/reading-in-obsidian.md) | [![Candidate theme page](docs/assets/screenshots/theme-page.png)](docs/user-guide/cards/unified-theme-pool.md) |
 |---|---|

@@ -55,7 +55,7 @@ cp .env.example .env
 
 ### 文献卡与主题卡
 
-读一篇论文产出一张卡，多张卡再聚成候选主题。下面的图都来自真实产物（`outputs/cards/` 与 `outputs/reading/themes/`）：
+读一篇论文产出一张卡，多张卡再聚成候选主题。下面的图是把产物根当 vault 打开后的 Obsidian 截图（`outputs/cards/`、`outputs/reading/themes/`）：
 
 | [![证据卡：属性、状态与正文](docs/assets/screenshots/card-top.png)](docs/user-guide/cards/reading-in-obsidian.md) | [![候选主题页](docs/assets/screenshots/theme-page.png)](docs/user-guide/cards/unified-theme-pool.md) |
 |---|---|
