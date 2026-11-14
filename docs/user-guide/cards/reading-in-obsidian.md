@@ -61,6 +61,10 @@ uv run hydrolitagent cards index --json   # 机器可读报告（含断链自检
 
 ![阅读层首页](../../assets/screenshots/reading-layer-home.png){width=760}
 
+**关系图谱**：Obsidian 自带的关系图谱，画的就是这一层生成的链接 —— 蓝点是文献卡，绿点是定向精读页，橙点是主题页（`reading/themes/`），深灰点是主题候选版本与综述这类附属页；`HOME`、`INDEX` 是度数最高的两个枢纽。
+
+![阅读层的关系图谱：卡片、主题与精读页的链接网络](../../assets/screenshots/obsidian-graph.png){width=760}
+
 **裸尖括号会被转义**：正文里的 `<CLASS>`、`<METHOD>` 这类模型写的占位符，在阅读层
 写成 `&lt;CLASS&gt;`。原因是 Obsidian 的 **Live Preview** 会把未知的未闭合 HTML 标签
 当成 HTML 块的开头，从此整段不再按 Markdown 渲染；阅读视图（Reading view）更宽容，

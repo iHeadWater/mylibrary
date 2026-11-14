@@ -225,3 +225,5 @@ Skills 是面向 Agent 的封装层，每个 Skill 包含：
 下图是对 `hydrolitagent/` 跑一次的结果（2,518 节点 / 5,795 条边 / 165 个社区，右侧按社区列出代表文件）：
 
 ![graphify 产出的交互式知识图谱](../assets/screenshots/knowledge-graph.webp){width=820}
+
+⚠️ 上面这张是**代码图谱**（节点是文件/类/函数），不是文献语料的结果。要看文献之间的关系，用 Obsidian 打开产物根、按 `Ctrl+G`：那一张才是「卡片—主题—精读页」的文献图谱，见[在 Obsidian 里读产物](../user-guide/cards/reading-in-obsidian.md)。
