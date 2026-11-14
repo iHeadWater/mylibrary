@@ -220,10 +220,10 @@ Skills 是面向 Agent 的封装层，每个 Skill 包含：
 ## 知识图谱
 
 `graphify` 把目录转成带社区检测的知识图谱，产出三样东西：交互式 `graph.html`、GraphRAG 用的 `graph.json`、以及 `GRAPH_REPORT.md`。
-`graphify update <path>` 对代码走 AST 抽取，**不需要 LLM**；换成论文/文档语料时才需要模型做语义抽取。
+`graphify update <path>` 对**代码**走 AST 抽取，不需要模型；**论文/卡片**这类语料要先做一次语义抽取 —— 可以调模型，也可以由当前 agent 在 session 里按 `.claude/skills/graphify/references/extraction-spec.md` 的规范读原文写抽取 JSON，再交给 `graphify cluster-only` 聚类出图（这条路上没有外部模型调用）。
 
-下图是对 `hydrolitagent/` 跑一次的结果（2,518 节点 / 5,795 条边 / 165 个社区，右侧按社区列出代表文件）：
+下图是**文献概念图谱**：把 `outputs/cards/` 里 16 张证据卡抽成 55 个节点（论文 16、概念 35、主题 4）、114 条边，聚成 11 个社区 —— 城市级联、泥沙输运、溃决与堤防、灾害链网络、语料抽取、知识图谱与 RAG 等；社区名按内容命名，右侧是各社区的成员数。
 
-![graphify 产出的交互式知识图谱](../assets/screenshots/knowledge-graph.webp){width=820}
+![文献概念图谱：16 张卡抽出的 55 个概念与 11 个社区](../assets/screenshots/literature-graph.webp){width=820}
 
-⚠️ 上面这张是**代码图谱**（节点是文件/类/函数），不是文献语料的结果。要看文献之间的关系，用 Obsidian 打开产物根、按 `Ctrl+G`：那一张才是「卡片—主题—精读页」的文献图谱，见[在 Obsidian 里读产物](../user-guide/cards/reading-in-obsidian.md)。
+同一套工具对代码也能出图（节点变成文件/类/函数，2,518 节点 / 5,795 边 / 165 社区）；那张图看的是模块边界，不是文献关系。文献之间的关系也可以用 Obsidian 自带的关系图谱看：打开产物根按 `Ctrl+G`，见[在 Obsidian 里读产物](../user-guide/cards/reading-in-obsidian.md)。
