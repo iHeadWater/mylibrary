@@ -2,6 +2,10 @@
 
 从 DOI / arXiv ID / 论文标题到 Zotero 条目的全自动流程。
 
+入库后的样子：条目下面挂着 HTML 快照与 **linked_file** 附件（PDF 留在本地，不占 Zotero 云端配额）：
+
+![Zotero 条目下的 linked_file 附件](../assets/screenshots/zotero-ingest.webp){width=820}
+
 ## 一句话
 
 ```bash

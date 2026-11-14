@@ -7,6 +7,10 @@
 主题目录或 graphify 图谱按 DOI/题名对照，用来回答“谁在什么方向”；
 需要时再导出成学院/机构要求的表格。
 
+`scholars stats` 跑完的样子：一行一人（论文数、第一/通讯数、复核标记），后面列出写出的 CSV / JSON / Markdown：
+
+![学者统计的终端输出](../../assets/screenshots/scholars-stats.webp){width=820}
+
 ## 能用来做什么
 
 - 看某位老师/课题组近几年在哪些方向产出；

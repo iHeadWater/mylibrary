@@ -216,3 +216,12 @@ Skills 是面向 Agent 的封装层，每个 Skill 包含：
 | `证据卡/`、`主题/`、`运行记录/`、`文献链接/` | 科研产物（**路径可配**，默认在此，不入 Git） |
 | `_legacy/` | 专利/项目 Excel 统计（论文部分已迁至 `hydrolitagent/scholars/`） |
 | `equation_from_data/`、`google_floodhub/` | 论文复现 |
+
+## 知识图谱
+
+`graphify` 把目录转成带社区检测的知识图谱，产出三样东西：交互式 `graph.html`、GraphRAG 用的 `graph.json`、以及 `GRAPH_REPORT.md`。
+`graphify update <path>` 对代码走 AST 抽取，**不需要 LLM**；换成论文/文档语料时才需要模型做语义抽取。
+
+下图是对 `hydrolitagent/` 跑一次的结果（2,518 节点 / 5,795 条边 / 165 个社区，右侧按社区列出代表文件）：
+
+![graphify 产出的交互式知识图谱](../assets/screenshots/knowledge-graph.webp){width=820}
