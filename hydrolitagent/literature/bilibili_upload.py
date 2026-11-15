@@ -37,10 +37,27 @@ DEFAULT_TID = 171  # 科技·人工智能
 DEFAULT_COOKIE_PATH = Path.home() / ".bilibili" / "cookies.json"
 OUTPUT_DIR = BILIBILI_DIR
 
-# Windows 微软雅黑，Linux/Mac fallback
+# 封面标题基本都是中文，字体必须带中日韩字形。只用 Latin 字体渲染中文会得到
+# 一排 tofu 方框：以前的候选里只有 Windows 的微软雅黑，macOS 落到 Helvetica.ttc，
+# 于是封面上"测试标题"变成四个方框，日期里的"第""周"直接消失。
 _FONT_CANDIDATES = [
+    # Windows 微软雅黑
     "C:/Windows/Fonts/msyh.ttc",
     "C:/Windows/Fonts/msyhbd.ttc",
+    # macOS
+    "/System/Library/Fonts/PingFang.ttc",
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "/System/Library/Fonts/STHeiti Medium.ttc",
+    "/System/Library/Fonts/STHeiti Light.ttc",
+    # Linux
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+]
+
+# 没有中文字形的兜底字体：上面的候选一个都找不到时才用，用了中文就只能是方框，
+# 所以 generate_cover 会为此打一条警告，而不是悄悄输出一张坏封面。
+_LATIN_ONLY_FONTS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/System/Library/Fonts/Helvetica.ttc",
 ]
@@ -49,10 +66,30 @@ _FONT_CANDIDATES = [
 
 
 def _find_font() -> str | None:
+    """Return a CJK-capable font, falling back to a Latin-only one."""
+
     for path in _FONT_CANDIDATES:
         if Path(path).exists():
             return path
+    for path in _LATIN_ONLY_FONTS:
+        if Path(path).exists():
+            return path
     return None
+
+
+_CJK_RANGES = (
+    (0x2E80, 0x9FFF),   # 部首、假名、统一汉字
+    (0xF900, 0xFAFF),   # 兼容汉字
+    (0xFF00, 0xFFEF),   # 全角标点
+)
+
+
+def _contains_cjk(text: str) -> bool:
+    return any(lo <= ord(ch) <= hi for ch in text for lo, hi in _CJK_RANGES)
+
+
+def _font_renders_cjk(path: str | None) -> bool:
+    return bool(path) and path not in _LATIN_ONLY_FONTS
 
 
 def _find_biliup() -> str | None:
@@ -388,6 +425,11 @@ def generate_cover(
 
     # ── fonts ──
     font_path = _find_font()
+    if not _font_renders_cjk(font_path) and _contains_cjk(f"{title}{date_str}{subtitle}"):
+        log(
+            "WARNING: 没有找到带中文字形的字体，封面里的中文会显示成方框。"
+            "装一个中文字体，或把它的路径加进 _FONT_CANDIDATES。"
+        )
     try:
         title_font = ImageFont.truetype(font_path, 72) if font_path else ImageFont.load_default()
         date_font = ImageFont.truetype(font_path, 36) if font_path else ImageFont.load_default()
@@ -492,6 +534,9 @@ def audio_to_video(
         "-loop", "1", "-i", str(cover_path),
         "-i", str(audio_path),
         "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+        # 不加 -pix_fmt 时 libx264 会挑 yuv444p（High 4:4:4 Predictive），
+        # B站和多数播放器都不认这个色度抽样，真投稿会黑屏或直接被拒。
+        "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k",
         "-shortest",
         str(output_path),
