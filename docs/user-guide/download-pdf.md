@@ -19,7 +19,63 @@ uv run python scripts/download_paper.py --doi <DOI> [--sync]
 
 （方式二由 Claude Code 打开 Chromium 手动操作，见下文。）
 
+## 先搞清楚这条命令在做什么
+
+一句话：**给它一篇论文的编号，它把 PDF 下载下来；加 `--sync` 还会顺手写进你的 Zotero。**
+
+具体点说：
+
+- **大多数时候不会弹浏览器。** 开放获取的论文直接用 `curl` 拉，一秒内结束。
+- **只有付费墙的论文**才需要启动 Chrome，让你点一次人机验证、或登录学校的统一身份认证。
+- **下载完会校验**：文件大小对不对、开头是不是 `%PDF-`。所以不会出现“以为下成功了，
+  打开其实是一个报错网页”的情况。
+- **加 `--sync` 会多做两件事**：把 PDF 拷进你的 Google Drive 论文目录；在 Zotero 里
+  建一条记录，指向那个文件。
+
+### 需要准备什么
+
+| 东西 | 干什么用 | 没有会怎样 |
+|---|---|---|
+| 一个 DOI | 论文编号，形如 `10.5194/nhess-21-559-2021` | 也可以改用 `--arxiv <id>` 或 `--title "<标题>"` |
+| Zotero 密钥 + 用户 ID | 写进 Zotero 用 | 不加 `--sync` 就不需要 |
+| GDrive 论文目录路径 | PDF 存哪儿 | 同上，不加 `--sync` 不需要 |
+| Playwright Chromium | 只有付费墙论文才用 | 只下开放获取论文的话，可以先跳过 |
+
+不确定缺什么，先跑一次自检（它只检查，不下载任何东西）：
+
+```bash
+uv run python scripts/download_paper.py --setup-check
+```
+
+输出长这样，三行 `[ok]` 就说明齐了：
+
+```text
+── Zotero/GDrive setup check ──
+  [ok]   env keys present
+  [ok]   GDrive papers dir writable: /Users/<you>/phd/papers
+  [ok]   Zotero Web API credentials valid
+```
+
+### 一次大概要多久
+
+| 情况 | 耗时 |
+|---|---|
+| 开放获取（arXiv、Copernicus 等） | 1–3 秒 |
+| 付费墙，不需要人操作 | 10–20 秒 |
+| 付费墙，要你点验证或登录 | 30–60 秒，取决于你点多快 |
+| 再加 `--sync` | 多 3–10 秒（PDF 要拷进 Google Drive） |
+
+### 文件最后在哪
+
+| 位置 | 什么时候有 |
+|---|---|
+| `<仓库>/.playwright-mcp/<doi>.pdf` | 每次下载都有 |
+| `GDRIVE_PAPERS_PATH` 指向的目录 | 加了 `--sync` 才有，Zotero 记录指向的是这一份 |
+
 ## 一次性设置
+
+> 下面四步不是每一步都要做。**只走方式一（自主脚本）**的话，跳过第 1 步——那是给方式二
+> （让 agent 开浏览器）用的插件配置。第 2、3、4 步才是所有人都要做的。
 
 ### 1. 启用 Playwright 插件
 
@@ -112,6 +168,67 @@ uv run python scripts/download_paper.py --doi <doi> --resolve-only   # 仅查元
 agent 打开 Chromium 窗口。你只需在以下情况交互：
 - **Cloudflare 挑战**出现（Wiley/AGU）——在浏览器里点击复选框
 - **机构登录**需要——在浏览器里完成机构 SSO 登录
+
+## 实际运行效果
+
+下面是真实终端输出，不是示意。
+
+**开放获取（Copernicus），带 `--sync` 入库**
+
+```text
+$ uv run python scripts/download_paper.py --doi 10.5194/nhess-21-559-2021 --sync
+Simulating historical flood events at the continental scale: observational valid
+  Natural Hazards and Earth System Sciences | 10.5194
+  Copernicus curl: https://nhess.copernicus.org/articles/21/559/2021/nhess-21-559-2021.pdf
+SAVED: .playwright-mcp/10.5194.nhess-21-559-2021.pdf (16155441 bytes)
+   DOI index: 1 changed, 0 deleted
+OK — Zotero item created
+  Key:        SH6PVR6X
+  Title:      Simulating historical flood events at the continental scale: observational
+              validation of a large-scale hydrodynamic model
+  DOI:        10.5194/nhess-21-559-2021
+  Attachment: linked_file → attachments:nhess-21-559-2021.pdf
+  PDF copied: /Users/<you>/phd/papers/nhess-21-559-2021.pdf
+```
+
+**arXiv 预印本，只下载不入库**
+
+```text
+$ uv run python scripts/download_paper.py --arxiv 2110.10833
+arXiv curl: https://arxiv.org/pdf/2110.10833
+SAVED: .playwright-mcp/arXiv.2110.10833.pdf (532233 bytes)
+```
+
+这两条都**没有打开浏览器窗口**：开放获取走 `curl`，只有付费墙才拉起 Playwright。
+`SAVED` 后面的字节数是校验过 PDF 头部之后的结果，不是 HTTP 响应的 Content-Length。
+
+下载完直接打开，就是正常的论文正文（17 页），不是“下到一半的报错页”：
+
+![下载得到的 PDF 在预览里打开：标题页、作者单位、摘要都在](../assets/screenshots/downloaded-pdf.png){width=720}
+
+加了 `--sync` 之后，这篇论文在 Zotero 里长这样——标题、七位作者、期刊、卷期页码都是自动
+从 Crossref 取的，PDF 挂成链接附件：
+
+![Zotero 里自动建好的条目：标题、作者、期刊卷期页码齐全](../assets/screenshots/zotero-item.png){width=360}
+
+### `--sync` 之后还要等 Desktop 同步
+
+`--sync` 通过 **Zotero Web API** 建条目，而 `hydrolitagent cards paper-input` 读的是
+**Zotero Desktop 的 Local API**。Desktop 没同步完，卡片流程就看不到这篇：
+
+```text
+$ curl -s http://127.0.0.1:23119/api/users/0/items/SH6PVR6X
+HTTP 404                              ← Desktop 还没同步
+```
+
+在 Zotero 里点一次同步（或等它自己同步），同一个 key 就变成 200：
+
+```text
+HTTP 200
+标题: Simulating historical flood events at the continental scale: observati…
+```
+
+之后 `paper-input` 才会返回 `READY / PDF_READY`。这不是 bug，但不知道就会以为入库失败了。
 
 ## 支持的出版商
 
@@ -358,6 +475,42 @@ uv run python -m hydrolitagent.literature.download_pdf verify <pdf>
 | Zotero 同步超过 900 秒 | 大文件 + GDrive 拷贝慢 | 脚本打印 FAILED，**PDF 已保存**；单独重跑 `python -m hydrolitagent.literature.zotero_sync <pdf> <doi>` |
 | 浏览器流程崩溃 | 流程内部异常 | 退出码 1，只打印一行 `FAILED: browser flow crashed (...)`，不再吐 traceback |
 | ScienceDirect 签名 URL 重导航后跳回文章页 | 签名 URL 一次性 | 回文章页重点 "View PDF" 获取新 URL |
+| `拒绝不安全地址：拒绝非公网地址：<域名> -> 198.18.0.x` | 本机代理开了 fake-IP 模式，所有域名都被解析到基准测试网段（RFC 2544 / RFC 5180） | 升级到识别 `198.18.0.0/15` 与 `2001:2::/48` 的版本——全部解析结果都落在该网段时放行，混入真实私网地址仍然拒绝；或临时关掉 fake-IP |
+| `ITEM_NOT_FOUND`（条目刚建好） | `--sync` 写的是 Web API，Desktop 尚未同步 | 在 Zotero 里点一次同步，见上文「`--sync` 之后还要等 Desktop 同步」 |
+
+## 常见问题
+
+**我只知道标题，没有 DOI 怎么办？**
+
+用 `--title "<完整标题>"`，它会去 Crossref 查。查不到唯一结果时**不会乱猜**，而是列出
+候选并返回退出码 2，你挑一个用 `--doi` 指定就行。
+
+**下完了，但 Zotero 里搜不到？**
+
+两种可能，按顺序排查：
+
+1. 加 `--sync` 之后，Zotero **还在同步**。等几十秒到几分钟。`--sync` 的输出里有一行
+   `Key: XXXX`，拿它在 Zotero 搜索框里搜，能搜到就是同步好了。
+2. Zotero 根本没在跑，或者 `ZOTERO_LIBRARY_ID` 指向的不是你以为的那个库。
+
+**同一个 DOI 跑第二次会不会搞出重复条目？**
+
+不会。默认行为是“补挂”：条目已存在就往上面补附件；内容完全一样就跳过。要强制替换用
+`--replace`，要整篇跳过用 `--skip-existing`。
+
+**我只想下载，不想碰 Zotero。**
+
+去掉 `--sync`。不加就不写任何 Zotero 数据。
+
+**它会偷偷改我的 Zotero 吗？**
+
+不会。不加 `--sync` 全程只读；加了 `--sync` 只会做两件事之一：新建一条记录，或者给已有
+记录挂一个附件。
+
+**下载失败，日志里有“拒绝不安全地址”？**
+
+见上面失败模式表里 fake-IP 那一行——是本机代理的 DNS 把域名解析到了保留网段，
+不是论文地址真的有问题。
 
 ## 相关
 
