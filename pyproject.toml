@@ -43,6 +43,16 @@ paper-video = [
   "jieba>=0.42.1,<1",
   "numpy",
 ]
+# 视频笔记流水线（B 站视频 → 中文笔记 + 精确配图）。
+# 不并进核心依赖：ctranslate2 那套 wheel 加起来 200MB 上下，只为一条可选的路
+# 让所有安装都背上是划不来的。用法见 hydrolitagent/literature/video_notes/。
+video-notes = [
+  "yt-dlp>=2024.10",
+  "faster-whisper>=1.0",
+  # 转写前用 ffmpeg 解成 f32 数组喂给 whisper（绕开 PyAV 解码的版本坑），
+  # 顺带把 ndarray 这条路的类型写明。ctranslate2 本来也会带上 numpy。
+  "numpy",
+]
 
 [dependency-groups]
 dev = [

@@ -213,6 +213,10 @@ _docx_extract.md
 /[0-9][0-9]-[0-9][0-9] *.mp3
 /[0-9][0-9]-[0-9][0-9] *.txt
 
+# ── 视频笔记流水线的本地模型（faster-whisper small，约 500MB）──
+# 权重可重新下载，入库没有意义。代码在 hydrolitagent/literature/video_notes/。
+/models/
+
 # ── 文献卡与主题卡平台：运行产物一律不入库 ──
 # 代码与**只读资产**在 hydrolitagent/cards/（assets/ 入库）；
 # **运行产物**落产物根 `outputs/`（`configs/paths.toml` 的 `[literature] root`，
