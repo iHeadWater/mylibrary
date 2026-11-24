@@ -306,7 +306,11 @@ class ThemeTests(unittest.TestCase):
         self.assertIn("原主题需要收窄", self.calls("theme_synthesis")[0].prompt)
         self.assertTrue(Path(item["revised_path"]).exists())
         self.assertTrue(Path(item["initial_path"]).exists())
-        self.assertTrue(Path(item["readings"][0]["path"]).is_relative_to(self.f.package))
+        # 两边都 resolve：macOS 的 tmp 目录是 /var → /private/var 软链，
+        # 平台写出去的路径已经 resolve 过，直接比字符串会误判（Linux 上无此问题）。
+        self.assertTrue(
+            Path(item["readings"][0]["path"]).resolve().is_relative_to(self.f.package.resolve())
+        )
         self.assertEqual(protected, {p: p.read_bytes() for p in protected})
         self.assertFalse((self.config.paths.themes_dir / "confirmed").exists())
         again = self.run_theme()
@@ -617,7 +621,11 @@ class ThemeConfigTests(unittest.TestCase):
             data["theme_pipeline"] = {"enabled": True, "research_goal": "灾害链", "assets_dir": "custom-themes"}
             path.write_text(json.dumps(data), encoding="utf-8")
             config = load_config(path)
-            self.assertEqual(config.theme_pipeline.assets_dir, root / "custom-themes")
+            # 同上：相对 assets_dir 会被解析成 resolve 过的绝对路径，
+            # 与未 resolve 的 tmp 路径（macOS 的 /private/var）比不相等。
+            self.assertEqual(
+                config.theme_pipeline.assets_dir.resolve(), (root / "custom-themes").resolve()
+            )
             self.assertIsNone(config.theme_pipeline.model)
             for value in ({"enabled": "yes"}, {"unknown": 1}, {"timeout_seconds": 0}, {"timeout_seconds": float("inf")}, {"reasoning_effort": "bad"}):
                 data["theme_pipeline"] = value
