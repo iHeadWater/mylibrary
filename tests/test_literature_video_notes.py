@@ -357,3 +357,20 @@ def test_sanitize_no_proxy_handles_missing_and_empty():
     assert sanitize_no_proxy(env) == []
     env = {"NO_PROXY": ""}
     assert sanitize_no_proxy(env) == []
+
+
+# ---------------------------------------------------------------- log.md 不重复
+def test_append_log_skips_duplicate_note(tmp_path):
+    entry = "- 视频笔记「甲乙」→ [[甲乙（BV1a）]]（3 图）"
+    path, written = vn_cli.append_log(tmp_path, entry, key="甲乙（BV1a）")
+    assert written is True
+    path, written = vn_cli.append_log(tmp_path, entry, key="甲乙（BV1a）")
+    assert written is False
+    assert (tmp_path / "log.md").read_text(encoding="utf-8").count("[[甲乙（BV1a）]]") == 1
+
+
+def test_append_log_records_different_notes(tmp_path):
+    vn_cli.append_log(tmp_path, "- 甲 → [[甲（BV1a）]]", key="甲（BV1a）")
+    vn_cli.append_log(tmp_path, "- 乙 → [[乙（BV1b）]]", key="乙（BV1b）")
+    text = (tmp_path / "log.md").read_text(encoding="utf-8")
+    assert "[[甲（BV1a）]]" in text and "[[乙（BV1b）]]" in text

@@ -181,9 +181,18 @@ def cmd_setup(args) -> int:
 
 
 # ---------------------------------------------------------------- import
-def append_log(vault: Path, entry: str) -> Path:
+def append_log(vault: Path, entry: str, *, key: str) -> tuple[Path, bool]:
+    """往 ``log.md`` 追加一条，同一条笔记不重复记。
+
+    ``key`` 是笔记的双链目标。重复导入（或者导入前跑过 ``migrate``）会把同一
+    条笔记记两遍，翻日志时看着像导了两次 —— 已有就跳过。
+
+    返回 ``(路径, 是否真的写了)``。
+    """
     path = vault / "log.md"
     text = path.read_text(encoding="utf-8") if path.exists() else "# 变更日志\n"
+    if f"[[{key}]]" in text:
+        return path, False
     today = time.strftime("%Y-%m-%d")
     heading = f"## {today}"
     if heading in text:
@@ -191,7 +200,7 @@ def append_log(vault: Path, entry: str) -> Path:
     else:
         text = text.rstrip("\n") + f"\n\n{heading}\n{entry}\n"
     path.write_text(text, encoding="utf-8")
-    return path
+    return path, True
 
 
 def cmd_import(args) -> int:
@@ -229,10 +238,10 @@ def cmd_import(args) -> int:
         shutil.copy2(f, media / f.name)
 
     entry = f"- 视频笔记「{meta['title']}」→ [[{name}]]（{len(images)} 图）"
-    log_path = append_log(vault, entry)
+    log_path, written = append_log(vault, entry, key=name)
     log(f"已写入 {dest_note}")
     log(f"     {len(images)} 张图 → {media}/")
-    log(f"     {log_path}")
+    log(f"     {log_path}" + ("" if written else "（已有该条记录，未重复追加）"))
     return 0
 
 
