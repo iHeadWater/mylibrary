@@ -178,18 +178,36 @@ def test_to_vault_links_uses_vault_relative_path():
     )
 
 
-def test_figures_drops_duplicated_caption():
+def test_caption_line_is_italic_with_prefix():
+    assert assemble.caption_line("界面截图") == "*图｜界面截图*"
+
+
+def test_figures_reads_new_caption_format():
+    md = "正文。\n\n![[images/f0010.jpg]]\n*图｜成本函数曲线*\n\n下一段。"
+    out = assemble.figures(md)
+    assert "<figcaption>成本函数曲线</figcaption>" in out
+    assert "图｜" not in out          # 前缀只是给读者看的，渲染时去掉
+    assert "![[" not in out
+
+
+def test_figures_still_reads_legacy_format():
+    """#88 之前导入的笔记长这样：``|说明`` 后面再跟一行同样的说明。"""
     md = "说明段。\n\n![[images/f0010.jpg|成本函数曲线]]\n成本函数曲线\n\n下一段。"
     out = assemble.figures(md)
-    assert "<figure>" in out
-    # 说明只该留在 figure 里（alt + figcaption），那行重复的纯文本要被吃掉
+    assert "<figcaption>成本函数曲线</figcaption>" in out
     assert "\n成本函数曲线" not in out
     assert "![[" not in out
 
 
+def test_figures_handles_bare_embed():
+    out = assemble.figures("正文。\n\n![[images/f0001.jpg]]\n")
+    assert '<img src="images/f0001.jpg"' in out
+    assert "<figcaption>" not in out
+
+
 def test_render_html_has_no_obsidian_syntax():
     html = assemble.render_html(
-        "---\ntitle: 示例\n---\n\n## 一、开头\n\n正文。\n\n![[images/f0004.jpg|界面截图]]\n界面截图\n"
+        "---\ntitle: 示例\n---\n\n## 一、开头\n\n正文。\n\n![[images/f0004.jpg]]\n*图｜界面截图*\n"
     )
     assert "<title>示例</title>" in html
     assert "![[ " not in html and "![[" not in html
@@ -217,8 +235,11 @@ def test_build_markdown_places_image_after_its_paragraph(tmp_path):
     )
     assert n_img == 1
     assert "## 一、开头" in text
-    assert text.index("第一段。") < text.index("![[images/f0010.jpg|界面截图]]")
+    assert text.index("第一段。") < text.index("![[images/f0010.jpg]]")
     assert text.index("![[images/f0010.jpg") < text.index("第二段。")
+    # 图注只写一次，且是斜体单独一行（#88）
+    assert "*图｜界面截图*" in text
+    assert text.count("界面截图") == 1
     assert (work / "images" / "f0010.jpg").exists()
     assert "saved:" in text and "video-notes" not in text
 

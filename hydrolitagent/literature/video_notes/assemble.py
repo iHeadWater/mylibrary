@@ -18,7 +18,14 @@ import time
 from pathlib import Path
 
 FULL_HEADING = "## 全文整理"
+CAPTION_PREFIX = "图｜"
 EMBED = re.compile(r"!\[\[([^\]|\n]+?)(?:\|([^\]\n]*))?\]\]")
+# 新版：图片独占一行，下一行是斜体图注
+CAPTION_LINE = re.compile(r"!\[\[([^\]|\n]+?)\]\]\s*\n\s*\*(?:图｜)?([^*\n]+)\*")
+# 旧版（#88 之前）：``![[图|说明]]`` 后面再跟一行同样的说明
+LEGACY_PAIR = re.compile(
+    r"!\[\[([^\]|\n]+?)\|([^\]\n]+)\]\][ \t]*\n(?:\s*\n)?\2[ \t]*(?:\n|$)"
+)
 
 CSS = """
 :root { --ink:#1b1b1f; --muted:#6b7280; --line:#e5e7eb; --brand:#1565c0; }
@@ -51,6 +58,17 @@ def cn_num(n: int) -> str:
     return str(n)
 
 
+def caption_line(desc: str) -> str:
+    """图注单独一行、斜体、带「图｜」前缀。
+
+    三样都做，是因为只做斜体时，长图注在小屏幕上仍然容易和正文混在一起：
+    - 「图｜」前缀告诉读者「这是图注」；
+    - 斜体在 Obsidian 与导出的 HTML 里都稳定；
+    - 单独成段（前后各一个空行）让它不粘在正文段落末尾。
+    """
+    return f"*{CAPTION_PREFIX}{desc}*"
+
+
 def build_markdown(
     meta: dict,
     sections: list[dict],
@@ -80,8 +98,7 @@ def build_markdown(
                 if not src.exists():
                     continue
                 shutil.copy2(src, work / image_dir / fname)
-                cap = it["desc"]
-                parts.append(f"![[{image_dir}/{fname}|{cap}]]\n{cap}")
+                parts.append(f"![[{image_dir}/{fname}]]\n{caption_line(it['desc'])}")
                 n_img += 1
         parts_sec.append(
             f"## {cn_num(i + 1)}、{sec['title']}\n\n" + "\n\n".join(parts)
@@ -117,20 +134,20 @@ def to_vault_links(text: str, album: str, *, image_dir: str = "images") -> str:
 
 
 def _figure(path: str, caption: str) -> str:
+    src = htmllib.escape(path, quote=True)
     alt = htmllib.escape(caption)
-    return (
-        f'<figure><img src="{htmllib.escape(path, quote=True)}" alt="{alt}">'
-        f"<figcaption>{alt}</figcaption></figure>"
-    )
+    figcaption = f"<figcaption>{alt}</figcaption>" if caption else ""
+    return f'<figure><img src="{src}" alt="{alt}">{figcaption}</figure>'
 
 
 def figures(text: str) -> str:
-    """Obsidian 嵌入 → ``<figure>``，并吃掉紧随其后的那行重复说明。"""
-    text = re.sub(
-        r"!\[\[([^\]|\n]+?)\|([^\]\n]+)\]\][ \t]*\n(?:\s*\n)?\2[ \t]*(?:\n|$)",
-        lambda m: _figure(m.group(1), m.group(2)) + "\n",
-        text,
-    )
+    """Obsidian 嵌入 → ``<figure>``。
+
+    三种写法都要认：新版的「图片 + 下一行斜体图注」、旧版的「``|说明`` + 重复一行」、
+    以及光秃秃的嵌入。旧版留着是因为 vault 里可能还有 #88 之前导入的笔记。
+    """
+    text = CAPTION_LINE.sub(lambda m: _figure(m.group(1), m.group(2)) + "\n", text)
+    text = LEGACY_PAIR.sub(lambda m: _figure(m.group(1), m.group(2)) + "\n", text)
     return EMBED.sub(lambda m: _figure(m.group(1), m.group(2) or ""), text)
 
 
