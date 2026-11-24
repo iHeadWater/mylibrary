@@ -1,10 +1,14 @@
 """命令行入口：``run`` / ``setup`` / ``import``。
 
+``run`` 收两种素材：B 站 BV 号，或任意本地音视频文件。两者只是入口不同，转写之后
+的链路完全一样 —— 这也是为什么加它只需要动入口，不必碰后半段。
+
     uv run --extra video-notes python -m hydrolitagent.literature.video_notes setup
     uv run --extra video-notes python -m hydrolitagent.literature.video_notes run BV1REx46NEc4
+    uv run --extra video-notes python -m hydrolitagent.literature.video_notes run ~/周会.mp4
     uv run --extra video-notes python -m hydrolitagent.literature.video_notes import BV1REx46NEc4 --into-vault
 
-``run`` 只负责生成，产物在 ``<literature_root>/video-notes/<BV号>/``。**看过之后**
+``run`` 只负责生成，产物在 ``<literature_root>/video-notes/<名字>/``。**看过之后**
 再 ``import --into-vault`` 才会写进 vault 的 ``sources/videos/``，这道人工门与主题的
 「人工筛选门」是同一个道理：生成不等于入库。
 """
@@ -14,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -24,13 +29,25 @@ from pathlib import Path
 from hydrolitagent._config import PROJECT_ROOT
 from hydrolitagent.literature._paths import resolve_literature_root
 
-from . import asr, assemble, bodies as bodies_mod, download, frames, layout, outline, proofread
+from . import (
+    asr,
+    assemble,
+    bodies as bodies_mod,
+    download,
+    frames,
+    layout,
+    local,
+    outline,
+    proofread,
+    subs as subs_mod,
+)
 from .client import DeepSeek
 from .naming import folder_name
 
 MODELS_DIR = PROJECT_ROOT / "models"
 VAULT_SOURCES = Path("sources") / "videos"
 VAULT_MEDIA = Path("media") / "videos"
+BV_PATTERN = re.compile(r"^BV[0-9A-Za-z]{10}$")
 
 
 def video_notes_root() -> Path:
@@ -41,11 +58,11 @@ def read_meta(work: Path) -> dict:
     return json.loads((work / "meta.json").read_text(encoding="utf-8"))
 
 
-def existing_work(bv: str) -> Path | None:
-    """按 BV 号在 ``video-notes/`` 下找已有目录。
+def existing_work(key: str) -> Path | None:
+    """按素材 id 在 ``video-notes/`` 下找已有目录。
 
-    目录名现在是标题，拼不出来，只能反过来扫一遍 ``meta.json``。顺带的好处是
-    以前用 BV 号命名、现在还没迁移的旧目录照样找得到。
+    目录名现在是标题拼出来的，算不回去，只能反过来扫一遍 ``meta.json``。顺带的
+    好处是以前用 BV 号命名、现在还没迁移的旧目录照样找得到。
     """
     root = video_notes_root()
     if not root.is_dir():
@@ -58,7 +75,7 @@ def existing_work(bv: str) -> Path | None:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if meta.get("id") == bv:
+        if meta.get("id") == key:
             return d
     return None
 
@@ -76,6 +93,83 @@ def work_for_run(bv: str, override: str | None) -> tuple[Path, dict | None]:
     return video_notes_root() / folder_name(meta), meta
 
 
+def resolve_target(target: str) -> tuple[str, Path | None]:
+    """``BV1xxxxxxxxx`` 还是本地文件。
+
+    存在的文件优先当文件 —— BV 号不可能是一个存在的路径，反过来「路径没写错但
+    恰好长得像 BV 号」的概率可以忽略。
+    """
+    path = Path(target).expanduser()
+    if path.is_file():
+        return "file", path
+    if BV_PATTERN.match(target):
+        return "bilibili", None
+    raise SystemExit(f"既不是 BV 号也不是可读文件：{target}")
+
+
+def guard_work(work: Path, key: str) -> None:
+    """目录已被别的素材占用就停下。
+
+    不然 ``prepare()`` 会读到别人的 ``meta.json`` 并一路用下去 —— 静默产出一条
+    讲错视频的笔记，比对不上名字难查得多。
+    """
+    meta_path = work / "meta.json"
+    if not meta_path.is_file():
+        return
+    try:
+        other = json.loads(meta_path.read_text(encoding="utf-8")).get("id")
+    except (OSError, ValueError):
+        return
+    if other and other != key:
+        raise SystemExit(
+            f"{work} 里已有另一条素材（id={other}），换 --title 或 --work-dir"
+        )
+
+
+def subs_for(target: Path, args) -> Path | None:
+    """这次用哪份字幕：显式指定 → 同级同名 → 没有。"""
+    if args.no_subs:
+        return None
+    if args.subs:
+        path = Path(args.subs).expanduser()
+        if not path.is_file():
+            raise SystemExit(f"字幕文件不存在：{path}")
+        return path
+    return subs_mod.find_sibling(target)
+
+
+def prepare_run(target: str, args, log) -> tuple[Path, dict, Path, Path | None]:
+    """把「要跑什么」翻译成「产物目录 + meta + 媒体路径 + 字幕」。
+
+    BV 与本地文件只在这一处分岔，往后完全同一条链路。
+    """
+    kind, path = resolve_target(target)
+
+    if kind == "bilibili":
+        work, meta = work_for_run(target, args.work_dir)
+        log(f"[0] 产物目录：{work}")
+        meta = download.prepare(work, target, meta=meta, log=log)
+        return work, meta, work / "media.mp4", None
+
+    assert path is not None
+    info = local.probe(path)
+    if not info["has_video"]:
+        raise SystemExit(
+            f"{path} 里没有视频轨。纯音频的笔记形态（说话人分离、无配图排版）"
+            "等 #90，这次先只收带画面的文件。"
+        )
+    meta = local.meta_for(path, title=args.title, info=info)
+    work = (
+        Path(args.work_dir).expanduser()
+        if args.work_dir
+        else existing_work(meta["id"]) or video_notes_root() / folder_name(meta)
+    )
+    guard_work(work, meta["id"])
+    log(f"[0] 产物目录：{work}")
+    meta = local.prepare(work, meta, log=log)
+    return work, meta, local.media_path(meta), subs_for(path, args)
+
+
 def make_log(quiet: bool):
     def noop(_msg: str) -> None:
         return None
@@ -90,15 +184,11 @@ def make_log(quiet: bool):
 def cmd_run(args) -> int:
     log = make_log(args.quiet)
     client = DeepSeek()
-    bv = args.bv
-    work, meta = work_for_run(bv, args.work_dir)
-    log(f"[0] 产物目录：{work}")
+    work, meta, video, subs = prepare_run(args.target, args, log)
     for sub in ("frames", "images"):
         (work / sub).mkdir(parents=True, exist_ok=True)
 
-    meta = download.prepare(work, bv, meta=meta, log=log)
-    video = work / "media.mp4"
-    segs = asr.ensure_transcript(work, video, MODELS_DIR, log=log)
+    segs = asr.ensure_transcript(work, video, MODELS_DIR, subs=subs, log=log)
     polished = proofread.ensure_polished(work, segs, client, log=log)
     blocks = proofread.merge_blocks(polished)
     log(f"[3] 合并成 {len(blocks)} 段讲解")
@@ -126,8 +216,11 @@ def cmd_run(args) -> int:
     print(json.dumps(summary, ensure_ascii=False))
 
     if args.clean_media:
-        video.unlink(missing_ok=True)
-        log("[1] 已删除 media.mp4（--clean-media）")
+        if video.parent == work:
+            video.unlink(missing_ok=True)
+            log("[1] 已删除 media.mp4（--clean-media）")
+        else:
+            log("[1] 本地素材留在库里，--clean-media 只清 B 站下的缓存")
     return 0
 
 
@@ -205,11 +298,17 @@ def append_log(vault: Path, entry: str, *, key: str) -> tuple[Path, bool]:
 
 def cmd_import(args) -> int:
     log = make_log(args.quiet)
-    bv = args.bv
-    work = Path(args.work_dir).expanduser() if args.work_dir else existing_work(bv)
+    work = Path(args.work_dir).expanduser() if args.work_dir else None
+    if work is None:
+        if not args.target:
+            print("要么给 BV 号 / 文件，要么给 --work-dir", file=sys.stderr)
+            return 2
+        kind, path = resolve_target(args.target)
+        key = args.target if kind == "bilibili" else local.fingerprint(path)
+        work = existing_work(key)
     if work is None or not (work / "note.md").exists():
-        where = work if work is not None else f"{video_notes_root()}/<标题>（{bv}）"
-        print(f"{where} 下没有 note.md，先跑 run {bv}", file=sys.stderr)
+        where = work if work is not None else video_notes_root()
+        print(f"{where} 下没有 note.md，先跑一次 run", file=sys.stderr)
         return 2
 
     meta = read_meta(work)
@@ -319,13 +418,18 @@ def cmd_migrate(args) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="python -m hydrolitagent.literature.video_notes",
-        description="B 站教学视频 → 中文笔记 + 精确配图",
+        description="B 站视频或本地音视频文件 → 中文笔记 + 精确配图",
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    run = sub.add_parser("run", help="从 BV 号跑到一份带配图的笔记")
-    run.add_argument("bv")
-    run.add_argument("--work-dir", help="产物目录，默认 <literature_root>/video-notes/<标题>（BV号）")
+    run = sub.add_parser("run", help="从 BV 号或本地文件跑到一份带配图的笔记")
+    run.add_argument("target", help="BV 号，或本地音视频文件路径")
+    run.add_argument("--title", help="本地文件的标题，默认取文件名")
+    run.add_argument("--subs", help="用这份字幕文件代替转写（.srt / .vtt）")
+    run.add_argument("--no-subs", action="store_true", help="忽略同级字幕，强制转写")
+    run.add_argument(
+        "--work-dir", help="产物目录，默认 <literature_root>/video-notes/<名字>"
+    )
     run.add_argument("--clean-media", action="store_true", help="跑完删掉 media.mp4")
     run.add_argument("--quiet", action="store_true", help="只打最后一行摘要")
     run.set_defaults(func=cmd_run)
@@ -336,10 +440,10 @@ def build_parser() -> argparse.ArgumentParser:
     setup.set_defaults(func=cmd_setup)
 
     imp = sub.add_parser("import", help="把生成的笔记导入 vault（人工确认之后）")
-    imp.add_argument("bv")
+    imp.add_argument("target", nargs="?", help="BV 号或本地文件；给了 --work-dir 可省略")
     imp.add_argument("--into-vault", action="store_true", help="真正写入；不加只预演")
     imp.add_argument("--vault", help="vault 根，默认 literature_root")
-    imp.add_argument("--work-dir", help="产物目录，默认按 BV 号自动找到")
+    imp.add_argument("--work-dir", help="产物目录，默认按素材 id 自动找到")
     imp.add_argument("--force", action="store_true", help="覆盖 vault 里已有的同名笔记")
     imp.add_argument("--quiet", action="store_true")
     imp.set_defaults(func=cmd_import)

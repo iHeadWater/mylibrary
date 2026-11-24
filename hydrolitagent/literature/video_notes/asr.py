@@ -19,6 +19,8 @@ from pathlib import Path
 
 import numpy as np
 
+from . import subs as subs_mod
+
 MODEL_NAME = "small"
 SAMPLE_RATE = 16000
 
@@ -93,13 +95,26 @@ def transcribe(
 
 
 def ensure_transcript(
-    work: Path, video: Path, models_dir: Path, *, log=print
+    work: Path,
+    video: Path,
+    models_dir: Path,
+    *,
+    subs: Path | None = None,
+    log=print,
 ) -> list[dict]:
-    """``transcript.json`` 是逐字稿唯一事实源，已有就不再转。"""
+    """``transcript.json`` 是逐字稿唯一事实源，已有就不再转。
+
+    ``subs`` 给了就直接用字幕：人工校对过的字幕通常比 small 模型准，还省掉
+    ASR 那几十分钟。
+    """
     path = work / "transcript.json"
     if not path.exists():
-        log("[2] 转写…")
-        segs = transcribe(video, models_dir)
+        if subs is not None:
+            log(f"[2] 用字幕 {Path(subs).name}，跳过转写")
+            segs = subs_mod.load(Path(subs))
+        else:
+            log("[2] 转写…")
+            segs = transcribe(video, models_dir)
         path.write_text(
             json.dumps(segs, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
         )

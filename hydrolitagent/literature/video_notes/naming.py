@@ -10,6 +10,10 @@
 
 因此统一格式：``清洗后的标题（BV号）``。可读、天然唯一（同一标题不同视频不会撞），
 换了标题也是新目录，不会把旧产物的缓存搅在一起。
+
+本地文件没有 BV 号，改用它自己的日期：``2026-11-20 标题``。日期顶在最前面，按
+名字排序就是按时间排序。**故意不带指纹后缀** —— 你要的是可读，撞名就让它报错，
+别悄悄复用别人的缓存。
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 _SPACES = re.compile(r"\s+")
 # 截断后不该留在末尾的标点
 _TRAILING = " 　.．。、，,·-—"
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def sanitize(title: str, *, max_len: int = MAX_TITLE) -> str:
@@ -41,9 +46,25 @@ def sanitize(title: str, *, max_len: int = MAX_TITLE) -> str:
 
 
 def folder_name(meta: dict) -> str:
-    """``meta.json`` → ``标题（BV号）``；标题清洗后为空就只剩 BV 号。"""
-    bv = str(meta.get("id") or "").strip()
-    title = sanitize(str(meta.get("title") or ""))
-    if not bv:
+    """``meta.json`` → 笔记名。
+
+    B 站：``标题（BV号）``，标题清洗后为空就只剩 BV 号。
+    本地文件：``2026-11-20 标题``，日期顶在前面便于排序。
+    """
+    key = str(meta.get("id") or "").strip()
+    if not key:
         raise ValueError("meta.json 里没有 id，无法起名")
-    return f"{title}（{bv}）" if title else bv
+    raw_title = str(meta.get("title") or "")
+
+    if meta.get("source") == "file":
+        date = str(meta.get("date") or "").strip()
+        date = date if _DATE.match(date) else ""
+        # 日期占了前缀，标题相应缩短，总长仍守在 MAX_TITLE 以内
+        budget = MAX_TITLE - (len(date) + 1 if date else 0)
+        title = sanitize(raw_title, max_len=max(budget, 8))
+        if date and title:
+            return f"{date} {title}"
+        return date or title or key
+
+    title = sanitize(raw_title)
+    return f"{title}（{key}）" if title else key

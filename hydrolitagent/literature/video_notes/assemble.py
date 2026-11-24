@@ -104,19 +104,34 @@ def build_markdown(
             f"## {cn_num(i + 1)}、{sec['title']}\n\n" + "\n\n".join(parts)
         )
 
+    if meta.get("source") == "file":
+        # 本地素材没有网页，记原始路径；`url:` 那一行就别硬造了
+        origin = f"file: {meta.get('original_path') or meta.get('source_path') or ''}"
+        kind = "视频笔记 - 本地文件"
+    else:
+        origin = (
+            "url: "
+            + (
+                url
+                or meta.get("webpage_url")
+                or f"https://www.bilibili.com/video/{meta['id']}/"
+            )
+        )
+        kind = "视频笔记 - B站"
+    author = meta.get("uploader") or ""
+    byline = f"作者：{author}\n\n" if author else ""
+
     head = f"""---
 title: {meta['title']}
-author: {meta.get('uploader') or ''}
-source: 视频笔记 - B站
-url: {url or meta.get('webpage_url') or f"https://www.bilibili.com/video/{meta['id']}/"}
+author: {author}
+source: {kind}
+{origin}
 saved: {time.strftime('%Y-%m-%d %H:%M:%S')}
 tags:
   - 视频笔记
 ---
 
-作者：{meta.get('uploader') or ''}
-
-"""
+{byline}"""
     return head + "\n\n".join(parts_sec) + "\n", n_img
 
 

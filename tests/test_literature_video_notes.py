@@ -374,3 +374,219 @@ def test_append_log_records_different_notes(tmp_path):
     vn_cli.append_log(tmp_path, "- 乙 → [[乙（BV1b）]]", key="乙（BV1b）")
     text = (tmp_path / "log.md").read_text(encoding="utf-8")
     assert "[[甲（BV1a）]]" in text and "[[乙（BV1b）]]" in text
+
+
+# ---------------------------------------------------------------- 本地文件（#89）
+import os  # noqa: E402
+from datetime import datetime  # noqa: E402
+
+from hydrolitagent.literature.video_notes import download, local, subs  # noqa: E402
+
+
+def _file_meta(name="会议记录", date="2026-11-20"):
+    return {"id": "local-a3f2c1b9d0", "source": "file", "title": name, "date": date}
+
+
+def _info(**over):
+    return {"duration": 12.5, "has_video": True, "has_audio": True, **over}
+
+
+def test_folder_name_puts_date_first_for_local_file():
+    name = naming.folder_name(_file_meta())
+    assert name == "2026-11-20 会议记录"
+    assert "（" not in name  # 本地文件不带指纹括号
+
+
+def test_folder_name_local_without_date_falls_back_to_title():
+    assert naming.folder_name(_file_meta(date="")) == "会议记录"
+
+
+def test_folder_name_local_ignores_malformed_date():
+    assert naming.folder_name(_file_meta(date="2026/11/20")) == "会议记录"
+
+
+def test_folder_name_local_keeps_total_length_within_budget():
+    name = naming.folder_name(_file_meta(name="很长的标题" * 30))
+    assert len(name) <= naming.MAX_TITLE
+    assert name.startswith("2026-11-20 ")
+
+
+def test_folder_name_local_empty_title_keeps_date():
+    assert naming.folder_name(_file_meta(name="///")) == "2026-11-20"
+
+
+def test_folder_name_bv_still_wins_without_source_field():
+    assert naming.folder_name({"id": "BV1xx", "title": "贝叶斯"}) == "贝叶斯（BV1xx）"
+
+
+def test_fingerprint_is_stable_across_rename(tmp_path):
+    first = tmp_path / "会议.mp4"
+    first.write_bytes(b"x" * 1000)
+    second = tmp_path / "改了名.mp4"
+    second.write_bytes(b"x" * 1000)
+    assert local.fingerprint(first) == local.fingerprint(second)
+    assert local.fingerprint(first).startswith("local-")
+
+
+def test_fingerprint_changes_when_content_changes(tmp_path):
+    first = tmp_path / "a.mp4"
+    first.write_bytes(b"a" * 1000)
+    second = tmp_path / "b.mp4"
+    second.write_bytes(b"a" * 999 + b"b")
+    assert local.fingerprint(first) != local.fingerprint(second)
+
+
+def test_note_date_uses_file_mtime(tmp_path):
+    path = tmp_path / "a.mp4"
+    path.write_bytes(b"")
+    stamp = datetime(2026, 11, 20, 9, 0).timestamp()
+    os.utime(path, (stamp, stamp))
+    assert local.note_date(path) == "2026-11-20"
+
+
+def test_meta_for_overrides_title_and_skips_reprobe(tmp_path):
+    path = tmp_path / "会议.mp4"
+    path.write_bytes(b"data")
+    meta = local.meta_for(path, title="周会", info=_info(duration=99.0))
+    assert meta["source"] == "file"
+    assert meta["title"] == "周会"
+    assert meta["duration"] == 99.0
+    assert meta["chapters"] == []
+    assert meta["id"].startswith("local-")
+
+
+def test_collect_copies_into_library_and_is_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setattr(local, "library_root", lambda: tmp_path / "lib")
+    src = tmp_path / "会议.mp4"
+    src.write_bytes(b"data")
+    dest = local.collect(src, "2026-11-20 会议")
+    assert dest == tmp_path / "lib" / "2026-11-20 会议.mp4"
+    assert dest.read_bytes() == b"data"
+    assert local.collect(src, "2026-11-20 会议") == dest
+
+
+def test_collect_refuses_same_name_different_size(tmp_path, monkeypatch):
+    monkeypatch.setattr(local, "library_root", lambda: tmp_path / "lib")
+    small = tmp_path / "a.mp4"
+    small.write_bytes(b"1")
+    local.collect(small, "同名")
+    bigger = tmp_path / "b.mp4"
+    bigger.write_bytes(b"22")
+    with pytest.raises(FileExistsError):
+        local.collect(bigger, "同名")
+
+
+def test_media_path_reports_missing_or_absent_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(local, "PROJECT_ROOT", tmp_path)
+    with pytest.raises(ValueError):
+        local.media_path({})
+    with pytest.raises(FileNotFoundError):
+        local.media_path({"source_path": "media-library/gone.mp4"})
+
+
+def test_prepare_local_collects_and_writes_meta(tmp_path, monkeypatch):
+    monkeypatch.setattr(local, "library_root", lambda: tmp_path / "lib")
+    monkeypatch.setattr(local, "PROJECT_ROOT", tmp_path)
+    src = tmp_path / "会议.mp4"
+    src.write_bytes(b"data")
+    meta = local.meta_for(src, title="周会", info=_info())
+    name = naming.folder_name(meta)
+
+    work = tmp_path / "w"
+    out = local.prepare(work, meta, log=lambda _msg: None)
+    assert out["source_path"] == f"lib/{name}.mp4"
+    assert (tmp_path / "lib" / f"{name}.mp4").is_file()
+    assert local.media_path(out).name == f"{name}.mp4"
+    # 重跑读 meta.json，不再复制一份
+    assert local.prepare(work, meta, log=lambda _msg: None)["source_path"] == out["source_path"]
+
+
+def test_write_meta_never_overwrites_existing(tmp_path):
+    work = tmp_path / "w"
+    work.mkdir()
+    assert download.write_meta(work, {"id": "a"})["id"] == "a"
+    assert download.write_meta(work, {"id": "b"})["id"] == "a"
+
+
+def test_resolve_target_distinguishes_file_from_bv(tmp_path):
+    video = tmp_path / "会议.mp4"
+    video.write_bytes(b"")
+    assert vn_cli.resolve_target(str(video)) == ("file", video)
+    assert vn_cli.resolve_target("BV1REx46NEc4") == ("bilibili", None)
+    with pytest.raises(SystemExit):
+        vn_cli.resolve_target(str(tmp_path / "不存在"))
+
+
+def test_guard_work_stops_on_other_material(tmp_path):
+    work = tmp_path / "w"
+    work.mkdir()
+    (work / "meta.json").write_text('{"id": "local-aaa"}', encoding="utf-8")
+    with pytest.raises(SystemExit):
+        vn_cli.guard_work(work, "local-bbb")
+    vn_cli.guard_work(work, "local-aaa")
+    vn_cli.guard_work(tmp_path / "空目录", "local-bbb")
+
+
+SRT = """1
+00:00:01,000 --> 00:00:03,500
+第一句
+
+2
+00:00:04,000 --> 00:00:06,000
+<i>第二句</i>
+"""
+
+
+def test_parse_srt_keeps_times_and_strips_markup():
+    segs = subs.parse_srt(SRT)
+    assert [s["text"] for s in segs] == ["第一句", "第二句"]
+    assert segs[0]["start"] == 1.0
+    assert segs[0]["end"] == 3.5
+
+
+def test_parse_srt_drops_blocks_without_time_line():
+    assert subs.parse_srt("只有文字没有时间\n\n") == []
+
+
+def test_parse_vtt_skips_webvtt_header_and_notes():
+    vtt = "WEBVTT\n\nNOTE 这是注释\n\n00:00:01.000 --> 00:00:02.000\n第一句\n"
+    assert [s["text"] for s in subs.parse_vtt(vtt)] == ["第一句"]
+
+
+def test_decode_falls_back_to_gb18030():
+    assert subs.decode("第一句".encode("gb18030")) == "第一句"
+
+
+def test_decode_strips_utf8_bom():
+    assert subs.decode("\ufeff第一句".encode("utf-8")) == "第一句"
+
+
+def test_find_sibling_prefers_plain_srt(tmp_path):
+    video = tmp_path / "会议.mp4"
+    video.write_bytes(b"")
+    (tmp_path / "会议.srt").write_text(SRT, encoding="gb18030")
+    (tmp_path / "会议.vtt").write_text(SRT, encoding="utf-8")
+    assert subs.find_sibling(video).name == "会议.srt"
+
+
+def test_find_sibling_accepts_language_suffix(tmp_path):
+    video = tmp_path / "会议.mp4"
+    video.write_bytes(b"")
+    (tmp_path / "会议.zh.srt").write_text(SRT, encoding="utf-8")
+    assert subs.find_sibling(video).name == "会议.zh.srt"
+
+
+def test_find_sibling_returns_none_when_absent(tmp_path):
+    video = tmp_path / "会议.mp4"
+    video.write_bytes(b"")
+    assert subs.find_sibling(video) is None
+
+
+def test_load_reads_gb18030_and_rejects_empty(tmp_path):
+    path = tmp_path / "会议.srt"
+    path.write_text(SRT, encoding="gb18030")
+    assert len(subs.load(path)) == 2
+    empty = tmp_path / "空.srt"
+    empty.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError):
+        subs.load(empty)

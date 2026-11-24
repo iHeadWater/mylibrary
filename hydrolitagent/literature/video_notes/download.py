@@ -81,6 +81,17 @@ def download_media(bv: str, dest: Path, *, max_height: int = MAX_HEIGHT) -> Path
     return dest
 
 
+def write_meta(work: Path, meta: dict) -> dict:
+    """把 meta 落到 ``meta.json``；已有文件就原样返回那份 —— 重跑以文件为准。"""
+    path = work / "meta.json"
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return meta
+
+
 def prepare(work: Path, bv: str, *, meta: dict | None = None, log=print) -> dict:
     """确保 ``work`` 下有 ``meta.json`` 与 ``media.mp4``，已有就跳过。
 
@@ -93,11 +104,12 @@ def prepare(work: Path, bv: str, *, meta: dict | None = None, log=print) -> dict
     meta_path = work / "meta.json"
     if meta_path.exists():
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        if meta.get("id") not in (None, bv):
+            raise RuntimeError(
+                f"{work} 里是另一条素材（id={meta.get('id')}），请换 --work-dir"
+            )
     else:
-        meta = meta or fetch_meta(bv)
-        meta_path.write_text(
-            json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+        meta = write_meta(work, meta or fetch_meta(bv))
     log(f"[0] {meta['title']}  {fmt(meta['duration'])}")
 
     video = work / "media.mp4"
