@@ -484,6 +484,15 @@ def test_media_path_reports_missing_or_absent_source(tmp_path, monkeypatch):
         local.media_path({"source_path": "media-library/gone.mp4"})
 
 
+def test_media_path_accepts_windows_separator(tmp_path, monkeypatch):
+    """旧版本在 Windows 上写下的 meta.json 里是反斜杠，读的时候要认。"""
+    monkeypatch.setattr(local, "PROJECT_ROOT", tmp_path)
+    (tmp_path / "media-library").mkdir()
+    (tmp_path / "media-library" / "x.mp4").write_bytes(b"")
+    meta = {"source_path": "media-library\\x.mp4"}
+    assert local.media_path(meta).name == "x.mp4"
+
+
 def test_prepare_local_collects_and_writes_meta(tmp_path, monkeypatch):
     monkeypatch.setattr(local, "library_root", lambda: tmp_path / "lib")
     monkeypatch.setattr(local, "PROJECT_ROOT", tmp_path)
@@ -495,6 +504,8 @@ def test_prepare_local_collects_and_writes_meta(tmp_path, monkeypatch):
     work = tmp_path / "w"
     out = local.prepare(work, meta, log=lambda _msg: None)
     assert out["source_path"] == f"lib/{name}.mp4"
+    # meta.json 跨 mac / Windows 同步，不能带系统分隔符
+    assert "\\" not in out["source_path"]
     assert (tmp_path / "lib" / f"{name}.mp4").is_file()
     assert local.media_path(out).name == f"{name}.mp4"
     # 重跑读 meta.json，不再复制一份

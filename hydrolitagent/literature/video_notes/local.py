@@ -97,11 +97,17 @@ def meta_for(path: Path, *, title: str | None = None, info: dict | None = None) 
 
 
 def rel_to_project(path: Path) -> str:
-    """能相对仓库根表示就相对表示，meta.json 换台机器也还能读。"""
+    """能相对仓库根表示就相对表示，且一律用 POSIX 分隔符。
+
+    ``meta.json`` 会跟着 vault 在 macOS 与 Windows 之间同步。存 ``\\`` 的话换台
+    机器 ``media_path()`` 就找不到文件 —— 反斜杠在 POSIX 上会被当成文件名里的
+    普通字符。仓库里 ``cards`` 那套相对路径（``themes.py``、``theme_pool.py``）
+    也是 ``as_posix()``，跟着同一条规矩走。
+    """
     try:
-        return str(path.resolve().relative_to(PROJECT_ROOT))
+        return path.resolve().relative_to(PROJECT_ROOT).as_posix()
     except ValueError:
-        return str(path.resolve())
+        return path.resolve().as_posix()
 
 
 def collect(src: Path, name: str) -> Path:
@@ -124,7 +130,8 @@ def media_path(meta: dict) -> Path:
     raw = str(meta.get("source_path") or "")
     if not raw:
         raise ValueError("meta.json 里没有 source_path")
-    path = Path(raw)
+    # 兼容旧版本按系统分隔符写下的反斜杠
+    path = Path(raw.replace("\\", "/"))
     if not path.is_absolute():
         path = PROJECT_ROOT / path
     if not path.exists():
