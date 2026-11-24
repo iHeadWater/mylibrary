@@ -26,16 +26,54 @@ from hydrolitagent.literature._paths import resolve_literature_root
 
 from . import asr, assemble, bodies as bodies_mod, download, frames, layout, outline, proofread
 from .client import DeepSeek
+from .naming import folder_name
 
 MODELS_DIR = PROJECT_ROOT / "models"
 VAULT_SOURCES = Path("sources") / "videos"
 VAULT_MEDIA = Path("media") / "videos"
 
 
-def work_dir(bv: str, override: str | None = None) -> Path:
+def video_notes_root() -> Path:
+    return resolve_literature_root() / "video-notes"
+
+
+def read_meta(work: Path) -> dict:
+    return json.loads((work / "meta.json").read_text(encoding="utf-8"))
+
+
+def existing_work(bv: str) -> Path | None:
+    """按 BV 号在 ``video-notes/`` 下找已有目录。
+
+    目录名现在是标题，拼不出来，只能反过来扫一遍 ``meta.json``。顺带的好处是
+    以前用 BV 号命名、现在还没迁移的旧目录照样找得到。
+    """
+    root = video_notes_root()
+    if not root.is_dir():
+        return None
+    for d in sorted(root.iterdir()):
+        meta_path = d / "meta.json"
+        if not meta_path.is_file():
+            continue
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if meta.get("id") == bv:
+            return d
+    return None
+
+
+def work_for_run(bv: str, override: str | None) -> tuple[Path, dict | None]:
+    """定下这次跑哪个目录。已有就复用，没有就按标题新建。"""
     if override:
-        return Path(override).expanduser()
-    return resolve_literature_root() / "video-notes" / bv
+        path = Path(override).expanduser()
+        meta_path = path / "meta.json"
+        return path, (read_meta(path) if meta_path.is_file() else None)
+    existing = existing_work(bv)
+    if existing is not None:
+        return existing, read_meta(existing)
+    meta = download.fetch_meta(bv)
+    return video_notes_root() / folder_name(meta), meta
 
 
 def make_log(quiet: bool):
@@ -53,11 +91,12 @@ def cmd_run(args) -> int:
     log = make_log(args.quiet)
     client = DeepSeek()
     bv = args.bv
-    work = work_dir(bv, args.work_dir)
+    work, meta = work_for_run(bv, args.work_dir)
+    log(f"[0] 产物目录：{work}")
     for sub in ("frames", "images"):
         (work / sub).mkdir(parents=True, exist_ok=True)
 
-    meta = download.prepare(work, bv, log=log)
+    meta = download.prepare(work, bv, meta=meta, log=log)
     video = work / "media.mp4"
     segs = asr.ensure_transcript(work, video, MODELS_DIR, log=log)
     polished = proofread.ensure_polished(work, segs, client, log=log)
@@ -158,17 +197,19 @@ def append_log(vault: Path, entry: str) -> Path:
 def cmd_import(args) -> int:
     log = make_log(args.quiet)
     bv = args.bv
-    work = work_dir(bv, args.work_dir)
-    note = work / "note.md"
-    if not note.exists():
-        print(f"{note} 不存在，先跑 run {bv}", file=sys.stderr)
+    work = Path(args.work_dir).expanduser() if args.work_dir else existing_work(bv)
+    if work is None or not (work / "note.md").exists():
+        where = work if work is not None else f"{video_notes_root()}/<标题>（{bv}）"
+        print(f"{where} 下没有 note.md，先跑 run {bv}", file=sys.stderr)
         return 2
 
+    meta = read_meta(work)
+    name = folder_name(meta)
     vault = (
         Path(args.vault).expanduser() if args.vault else resolve_literature_root()
     )
-    dest_note = vault / VAULT_SOURCES / f"{bv}.md"
-    media = vault / VAULT_MEDIA / bv
+    dest_note = vault / VAULT_SOURCES / f"{name}.md"
+    media = vault / VAULT_MEDIA / name
     images = sorted((work / "images").glob("*.jpg"))
 
     if not args.into_vault:
@@ -180,19 +221,88 @@ def cmd_import(args) -> int:
         print(f"{dest_note} 已存在，加 --force 覆盖", file=sys.stderr)
         return 2
 
-    text = assemble.to_vault_links(note.read_text(encoding="utf-8"), bv)
+    text = assemble.to_vault_links(note_text(work), name)
     dest_note.parent.mkdir(parents=True, exist_ok=True)
     media.mkdir(parents=True, exist_ok=True)
     dest_note.write_text(text, encoding="utf-8")
     for f in images:
         shutil.copy2(f, media / f.name)
 
-    meta = json.loads((work / "meta.json").read_text(encoding="utf-8"))
-    entry = f"- 视频笔记「{meta['title']}」→ [[{bv}]]（{len(images)} 图）"
+    entry = f"- 视频笔记「{meta['title']}」→ [[{name}]]（{len(images)} 图）"
     log_path = append_log(vault, entry)
     log(f"已写入 {dest_note}")
     log(f"     {len(images)} 张图 → {media}/")
     log(f"     {log_path}")
+    return 0
+
+
+def note_text(work: Path) -> str:
+    return (work / "note.md").read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------- migrate
+def cmd_migrate(args) -> int:
+    """把已生成的笔记从 BV 号命名改成「标题（BV号）」。默认只预演。
+
+    要同时动三处：草稿目录、vault 里的笔记与图片目录、log.md 里的双链。
+    任何一处目标已存在就整条跳过，不做部分迁移 —— 半迁状态比没迁更难收拾。
+    """
+    log = make_log(args.quiet)
+    root = video_notes_root()
+    vault = Path(args.vault).expanduser() if args.vault else resolve_literature_root()
+    if not root.is_dir():
+        print(f"{root} 不存在，没有可迁移的产物", file=sys.stderr)
+        return 2
+
+    plan: list[tuple[Path, Path, str]] = []
+    for d in sorted(root.iterdir()):
+        if not (d / "meta.json").is_file():
+            continue
+        name = folder_name(read_meta(d))
+        if name != d.name:
+            plan.append((d, d.with_name(name), name))
+
+    if not plan:
+        log("所有产物已经是标题命名，无需迁移。")
+        return 0
+
+    renamed: list[tuple[str, str]] = []
+    for old_dir, new_dir, name in plan:
+        note_old = vault / VAULT_SOURCES / f"{old_dir.name}.md"
+        note_new = vault / VAULT_SOURCES / f"{name}.md"
+        media_old = vault / VAULT_MEDIA / old_dir.name
+        media_new = vault / VAULT_MEDIA / name
+        log(f"  {old_dir.name}\n    → {name}")
+        clash = next(
+            (p for p in (new_dir, note_new, media_new) if p.exists()), None
+        )
+        if clash is not None:
+            log(f"    跳过：{clash} 已存在")
+            continue
+        if not args.apply:
+            continue
+
+        old_dir.rename(new_dir)
+        if media_old.is_dir():
+            media_old.rename(media_new)
+        if note_old.is_file():
+            text = note_old.read_text(encoding="utf-8")
+            text = text.replace(f"media/videos/{old_dir.name}/", f"media/videos/{name}/")
+            note_old.rename(note_new)
+            note_new.write_text(text, encoding="utf-8")
+        renamed.append((old_dir.name, name))
+
+    if not args.apply:
+        log("\n以上是预演。确认无误后加 --apply 真正改名。")
+        return 0
+
+    log_path = vault / "log.md"
+    if renamed and log_path.is_file():
+        text = log_path.read_text(encoding="utf-8")
+        for old, new in renamed:
+            text = text.replace(f"[[{old}]]", f"[[{new}]]")
+        log_path.write_text(text, encoding="utf-8")
+        log(f"\n已迁移 {len(renamed)} 条，log.md 的双链一并更新。")
     return 0
 
 
@@ -206,7 +316,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="从 BV 号跑到一份带配图的笔记")
     run.add_argument("bv")
-    run.add_argument("--work-dir", help="产物目录，默认 <literature_root>/video-notes/<BV号>")
+    run.add_argument("--work-dir", help="产物目录，默认 <literature_root>/video-notes/<标题>（BV号）")
     run.add_argument("--clean-media", action="store_true", help="跑完删掉 media.mp4")
     run.add_argument("--quiet", action="store_true", help="只打最后一行摘要")
     run.set_defaults(func=cmd_run)
@@ -220,10 +330,18 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("bv")
     imp.add_argument("--into-vault", action="store_true", help="真正写入；不加只预演")
     imp.add_argument("--vault", help="vault 根，默认 literature_root")
-    imp.add_argument("--work-dir", help="产物目录，默认 <literature_root>/video-notes/<BV号>")
+    imp.add_argument("--work-dir", help="产物目录，默认按 BV 号自动找到")
     imp.add_argument("--force", action="store_true", help="覆盖 vault 里已有的同名笔记")
     imp.add_argument("--quiet", action="store_true")
     imp.set_defaults(func=cmd_import)
+
+    migrate = sub.add_parser(
+        "migrate", help="把已生成的笔记从 BV 号命名改成标题命名（默认只预演）"
+    )
+    migrate.add_argument("--apply", action="store_true", help="真正改名；不加只预演")
+    migrate.add_argument("--vault", help="vault 根，默认 literature_root")
+    migrate.add_argument("--quiet", action="store_true")
+    migrate.set_defaults(func=cmd_migrate)
     return p
 
 

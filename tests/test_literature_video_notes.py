@@ -233,3 +233,106 @@ def test_build_markdown_full_section():
 def test_group_size_covers_all_sections(n):
     size = bodies.group_size(n)
     assert size * (len(range(0, n, size))) >= n
+
+
+# ---------------------------------------------------------------- 命名（#87）
+import json  # noqa: E402
+
+from hydrolitagent.literature.video_notes import __main__ as vn_cli  # noqa: E402
+from hydrolitagent.literature.video_notes import naming  # noqa: E402
+
+
+def test_sanitize_replaces_filesystem_illegal_chars():
+    assert naming.sanitize('a/b\\c:d*e?f"g<h>i|j') == "a b c d e f g h i j"
+
+
+def test_sanitize_removes_obsidian_link_chars():
+    out = naming.sanitize("标题[1]#2^3")
+    assert not any(ch in out for ch in "[]#^")
+
+
+def test_sanitize_collapses_whitespace_and_trailing_dots():
+    assert naming.sanitize("  多   空白..  ") == "多 空白"
+
+
+def test_sanitize_truncates_long_titles():
+    assert len(naming.sanitize("字" * 200)) == naming.MAX_TITLE
+
+
+def test_sanitize_truncation_drops_trailing_punctuation():
+    out = naming.sanitize("字" * 59 + "，尾巴")
+    assert len(out) <= naming.MAX_TITLE
+    assert not out.endswith(("，", "、", "。"))
+
+
+def test_sanitize_all_illegal_becomes_empty():
+    assert naming.sanitize("") == ""
+    assert naming.sanitize("///") == ""
+
+
+def test_folder_name_appends_bv():
+    meta = {"id": "BV1xx", "title": "贝叶斯/定理"}
+    assert naming.folder_name(meta) == "贝叶斯 定理（BV1xx）"
+
+
+def test_folder_name_falls_back_to_bv():
+    assert naming.folder_name({"id": "BV1xx", "title": "///"}) == "BV1xx"
+
+
+def test_folder_name_requires_id():
+    with pytest.raises(ValueError):
+        naming.folder_name({"title": "x"})
+
+
+def test_same_title_different_bv_stays_unique():
+    a = naming.folder_name({"id": "BV1a", "title": "同名视频"})
+    b = naming.folder_name({"id": "BV1b", "title": "同名视频"})
+    assert a != b
+
+
+def test_existing_work_finds_dir_by_bv(tmp_path, monkeypatch):
+    root = tmp_path / "video-notes"
+    old = root / "BV1old"
+    old.mkdir(parents=True)
+    (old / "meta.json").write_text(json.dumps({"id": "BV1"}), encoding="utf-8")
+    (root / "没有meta的目录").mkdir()
+    monkeypatch.setattr(vn_cli, "video_notes_root", lambda: root)
+
+    assert vn_cli.existing_work("BV1") == old
+    assert vn_cli.existing_work("BVmissing") is None
+
+
+def test_to_vault_links_keeps_titled_album():
+    text = "![[images/f0010.jpg|说明]]"
+    assert (
+        assemble.to_vault_links(text, "贝叶斯定理（BV1R7411a76r）")
+        == "![[media/videos/贝叶斯定理（BV1R7411a76r）/f0010.jpg|说明]]"
+    )
+
+
+# ---------------------------------------------------------------- NO_PROXY 净化
+from hydrolitagent.literature.video_notes.client import sanitize_no_proxy  # noqa: E402
+
+
+def test_sanitize_no_proxy_drops_bracketed_ipv6():
+    env = {
+        "NO_PROXY": "localhost,127.0.0.1,::1,*.local,[::1]",
+        "no_proxy": "localhost,127.0.0.1,::1,*.local,[::1]",
+    }
+    dropped = sanitize_no_proxy(env)
+    assert dropped == ["[::1]", "[::1]"]
+    assert env["NO_PROXY"] == "localhost,127.0.0.1,::1,*.local"
+    assert env["no_proxy"] == "localhost,127.0.0.1,::1,*.local"
+
+
+def test_sanitize_no_proxy_keeps_plain_ipv6():
+    env = {"NO_PROXY": "localhost,::1"}
+    assert sanitize_no_proxy(env) == []
+    assert env["NO_PROXY"] == "localhost,::1"
+
+
+def test_sanitize_no_proxy_handles_missing_and_empty():
+    env: dict[str, str] = {}
+    assert sanitize_no_proxy(env) == []
+    env = {"NO_PROXY": ""}
+    assert sanitize_no_proxy(env) == []

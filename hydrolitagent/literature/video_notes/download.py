@@ -81,8 +81,11 @@ def download_media(bv: str, dest: Path, *, max_height: int = MAX_HEIGHT) -> Path
     return dest
 
 
-def prepare(work: Path, bv: str, *, log=print) -> dict:
+def prepare(work: Path, bv: str, *, meta: dict | None = None, log=print) -> dict:
     """确保 ``work`` 下有 ``meta.json`` 与 ``media.mp4``，已有就跳过。
+
+    ``meta`` 允许由调用方先取好 —— 目录名要用标题算，所以 ``run`` 一定在
+    建目录之前就拿到了元信息，这里不必再打一次网络。
 
     媒体默认**保留**：换章节切法、换抽帧步长都不必重新下载。清理交给
     ``--clean-media`` 由用户自己决定时机。
@@ -91,7 +94,7 @@ def prepare(work: Path, bv: str, *, log=print) -> dict:
     if meta_path.exists():
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
     else:
-        meta = fetch_meta(bv)
+        meta = meta or fetch_meta(bv)
         meta_path.write_text(
             json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )

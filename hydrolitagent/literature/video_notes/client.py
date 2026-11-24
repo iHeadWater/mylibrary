@@ -9,6 +9,8 @@ from __future__ import annotations
 import base64
 import io
 import os
+import re
+import sys
 import time
 from pathlib import Path
 
@@ -16,6 +18,39 @@ from openai import OpenAI
 
 DEFAULT_MODEL = "deepseek-flash"
 DEFAULT_BASE_URL = "https://api.deepseek.com"
+
+_BRACKETED = re.compile(r"^\[.*\]$")
+
+
+def sanitize_no_proxy(environ=None) -> list[str]:
+    """把 ``NO_PROXY`` 里带方括号的 IPv6 项去掉，返回被删掉的项。
+
+    为什么必须剔：httpx 0.28 把 ``[::1]`` 这类项拼成通配模式 ``all://*[::1]``，
+    而 ``httpx.Client(mounts=...)`` 又会把每个 key 当 URL 再解析一次，于是
+    ``:1]`` 被当成端口，抛 ``InvalidURL: Invalid port``。openai 2.x 恰好把
+    ``get_environment_proxies()`` 的结果原样交给 ``httpx.Client``，所以只要
+    ``NO_PROXY`` 里有方括号 IPv6，``OpenAI(...)`` 连构造都构造不出来。
+
+    去掉是安全的：同一份列表里通常已经有 ``::1``，回环照样绕过代理。
+    改了 ``os.environ`` 不写回，只影响本进程。
+    """
+    env = os.environ if environ is None else environ
+    removed: list[str] = []
+    for key in ("NO_PROXY", "no_proxy"):
+        raw = env.get(key)
+        if not raw:
+            continue
+        kept: list[str] = []
+        for item in raw.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            if _BRACKETED.match(item):
+                removed.append(item)
+                continue
+            kept.append(item)
+        env[key] = ",".join(kept)
+    return removed
 
 
 class DeepSeek:
@@ -36,6 +71,15 @@ class DeepSeek:
         if not key:
             raise RuntimeError(
                 "缺少 DEEPSEEK_API_KEY：写进 .env 或设为环境变量（见 .env.example）"
+            )
+        # 必须在构造 OpenAI 之前：方括号 IPv6 会让 httpx 在解析 mounts 时崩掉
+        dropped = sanitize_no_proxy()
+        if dropped:
+            print(
+                f"  已从 NO_PROXY 去掉 {', '.join(dropped)}"
+                "（方括号 IPv6 会触发 httpx 的 URL 解析 bug，详见 client.py 注释）",
+                file=sys.stderr,
+                flush=True,
             )
         self.client = OpenAI(
             base_url=base_url or os.environ.get("DEEPSEEK_BASE_URL") or DEFAULT_BASE_URL,
